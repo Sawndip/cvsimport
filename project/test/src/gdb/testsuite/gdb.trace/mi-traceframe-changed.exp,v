@@ -1,0 +1,581 @@
+head	1.7;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.3
+	gdb_7_6-2013-04-26-release:1.3
+	gdb_7_6-branch:1.3.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.3;
+locks; strict;
+comment	@# @;
+
+
+1.7
+date	2013.07.16.18.48.31;	author tromey;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2013.04.03.10.11.46;	author qiyao;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2013.03.15.01.41.29;	author qiyao;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2013.03.14.13.34.06;	author qiyao;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2013.01.01.06.41.28;	author brobecke;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2012.12.15.02.19.21;	author qiyao;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2012.09.18.11.33.43;	author qiyao;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.7
+log
+@test suite fixlet for gdb.trace
+
+This is a minor fix to clean up the last remaining test suite
+parallelization issue in gdb.trace.
+
+mi-traceframe-changed.exp refers to objdir.  This patch changes the
+code to have the same effect, but avoid using that variable.
+
+	* gdb.trace/mi-traceframe-changed.exp: Don't use objdir.
+@
+text
+@# Copyright 2012-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+load_lib trace-support.exp
+load_lib mi-support.exp
+set MIFLAGS "-i=mi"
+
+standard_testfile tfile.c
+set executable $testfile
+
+if  { [gdb_compile "${srcdir}/${subdir}/${srcfile}" "${binfile}" \
+	   executable {debug nowarnings}] != "" } {
+     untested ${testfile}.exp
+     return -1
+}
+
+# Make sure we are starting fresh.
+remote_file host delete tfile-basic.tf
+remote_file target delete tfile-basic.tf
+
+remote_exec target "$binfile"
+# Copy tracefile from target to host.
+remote_download host [remote_upload target tfile-basic.tf] \
+    tfile-basic.tf
+
+proc test_tfind_tfile { } {
+    with_test_prefix "tfile" {
+	global binfile
+	global decimal
+
+	if [mi_gdb_start] {
+	    return
+	}
+	mi_gdb_load ${binfile}
+
+	mi_gdb_test "-target-select tfile tfile-basic.tf" \
+	    ".*=breakpoint-created,bkpt=\{number=\"${decimal}\",type=\"tracepoint\",disp=\"keep\",enabled=\"y\",.*,func=\"write_basic_trace_file\".*\\^connected" \
+	    "select trace file"
+
+	mi_gdb_test "tfind 0" \
+	    ".*=traceframe-changed,num=\"0\",tracepoint=\"${decimal}\".*\\^done" \
+	    "tfind 0"
+
+	# No MI notification is sent because traceframe is not changed.
+	mi_gdb_test "tfind 0" \
+	    "\\&\"tfind 0\\\\n\"\r\n\~\"Found.*\\^done" \
+	    "tfind 0 again"
+
+	mi_gdb_test "tfind end" \
+	    ".*=traceframe-changed,end.*\\^done" \
+	    "tfind end"
+
+	# No MI notification is send because request is from MI command.
+	mi_gdb_test "-trace-find frame-number 0" \
+	    "-trace-find frame-number 0\r\n\\^done,found=\"1\",tracepoint=\"${decimal}\",traceframe=\"0\",frame=\{.*" \
+	    "-trace-find frame-number 0"
+
+	mi_gdb_exit
+    }
+}
+
+test_tfind_tfile
+
+# Change to a different test case in order to run it on target, and get
+# several traceframes.
+standard_testfile status-stop.c
+append testfile -1
+append binfile -1
+set executable $testfile
+
+if  { [gdb_compile "${srcdir}/${subdir}/${srcfile}" "${binfile}" \
+	   executable {debug nowarnings}] != "" } {
+     untested ${testfile}.exp
+     return -1
+}
+
+# Test target supports tracepoints or not.
+
+clean_restart $executable
+
+if ![runto_main] {
+    fail "Can't run to main to check for trace support"
+    return -1
+}
+
+if ![gdb_target_supports_trace] {
+    unsupported "Current target does not support trace"
+    return -1
+}
+
+gdb_exit
+
+proc test_tfind_remote { } {
+    with_test_prefix "remote" {
+	global decimal
+
+	if [mi_gdb_start] {
+	    return
+	}
+	mi_run_to_main
+
+	mi_gdb_test "-break-insert end" "\\^done.*" "break end"
+	mi_gdb_test "-break-insert -a func2" "\\^done.*" "break func2"
+	mi_gdb_test "-trace-start" "=breakpoint-modified,bkpt={.*installed=\"y\".*}.*\\^done.*" \
+	    "trace start"
+
+	mi_execute_to "exec-continue" "breakpoint-hit" end "" ".*" ".*" \
+	    { "" "disp=\"keep\"" } \
+	    "continue to end"
+	mi_gdb_test "-trace-stop" "\\^done.*" "trace stop"
+
+	mi_gdb_test "tfind 0" \
+	    ".*=traceframe-changed,num=\"0\",tracepoint=\"${decimal}\".*\\^done" \
+	    "tfind 0"
+
+	mi_gdb_test "tfind" \
+	    ".*=traceframe-changed,num=\"1\",tracepoint=\"${decimal}\".*\\^done" \
+	    "tfind"
+
+	mi_gdb_test "tfind end" \
+	    ".*=traceframe-changed,end.*\\^done" \
+	    "tfind end"
+
+	mi_gdb_exit
+    }
+}
+
+test_tfind_remote
+
+return 0
+@
+
+
+1.6
+log
+@gdb/testsuite/
+
+	* gdb.trace/mi-traceframe-changed.exp: Update tfile name to
+	"tfile-basic.tf".
+	(test_tfind_tfile): Likewise.
+@
+text
+@d79 2
+a80 2
+set testfile ${testfile}-1
+set binfile ${objdir}/${subdir}/${testfile}
+@
+
+
+1.5
+log
+@gdb/testsuite/
+	* gdb.threads/non-ldr-exc-1.exp (do_test): Fix the indent of
+	using with_test_prefix.
+	* gdb.threads/non-ldr-exc-2.exp (do_test): Likewise.
+	* gdb.threads/non-ldr-exc-3.exp (do_test): Likewise.
+	* gdb.threads/non-ldr-exc-4.exp (do_test): Likewise.
+	* gdb.threads/watchpoint-fork.exp (test): Likewise.
+	* gdb.base/break-interp.exp (test_core): Likewise.
+	(test_attach_gdb): Likewise.
+	* gdb.base/catch-load.exp (one_catch_load_test): Likewise.
+	* gdb.base/disp-step-syscall.exp (disp_step_cross_syscall):
+	Likewise.
+	* gdb.base/jit-so.exp (one_jit_test): Likewise.
+	* gdb.base/jit.exp (one_jit_test): Likewise.
+	* gdb.base/sepdebug.exp (test_different_dir): Likewise.
+	* gdb.dwarf2/dw2-dir-file-name.exp (test): Likewise.
+	* gdb.dwarf2/dw2-noloc.exp (file_symbols): Likewise.
+	* gdb.mi/mi-breakpoint-changed.exp (test_pending_resolved):
+	Likewise.
+	* gdb.mi/mi-cmd-param-changed.exp (test_command_param_changed):
+	Likewise.
+	* gdb.mi/mi-watch.exp test_watchpoint_all): Likewise.
+	* gdb.mi/pr11022.exp (test_memory_changed_observer): Likewise.
+	* gdb.trace/change-loc.exp (tracepoint_change_loc_1): Likewise.
+	(tracepoint_change_loc_2): Likewise.
+	* gdb.trace/disconnected-tracing.exp (disconnected_tracing):
+	Likewise.
+	(disconnected_tfind): Likewise.
+	* gdb.trace/mi-traceframe-changed.exp (test_tfind_tfile):
+	Likewise.
+	(test_tfind_remote): Likewise.
+	* gdb.trace/mi-tracepoint-changed.exp (test_reconnect):
+	Likewise.
+	(test_pending_resolved): Likewise.
+	* gdb.trace/mi-tsv-changed.exp (test_create_delete_modify_tsv):
+	Likewise.
+	(test_upload_tsv): Likewise.
+	* gdb.trace/pending.exp (pending_tracepoint_resolved):
+	Likewise.
+	(pending_tracepoint_works): Likewise.
+	* gdb.trace/report.exp (use_collected_data): Likewise.
+	* gdb.trace/status-stop.exp (test_tstart_tstop_tstart):
+	Likewise.
+	(test_tstart_tstart, test_buffer_full_tstart): Likewise.
+	* gdb.trace/strace.exp (strace_info_marker): Likewise.
+	(strace_trace_on_same_addr): Likewise.
+	(strace_trace_on_diff_addr): Likewise.
+	* gdb.trace/unavailable.exp (gdb_collect_args_test): Likewise.
+	(gdb_collect_locals_test): Likewise.
+	(gdb_unavailable_registers_test): Likewise.
+	(gdb_collect_globals_test): Likewise.
+@
+text
+@d30 2
+a31 2
+remote_file host delete basic.tf
+remote_file target delete basic.tf
+d35 2
+a36 1
+remote_download host [remote_upload target basic.tf] basic.tf
+d48 1
+a48 1
+	mi_gdb_test "-target-select tfile basic.tf" \
+@
+
+
+1.4
+log
+@gdb/testsuite/
+
+	* config/monitor.exp (gdb_target_cmd): Remove semicolon after
+	'return'.
+	(gdb_target_monitor, gdb_load): Likewise.
+	* config/sid.exp (gdb_load): Likewise.
+	* config/slite.exp (gdb_load): Likewise.
+	* config/vx.exp (gdb_start, spawn_vxgdb): Likewise.
+	* gdb.ada/arrayidx.exp, gdb.ada/null_array.exp: Likewise.
+	* gdb.arch/mips-octeon-bbit.exp (single_step): Likewise.
+	(single_step_until): Likewise.
+	* gdb.arch/powerpc-d128-regs.exp: Likewise.
+	* gdb.arch/system-gcore.exp: Likewise.
+	* gdb.base/bigcore.exp (extract_heap): Likewise.
+	* gdb.base/break-on-linker-gcd-function.exp: Likewise.
+	* gdb.base/call-ar-st.exp: Likewise.
+	* gdb.base/call-rt-st.exp: Likewise.
+	* gdb.base/call-sc.exp, gdb.base/call-strs.exp: Likewise.
+	* gdb.base/callfuncs.exp, gdb.base/completion.exp: Likewise.
+	* gdb.base/condbreak.exp, gdb.base/constvars.exp: Likewise.
+	* gdb.base/corefile.exp: Likewise.
+	* gdb.base/dbx.exp (gdb_file_cmd): Likewise.
+	* gdb.base/exprs.exp, gdb.base/fileio.exp: Likewise.
+	* gdb.base/fixsection.exp: Likewise.
+	* gdb.base/funcargs.exp: Likewise.
+	* gdb.base/gcore-buffer-overflow.exp: Likewise.
+	* gdb.base/gcore-relro.exp: Likewise.
+	* gdb.base/gcore.exp, gdb.base/gdb11530.exp: Likewise.
+	* gdb.base/gdb11531.exp, gdb.base/gnu-ifunc.exp: Likewise.
+	* gdb.base/info-os.exp, gdb.base/info-proc.exp: Likewise.
+	* gdb.base/interp.exp, gdb.base/langs.exp:: Likewise.
+	* gdb.base/list.exp: Likewise.
+	(set_listsize): Likewise.
+	* gdb.base/logical.exp, gdb.base/mips_pro.exp: Likewise.
+	* gdb.base/miscexprs.exp, gdb.base/nodebug.exp: Likewise.
+	* gdb.base/opaque.exp, gdb.base/pointers.exp: Likewise.
+	* gdb.base/psymtab.exp, gdb.base/ptype.exp: Likewise.
+	* gdb.base/relational.exp, gdb.base/scope.exp: Likewise.
+	* gdb.base/setvar.exp: Likewise.
+	(test_set): Likewise.
+	* gdb.base/signals.exp, gdb.base/sizeof.exp: Likewise.
+	* gdb.base/solib-overlap.exp: Likewise.
+	* gdb.base/store.exp, gdb.base/structs.exp: Likewise.
+	* gdb.base/structs2.exp, gdb.base/volatile.exp: Likewise.
+	* gdb.base/watchpoint.exp (initialize): Likewise.
+	(test_simple_watchpoint): Likewise.
+	(test_disabling_watchpoints): Likewise.
+	(test_watchpoint_triggered_in_syscall): Likewise.
+	* gdb.base/whatis.exp, gdb.cp/ambiguous.exp: Likewise.
+	* gdb.cp/casts.exp, gdb.cp/ctti.exp: Likewise.
+	* gdb.cp/namespace.exp, gdb.cp/nsdecl.exp: Likewise.
+	* gdb.cp/psmang.exp, gdb.dwarf2/dw2-ranges.exp: Likewise.
+	* gdb.hp/gdb.aCC/optimize.exp: Likewise.
+	* gdb.hp/gdb.aCC/watch-cmd.exp: Likewise.
+	* gdb.hp/gdb.base-hp/callfwmall.exp: Likewise.
+	* gdb.hp/gdb.base-hp/pxdb.exp: Likewise.
+	* gdb.hp/gdb.compat/xdb1.exp: Likewise.
+	* gdb.hp/gdb.compat/xdb2.exp: Likewise.
+	* gdb.hp/gdb.compat/xdb3.exp: Likewise.
+	* gdb.hp/gdb.defects/bs14602.exp: Likewise.
+	* gdb.hp/gdb.defects/solib-d.exp: Likewise.
+	* gdb.mi/gdb792.exp: Likewise.
+	* gdb.mi/mi-inheritance-syntax-error.exp: Likewise.
+	* gdb.mi/mi-logging.exp, gdb.mi/mi-var-cp.exp : Likewise.
+	* gdb.mi/mi-var-rtti.exp, gdb.python/py-type.exp: Likewise.
+	* gdb.threads/gcore-thread.exp: Likewise.
+	(load_core): Likewise.
+	* gdb.threads/pthreads.exp (all_threads_running): Likewise.
+	(test_startup, check_control_c): Likewise.
+	* gdb.threads/sigstep-threads.exp: Likewise.
+	* gdb.threads/thread_check.exp: Likewise.
+	* gdb.trace/backtrace.exp, gdb.trace/change-loc.exp: Likewise.
+	* gdb.trace/circ.exp (run_trace_experiment): Likewise.
+	(set_a_tracepoint, trace_buffer_normal): Likewise.
+	(gdb_trace_circular_tests): Likewise.
+	* gdb.trace/collection.exp: Likewise.
+	* gdb.trace/disconnected-tracing.exp: Likewise.
+	* gdb.trace/infotrace.exp: Likewise.
+	* gdb.trace/mi-traceframe-changed.exp: Likewise.
+	* gdb.trace/mi-tracepoint-changed.exp: Likewise.
+	* gdb.trace/mi-tsv-changed.exp (test_create_delete_modify_tsv): Likewise.
+	* gdb.trace/packetlen.exp, gdb.trace/passc-dyn.exp: Likewise.
+	* gdb.trace/pending.exp, gdb.trace/report.exp: Likewise.
+	* gdb.trace/stap-trace.exp: Likewise.
+	* gdb.trace/status-stop.exp,gdb.trace/strace.exp: Likewise.
+	* gdb.trace/tfind.exp, gdb.trace/trace-break.exp: Likewise.
+	* gdb.trace/trace-buffer-size.exp: Likewise.
+	* gdb.trace/tspeed.exp, gdb.trace/tsv.exp: Likewise.
+	* gdb.trace/unavailable.exp: Likewise.
+	* gdb.trace/while-dyn.exp: Likewise.
+	* lib/fortran.exp (set_lang_fortran): Likewise.
+	* lib/gdb.exp (default_gdb_version, gdb_start_cmd): Likewise.
+	(gdb_breakpoint, gdb_reinitialize_dir): Likewise.
+	(default_gdb_start, get_compiler_info): Likewise.
+	(gdb_compile, gdb_compile_objc, gdb_reload, gdb_init): Likewise.
+	(get_debug_format, setup_xfail_format): Likewise.
+	(rerun_to_main, gdb_skip_float_test): Likewise.
+	(build_id_debug_filename_get, get_remotetimeout): Likewise.
+	* lib/java.exp (set_lang_java): Likewise.
+	* lib/mi-support.exp (default_mi_gdb_start): Likewise.
+	(mi_gdb_reinitialize_dir, mi_gdb_target_cmd): Likewise.
+	(mi_gdb_file_cmd, mi_gdb_test): Likewise.
+	(mi_run_cmd_full, mi_expect_interrupt): Likewise.
+	* lib/objc.exp (set_lang_objc): Likewise.
+	* lib/pascal.exp (set_lang_pascal): Likewise.
+	* lib/prompt.exp (default_prompt_gdb_start): Likewise.
+	* lib/trace-support.exp (gdb_trace_setactions, gdb_tfind_test): Likewise.
+	(gdb_readexpr, gdb_gettpnum, gdb_find_recursion_test_baseline): Likewise.
+@
+text
+@d37 31
+a67 3
+proc test_tfind_tfile { } { with_test_prefix "tfile" {
+    global binfile
+    global decimal
+d69 1
+a69 2
+    if [mi_gdb_start] {
+	return
+d71 1
+a71 26
+    mi_gdb_load ${binfile}
+
+    mi_gdb_test "-target-select tfile basic.tf" \
+	".*=breakpoint-created,bkpt=\{number=\"${decimal}\",type=\"tracepoint\",disp=\"keep\",enabled=\"y\",.*,func=\"write_basic_trace_file\".*\\^connected" \
+	"select trace file"
+
+    mi_gdb_test "tfind 0" \
+	".*=traceframe-changed,num=\"0\",tracepoint=\"${decimal}\".*\\^done" \
+	"tfind 0"
+
+    # No MI notification is sent because traceframe is not changed.
+    mi_gdb_test "tfind 0" \
+	"\\&\"tfind 0\\\\n\"\r\n\~\"Found.*\\^done" \
+	"tfind 0 again"
+
+    mi_gdb_test "tfind end" \
+	".*=traceframe-changed,end.*\\^done" \
+	"tfind end"
+
+    # No MI notification is send because request is from MI command.
+    mi_gdb_test "-trace-find frame-number 0" \
+	"-trace-find frame-number 0\r\n\\^done,found=\"1\",tracepoint=\"${decimal}\",traceframe=\"0\",frame=\{.*" \
+	"-trace-find frame-number 0"
+
+    mi_gdb_exit
+}}
+d104 30
+a133 2
+proc test_tfind_remote { } { with_test_prefix "remote" {
+    global decimal
+d135 1
+a135 2
+    if [mi_gdb_start] {
+	return
+d137 1
+a137 26
+    mi_run_to_main
+
+    mi_gdb_test "-break-insert end" "\\^done.*" "break end"
+    mi_gdb_test "-break-insert -a func2" "\\^done.*" "break func2"
+    mi_gdb_test "-trace-start" "=breakpoint-modified,bkpt={.*installed=\"y\".*}.*\\^done.*" \
+	"trace start"
+
+    mi_execute_to "exec-continue" "breakpoint-hit" end "" ".*" ".*" \
+	{ "" "disp=\"keep\"" } \
+	"continue to end"
+    mi_gdb_test "-trace-stop" "\\^done.*" "trace stop"
+
+    mi_gdb_test "tfind 0" \
+	".*=traceframe-changed,num=\"0\",tracepoint=\"${decimal}\".*\\^done" \
+	"tfind 0"
+
+    mi_gdb_test "tfind" \
+	".*=traceframe-changed,num=\"1\",tracepoint=\"${decimal}\".*\\^done" \
+	"tfind"
+
+    mi_gdb_test "tfind end" \
+	".*=traceframe-changed,end.*\\^done" \
+	"tfind end"
+
+    mi_gdb_exit
+}}
+@
+
+
+1.3
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@d97 1
+a97 1
+    return -1;
+@
+
+
+1.2
+log
+@2012-12-15  Yao Qi  <yao@@codesourcery.com>
+
+	* breakpoint.c (print_one_breakpoint_location): Display the
+	state of 'installed' of each non-pending location of a tracepoint
+	in both CLI and MI.
+	(download_tracepoint_locations): Notify 'breakpoint-modified'
+	observer if any tracepoint location is downloaded.
+	* tracepoint.c (start_tracing): Likewise.
+	(merge_uploaded_tracepoints): Record all modified
+	tracepoints and notify 'breakpoint-modified' observer for them.
+
+	* NEWS: Mention the change for CLI and MI.
+
+gdb/doc:
+2012-12-15  Yao Qi  <yao@@codesourcery.com>
+
+	* gdb.texinfo (Listing Tracepoints): New item and example about
+	'installed on target' output.
+	Add more in the example about 'installed on target'.
+	(GDB/MI Breakpoint Commands): Doc about 'installed field.
+
+gdb/testsuite:
+2012-12-15  Yao Qi  <yao@@codesourcery.com>
+
+	* gdb.trace/mi-tracepoint-changed.exp (test_pending_resolved): Check
+	'installed' field in '=breakpoint-modified'.
+	(test_reconnect): Check 'installed' field in
+	'=breakpoint-modified' and '=breakpoint-created'.
+
+	* gdb.trace/actions.exp: Update test for 'installed' field.
+	* gdb.trace/change-loc.exp (tracepoint_change_loc_1):
+	(tracepoint_change_loc_2): Likewise.
+	Check 'info tracepoint' display nothing else.
+	* gdb.trace/deltrace.exp: Likewise.
+	* gdb.trace/infotrace.exp: Likewise.
+	* gdb.trace/mi-traceframe-changed.exp (test_tfind_remote):
+	Likewise.
+	* gdb.trace/passcount.exp: Likewise.
+	* gdb.trace/tracecmd.exp: Likewise.
+	* gdb.trace/while-stepping.exp: Likewise.
+@
+text
+@d1 1
+a1 1
+# Copyright 2012 Free Software Foundation, Inc.
+@
+
+
+1.1
+log
+@gdb/doc:
+
+	* observer.texi (GDB Observers): New observer 'traceframe_changed'.
+	* gdb.texinfo (GDB/MI Async Records): Mention new MI notification
+	'=traceframe-changed'.
+
+gdb:
+
+	* tracepoint.c (tfind_1): Call observer_notify_traceframe_changed
+	if traceframe changed.
+
+	* mi/mi-cmds.c (mi_cmd mi_cmds): Adjust for command
+	"trace-find".
+	* mi/mi-interp.c: Declare 'mi_traceframe_changed'.
+	(mi_interpreter_init): Hook mi_traceframe_changed to observer
+	'traceframe_changed'.
+	(mi_traceframe_changed): New.
+	* mi/mi-main.h (struct mi_suppress_notification) <traceframe>:
+	New field.
+
+	* NEWS: Mention the new MI notification.
+
+gdb/testsuite:
+
+	* gdb.trace/mi-traceframe-changed.exp: New.
+@
+text
+@d112 2
+a113 1
+    mi_gdb_test "-trace-start" "\\^done.*" "trace start"
+@
+

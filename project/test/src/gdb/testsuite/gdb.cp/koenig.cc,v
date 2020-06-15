@@ -1,0 +1,535 @@
+head	1.5;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.5
+	gdb_7_6-2013-04-26-release:1.5
+	gdb_7_6-branch:1.5.0.6
+	gdb_7_6-2013-03-12-branchpoint:1.5
+	gdb_7_5_1-2012-11-29-release:1.5
+	gdb_7_5-2012-08-17-release:1.5
+	gdb_7_5-branch:1.5.0.4
+	gdb_7_5-2012-07-18-branchpoint:1.5
+	gdb_7_4_1-2012-04-26-release:1.5
+	gdb_7_4-2012-01-24-release:1.5
+	gdb_7_4-branch:1.5.0.2
+	gdb_7_4-2011-12-13-branchpoint:1.5
+	gdb_7_3_1-2011-09-04-release:1.4
+	gdb_7_3-2011-07-26-release:1.4
+	gdb_7_3-branch:1.4.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.4
+	gdb_7_2-2010-09-02-release:1.3
+	gdb_7_2-branch:1.3.0.2
+	gdb_7_2-2010-07-07-branchpoint:1.3;
+locks; strict;
+comment	@// @;
+
+
+1.5
+date	2011.10.09.19.41.17;	author jkratoch;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2010.09.13.20.41.05;	author swagiaal;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2010.06.07.16.11.33;	author swagiaal;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2010.06.02.15.31.30;	author swagiaal;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2010.05.07.14.46.28;	author swagiaal;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.5
+log
+@gdb/
+	Support @@entry in input expressions.
+	* c-exp.y (ENTRY, unknown_cpp_name): New.
+	(exp: UNKNOWN_CPP_NAME): Change to `exp: unknown_cpp_name'.
+	(unknown_cpp_name: UNKNOWN_CPP_NAME, unknown_cpp_name: ENTRY)
+	(variable: name_not_typename '@@' ENTRY, name: ENTRY)
+	(name_not_typename: ENTRY): New.
+	(yylex): Recognize ENTRY.
+	* eval.c (evaluate_subexp_standard): Support also OP_VAR_ENTRY_VALUE.
+	* expprint.c (print_subexp_standard, dump_subexp_body_standard):
+	Likewise.
+	* parse.c (operator_length_standard): Likewise.
+	* std-operator.def: New operator OP_VAR_ENTRY_VALUE.
+
+gdb/doc/
+	Support @@entry in input expressions.
+	* gdb.texinfo (Variables): Describe @@entry names suffix.
+	(Print Settings): Add anchor for `set print entry-values'.
+
+gdb/testsuite/
+	Support @@entry in input expressions.
+	* gdb.arch/amd64-entry-value.exp (entry: p i@@entry, entry: p j@@entry)
+	(entry_stack: p s1@@entry, entry_stack: p s2@@entry)
+	(entry_stack: p d9@@entry, entry_stack: p da@@entry, tailcall: p i@@entry)
+	(tailcall: p j@@entry): New tests.
+	* gdb.cp/koenig.cc (A::entry): New function.
+	(main): Call it.
+	* gdb.cp/koenig.exp (p entry (c)): New test.
+@
+text
+@namespace A
+{
+  class C
+  {
+  public:
+    static const int x = 11;
+  };
+
+  int
+  first (C c)
+  {
+    return 11;
+  }
+
+  int
+  first (int a, C c)
+  {
+    return 22;
+  }
+
+  int
+  second (int a, int b, C cc, int c, int d)
+  {
+    return 33;
+  }
+
+  int
+  entry (C c)
+  {
+    return 44;
+  }
+}
+
+struct B
+{
+  A::C c;
+};
+
+//------------
+
+namespace E
+{
+  class O{};
+  int foo (O o){return 1; }
+  int foo (O o, O o2){return 2; }
+  int foo (O o, O o2, int i){return 3; }
+}
+
+namespace F
+{
+  class O{};
+  int foo (       O fo, ::E::O eo){ return 4;}
+  int foo (int i, O fo, ::E::O eo){ return 5;}
+}
+
+namespace G
+{
+  class O{};
+  int foo (O go, ::F::O fo, ::E::O eo){ return 6; }
+}
+
+//------------
+
+namespace H
+{
+  class O{};
+  int foo (O){ return 7;}
+}
+
+namespace I
+{
+  class O: public H::O {};
+  class X: H::O{};
+}
+
+//------------
+
+namespace J
+{
+  union U{};
+  struct S{};
+  enum E{};
+
+  class A{
+  public:
+    class B{};
+  };
+
+  class C{};
+
+  int foo (U){ return 8;}
+  int foo (S){ return 9;}
+  int foo (E){ return 10;}
+  int foo (A::B){ return 11;}
+  int foo (A*){ return 12;}
+  int foo (A**){ return 13;}
+  int foo (C[]){ return 14;}
+
+}
+//------------
+
+namespace K{
+  class O{};
+
+  int foo(O, int){
+    return 15;
+  }
+
+  int bar(O, int){
+    return 15;
+  }
+}
+
+int foo(K::O, float){
+  return 16;
+}
+
+int bar(K::O, int){
+  return 16;
+}
+//------------
+
+namespace L {
+  namespace A{
+    namespace B{
+    class O {};
+
+    int foo (O){
+      return 17;
+    }
+
+    }
+  }
+}
+
+//------------
+
+namespace M {
+  class A{
+  public:
+    int foo(char) {
+      return 18;
+    }
+  };
+
+  int foo(A,char){
+      return 19;
+  }
+
+  int foo(A *,char){
+    return 23;
+  }
+
+  int bar(char){
+    return 21;
+  }
+
+  namespace N {
+    int foo(::M::A,int){
+      return 20;
+    }
+
+    int bar(int){
+      return 22;
+    }
+  }
+}
+//------------
+
+namespace O {
+  class A{};
+
+  int foo(A,int){
+    return 23;
+  }
+
+}
+
+typedef O::A TOA;
+typedef TOA  TTOA;
+
+//------------
+
+static union {
+    int  a;
+    char b;
+}p_union;
+
+//------------
+
+namespace P {
+  class Q{
+  public:
+    int operator== (int)
+      {
+        return 24;
+      }
+
+    int operator== (float)
+      {
+        return 25;
+      }
+
+    int operator+ (float)
+      {
+        return 26;
+      }
+
+  };
+
+  int operator!= (Q, int)
+    {
+      return 27;
+    }
+
+  int operator!= (Q, double)
+    {
+      return 28;
+    }
+
+  int operator+ (Q, int)
+    {
+      return 29;
+    }
+
+  int operator++ (Q)
+    {
+      return 30;
+    }
+}
+
+//------------
+
+class R {
+  public:
+    int rfoo(){ return 31; }
+    int rbar(){
+      return 1; // marker1
+    }
+};
+
+//------------
+
+int
+main ()
+{
+  A::C c;
+  B b;
+
+  A::first (c);
+  first (0, c);
+  second (0, 0, c, 0, 0);
+  entry (c);
+  A::first (b.c);
+
+  E::O eo;
+  F::O fo;
+  G::O go;
+
+  foo (eo);
+  foo (eo, eo);
+  foo (eo, eo, 1);
+  foo (fo, eo);
+  foo (1  ,fo, eo);
+  foo (go, fo, eo);
+
+  I::O io;
+  I::X ix;
+
+  foo (io);
+//foo (ix);
+
+  J::U ju;
+  J::S js;
+  J::E je;
+  J::A::B jab;
+  J::A *jap;
+  J::A **japp;
+  J::C jca[3];
+
+  foo (ju);
+  foo (js);
+  foo (je);
+  foo (jab);
+  foo (jap);
+  foo (japp);
+  foo (jca);
+
+  K::O ko;
+  foo (ko, 1);
+  foo (ko, 1.0f);
+  //bar(ko,1);
+
+  L::A::B::O labo;
+  foo (labo);
+  
+  M::A ma;
+  foo(ma,'a');
+  ma.foo('a');
+  M::N::foo(ma,'a');
+
+  M::bar('a');
+  M::N::bar('a');
+
+  TTOA ttoa;
+  foo (ttoa, 'a');
+
+  P::Q q;
+  q == 5;
+  q == 5.0f;
+  q != 5;
+  q != 5.0f;
+  q + 5;
+  q + 5.0f;
+
+  ++q;
+
+  R r;
+  r.rbar();
+  r.rfoo();
+
+  return first (0, c) + foo (eo) +
+         foo (eo, eo) + foo (eo, eo, 1)  +
+         foo (fo, eo) + foo (1  ,fo, eo) +
+         foo (go, fo, eo);
+}
+@
+
+
+1.4
+log
+@Fix PR 11992: C++ 'this' scope sometimes does not work
+
+2010-09-13  Sami Wagiaalla  <swagiaal@@redhat.com>
+
+	PR symtab/11992:
+	* c-exp.y (classify_name): Check is_a_member_of_this before returning
+	UNKNOWN_CPP_NAME.
+
+2010-09-13  Sami Wagiaalla  <swagiaal@@redhat.com>
+
+	* gdb.cp/koenig.cc: created class for testing member lookup.
+	* gdb.cp/koenig.exp: Added test for member lookup.
+@
+text
+@d27 5
+d253 1
+@
+
+
+1.3
+log
+@Test and support all cpp operator types.
+
+2010-06-07  Sami Wagiaalla  <swagiaal@@redhat.com>
+
+	* value.h: Created oload_search_type enum.
+	(find_overload_match): Use oload_search_type enum.
+	* valops.c (find_overload_match): Support combined member and
+	non-member search.
+	* eval.c (evaluate_subexp_standard): Calls to
+	find_overload_match now use oload_search_type enum.
+	(oload_method_static): Verify index is a proper value.
+	* valarith.c (value_user_defined_cpp_op): Search for and handle
+	both member and non-member operators.
+	(value_user_defined_cpp_op): New function.
+	(value_user_defined_op): New function.
+	(value_x_unop): Use value_user_defined_op.
+	(value_x_binop): Ditto.
+	* cp-support.c (make_symbol_overload_list_using): Added block
+	iteration.
+	Add check for namespace aliases and imported declarations.
+
+2010-06-07  Sami Wagiaalla  <swagiaal@@redhat.com>
+
+	* gdb.cp/koenig.exp: Test for ADL operators.
+	* gdb.cp/koenig.cc: Added ADL operators.
+	* gdb.cp/operator.exp: New test.
+	* gdb.cp/operator.cc: New test.
+@
+text
+@d229 10
+d312 4
+@
+
+
+1.2
+log
+@Fix ADL anonymous name crash.
+
+2010-06-02  Sami Wagiaalla  <swagiaal@@redhat.com>
+
+	* cp-support.c (make_symbol_overload_list_adl_namespace): Handle
+	anonymous type case.
+
+2010-06-02  Sami Wagiaalla  <swagiaal@@redhat.com>
+
+	* gdb.cp/koenig.exp: Added new test case.
+	* gdb.cp/koenig.cc: Ditto.
+@
+text
+@d178 1
+d186 43
+d292 10
+@
+
+
+1.1
+log
+@Add ADL support
+
+2010-05-07  Sami Wagiaalla  <swagiaal@@redhat.com>
+
+	PR C++/7943:
+	* valops.c (find_overload_match): Handle fsym == NULL case.
+	Add int no_adl argument.
+	(find_oload_champ_namespace_loop): Call make_symbol_overload_list_adl
+	when appropriate.
+	Add int no_adl argument.
+	(find_oload_champ_namespace): 	Add int no_adl argument.
+	* parse.c (operator_length_standard): Return length for OP_ADL_FUNC
+	expression.
+	* expprint.c (op_name_standard): Added string for OP_ADL_FUNC case.
+	* eval.c (evaluate_subexp_standard): Added OP_ADL_FUNC case.
+	Evaluate arguments and use them to perform ADL lookup.
+	Pass no_adl argument to find_overload_match.
+	Disable adl lookup when evaluating a fully qualified OP_FUNCALL.
+	* cp-support.h: Added prototype for
+	make_symbol_overload_list_namespace.
+	* cp-support.c (make_symbol_overload_list_namespace): New function.
+	(make_symbol_overload_list_adl_namespace): New function.
+	(make_symbol_overload_list_adl): New function.
+	(make_symbol_overload_list_using): Moved code to add function to
+	overload set to make_symbol_overload_list_namespace.
+	* c-exp.y: create UNKNOWN_CPP_NAME token.
+	Add parse rule for ADL functions.
+	(classify_name): Recognize an UNKNOWN_CPP_NAME.
+
+2010-05-07  Sami Wagiaalla  <swagiaal@@redhat.com>
+
+	* gdb.cp/koenig.exp: New test.
+	* gdb.cp/koenig.cc: New test program.
+@
+text
+@d178 7
+@
+

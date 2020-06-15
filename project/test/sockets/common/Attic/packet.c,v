@@ -1,0 +1,279 @@
+head	1.2;
+access;
+symbols
+	start:1.1.1.1 sockets:1.1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.2
+date	2005.04.04.20.33.28;	author msnyder;	state dead;
+branches;
+next	1.1;
+
+1.1
+date	2004.03.05.00.19.13;	author msnyder;	state Exp;
+branches
+	1.1.1.1;
+next	;
+
+1.1.1.1
+date	2004.03.05.00.19.13;	author msnyder;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@Oops, these were never meant to be here...
+@
+text
+@#include <stdio.h>
+
+#define BUFSIZE 2048
+
+int gdb_verbose;
+
+/* Convert ascii hex digit A to a binary hex number.  */
+
+static int
+char2bin (a)
+     int a;
+{
+  if (a >= '0' && a <= '9')
+    return a - '0';
+  else if (a >= 'a' && a <= 'f')
+    return a - 'a' + 10;
+  else
+    {
+      fprintf (stderr, "char2bin: reply contains invalid hex digit.\n");
+      exit (-1);
+    }
+}
+
+/* Convert hex number NIB to an ascii char representation.  */
+
+static int
+bin2char (nib)
+     int nib;
+{
+  if (nib < 10)
+    return '0' + nib;
+  else
+    return 'a' + nib - 10;
+}
+
+/* convert ascii encoding of hex string to binary */
+
+void
+asc2bin (src, targ, count)
+     char *src, *targ;
+     long count;
+{
+  long i, ch;
+  
+  for (i = 0; i < count; i++)
+    {
+      ch = (char2bin (*src++) << 4) + char2bin (*src++);
+      *targ++ = ch;
+    }
+}
+
+/* convert a range of binary bytes into ascii hex encoding */
+
+void
+bin2asc (src, targ, count)
+     char *src, *targ;
+     long count;
+{
+  long i, ch;
+
+  for (i = 0; i < count; i++)
+    {
+      ch = *src++;
+      *targ++ = bin2char (ch >> 4);
+      *targ++ = bin2char (ch % 16);
+    }
+  *targ = '\0';
+}
+
+/* Returns next char from remote GDB.  -1 if error.  */
+static char rcbuf[BUFSIZE];
+static int  rcbufcnt = 0;
+static char *rcbufp;
+
+int
+getpktstat ()
+{
+  return (rcbufcnt > 0);
+}
+
+static int
+readchar (rfd)
+     int rfd;
+{
+ fullbuf:
+  if (rcbufcnt-- > 0)
+    return *rcbufp++ & 0x7f;
+
+  rcbufcnt = read (rfd, rcbuf, sizeof (rcbuf));
+
+  if (rcbufcnt <= 0)
+    {
+      if (rcbufcnt == 0)
+	fprintf (stderr, "readchar: Got EOF\n");
+      else
+	perror ("readchar");
+
+      return -1;
+    }
+
+  rcbufp = rcbuf;
+  goto fullbuf;
+}
+
+/* Read a packet from the remote machine, with error checking,
+   and store it in BUF.  Returns length of packet, or negative if error. */
+
+int
+getpkt (rfd, buf)
+     int rfd;		/* remote file descriptor */
+     char *buf;
+{
+  char *bp;
+  unsigned char csum, c1, c2;
+  int c;
+
+  while (1)
+    {
+      csum = 0;
+
+      while (1)
+	{
+	  c = readchar (rfd);
+	  if (c == '$')
+	    break;
+	  if (c < 0)
+	    return -1;
+	}
+
+      bp = buf;
+      while (1)
+	{
+	  c = readchar (rfd);
+	  if (c < 0)
+	    return -1;
+	  if (c == '#')
+	    break;
+	  *bp++ = c;
+	  csum += c;
+	}
+      *bp = 0;
+
+      c1 = char2bin (readchar (rfd));
+      c2 = char2bin (readchar (rfd));
+      if (csum == (c1 << 4) + c2)
+	break;
+
+      fprintf (stderr, "Bad checksum from stub: 0x%x != 0x%x, buf=%s\n",
+	       (c1 << 4) + c2, csum, buf);
+      if (gdb_verbose)
+	fprintf (stdout, "[sent nack]\n");
+      write (rfd, "-", 1);
+    }
+
+  if (gdb_verbose)
+    fprintf (stdout, "[sent ack]\n");
+  write (rfd, "+", 1);
+  return bp - buf;
+}
+
+/* Send a packet to the remote machine, with error checking.
+   The data of the packet is in BUF.  Returns >= 0 on success, -1 otherwise. */
+
+int
+putpkt (rfd, buf)
+     int rfd;		/* remote file descriptor */
+     char *buf;
+{
+  int i;
+  unsigned char csum = 0;
+  char buf2[BUFSIZE];
+  char buf3[1];
+  int cnt = strlen (buf);
+  char *p;
+
+  /* Copy the packet into buffer BUF2, encapsulating it
+     and giving it a checksum.  */
+
+  p = buf2;
+  *p++ = '$';
+
+  for (i = 0; i < cnt; i++)
+    {
+      csum += buf[i];
+      *p++ = buf[i];
+    }
+  *p++ = '#';
+  *p++ = bin2char ((csum >> 4) & 0xf);
+  *p++ = bin2char (csum & 0xf);
+
+  /* Send it over and over until we get a positive ack.  */
+
+  do
+    {
+      int cc;
+
+      if (write (rfd, buf2, p - buf2) != p - buf2)
+	{
+	  perror ("putpkt(write)");
+	  return -1;
+	}
+
+      cc = read (rfd, buf3, 1);
+      if (cc <= 0)
+	{
+	  if (cc == 0)
+	    fprintf (stderr, "putpkt(read): Got EOF\n");
+	  else
+	    perror ("putpkt(read)");
+
+	  return -1;
+	}
+      if (gdb_verbose)
+	{
+	  if (buf3[0] == '+')
+	    fprintf (stdout, "[received ACK]\n");
+	  else if (buf3[0] == '-')
+	    fprintf (stdout, "[received NACK, resending...]\n");
+	  else
+	    fprintf (stdout, "[received bogus char 0x%x ('%c'), resending]\n",
+		     buf3[0], buf3[0]);
+	}
+    }
+  while (buf3[0] != '+');
+
+  return 1;			/* Success! */
+}
+
+@
+
+
+1.1
+log
+@Initial revision
+@
+text
+@@
+
+
+1.1.1.1
+log
+@Import common files
+@
+text
+@@

@@ -1,0 +1,220 @@
+head	1.3;
+access;
+symbols
+	binutils-2_24-branch:1.3.0.10
+	binutils-2_24-branchpoint:1.3
+	binutils-2_21_1:1.3
+	binutils-2_23_2:1.3
+	binutils-2_23_1:1.3
+	binutils-2_23:1.3
+	binutils-2_23-branch:1.3.0.8
+	binutils-2_23-branchpoint:1.3
+	binutils-2_22_branch:1.3.0.6
+	binutils-2_22:1.3
+	binutils-2_22-branch:1.3.0.4
+	binutils-2_22-branchpoint:1.3
+	binutils-2_21:1.3
+	binutils-2_21-branch:1.3.0.2
+	binutils-2_21-branchpoint:1.3
+	binutils_latest_snapshot:1.3;
+locks; strict;
+comment	@# @;
+
+
+1.3
+date	2010.10.14.22.10.22;	author ccoutant;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2010.08.12.22.18.14;	author ccoutant;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2009.12.02.14.51.22;	author espindola;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.3
+log
+@	* debug.h (DEBUG_INCREMENTAL): New flag.
+	(debug_string_to_enum): Add DEBUG_INCREMENTAL).
+	* gold.cc (queue_initial_tasks): Check parameters for incremental link
+	mode.
+	* incremental.cc (report_command_line): Ignore all forms of
+	--incremental.
+	* layout.cc (Layout::Layout): Check parameters for incremental link
+	mode.
+	* options.cc (General_options::parse_incremental): New function.
+	(General_options::parse_no_incremental): New function.
+	(General_options::parse_incremental_full): New function.
+	(General_options::parse_incremental_update): New function.
+	(General_options::incremental_mode_): New data member.
+	(General_options::finalize): Check incremental_mode_.
+	* options.h (General_options): Update help text for --incremental.
+	Add --no-incremental, --incremental-full, --incremental-update.
+	(General_options::Incremental_mode): New enum type.
+	(General_options::incremental_mode): New function.
+	(General_options::incremental_mode_): New data member.
+	* parameters.cc (Parameters::incremental_mode_): New data member.
+	(Parameters::set_options): Set incremental_mode_.
+	(Parameters::set_incremental_full): New function.
+	(Parameters::incremental): New function.
+	(Parameters::incremental_update): New function.
+	(set_parameters_incremental_full): New function.
+	* parameters.h (Parameters::set_incremental_full): New function.
+	(Parameters::incremental): New function.
+	(Parameters::incremental_update): New function.
+	(Parameters::incremental_mode_): New data member.
+	(set_parameters_incremental_full): New function.
+	* plugin.cc (Plugin_manager::add_input_file): Check parameters for
+	incremental link mode.
+	* reloc.cc (Sized_relobj::do_read_relocs): Likewise.
+	(Sized_relobj::do_relocate_sections): Likewise.
+	* testsuite/Makefile.am (incremental_test): Use --incremental-full
+	option.
+	* testsuite/Makefile.in: Regenerate.
+	* testsuite/incremental_test.sh: Filter all forms of --incremental.
+@
+text
+@#!/bin/sh
+
+# incremental_test.sh -- test that incremental linking information is correct.
+
+# Copyright 2009, 2010 Free Software Foundation, Inc.
+# Written by Rafael Avila de Espindola <espindola@@google.com>
+# and Cary Coutant <ccoutant@@google.com>
+
+# This file is part of gold.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+# MA 02110-1301, USA.
+
+check_cmp()
+{
+    if ! cmp -s "$1" "$2"
+    then
+	echo "Actual output differs from expected:"
+	echo "diff $1 $2"
+	diff $1 $2
+	exit 1
+    fi
+}
+
+check()
+{
+    if ! grep -q "$2" "$1"
+    then
+	echo "Did not find expected output in $1:"
+	echo "   $2"
+	echo ""
+	echo "Actual output below:"
+	cat "$1"
+	exit 1
+    fi
+}
+
+# Extract actual command line from linker's -v output.
+cat incremental_test.cmdline |
+  grep "gcctestdir/ld " |
+  sed "s/--incremental[-a-z]* //g" |
+  cut -d ' ' -f 2- > actual
+
+# Extract recorded command line from dump of the output file.
+cat incremental_test.stdout |
+  grep "Link command line" |
+  cut -d : -f 2- |
+  cut -d ' ' -f 3- |
+  sed "s/'//g" > recorded
+
+# Verify that the command line was recorded correctly.
+check_cmp actual recorded
+
+rm -f actual recorded
+
+# Filter the incremental-dump output into a format that can be grepped
+# more easily.
+
+awk '
+    /^[A-Za-z][A-Za-z ]+:$/ { section = $0; }
+    /^[[]/ { subsection = $0; }
+    /^ / { print section, subsection, $0; }
+' < incremental_test.stdout > incremental_test.dump
+
+check incremental_test.dump "Input sections: .* incremental_test_1.o  *1 "
+check incremental_test.dump "Input sections: .* incremental_test_2.o  *1 "
+check incremental_test.dump "Global symbol table: .* main  .* relocation type "
+check incremental_test.dump "Global symbol table: .* a  *incremental_test_1.o "
+check incremental_test.dump "Global symbol table: .* a .* relocation type "
+check incremental_test.dump "Global symbol table: .* b  *incremental_test_2.o "
+check incremental_test.dump "Global symbol table: .* b .* relocation type "
+check incremental_test.dump "Global symbol table: .* t1  *incremental_test_2.o "
+check incremental_test.dump "Global symbol table: .* t1 .* relocation type "
+
+rm -f incremental_test.dump
+
+exit 0
+@
+
+
+1.2
+log
+@gold/ChangeLog:
+
+	* testsuite/incremental_test.sh: Rewrite.
+	* testsuite/incremental_test_1.c: Rewrite.
+	* testsuite/incremental_test_2.c: Rewrite.
+@
+text
+@d53 1
+@
+
+
+1.1
+log
+@2009-12-02  Rafael Avila de Espindola  <espindola@@google.com>
+
+	* testsuite/Makefile.am: Add the incremental_test.sh test.
+	* testsuite/incremental_test.sh: New.
+	* testsuite/incremental_test_1.c: New.
+	* testsuite/incremental_test_2.c: New.
+@
+text
+@d5 1
+a5 1
+# Copyright 2009 Free Software Foundation, Inc.
+d7 1
+d26 59
+a84 3
+set -e
+cat incremental_test.cmdline | grep "gcctestdir/ld " | cut -d ' ' -f 2- > \
+  actual
+d86 1
+a86 2
+cat incremental_test.stdout | grep "Link command line" | cut -d : -f 2- | \
+  cut -d ' ' -f 3- | sed "s/'//g" > recorded
+d88 1
+a88 4
+diff actual recorded
+rm actual recorded
+
+exit 0@
+

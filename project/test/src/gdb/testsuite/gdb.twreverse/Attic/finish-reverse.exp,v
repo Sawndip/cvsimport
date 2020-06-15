@@ -1,0 +1,661 @@
+head	1.1;
+access;
+symbols
+	reverse-20081226-branch:1.1.2.7.0.2
+	reverse-20081226-branchpoint:1.1.2.7
+	reverse-20080717-branch:1.1.0.2;
+locks; strict;
+comment	@# @;
+
+
+1.1
+date	2008.09.05.20.57.49;	author msnyder;	state dead;
+branches
+	1.1.2.1;
+next	;
+
+1.1.2.1
+date	2008.09.05.20.57.49;	author msnyder;	state Exp;
+branches;
+next	1.1.2.2;
+
+1.1.2.2
+date	2008.09.05.21.06.25;	author msnyder;	state Exp;
+branches;
+next	1.1.2.3;
+
+1.1.2.3
+date	2008.09.05.21.22.26;	author msnyder;	state Exp;
+branches;
+next	1.1.2.4;
+
+1.1.2.4
+date	2008.09.05.21.29.25;	author msnyder;	state Exp;
+branches;
+next	1.1.2.5;
+
+1.1.2.5
+date	2008.09.09.19.05.17;	author msnyder;	state Exp;
+branches;
+next	1.1.2.6;
+
+1.1.2.6
+date	2008.09.19.20.44.04;	author msnyder;	state Exp;
+branches;
+next	1.1.2.7;
+
+1.1.2.7
+date	2008.09.19.21.17.10;	author msnyder;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.1
+log
+@file finish-reverse.exp was initially added on branch reverse-20080717-branch.
+@
+text
+@@
+
+
+1.1.2.1
+log
+@2008-09-05  Michael Snyder  <msnyder@@vmware.com>
+
+	* gdb.twreverse/finish-reverse.exp: New file.
+	* gdb.twreverse/return2-reverse.c: New file.
+	* gdb.twreverse/Makefile.in: Add return2-reverse for make clean.
+@
+text
+@a0 242
+# Copyright 2000, 2004, 2007, 2008 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# Please email any bugs, comments, and/or additions to this file to:
+# bug-gdb@@prep.ai.mit.edu
+
+if $tracelevel then {
+	strace $tracelevel
+}
+
+# re-use the program from the "return2" test.
+
+set testfile "return2-reverse"
+set srcfile ${testfile}.c
+
+if { [prepare_for_testing return2-reverse.exp "$testfile"] } {
+    return -1
+}
+
+proc test_start_of_line { line_text test_msg } {
+    global gdb_prompt
+    global decimal
+    global hex
+
+    send_gdb "info line\n"
+    gdb_expect {
+	-re "Line $decimal of .* starts at address ($hex) .*$gdb_prompt $" {
+	    set line_begin $expect_out(1,string)
+	}
+	default {
+	    fail "Get line address in test_start_of_line"
+	}
+    }
+    send_gdb "info reg pc\n"
+    gdb_expect {
+	-re ".*: ($hex)\r\n*$gdb_prompt $" {
+	    set stop_pc $expect_out(1,string)
+	}
+	default {
+	    fail"Get stop pc in test_start_of_line"
+	}
+    }
+    gdb_test "print $line_begin == $stop_pc" \
+	" = 1\[\r\n\]*" \
+	"test_start_of_line, $test_msg"
+}
+
+set timeout 600
+runto main
+# FIXME 'record' command should say something so we know it's working.
+gdb_test "record" "" "start recording"
+
+# Test finish from void func
+
+set breakloc [gdb_get_line_number "VOID FUNC" "$srcfile"]
+gdb_test "break void_func" \
+    "Breakpoint $decimal at .* line $breakloc\." \
+    "set breakpoint on void_func"
+gdb_continue_to_breakpoint "void_func" ".*/$srcfile:$breakloc"
+
+set test_msg "finish from void_func"
+gdb_test_multiple "finish" "$test_msg" {
+    -re "call to void_func" {
+	send_gdb "step\n"
+	exp_continue
+    }
+    -re "void_checkpoint" {
+	pass "$test_msg"
+    }
+}
+
+# Test finish from char func
+
+set breakloc [gdb_get_line_number "CHAR FUNC" "$srcfile"]
+gdb_test "break char_func" \
+    "Breakpoint $decimal at .* line $breakloc\." \
+    "set breakpoint on char_func"
+gdb_continue_to_breakpoint "char_func" ".*/$srcfile:$breakloc"
+
+set test_msg "finish from char_func"
+gdb_test_multiple "finish" "$test_msg" {
+    -re "void_checkpoint" {
+	send_gdb "step\n"
+	exp_continue
+    }
+    -re "char_checkpoint" {
+	pass "$test_msg"
+    }
+}
+
+
+###
+###
+###
+
+# Now switch to reverse
+gdb_test "set exec-dir reverse" "" "set reverse execution"
+
+# Test reverse finish from char func
+
+set breakloc [gdb_get_line_number "CHAR FUNC" "$srcfile"]
+gdb_continue_to_breakpoint "char_func" ".*/$srcfile:$breakloc"
+
+set test_msg "reverse finish from char_func"
+gdb_test_multiple "finish" "$test_msg" {
+    -re ".*void_checkpoint.*$gdb_prompt $" {
+	test_start_of_line "void_checkpoint" "$test_msg"
+    }
+}
+
+# Test reverse finish from void func
+
+set breakloc [gdb_get_line_number "VOID FUNC" "$srcfile"]
+gdb_continue_to_breakpoint "void_func" ".*/$srcfile:$breakloc"
+
+set test_msg "reverse finish from void_func"
+send_gdb "finish\n"
+gdb_expect {
+    -re ".*call to void_func.*$gdb_prompt $" {
+	test_start_of_line "call to void_func" "$test_msg"
+    }
+    -re ".*$gdb_prompt $" {
+	fail "$test_msg"
+    }
+    timeout {
+	fail "$test_msg (timeout)"
+    }
+}
+
+
+
+return 0
+
+
+proc finish_1 { type } {
+    global gdb_prompt
+
+    gdb_test "break ${type}_func" "Breakpoint \[0123456789\].*" \
+	    "set break on ${type}_func"
+    gdb_test "continue" "Breakpoint.* ${type}_func.*" \
+	    "continue to ${type}_func"
+    send_gdb "finish\n"
+    gdb_expect {
+	-re ".*Value returned is .* = 49 '1'\r\n$gdb_prompt $" {
+	    if { $type == "char" } {
+		pass "finish from char_func"
+	    } else {
+		fail "finish from ${type}_func"
+	    }
+	}
+	-re ".*Value returned is .* = \[0123456789\]* '1'\r\n$gdb_prompt $" {
+	    if { $type == "char" } {
+		pass "finish from char_func (non-ASCII char set?)"
+	    } else {
+		fail "finish from ${type}_func"
+	    }
+	}
+	-re ".*Value returned is .* = 1\r\n$gdb_prompt $" {
+	    pass "finish from ${type}_func"
+	}
+	-re ".*$gdb_prompt $" {
+	    fail "finish from ${type}_func"
+	}
+	timeout {
+	    fail "finish from ${type}_func (timeout)"
+	}
+    }
+}
+
+proc finish_void { } {
+    global gdb_prompt
+
+    gdb_test "break void_func" "Breakpoint \[0123456789\].*" \
+	    "set break on void_func"
+    gdb_test "continue" "Breakpoint.* void_func.*" \
+	    "continue to void_func"
+    send_gdb "finish\n"
+    # Some architectures will have one or more instructions after the
+    # call instruction which still is part of the call sequence, so we
+    # must be prepared for a "finish" to show us the void_func call
+    # again as well as the statement after.
+    gdb_expect {
+	-re ".*void_checkpoint.*$gdb_prompt $" {
+	    pass "finish from void_func"
+	}
+	-re "0x\[0-9a-fA-F\]+ in main.*call to void_func.*$gdb_prompt $" {
+	    pass "finish from void_func"
+	}
+	-re ".*$gdb_prompt $" {
+	    fail "finish from void_func"
+	}
+	timeout {
+	    fail "finish from void_func (timeout)"
+	}
+    }
+}
+
+# A function that tests that the given ABBREV is a working abbreviation
+# of the "finish" command.
+
+proc finish_abbreviation { abbrev } {
+
+    if { ! [ runto "int_func" ] } then {
+        fail "running to int_func"
+        return -1
+    }
+
+    gdb_test "$abbrev" \
+             "Value returned is .* = 1" \
+             "Testing the \"$abbrev\" abbreviation for \"finish\""
+}
+
+proc finish_tests { } {
+    global gdb_prompt
+
+    if { ! [ runto_main ] } then {
+	untested finish.exp
+	return -1
+    }
+
+    finish_void
+    finish_1 "char"
+    finish_1 "short"
+    finish_1 "int"
+    finish_1 "long"
+    finish_1 "long_long"
+    finish_1 "float"
+    finish_1 "double"
+    finish_abbreviation "fin"
+}
+@
+
+
+1.1.2.2
+log
+@expand
+@
+text
+@a102 57
+# Test finish from short func
+
+set breakloc [gdb_get_line_number "SHORT FUNC" "$srcfile"]
+gdb_test "break short_func" \
+    "Breakpoint $decimal at .* line $breakloc\." \
+    "set breakpoint on short_func"
+gdb_continue_to_breakpoint "short_func" ".*/$srcfile:$breakloc"
+
+set test_msg "finish from short_func"
+gdb_test_multiple "finish" "$test_msg" {
+    -re "char_checkpoint" {
+	send_gdb "step\n"
+	exp_continue
+    }
+    -re "short_checkpoint" {
+	pass "$test_msg"
+    }
+}
+
+# Test finish from int func
+
+set breakloc [gdb_get_line_number "INT FUNC" "$srcfile"]
+gdb_test "break int_func" \
+    "Breakpoint $decimal at .* line $breakloc\." \
+    "set breakpoint on int_func"
+gdb_continue_to_breakpoint "int_func" ".*/$srcfile:$breakloc"
+
+set test_msg "finish from int_func"
+gdb_test_multiple "finish" "$test_msg" {
+    -re "short_checkpoint" {
+	send_gdb "step\n"
+	exp_continue
+    }
+    -re "int_checkpoint" {
+	pass "$test_msg"
+    }
+}
+
+# Test finish from lnog func
+
+set breakloc [gdb_get_line_number "LONG FUNC" "$srcfile"]
+gdb_test "break long_func" \
+    "Breakpoint $decimal at .* line $breakloc\." \
+    "set breakpoint on long_func"
+gdb_continue_to_breakpoint "long_func" ".*/$srcfile:$breakloc"
+
+set test_msg "finish from long_func"
+gdb_test_multiple "finish" "$test_msg" {
+    -re "int_checkpoint" {
+	send_gdb "step\n"
+	exp_continue
+    }
+    -re "long_checkpoint" {
+	pass "$test_msg"
+    }
+}
+
+a110 36
+# Test reverse finish from long func
+
+set breakloc [gdb_get_line_number "LONG FUNC" "$srcfile"]
+gdb_continue_to_breakpoint "long_func" ".*/$srcfile:$breakloc"
+
+set test_msg "reverse finish from long_func"
+gdb_test_multiple "finish" "$test_msg" {
+    -re ".*int_checkpoint.*$gdb_prompt $" {
+	test_start_of_line "int_checkpoint" "$test_msg"
+    }
+}
+
+# Test reverse finish from int func
+
+set breakloc [gdb_get_line_number "INT FUNC" "$srcfile"]
+gdb_continue_to_breakpoint "int_func" ".*/$srcfile:$breakloc"
+
+set test_msg "reverse finish from int_func"
+gdb_test_multiple "finish" "$test_msg" {
+    -re ".*short_checkpoint.*$gdb_prompt $" {
+	test_start_of_line "short_checkpoint" "$test_msg"
+    }
+}
+
+# Test reverse finish from short func
+
+set breakloc [gdb_get_line_number "SHORT FUNC" "$srcfile"]
+gdb_continue_to_breakpoint "short_func" ".*/$srcfile:$breakloc"
+
+set test_msg "reverse finish from short_func"
+gdb_test_multiple "finish" "$test_msg" {
+    -re ".*char_checkpoint.*$gdb_prompt $" {
+	test_start_of_line "char_checkpoint" "$test_msg"
+    }
+}
+
+d129 2
+a130 1
+gdb_test_multiple "finish" "$test_msg" {
+d134 6
+@
+
+
+1.1.2.3
+log
+@expand
+@
+text
+@d23 1
+a23 1
+# re-use the program from the "return2-reverse" test.
+d75 1
+a75 1
+    -re " call to void_func " {
+d79 1
+a79 1
+    -re " void_checkpoint " {
+d94 1
+a94 1
+    -re " void_checkpoint " {
+d98 1
+a98 1
+    -re " char_checkpoint " {
+d113 1
+a113 1
+    -re " char_checkpoint " {
+d117 1
+a117 1
+    -re " short_checkpoint " {
+d132 1
+a132 1
+    -re " short_checkpoint " {
+d136 1
+a136 1
+    -re " int_checkpoint " {
+d141 1
+a141 1
+# Test finish from long func
+d151 1
+a151 1
+    -re " int_checkpoint " {
+d155 1
+a155 20
+    -re " long_checkpoint " {
+	pass "$test_msg"
+    }
+}
+
+# Test finish from long long func
+
+set breakloc [gdb_get_line_number "LONG LONG FUNC" "$srcfile"]
+gdb_test "break long_long_func" \
+    "Breakpoint $decimal at .* line $breakloc\." \
+    "set breakpoint on long_long_func"
+gdb_continue_to_breakpoint "long_long_func" ".*/$srcfile:$breakloc"
+
+set test_msg "finish from long_long_func"
+gdb_test_multiple "finish" "$test_msg" {
+    -re " long_checkpoint " {
+	send_gdb "step\n"
+	exp_continue
+    }
+    -re " long_long_checkpoint " {
+a167 12
+# Test reverse finish from long long func
+
+set breakloc [gdb_get_line_number "LONG LONG FUNC" "$srcfile"]
+gdb_continue_to_breakpoint "long_long_func" ".*/$srcfile:$breakloc"
+
+set test_msg "reverse finish from long_long_func"
+gdb_test_multiple "finish" "$test_msg" {
+    -re ".* long_checkpoint.*$gdb_prompt $" {
+	test_start_of_line "long_checkpoint" "$test_msg"
+    }
+}
+
+d175 1
+a175 1
+    -re ".* int_checkpoint.*$gdb_prompt $" {
+d187 1
+a187 1
+    -re ".* short_checkpoint.*$gdb_prompt $" {
+d199 1
+a199 1
+    -re ".* char_checkpoint.*$gdb_prompt $" {
+d211 1
+a211 1
+    -re ".* void_checkpoint.*$gdb_prompt $" {
+d223 1
+a223 1
+    -re ".* call to void_func.*$gdb_prompt $" {
+d228 2
+d231 98
+@
+
+
+1.1.2.4
+log
+@copyright notice
+@
+text
+@d1 1
+a1 1
+# Copyright 2008 Free Software Foundation, Inc.
+@
+
+
+1.1.2.5
+log
+@2008-09-09  Michael Snyder  <msnyder@@vmware.com>
+
+	* gdb.twreverse/return2-reverse.c: Rename to:
+	* gdb.twreverse/finish-reverse.c: New name of file.
+	* gdb.twreverse/*.exp: Sharpen regexps, add $gdb_prompt.
+
+2008-09-06  Michael Snyder  <msnyder@@vmware.com>
+
+	* gdb.twreverse/watch-reverse.exp: New file.
+	* gdb.twreverse/watch-reverse.c: New file.
+	* gdb.twreverse/Makefile.in: Add watch-reverse for make clean.
+	* gdb.twreverse/step-reverse.exp: Add $gdb_prompt to regexps.
+@
+text
+@d19 7
+a25 1
+set testfile "finish-reverse"
+d28 1
+a28 2
+if { [prepare_for_testing return2-reverse.exp "$testfile" $srcfile] } {
+    untested finish-reverse.exp
+a31 3
+global hex
+global decimal
+
+d60 1
+a61 1
+
+d69 1
+a69 1
+    "Breakpoint $decimal at .*/$srcfile, line $breakloc\." \
+d71 1
+a71 1
+gdb_continue_to_breakpoint "void_func" ".*/$srcfile:$breakloc.*"
+d75 1
+a75 1
+    -re " call to void_func .*$gdb_prompt $" {
+d79 1
+a79 1
+    -re " void_checkpoint .*$gdb_prompt $" {
+d88 1
+a88 1
+    "Breakpoint $decimal at .*/$srcfile, line $breakloc\." \
+d90 1
+a90 1
+gdb_continue_to_breakpoint "char_func" ".*/$srcfile:$breakloc.*"
+d94 1
+a94 1
+    -re " void_checkpoint .*$gdb_prompt $" {
+d98 1
+a98 1
+    -re " char_checkpoint .*$gdb_prompt $" {
+d109 1
+a109 1
+gdb_continue_to_breakpoint "short_func" ".*/$srcfile:$breakloc.*"
+d113 1
+a113 1
+    -re " char_checkpoint .*$gdb_prompt $" {
+d117 1
+a117 1
+    -re " short_checkpoint .*$gdb_prompt $" {
+d128 1
+a128 1
+gdb_continue_to_breakpoint "int_func" ".*/$srcfile:$breakloc.*"
+d132 1
+a132 1
+    -re " short_checkpoint .*$gdb_prompt $" {
+d136 1
+a136 1
+    -re " int_checkpoint .*$gdb_prompt $" {
+d147 1
+a147 1
+gdb_continue_to_breakpoint "long_func" ".*/$srcfile:$breakloc.*"
+d151 1
+a151 1
+    -re " int_checkpoint .*$gdb_prompt $" {
+d155 1
+a155 1
+    -re " long_checkpoint .*$gdb_prompt $" {
+d166 1
+a166 1
+gdb_continue_to_breakpoint "long_long_func" ".*/$srcfile:$breakloc.*"
+d170 1
+a170 1
+    -re " long_checkpoint .*$gdb_prompt $" {
+d174 1
+a174 1
+    -re " long_long_checkpoint .*$gdb_prompt $" {
+d190 1
+a190 1
+gdb_continue_to_breakpoint "long_long_func" ".*/$srcfile:$breakloc.*"
+d202 1
+a202 1
+gdb_continue_to_breakpoint "long_func" ".*/$srcfile:$breakloc.*"
+d214 1
+a214 1
+gdb_continue_to_breakpoint "int_func" ".*/$srcfile:$breakloc.*"
+d226 1
+a226 1
+gdb_continue_to_breakpoint "short_func" ".*/$srcfile:$breakloc.*"
+d238 1
+a238 1
+gdb_continue_to_breakpoint "char_func" ".*/$srcfile:$breakloc.*"
+d250 1
+a250 1
+gdb_continue_to_breakpoint "void_func" ".*/$srcfile:$breakloc.*"
+@
+
+
+1.1.2.6
+log
+@prepare_for_testing, standardize
+@
+text
+@d22 2
+a23 1
+if { [prepare_for_testing $testfile.exp "$testfile" $srcfile] } {
+@
+
+
+1.1.2.7
+log
+@don't need globals hex and decimal
+@
+text
+@d26 3
+@
+
+

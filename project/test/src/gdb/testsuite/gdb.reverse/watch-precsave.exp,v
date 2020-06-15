@@ -1,0 +1,667 @@
+head	1.12;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.12
+	gdb_7_6-2013-04-26-release:1.12
+	gdb_7_6-branch:1.12.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.12
+	gdb_7_5_1-2012-11-29-release:1.11
+	gdb_7_5-2012-08-17-release:1.11
+	gdb_7_5-branch:1.11.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.11
+	gdb_7_4_1-2012-04-26-release:1.8.2.1
+	gdb_7_4-2012-01-24-release:1.8.2.1
+	gdb_7_4-branch:1.8.0.2
+	gdb_7_4-2011-12-13-branchpoint:1.8
+	gdb_7_3_1-2011-09-04-release:1.7
+	gdb_7_3-2011-07-26-release:1.7
+	gdb_7_3-branch:1.7.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.7
+	gdb_7_2-2010-09-02-release:1.6
+	gdb_7_2-branch:1.6.0.2
+	gdb_7_2-2010-07-07-branchpoint:1.6
+	gdb_7_1-2010-03-18-release:1.3
+	gdb_7_1-branch:1.3.0.2
+	gdb_7_1-2010-02-18-branchpoint:1.3;
+locks; strict;
+comment	@# @;
+
+
+1.12
+date	2013.01.01.06.41.26;	author brobecke;	state Exp;
+branches;
+next	1.11;
+
+1.11
+date	2012.07.11.15.21.36;	author tromey;	state Exp;
+branches;
+next	1.10;
+
+1.10
+date	2012.06.26.17.54.59;	author tromey;	state Exp;
+branches;
+next	1.9;
+
+1.9
+date	2012.01.04.08.27.54;	author brobecke;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2011.11.08.08.23.48;	author qiyao;	state Exp;
+branches
+	1.8.2.1;
+next	1.7;
+
+1.7
+date	2011.01.01.15.33.49;	author brobecke;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2010.06.03.23.54.18;	author msnyder;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2010.06.02.21.50.56;	author msnyder;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2010.05.28.18.26.41;	author msnyder;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2010.01.01.07.32.06;	author brobecke;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2009.11.23.20.11.42;	author msnyder;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2009.10.22.19.58.26;	author msnyder;	state Exp;
+branches;
+next	;
+
+1.8.2.1
+date	2012.01.06.04.54.28;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.12
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@# Copyright 2009-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# Based on a file written by Fred Fish. (fnf@@cygnus.com)
+# This file is part of the GDB testsuite.  It tests precord dumpfile
+# debugging with watchpoints.
+
+# This test suitable only for process record-replay
+if ![supports_process_record] {
+    return
+}
+
+standard_testfile watch-reverse.c
+set precsave [standard_output_file watch.precsave]
+
+if { [prepare_for_testing $testfile.exp $testfile $srcfile] } {
+    return -1
+}
+
+runto main
+
+if [supports_process_record] {
+    # Activate process record/replay
+    gdb_test_no_output "record" "Turn on process record"
+}
+
+set end_location  [gdb_get_line_number "end of main"  ]
+gdb_test "break $end_location" \
+    "Breakpoint $decimal at .*/$srcfile, line $end_location\." \
+    "BP at end of main"
+
+gdb_test "continue" "Breakpoint .* end of main .*" "run to end of main"
+
+gdb_test "record save $precsave" \
+    "Saved core file $precsave with execution log\."  \
+    "save process recfile"
+
+gdb_test "kill" "" "Kill process, prepare to debug log file" \
+    "Kill the program being debugged\\? \\(y or n\\) " "y"
+
+gdb_test "record restore $precsave" \
+    "Program terminated with signal .*" \
+    "reload core file"
+
+# Only software watchpoints can be used in reverse
+gdb_test_no_output "set can-use-hw-watchpoints 0" ""
+
+gdb_test "break marker1" \
+    "Breakpoint $decimal at $hex: file .*$srcfile, line $decimal.*" \
+    "set breakpoint at marker1"
+
+gdb_test "break marker2" \
+    "Breakpoint $decimal at $hex: file .*$srcfile, line $decimal.*" \
+    "set breakpoint at marker2"
+
+gdb_continue_to_breakpoint "marker1" ".*/$srcfile:.*"
+
+gdb_test "watch ival3" \
+    ".*\[Ww\]atchpoint $decimal: ival3.*" \
+    "set watchpoint on ival3"
+
+# Continue until first change, from -1 to 0
+
+gdb_test "continue" \
+    ".*\[Ww\]atchpoint.*ival3.*Old value = -1.*New value = 0.*ival3 = count; ival4 = count;.*" \
+    "watchpoint hit, first time"
+
+# Continue until the next change, from 0 to 1.
+gdb_test "continue" \
+    ".*\[Ww\]atchpoint.*ival3.*Old value = 0.*New value = 1.*ival3 = count; ival4 = count;.*" \
+    "watchpoint hit, second time"
+
+# Continue until the next change, from 1 to 2.
+gdb_test "continue" \
+    ".*\[Ww\]atchpoint.*ival3.*Old value = 1.*New value = 2.*ival3 = count; ival4 = count;.*" \
+    "watchpoint hit, third time"
+
+# Continue until the next change, from 2 to 3.
+gdb_test "continue" \
+    ".*\[Ww\]atchpoint.*ival3.*Old value = 2.*New value = 3.*ival3 = count; ival4 = count;.*" \
+    "watchpoint hit, fourth time"
+
+# Continue until the next change, from 3 to 4.
+# Note that this one is outside the loop.
+
+gdb_test "continue" \
+    ".*\[Ww\]atchpoint.*ival3.*Old value = 3.*New value = 4.*ival3 = count; ival4 = count;.*" \
+    "watchpoint hit, fifth time"
+
+# Continue until we hit the finishing marker function.
+# Make sure we hit no more watchpoints.
+
+gdb_continue_to_breakpoint "marker2" ".*/$srcfile:.*"
+
+###
+###
+###
+
+gdb_test_no_output "set exec-direction reverse" "set reverse"
+
+# Reverse until the previous change, from 4 to 3
+# Note that this one is outside the loop
+
+gdb_test "continue" \
+    ".*\[Ww\]atchpoint.*ival3.*Old value = 4.*New value = 3.*ival3 = count; ival4 = count;.*" \
+    "watchpoint hit in reverse, first time"
+
+# Reverse until the previous change, from 3 to 2.
+gdb_test "continue" \
+    ".*\[Ww\]atchpoint.*ival3.*Old value = 3.*New value = 2.*ival3 = count; ival4 = count;.*" \
+    "watchpoint hit in reverse, second time"
+
+# Reverse until the previous change, from 2 to 1.
+gdb_test "continue" \
+    ".*\[Ww\]atchpoint.*ival3.*Old value = 2.*New value = 1.*ival3 = count; ival4 = count;.*" \
+    "watchpoint hit in reverse, third time"
+
+# Reverse until the previous change, from 1 to 0.
+gdb_test "continue" \
+    ".*\[Ww\]atchpoint.*ival3.*Old value = 1.*New value = 0.*ival3 = count; ival4 = count;.*" \
+    "watchpoint hit in reverse, fourth time"
+
+# Reverse until first change, from 0 to -1
+
+gdb_test "continue" \
+    ".*\[Ww\]atchpoint.*ival3.*Old value = 0.*New value = -1.*ival3 = count; ival4 = count;.*" \
+    "watchpoint hit in reverse, fifth time"
+
+gdb_test_no_output "set can-use-hw-watchpoints 1" "enable hw watchpoints"
+
+###
+###
+###
+
+gdb_test_no_output "set exec-direction forward" "set forward"
+
+# Continue until first change, from -1 to 0
+
+gdb_test "continue" \
+    ".*\[Ww\]atchpoint.*ival3.*Old value = -1.*New value = 0.*ival3 = count; ival4 = count;.*" \
+    "watchpoint hit, forward replay, first time"
+
+# Continue until the next change, from 0 to 1.
+gdb_test "continue" \
+    ".*\[Ww\]atchpoint.*ival3.*Old value = 0.*New value = 1.*ival3 = count; ival4 = count;.*" \
+    "watchpoint hit, forward replay, second time"
+
+# Continue until the next change, from 1 to 2.
+gdb_test "continue" \
+    ".*\[Ww\]atchpoint.*ival3.*Old value = 1.*New value = 2.*ival3 = count; ival4 = count;.*" \
+    "watchpoint hit, forward replay, third time"
+
+# Continue until the next change, from 2 to 3.
+gdb_test "continue" \
+    ".*\[Ww\]atchpoint.*ival3.*Old value = 2.*New value = 3.*ival3 = count; ival4 = count;.*" \
+    "watchpoint hit, forward replay, fourth time"
+
+# Continue until the next change, from 3 to 4.
+# Note that this one is outside the loop.
+
+gdb_test "continue" \
+    ".*\[Ww\]atchpoint.*ival3.*Old value = 3.*New value = 4.*ival3 = count; ival4 = count;.*" \
+    "watchpoint hit, forward replay, fifth time"
+
+# Continue until we hit the finishing marker function.
+# Make sure we hit no more watchpoints.
+
+gdb_test "continue" "marker2 .*" "replay forward to marker2"
+
+###
+###
+###
+
+gdb_test_no_output "set exec-direction reverse" "set reverse"
+
+# Reverse until the previous change, from 4 to 3
+# Note that this one is outside the loop
+
+gdb_test "continue" \
+    ".*\[Ww\]atchpoint.*ival3.*Old value = 4.*New value = 3.*ival3 = count; ival4 = count;.*" \
+    "watchpoint hit in reverse, HW, first time"
+
+# Reverse until the previous change, from 3 to 2.
+gdb_test "continue" \
+    ".*\[Ww\]atchpoint.*ival3.*Old value = 3.*New value = 2.*ival3 = count; ival4 = count;.*" \
+    "watchpoint hit in reverse, HW, second time"
+
+# Reverse until the previous change, from 2 to 1.
+gdb_test "continue" \
+    ".*\[Ww\]atchpoint.*ival3.*Old value = 2.*New value = 1.*ival3 = count; ival4 = count;.*" \
+    "watchpoint hit in reverse, HW, third time"
+
+# Reverse until the previous change, from 1 to 0.
+gdb_test "continue" \
+    ".*\[Ww\]atchpoint.*ival3.*Old value = 1.*New value = 0.*ival3 = count; ival4 = count;.*" \
+    "watchpoint hit in reverse, HW, fourth time"
+
+# Reverse until first change, from 0 to -1
+
+gdb_test "continue" \
+    ".*\[Ww\]atchpoint.*ival3.*Old value = 0.*New value = -1.*ival3 = count; ival4 = count;.*" \
+    "watchpoint hit in reverse, HW, fifth time"
+
+@
+
+
+1.11
+log
+@	* gdb.reverse/break-precsave.exp: Use standard_output_file.
+	* gdb.reverse/consecutive-precsave.exp: Use standard_output_file.
+	* gdb.reverse/finish-precsave.exp: Use standard_output_file.
+	* gdb.reverse/i386-precsave.exp: Use standard_output_file.
+	* gdb.reverse/machinestate-precsave.exp: Use standard_output_file.
+	* gdb.reverse/sigall-precsave.exp: Use standard_output_file.
+	* gdb.reverse/solib-precsave.exp: Use standard_output_file.
+	* gdb.reverse/step-precsave.exp: Use standard_output_file.
+	* gdb.reverse/until-precsave.exp: Use standard_output_file.
+	* gdb.reverse/watch-precsave.exp: Use standard_output_file.
+@
+text
+@d1 1
+a1 1
+# Copyright 2009-2012 Free Software Foundation, Inc.
+@
+
+
+1.10
+log
+@	* gdb.reverse/break-precsave.exp: Use standard_testfile.
+	* gdb.reverse/break-reverse.exp: Use standard_testfile.
+	* gdb.reverse/consecutive-precsave.exp: Use standard_testfile.
+	* gdb.reverse/consecutive-reverse.exp: Use standard_testfile.
+	* gdb.reverse/finish-precsave.exp: Use standard_testfile.
+	* gdb.reverse/finish-reverse-bkpt.exp: Use standard_testfile.
+	* gdb.reverse/finish-reverse.exp: Use standard_testfile.
+	* gdb.reverse/i386-precsave.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.reverse/i386-reverse.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.reverse/i386-sse-reverse.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.reverse/i387-env-reverse.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.reverse/i387-stack-reverse.exp: Use standard_testfile,
+	prepare_for_testing
+	* gdb.reverse/machinestate-precsave.exp: Use standard_testfile.
+	* gdb.reverse/machinestate.exp: Use standard_testfile.
+	* gdb.reverse/next-reverse-bkpt-over-sr.exp: Use standard_testfile.
+	* gdb.reverse/sigall-precsave.exp: Use standard_testfile,
+	build_executable.
+	* gdb.reverse/sigall-reverse.exp: Use standard_testfile,
+	build_executable.
+	* gdb.reverse/solib-precsave.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.reverse/solib-reverse.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.reverse/step-precsave.exp: Use standard_testfile.
+	* gdb.reverse/step-reverse.exp: Use standard_testfile.
+	* gdb.reverse/until-precsave.exp: Use standard_testfile.
+	* gdb.reverse/until-reverse.exp: Use standard_testfile.
+	* gdb.reverse/watch-precsave.exp: Use standard_testfile.
+	* gdb.reverse/watch-reverse.exp: Use standard_testfile.
+@
+text
+@d26 1
+d46 2
+a47 2
+gdb_test "record save watch.precsave" \
+    "Saved core file watch.precsave with execution log\."  \
+d53 1
+a53 1
+gdb_test "record restore watch.precsave" \
+@
+
+
+1.9
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d25 1
+a25 3
+set testfile "watch-reverse"
+set srcfile ${testfile}.c
+set binfile ${objdir}/${subdir}/${testfile}
+@
+
+
+1.8
+log
+@gdb/testsuite/
+
+	* gdb.exp (supports_process_record): New.
+	(supports_reverse): New.
+	* gdb.reverse/break-precsave.exp: Call support_process_record
+	to run test conditionally.
+	* gdb.reverse/consecutive-precsave.exp: Likewise.
+	* gdb.reverse/i386-precsave.exp: Likewise.
+	* gdb.reverse/machinestate-precsave.exp: Likewise.
+	* gdb.reverse/solib-precsave.exp: Likewise.
+	* gdb.reverse/step-precsave.exp: Likewise.
+	* gdb.reverse/until-precsave.exp: Likewise.
+	* gdb.reverse/watch-precsave.exp: Likewise.
+	* gdb.reverse/break-reverse.exp: Call support_reverse  to run
+	test conditionally.
+	* gdb.reverse/consecutive-reverse.exp: Likewise.
+	* gdb.reverse/finish-precsave.exp: Likewise.
+	* gdb.reverse/finish-reverse-bkpt.exp: Likewise.
+	* gdb.reverse/finish-reverse.exp: Likewise.
+	* gdb.reverse/i386-reverse.exp: Likewise.
+	* gdb.reverse/i386-sse-reverse.exp: Likewise.
+	* gdb.reverse/machinestate.exp: Likewise.
+	* gdb.reverse/next-reverse-bkpt-over-sr.exp: Likewise.
+	* gdb.reverse/sigall-precsave.exp: Likewise.
+	* gdb.reverse/sigall-reverse.exp: Likewise.
+	* gdb.reverse/solib-reverse.exp: Likewise.
+	* gdb.reverse/step-reverse.exp: Likewise.
+	* gdb.reverse/until-reverse.exp: Likewise.
+	* gdb.reverse/watch-reverse.exp: Likewise.
+@
+text
+@d1 1
+a1 1
+# Copyright 2009, 2010, 2011 Free Software Foundation, Inc.
+@
+
+
+1.8.2.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d1 1
+a1 1
+# Copyright 2009-2012 Free Software Foundation, Inc.
+@
+
+
+1.7
+log
+@run copyright.sh for 2011.
+@
+text
+@d21 1
+a21 1
+if ![target_info exists gdb,use_precord] {
+d35 1
+a35 1
+if [target_info exists gdb,use_precord] {
+@
+
+
+1.6
+log
+@2010-06-03  Michael Snyder  <msnyder@@vmware.com>
+
+	* gdb.base/commands.exp: Replace gdb_test with gdb_test_no_output.
+	* gdb.base/display.exp: Ditto.
+	* gdb.base/find.exp: Ditto.
+	* gdb.base/ifelse.exp: Ditto.
+	* gdb.base/multi-forks.exp: Ditto.
+	* gdb.base/recurse.exp: Ditto.
+	* gdb.base/setshow.exp: Ditto.
+	* gdb.base/value-double-free.exp: Ditto.
+	* gdb.base/watch-vfork.exp: Ditto.
+	* gdb.base/watch_thread_num.exp: Ditto.
+	* gdb.base/watchpoint-solib.exp: Ditto.
+	* gdb.base/watchpoint.exp: Ditto.
+	* gdb.base/watchpoints.exp: Ditto.
+
+	* gdb.cp/classes.exp: Replace gdb_test with gdb_test_no_output.
+	* gdb.cp/overload.exp: Ditto.
+	* gdb.cp/virtfunc.exp: Ditto.
+
+	* gdb.python/py-value.exp: Replace gdb_test with gdb_test_no_output.
+
+	* gdb.reverse/watch-precsave.exp:
+	Replace gdb_test with gdb_test_no_output.
+
+	* gdb.threads/attach-into-signal.exp:
+	Replace gdb_test with gdb_test_no_output.
+	* gdb.threads/local-watch-wrong-thread.exp: Ditto.
+	* gdb.threads/watchthreads.exp: Ditto.
+	* gdb.threads/watchthreads2.exp: Ditto.
+
+	* gdb.trace/deltrace.exp: Replace gdb_test with gdb_test_no_output.
+	* gdb.trace/tfind.exp: Ditto.
+@
+text
+@d1 1
+a1 1
+# Copyright 2009, 2010 Free Software Foundation, Inc.
+@
+
+
+1.5
+log
+@2010-06-02  Michael Snyder  <msnyder@@vmware.com>
+
+	* gdb.python/py-block.exp: Use gdb_test_no_output.
+	* gdb.python/py-prettyprint.exp: Ditto.
+	* gdb.python/py-template.exp: Ditto.
+	* gdb.python/py-value.exp: Ditto.
+
+	* gdb.reverse/watch-precsave.exp: Use gdb_test_no_output.
+	* gdb.reverse/watch-reverse.exp: Ditto.
+
+	* gdb.server/ext-attach.exp: Use gdb_test_no_output.
+	* gdb.server/ext-run.exp: Ditto.
+@
+text
+@d59 1
+a59 1
+gdb_test "set can-use-hw-watchpoints 0" "" ""
+@
+
+
+1.4
+log
+@2010-05-28  Michael Snyder  <msnyder@@msnyder-server.eng.vmware.com>
+
+	* gdb.reverse/break-precsave.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/break-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/consecutive-precsave.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/consecutive-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/finish-precsave.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/finish-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/i386-precsave.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/i386-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/i386-sse-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/i387-env-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/i387-stack-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/machinestate-precsave.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/machinestate.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/sigall-precsave.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/sigall-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/solib-precsave.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/solib-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/step-precsave.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/step-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/until-precsave.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/until-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/watch-precsave.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/watch-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+@
+text
+@d142 1
+a142 1
+gdb_test "set can-use-hw-watchpoints 1" "" "enable hw watchpoints"
+@
+
+
+1.3
+log
+@Update copyright year in most headers.
+
+Automatic update by copyright.sh.
+@
+text
+@d37 1
+a37 2
+    gdb_test "record" "" "Turn on process record"
+    # FIXME: command ought to acknowledge, so we can test if it succeeded.
+d112 1
+a112 2
+# FIXME 'set exec-dir' command should give some output so we can test.
+gdb_test "set exec-direction reverse" "" "set reverse"
+d148 1
+a148 2
+# FIXME 'set exec-dir' command should give some output so we can test.
+gdb_test "set exec-direction forward" "" "set forward"
+d187 1
+a187 2
+# FIXME 'set exec-dir' command should give some output so we can test.
+gdb_test "set exec-direction reverse" "" "set reverse"
+@
+
+
+1.2
+log
+@2009-11-23  Michael Snyder  <msnyder@@vmware.com>
+
+	* gdb.reverse/watch-reverse.exp: Extend test for hw watchpoints.
+	* gdb.reverse-watch-precsave.exp: Ditto.
+@
+text
+@d1 1
+a1 1
+# Copyright 2009 Free Software Foundation, Inc.
+@
+
+
+1.1
+log
+@2009-10-19  Michael Snyder  <msnyder@@vmware.com>
+
+	* gdb.reverse/break-precsave.exp: New test.
+	* gdb.reverse/consecutive-precsave.exp: Ditto.
+	* gdb.reverse/finish-precsave.exp: Ditto.
+	* gdb.reverse/i386-precsave.exp: Ditto.
+	* gdb.reverse/machinestate-precsave.exp: Ditto.
+	* gdb.reverse/sigall-precsave.exp: Ditto.
+	* gdb.reverse/solilb-precsave.exp: Ditto.
+	* gdb.reverse/step-precsave.exp: Ditto.
+	* gdb.reverse/until-precsave.exp: Ditto.
+	* gdb.reverse/watch-precsave.exp: Ditto.
+@
+text
+@d1 1
+a1 1
+# Copyright 2008, 2009 Free Software Foundation, Inc.
+d143 78
+@
+

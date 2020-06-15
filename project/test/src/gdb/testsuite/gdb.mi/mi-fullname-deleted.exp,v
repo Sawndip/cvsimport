@@ -1,0 +1,203 @@
+head	1.4;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.4
+	gdb_7_6-2013-04-26-release:1.4
+	gdb_7_6-branch:1.4.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.4;
+locks; strict;
+comment	@# @;
+
+
+1.4
+date	2013.02.03.16.00.36;	author jkratoch;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2013.01.13.18.52.45;	author jkratoch;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2013.01.01.06.41.24;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2012.12.25.08.03.33;	author jkratoch;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.4
+log
+@gdb/
+	Code cleanup.
+	* breakpoint.c (clear_command): Remove variable is_abs, unify the
+	call of filename_cmp with compare_filenames_for_search.
+	* dwarf2read.c (dw2_map_symtabs_matching_filename): Remove variable
+	is_abs, unify the call of FILENAME_CMP with
+	compare_filenames_for_search.  New gdb_asserts for real_path and name.
+	Unify the call of compare_filenames_for_search with FILENAME_CMP.
+	* psymtab.c (partial_map_symtabs_matching_filename): Likewise.
+	* symfile.h (struct quick_symbol_functions): Extend the comment for
+	map_symtabs_matching_filename.
+	* symtab.c (compare_filenames_for_search): Remove the function comment
+	relative path requirement.  Handle absolute filenames, with a comment.
+	(iterate_over_some_symtabs): Remove variable is_abs, unify the call of
+	FILENAME_CMP with compare_filenames_for_search.  New gdb_asserts for
+	real_path and name.  Unify the call of compare_filenames_for_search
+	with FILENAME_CMP.
+	(iterate_over_symtabs): New gdb_assert on REAL_PATH.
+
+gdb/testsuite/
+	* gdb.mi/mi-fullname-deleted.exp: Use double last slash for $srcfileabs.
+	(compare_filenames_for_search does not match)
+	(compare_filenames_for_search does match): New tests.
+@
+text
+@# Copyright 2012-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+load_lib mi-support.exp
+set MIFLAGS "-i=mi"
+
+gdb_exit
+if [mi_gdb_start] {
+    continue
+}
+
+standard_testfile
+set srcfileabs [standard_output_file $srcfile]
+
+# "//$srcfile" It is used for the test of compare_filenames_for_search.
+if { [regsub {/[^/]+$} $srcfileabs {/\0} srcfileabs] != 1 } {
+    xfail "Cannot double the last slash separator"
+    return -1
+}
+
+if { [regsub {^(/[^/]+)/} $srcfileabs {\1subst/} srcfileabssubst] != 1
+     || [regsub {^(/[^/]+)/.*$} $srcfileabs {\1} initdir] != 1 } {
+    xfail "Missing root subdirectory"
+    return -1
+}
+
+set f [open $srcfileabs "w"]
+puts $f "int main (void) { return 0; }"
+close $f
+
+if { [gdb_compile "$srcfileabs" "${binfile}" executable {debug}] != "" } {
+    untested $testname
+    return -1
+}
+
+file delete -- $srcfileabs
+
+mi_gdb_reinitialize_dir $srcdir/$subdir
+mi_gdb_load ${binfile}
+
+mi_gdb_test "-interpreter-exec console \"set substitute-path ${initdir} ${initdir}subst\"" {\^done} "set substitute-path"
+
+mi_gdb_test "-file-list-exec-source-file" ".*\",fullname=\".*\".*" "fullname present"
+
+mi_gdb_test "-file-list-exec-source-file" ".*\",fullname=\"[string_to_regexp $srcfileabssubst]\".*" "substituted fullname"
+
+# Test compare_filenames_for_search does not falsely use absolute filename as
+# a relative one.
+mi_gdb_test "-break-insert -t /$srcfile:main" \
+	    "\\^error,msg=\"No source file named /[string_to_regexp $srcfile]\\.\"" \
+	    "compare_filenames_for_search does not match"
+mi_gdb_test "-break-insert -t $srcfile:main" \
+	    {\^done,bkpt=.*} \
+	    "compare_filenames_for_search does match"
+@
+
+
+1.3
+log
+@gdb/
+	* source.c (symtab_to_fullname): Apply rewrite_source_path also for
+	non-existing files.
+
+gdb/testsuite/
+	* gdb.mi/mi-fullname-deleted.exp: Set srcfileabssubst and initdir.
+	(set substitute-path): New test.
+	(fullname present): Remove content.
+	(substituted fullname): New test.
+@
+text
+@d27 6
+d58 9
+@
+
+
+1.2
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@d27 6
+d47 5
+a51 1
+mi_gdb_test "-file-list-exec-source-file" ".*\",fullname=\"[string_to_regexp $srcfileabs]\".*" "fullname present"
+@
+
+
+1.1
+log
+@gdb/
+	* ada-lang.c (is_known_support_routine): New variable fullname.  Use
+	access call to verify the symtab_to_fullname result.
+	* breakpoint.c (print_breakpoint_location, update_static_tracepoint):
+	Remove NULL check of symtab_to_fullname result.
+	* cli/cli-cmds.c (edit_command): Likewise.
+	* mi/mi-cmd-file.c (mi_cmd_file_list_exec_source_file)
+	(mi_cmd_file_list_exec_source_files): Likewise.
+	* python/py-symtab.c (stpy_fullname): Likewise.
+	* source.c (symtab_to_fullname): Update function comment.  Rename
+	variable r to fd, move it to inner block.  Always provide non-NULL
+	result.
+	(print_source_lines_base): Remove NULL check of symtab_to_fullname
+	result.
+	* stack.c (print_frame): Likewise.
+	* symtab.c (iterate_over_some_symtabs, find_line_symtab, sources_info):
+	Likewise.
+	* tracepoint.c (print_one_static_tracepoint_marker): Likewise.
+
+gdb/doc/
+	* gdb.texinfo (GDB/MI Data Manipulation) (fullname): Make it always
+	present.
+	(GDB/MI File Commands) (-file-list-exec-source-files): Make the
+	fullname output always present.
+
+gdb/testsuite/
+	* gdb.mi/mi-fullname-deleted.exp: New file.
+@
+text
+@d1 1
+a1 1
+# Copyright 2012 Free Software Foundation, Inc.
+@
+

@@ -1,0 +1,230 @@
+head	1.1;
+access;
+symbols
+	newlib-2_2_0:1.1.0.2
+	newlib-2_1_0:1.1
+	newlib-2_0_0:1.1
+	newlib-1_20_0:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.1
+date	2011.12.15.22.58.40;	author jjohnstn;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.1
+log
+@
+2011-12-15  Konrad Eisele <konrad@@gaisler.com>
+
+        * configure.in: Add SPARC LEON support.
+        * configure: Regenerated.
+        * sparc_leon/asm-leon/amba.h, sparc_leon/asm-leon/asmmacro.h,
+        sparc_leon/asm-leon/clock.h, sparc_leon/asm-leon/contextswitch.h,
+        sparc_leon/asm-leon/elfmacro.h, sparc_leon/asm-leon/head.h,
+        sparc_leon/asm-leon/irq.h, sparc_leon/asm-leon/jiffies.h,
+        sparc_leon/asm-leon/lambapp.h, sparc_leon/asm-leon/lambapp_devs.h,
+        sparc_leon/asm-leon/leon.h, sparc_leon/asm-leon/leon3.h,
+        sparc_leon/asm-leon/leonbare_debug.h, sparc_leon/asm-leon/leonbare_kernel.h,
+        sparc_leon/asm-leon/leonbare_kernel_queue.h, sparc_leon/asm-leon/leoncompat.h,
+        sparc_leon/asm-leon/leondbg.h, sparc_leon/asm-leon/leonstack.h,
+        sparc_leon/asm-leon/liblocks.h, sparc_leon/asm-leon/linkage.h,
+        sparc_leon/asm-leon/param.h, sparc_leon/asm-leon/queue.h,
+        sparc_leon/asm-leon/spinlock.h, sparc_leon/asm-leon/stack.h,
+        sparc_leon/asm-leon/time.h, sparc_leon/asm-leon/timer.h,
+        sparc_leon/asm-leon/types.h, sparc_leon/asm-leon/winmacros.h:
+        New file.
+        * sparc_leon/Makefile.in, sparc_leon/_exit.c,
+        sparc_leon/amba.c, sparc_leon/amba_dbg.c,
+        sparc_leon/amba_driver.c, sparc_leon/amba_scan.c,
+        sparc_leon/asm-leon, sparc_leon/bdinit.S,
+        sparc_leon/busscan.S, sparc_leon/cacheA.S,
+        sparc_leon/catch_interrupt.c, sparc_leon/catch_interrupt_mvt.c,
+        sparc_leon/catch_interrupt_pending.c, sparc_leon/catch_interrupt_svt.c,
+        sparc_leon/configure.in,
+        sparc_leon/console.c, sparc_leon/console_dbg.c,
+        sparc_leon/console_init.c, sparc_leon/contextswitch.c,
+        sparc_leon/contextswitch_asm.S, sparc_leon/crt0.S,
+        sparc_leon/crti.S, sparc_leon/crtn.S,
+        sparc_leon/etrap.S, sparc_leon/etrap_fast.S,
+        sparc_leon/fpu.S, sparc_leon/gettimeofday.c,
+        sparc_leon/initcalls.c, sparc_leon/io.c,
+        sparc_leon/irqinstall.S, sparc_leon/irqtrap.S,
+        sparc_leon/irqtrap_fast.S, sparc_leon/jiffies.c,
+        sparc_leon/kernel.c, sparc_leon/kernel_context.S,
+        sparc_leon/kernel_debug.c, sparc_leon/kernel_debug_var.c,
+        sparc_leon/kernel_mm.c, sparc_leon/kernel_mutex.c,
+        sparc_leon/kernel_queue.c, sparc_leon/kernel_sched.c,
+        sparc_leon/kernel_thread.c, sparc_leon/lcpuinit.S,
+        sparc_leon/locore.S, sparc_leon/locore_atexit.c,
+        sparc_leon/locore_clean.S, sparc_leon/locore_mvt.S,
+        sparc_leon/locore_mvt_reset.S, sparc_leon/locore_svt.S,
+        sparc_leon/locore_svt_reset.S, sparc_leon/locore_svtdisp.S,
+        sparc_leon/locore_var.S, sparc_leon/locore_var_svt.S,
+        sparc_leon/mmu_asm.S, sparc_leon/mutex.c,
+        sparc_leon/nocache.S, sparc_leon/pnpinit.c,
+        sparc_leon/pnpinit_malloc.c, sparc_leon/pnpinit_simple.c,
+        sparc_leon/regwin.S, sparc_leon/regwin_patch.c,
+        sparc_leon/regwin_slow.S, sparc_leon/regwinflush.S,
+        sparc_leon/rtc.c, sparc_leon/rtrap.S,
+        sparc_leon/rtrap_fast.S, sparc_leon/stop.S,
+        sparc_leon/timer.c, sparc_leon/times.c:
+        New file
+        * sparc_leon/configure: Regenerate
+@
+text
+@/*
+ * Copyright (c) 2011 Aeroflex Gaisler
+ *
+ * BSD license:
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
+
+
+#include <asm-leon/leon.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+/*#define DEBUG_CONFIG*/
+
+/* Structure containing address to devices found on the Amba Plug&Play bus */
+extern amba_confarea_type amba_conf;
+
+#ifdef DEBUG_CONFIG
+#define printk(fmt,arg...) \
+{ char c[1024]; \
+  sprintf(c,fmt,##arg); \
+  DEBUG_puts(c); \
+}
+#else
+#define printk(fmt,arg...)
+#endif
+
+static void
+vendor_dev_string (unsigned long conf, char *vendorbuf, char *devbuf)
+{
+  int vendor = amba_vendor (conf);
+  int dev = amba_device (conf);
+  char *devstr;
+  char *vendorstr;
+#ifdef DEBUG_CONFIG
+  sprintf (vendorbuf, "Unknown vendor %2x", vendor);
+  sprintf (devbuf, "Unknown device %2x", dev);
+  vendorstr = vendor_id2str (vendor);
+  if (vendorstr)
+    {
+      sprintf (vendorbuf, "%s", vendorstr);
+    }
+  devstr = device_id2str (vendor, dev);
+  if (devstr)
+    {
+      sprintf (devbuf, "%s", devstr);
+    }
+#else
+  vendorbuf[0] = 0;
+  devbuf[0] = 0;
+#endif
+}
+
+void
+amba_prinf_config (void)
+{
+  char devbuf[128];
+  char vendorbuf[128];
+  unsigned int conf;
+  int i = 0;
+  int j = 0;
+  unsigned int addr;
+  unsigned int m;
+  printk ("             Vendors         Slaves\n");
+  printk ("Ahb masters:\n");
+  i = 0;
+  while (i < amba_conf.ahbmst.devnr)
+    {
+      conf = amba_get_confword (amba_conf.ahbmst, i, 0);
+      vendor_dev_string (conf, vendorbuf, devbuf);
+      printk ("%2i(%2x:%3x|%2i): %16s %16s \n", i, amba_vendor (conf),
+	      amba_device (conf), amba_irq (conf), vendorbuf, devbuf);
+      for (j = 0; j < 4; j++)
+	{
+	  m = amba_ahb_get_membar (amba_conf.ahbmst, i, j);
+	  if (m)
+	    {
+	      addr = amba_membar_start (m);
+	      printk (" +%i: 0x%x \n", j, addr);
+	    }
+	}
+      i++;
+    }
+  printk ("Ahb slaves:\n");
+  i = 0;
+  while (i < amba_conf.ahbslv.devnr)
+    {
+      conf = amba_get_confword (amba_conf.ahbslv, i, 0);
+      vendor_dev_string (conf, vendorbuf, devbuf);
+      printk ("%2i(%2x:%3x|%2i): %16s %16s \n", i, amba_vendor (conf),
+	      amba_device (conf), amba_irq (conf), vendorbuf, devbuf);
+      for (j = 0; j < 4; j++)
+	{
+	  m = amba_ahb_get_membar (amba_conf.ahbslv, i, j);
+	  if (m)
+	    {
+	      addr = amba_membar_start (m);
+	      if (amba_membar_type (m) == AMBA_TYPE_AHBIO)
+		{
+		  addr = AMBA_TYPE_AHBIO_ADDR (addr);
+		}
+	      else if (amba_membar_type (m) == AMBA_TYPE_APBIO)
+		{
+		  printk ("Warning: apbio membar\n");
+		}
+	      printk (" +%i: 0x%x (raw:0x%x)\n", j, addr, m);
+	    }
+	}
+      i++;
+    }
+  printk ("Apb slaves:\n");
+  i = 0;
+  while (i < amba_conf.apbslv.devnr)
+    {
+
+      conf = amba_get_confword (amba_conf.apbslv, i, 0);
+      vendor_dev_string (conf, vendorbuf, devbuf);
+      printk ("%2i(%2x:%3x|%2i): %16s %16s \n", i, amba_vendor (conf),
+	      amba_device (conf), amba_irq (conf), vendorbuf, devbuf);
+
+      m = amba_apb_get_membar (amba_conf.apbslv, i);
+      addr = amba_iobar_start (amba_conf.apbslv.apbmst[i], m);
+      printk (" +%2i: 0x%x (raw:0x%x) \n", 0, addr, m);
+
+      i++;
+
+    }
+
+}
+@

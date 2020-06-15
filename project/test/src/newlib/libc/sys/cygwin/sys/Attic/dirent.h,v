@@ -1,0 +1,330 @@
+head	1.11;
+access;
+symbols
+	w32api-2_2:1.7
+	mingw-runtime-2_4:1.7
+	newlib-1_11_0:1.7
+	cygnus_cvs_20020108_pre:1.6
+	newlib-1_10_0:1.6
+	newlib-1_9_0:1.2
+	newlib-2000-02-17:1.1.1.1
+	SNAPSHOT:1.1.1;
+locks; strict;
+comment	@ * @;
+expand	@o@;
+
+
+1.11
+date	2003.05.12.11.09.39;	author corinna;	state dead;
+branches;
+next	1.10;
+
+1.10
+date	2003.05.11.00.23.41;	author cgf;	state Exp;
+branches;
+next	1.9;
+
+1.9
+date	2003.04.01.14.53.02;	author corinna;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2003.03.09.21.08.51;	author corinna;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2002.02.23.14.37.29;	author corinna;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2001.11.21.06.57.44;	author cgf;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2001.09.03.19.04.05;	author corinna;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2001.09.03.16.33.53;	author corinna;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2001.03.14.08.36.33;	author corinna;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2000.11.22.01.49.19;	author cgf;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2000.02.17.19.39.49;	author cgf;	state Exp;
+branches
+	1.1.1.1;
+next	;
+
+1.1.1.1
+date	2000.02.17.19.39.49;	author cgf;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.11
+log
+@	* configure.host: Accomodate removing the libc/sys/cygwin dir.
+	* libc/locale/ldpart.c (__part_load_locale): Use 64 bit stat call
+	if __CYGWIN_USE_BIG_TYPES__ is set.
+	* libc/search/hash.c (__hash_open): Ditto.
+	(init_hash): Ditto.
+	* libc/stdio/fseek.c (fseek): Ditto.
+	* libc/stdio/makebuf.c (__smakebuf): Ditto.
+	* libc/stdio/mktemp.c (_gettemp): Ditto.
+	* libc/sys/cygwin/Makefile.am: Remove.
+	* libc/sys/cygwin/Makefile.in: Remove.
+	* libc/sys/cygwin/aclocal.m4: Remove.
+	* libc/sys/cygwin/configure: Remove.
+	* libc/sys/cygwin/configure.in: Remove.
+	* libc/sys/cygwin/crt0.c: Move to winsup/cygwin directory.
+	* libc/sys/cygwin/sys/dirent.h: Move to winsup/cygwin/include/sys
+	directory.
+	* libc/sys/cygwin/sys/param.h: Ditto.
+	* libc/sys/cygwin/sys/utime.h: Ditto.
+	* libc/sys/cygwin/sys/utmp.h: Ditto.
+@
+text
+@/* Posix dirent.h for WIN32.
+
+   Copyright 2001 Red Hat, Inc.
+
+   This software is a copyrighted work licensed under the terms of the
+   Cygwin license.  Please consult the file "CYGWIN_LICENSE" for
+   details. */
+
+/* Including this file should not require any Windows headers.  */
+   
+#ifndef _SYS_DIRENT_H
+#define _SYS_DIRENT_H
+
+#include <sys/types.h>
+
+#define __DIRENT_VERSION	2
+
+#pragma pack(push,4)
+struct dirent
+{
+  long d_version;	/* Used since Cygwin 1.3.3. */
+  ino_t d_ino;		/* still junk but with more bits */
+  long d_fd;		/* File descriptor of open directory.
+			   Used since Cygwin 1.3.3. */
+  unsigned long old_d_ino;/* Just for compatibility, it's junk */
+  char d_name[256];	/* FIXME: use NAME_MAX? */
+};
+#pragma pack(pop)
+
+#define __DIRENT_COOKIE 0xdede4242
+
+typedef struct __DIR
+{
+  /* This is first to set alignment in non _COMPILING_NEWLIB case.  */
+  unsigned long __d_cookie;
+  struct dirent *__d_dirent;
+  char *__d_dirname;		/* directory name with trailing '*' */
+  _off_t __d_position;		/* used by telldir/seekdir */
+  unsigned long __d_dirhash;	/* hash of directory name for use by
+				   readdir */
+  union
+    {
+#ifdef _COMPILING_NEWLIB
+      struct
+	{
+	  void *__handle;
+	  void *__fh;
+	} __d_data;
+#endif
+      char __d_filler[16];
+    } __d_u;
+} DIR;
+
+DIR *opendir (const char *);
+struct dirent *readdir (DIR *);
+void rewinddir (DIR *);
+int closedir (DIR *);
+
+int dirfd (DIR *);
+
+#ifndef _POSIX_SOURCE
+#ifndef __INSIDE_CYGWIN__
+off_t telldir (DIR *);
+void seekdir (DIR *, off_t loc);
+#endif
+
+int scandir (const char *__dir,
+	     struct dirent ***__namelist,
+	     int (*select) (const struct dirent *),
+	     int (*compar) (const struct dirent **, const struct dirent **));
+
+int alphasort (const struct dirent **__a, const struct dirent **__b);
+#endif /* _POSIX_SOURCE */
+
+#endif
+@
+
+
+1.10
+log
+@* libc/sys/cygwin/sys/dirent.h (struct dirent): Accommodate (slightly) 64 bit
+inodes.
+@
+text
+@@
+
+
+1.9
+log
+@	* libc/sys/cygwin/sys/dirent.h (struct DIR): Change type of
+	__d_position member to _off_t.
+@
+text
+@d16 1
+a16 1
+#define __DIRENT_VERSION	1
+d18 1
+d22 1
+a22 1
+  long __d_reserved[2];
+d25 1
+a25 1
+  ino_t d_ino;		/* Just for compatibility, it's junk */
+d28 1
+@
+
+
+1.8
+log
+@	* libc/include/pwd.h: Add guards to avoid type clashes when compiling
+	Cygwin.
+	* libc/include/sys/stat.h: Ditto.
+	* libc/include/sys/unistd.h: Ditto.
+	* libc/sys/cygwin/sys/dirent.h: Ditto.
+@
+text
+@d36 1
+a36 1
+  __off32_t __d_position;	/* used by telldir/seekdir */
+@
+
+
+1.7
+log
+@	* libc/sys/cygwin/sys/dirent.h (struct __DIR): Use __off32_t instead
+	of off_t.
+@
+text
+@d60 1
+d63 1
+@
+
+
+1.6
+log
+@* libc/sys/cygwin/sys/dirent.h (DIR): Add another internal element.
+@
+text
+@d36 1
+a36 1
+  off_t __d_position;		/* used by telldir/seekdir */
+@
+
+
+1.5
+log
+@        * libc/sys/cygwin/sys/dirent.h (struct dirent): Add version number
+        field.
+        (__DIRENT_VERSION): New define.
+@
+text
+@d20 1
+a20 1
+  long d_version; /* Used since Cygwin 1.3.3. */
+d22 4
+a25 3
+  long d_fd; /* File descriptor of open directory. Used since Cygwin 1.3.3. */
+  ino_t d_ino; /* Just for compatibility, it's junk */
+  char d_name[256];		/* FIXME: use NAME_MAX? */
+d30 1
+a30 1
+typedef struct
+d45 1
+a45 1
+	  char __open_p;
+@
+
+
+1.4
+log
+@        * libc/sys/cygwin/sys/dirent.h (struct dirent): Add `d_fd' member.
+@
+text
+@d16 2
+d20 2
+a21 1
+  long __d_reserved[3];
+@
+
+
+1.3
+log
+@        * libc/sys/cygwin/crt0.c: Add copyright hint.
+        * libc/sys/cygwin/sys/dirent.h: Ditto.
+        * libc/sys/cygwin/sys/param.h: Ditto.
+        * libc/sys/cygwin/sys/utime.h: Ditto.
+        * libc/sys/cygwin/sys/utmp.h: Ditto.
+@
+text
+@d18 2
+a19 1
+  long __d_reserved[4];
+d52 2
+@
+
+
+1.2
+log
+@* libc/sys/cygwin/sys/dirent.h: Change definition to avoid necessity of
+including windows headers.
+@
+text
+@d1 7
+a7 1
+/* Posix dirent.h for WIN32.  */
+@
+
+
+1.1
+log
+@Initial revision
+@
+text
+@d33 1
+a33 1
+	  HANDLE __handle;
+@
+
+
+1.1.1.1
+log
+@import newlib-2000-02-17 snapshot
+@
+text
+@@

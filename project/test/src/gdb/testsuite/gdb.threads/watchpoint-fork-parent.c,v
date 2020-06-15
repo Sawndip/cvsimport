@@ -1,0 +1,213 @@
+head	1.3;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.3
+	gdb_7_6-2013-04-26-release:1.3
+	gdb_7_6-branch:1.3.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.3
+	gdb_7_5_1-2012-11-29-release:1.1
+	gdb_7_5-2012-08-17-release:1.1
+	gdb_7_5-branch:1.1.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.3
+date	2013.01.01.06.41.27;	author brobecke;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2012.12.19.08.19.59;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2012.01.24.13.46.55;	author jkratoch;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.3
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@/* Test case for forgotten hw-watchpoints after fork()-off of a process.
+
+   Copyright 2012-2013 Free Software Foundation, Inc.
+
+   This file is part of GDB.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program; if not, see <http://www.gnu.org/licenses/>.  */
+
+#include <string.h>
+#include <errno.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <assert.h>
+#include <stdio.h>
+#include <sys/wait.h>
+
+#include "watchpoint-fork.h"
+
+void
+forkoff (int nr)
+{
+  pid_t child, pid_got;
+  int exit_code = 42 + nr;
+  int status, i;
+
+  child = fork ();
+  switch (child)
+    {
+    case -1:
+      assert (0);
+    case 0:
+      printf ("child%d: %d\n", nr, (int) getpid ());
+      /* Delay to get both the "child%d" and "parent%d" message printed without
+	 a race breaking expect by its endless wait on `$gdb_prompt$':
+	 Breakpoint 3, marker () at ../../../gdb/testsuite/gdb.threads/watchpoint-fork.c:33
+	 33      }
+	 (gdb) parent2: 14223  */
+      i = sleep (1);
+      assert (i == 0);
+
+      /* We must not get caught here (against a forgotten breakpoint).  */
+      var++;
+      marker ();
+
+      _exit (exit_code);
+    default:
+      printf ("parent%d: %d\n", nr, (int) child);
+      /* Delay to get both the "child%d" and "parent%d" message printed, see
+	 above.  */
+      i = sleep (1);
+      assert (i == 0);
+
+      pid_got = wait (&status);
+      assert (pid_got == child);
+      assert (WIFEXITED (status));
+      assert (WEXITSTATUS (status) == exit_code);
+
+      /* We must get caught here (against a false watchpoint removal).  */
+      marker ();
+    }
+}
+@
+
+
+1.2
+log
+@update copyright notices in various GDB files.
+
+Update some files in GDB that were accidently left with a GPL v2
+copyright header.
+
+Update some files where the copyright notice still provides the
+old contact info, using the approach for providing the FSF's contact
+info.
+
+gdb/ChangeLog:
+
+        * acinclude.m4: Update contact info in copyright notice.
+
+gdb/doc/ChangeLog:
+
+        * refcard.tex: Update copyright notice to GPL v3 or later.
+        Update contact info.
+
+gdb/testsuite/ChangeLog:
+
+        * dg-extract-results.sh: Update contact info in copyright notice.
+        * gdb.arch/mips-octeon-bbit.exp: Update copyright notice to
+        GPL v3 or later.  Update contact info.
+        * gdb.fortran/logical.f90, gdb.threads/watchpoint-fork-child.c,
+        gdb.threads/watchpoint-fork-mt.c,
+        gdb.threads/watchpoint-fork-parent.c,
+        gdb.threads/watchpoint-fork-st.c,
+        gdb.threads/watchpoint-fork.h: Likewise.
+@
+text
+@d3 1
+a3 1
+   Copyright 2012 Free Software Foundation, Inc.
+@
+
+
+1.1
+log
+@gdb/
+	Fix watchpoints across inferior fork.
+	* amd64-linux-nat.c (update_debug_registers_callback): Update the
+	comment for linux_nat_iterate_watchpoint_lwps.
+	(amd64_linux_dr_set_control, amd64_linux_dr_set_addr): Use
+	linux_nat_iterate_watchpoint_lwps.
+	(amd64_linux_prepare_to_resume): New comment on Linux kernel.
+	* i386-linux-nat.c (update_debug_registers_callback): Update the
+	comment for linux_nat_iterate_watchpoint_lwps.
+	(i386_linux_dr_set_control, i386_linux_dr_set_addr): Use
+	linux_nat_iterate_watchpoint_lwps.
+	(i386_linux_prepare_to_resume): New comment on Linux kernel.
+	* i386-nat.c: Include inferior.h.
+	(dr_mirror): Remove.
+	(i386_inferior_data, struct i386_inferior_data)
+	(i386_inferior_data_get): New.
+	(i386_debug_reg_state): Use i386_inferior_data_get.
+	(i386_cleanup_dregs, i386_update_inferior_debug_regs)
+	(i386_insert_watchpoint, i386_remove_watchpoint)
+	(i386_stopped_data_address, i386_insert_hw_breakpoint)
+	(i386_remove_hw_breakpoint): New variable state, use
+	i386_debug_reg_state instead of DR_MIRROR.
+	* linux-nat.c (delete_lwp): New declaration.
+	(num_lwps): Move here from downwards.
+	(delete_lwp_cleanup): New.
+	(linux_child_follow_fork): Create new child_lp, call
+	linux_nat_new_thread and linux_nat_prepare_to_resume before calling
+	PTRACE_DETACH.
+	(num_lwps): Move upwards.
+	(linux_nat_iterate_watchpoint_lwps): New.
+	* linux-nat.h (linux_nat_iterate_watchpoint_lwps_ftype): New.
+	(linux_nat_iterate_watchpoint_lwps_ftype): New declaration.
+
+gdb/testsuite/
+	Fix watchpoints across inferior fork.
+	* gdb.threads/watchpoint-fork-child.c: New file.
+	* gdb.threads/watchpoint-fork-mt.c: New file.
+	* gdb.threads/watchpoint-fork-parent.c: New file.
+	* gdb.threads/watchpoint-fork-st.c: New file.
+	* gdb.threads/watchpoint-fork.exp: New file.
+	* gdb.threads/watchpoint-fork.h: New file.
+@
+text
+@d9 1
+a9 1
+   the Free Software Foundation; either version 2 of the License, or
+d18 1
+a18 3
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 59 Temple Place - Suite 330,
+   Boston, MA 02111-1307, USA.  */
+@
+

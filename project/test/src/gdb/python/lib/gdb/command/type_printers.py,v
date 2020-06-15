@@ -1,0 +1,355 @@
+head	1.3;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.3
+	gdb_7_6-2013-04-26-release:1.3
+	gdb_7_6-branch:1.3.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.3;
+locks; strict;
+comment	@# @;
+
+
+1.3
+date	2013.01.01.06.33.01;	author brobecke;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2012.12.12.16.47.30;	author pkoning;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2012.11.12.17.41.58;	author tromey;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.3
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@# Type printer commands.
+# Copyright (C) 2010-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+import copy
+import gdb
+
+"""GDB commands for working with type-printers."""
+
+class InfoTypePrinter(gdb.Command):
+    """GDB command to list all registered type-printers.
+
+    Usage: info type-printers
+    """
+
+    def __init__ (self):
+        super(InfoTypePrinter, self).__init__("info type-printers",
+                                              gdb.COMMAND_DATA)
+
+    def list_type_printers(self, type_printers):
+        """Print a list of type printers."""
+        # A potential enhancement is to provide an option to list printers in
+        # "lookup order" (i.e. unsorted).
+        sorted_type_printers = sorted (copy.copy(type_printers),
+                                       key = lambda x: x.name)
+        for printer in sorted_type_printers:
+            if printer.enabled:
+                enabled = ''
+            else:
+                enabled = " [disabled]"
+            print ("  %s%s" % (printer.name, enabled))
+
+    def invoke(self, arg, from_tty):
+        """GDB calls this to perform the command."""
+        sep = ''
+        for objfile in gdb.objfiles():
+            if objfile.type_printers:
+                print ("%sType printers for %s:" % (sep, objfile.name))
+                self.list_type_printers(objfile.type_printers)
+                sep = '\n'
+        if gdb.current_progspace().type_printers:
+            print ("%sType printers for program space:" % sep)
+            self.list_type_printers(gdb.current_progspace().type_printers)
+            sep = '\n'
+        if gdb.type_printers:
+            print ("%sGlobal type printers:" % sep)
+            self.list_type_printers(gdb.type_printers)
+
+class _EnableOrDisableCommand(gdb.Command):
+    def __init__(self, setting, name):
+        super(_EnableOrDisableCommand, self).__init__(name, gdb.COMMAND_DATA)
+        self.setting = setting
+
+    def set_some(self, name, printers):
+        result = False
+        for p in printers:
+            if name == p.name:
+                p.enabled = self.setting
+                result = True
+        return result
+
+    def invoke(self, arg, from_tty):
+        """GDB calls this to perform the command."""
+        for name in arg.split():
+            ok = False
+            for objfile in gdb.objfiles():
+                if self.set_some(name, objfile.type_printers):
+                    ok = True
+            if self.set_some(name, gdb.current_progspace().type_printers):
+                ok = True
+            if self.set_some(name, gdb.type_printers):
+                ok = True
+            if not ok:
+                print ("No type printer named '%s'" % name)
+
+    def add_some(self, result, word, printers):
+        for p in printers:
+            if p.name.startswith(word):
+                result.append(p.name)
+
+    def complete(self, text, word):
+        result = []
+        for objfile in gdb.objfiles():
+            self.add_some(result, word, objfile.type_printers)
+        self.add_some(result, word, gdb.current_progspace().type_printers)
+        self.add_some(result, word, gdb.type_printers)
+        return result
+
+class EnableTypePrinter(_EnableOrDisableCommand):
+    """GDB command to enable the specified type printer.
+
+    Usage: enable type-printer NAME
+
+    NAME is the name of the type-printer.
+    """
+
+    def __init__(self):
+        super(EnableTypePrinter, self).__init__(True, "enable type-printer")
+
+class DisableTypePrinter(_EnableOrDisableCommand):
+    """GDB command to disable the specified type-printer.
+
+    Usage: disable type-printer NAME
+
+    NAME is the name of the type-printer.
+    """
+
+    def __init__(self):
+        super(DisableTypePrinter, self).__init__(False, "disable type-printer")
+
+InfoTypePrinter()
+EnableTypePrinter()
+DisableTypePrinter()
+@
+
+
+1.2
+log
+@Add support for Python 3.
+* NEWS: Mention Python 3 support.
+* varobj.c (value_get_print_value): Use
+python_string_to_target_string.
+* python/py-block.c: Use PyVarObject_HEAD_INIT in initialization
+of type objects.
+* python/py-breakpoint.c: Ditto.
+* python/py-cmd.c:  Ditto.
+* python/py-event.c: Ditto.
+* python/py-event.h: Ditto.
+* python/py-evtregistry.c: Ditto.
+* python/py-finishbreakpoint.c: Ditto.
+* python/py-frame.c: Ditto.
+* python/py-function.c: Ditto.
+* python/py-infthread.c: Ditto.
+* python/py-lazy-string.c: Ditto.
+* python/py-progspace.c: Ditto.
+* /python/py-symbol.c: Ditto.
+* python/py-evts.c:  (gdbpy_initialize_py_events): Add module
+initialization for Python 3.
+* python/py-inferior.c: Use PyVarObject_HEAD_INIT in initialization
+of type objects.
+(infpy_read_memory): Return memoryview object if Python 3.
+(infpy_write_memory): Use "s*" operand parsing code for Python 3.
+(infpy_search_memory): Ditto.
+(get_buffer): New function for Python 3.
+* python/py-objfile.c: Use PyVarObject_HEAD_INIT in initialization
+of type objects.
+(objfpy_dealloc): Use Py_TYPE to call tp_free.
+* python/py-param.c: Use PyVarObject_HEAD_INIT in initialization
+of type objects.
+(get_attr): Use PyUnicode_CompareWithASCIIString if Python 3.
+(set_attr): Ditto.
+* python/py-prettyprint.c (print_string_repr): use PyBytes methods
+instead of PyString methods if Python 3.
+(print_children): Skip push_dummy_python_frame call if Python 3.
+* python/py-symtab.c: Use PyVarObject_HEAD_INIT in initialization
+of type objects.
+(salpy_dealloc): Use Py_TYPE to call tp_free.
+* python/py-type.c: Use PyVarObject_HEAD_INIT in initialization
+of type objects.
+(field_dealloc): Use Py_TYPE to call tp_free.
+(typy_dealloc): Ditto.
+(type_object_as_number): Adjust struct initializations for
+differences in layout for Python 2 vs. Python 3.
+* python/py-utils.c (python_string_to_unicode): Omit non-Unicode
+string case for Python 3.
+(unicode_to_encoded_python_string): Shorten code (no functional
+change).
+(python_string_to_target_python_string): Comment that in Python 3
+returned value is a Python "bytes" type.
+(gdbpy_is_string): Omit non-Unicode string check in Python 3.
+(gdb_py_object_from_longest): Omit non-long integer case in Python
+3.
+(gdb_py_object_from_ulongest): Ditto.
+* python/py-value.c: Use PyVarObject_HEAD_INIT in initialization
+of type objects.
+(valpy_dealloc): Use Py_TYPE to call tp_free.
+(valpy_int): Omit function if Python 3.
+(convert_value_from_python): Use "%S" format (Python object as a
+string) if Python 3.
+(value_object_as_number): Adjust struct initializations for
+differences in layout for Python 2 vs. Python 3.
+* python/python-config.py: Adjust syntax for Python 3
+compatibility.
+Include "sys.abiflags" string as part of python library name, if
+that attribute exists (Python 3).
+* python/python-internal.h (IS_PY3): Define if Python 3.
+(Py_TPFLAGS_HAVE_ITER, Py_TPFLAGS_CHECKTYPES): Define with
+placeholder value if Python 3.
+(PyInt_Check, PyInt_FromLong, PyInt_AsLong, PyString_FromString,
+PyString_Decode, PyString_FromFormat, PyString_Check): Define as
+analogous Python 3 API function if Python 3.
+(PyVarObject_HEAD_INIT): Define if not already defined.
+(Py_TYPE): Ditto.
+* python/python.c (eval_python_command): Omit Py_FlushLine call if
+Python 3.
+Check return values of all Python API calls for error.
+Supply dummy "python" and "python-interactive" commands if Python
+initialization failed.
+(_initialize_python): Convert argc to wchar_t** if Python 3.
+Add module initialization for Python 3.
+(finish_python_initialization): Pass wchar_t * argument to
+PySys_SetPath if Python 3.
+* python/lib/gdb/__init__.py: Define "reload" if Python 3.
+(_GdbFile): New class for common output file behavior.
+(GdbOutFile): Subclass from _GdbFile.
+(GdbOutputErrorFile): Ditto.
+(auto_load_packages): Adjust syntax for Python 3 compatibility.
+* python/lib/gdb/printing.py: Define basestr and int if Python 3.
+* python/lib/gdb/prompt.py: Use sorted() function rather than
+sort() method.
+* python/lib/gdb/command/explore.py: Define raw_input if Python 3.
+Adjust syntax for Python 3 compatibility.
+* python/lib/gdb/command/pretty_printers.py: Use sorted() function
+rather than sort() method.
+Adjust syntax for Python 3 compatibility.
+* python/lib/gdb/command/type_printers.py: Ditto.
+* doc/gdb.texinfo (Inferior.read_memory): Mention that the return
+value is a memoryview object if Python 3.
+@
+text
+@d2 1
+a2 1
+# Copyright (C) 2010-2012 Free Software Foundation, Inc.
+@
+
+
+1.1
+log
+@	* NEWS: Update.
+	* data-directory/Makefile.in (PYTHON_FILES): Add
+	type_printers.py.
+	* python/lib/gdb/command/type_printers.py: New file.
+	* python/lib/gdb/command/types.py (TypePrinter): New class.
+	(_get_some_type_recognizers, get_type_recognizers,
+	apply_type_recognizers, register_type_printer): New
+	functions.
+	* python/py-objfile.c (objfile_object) <type_printers>: New
+	field.
+	(objfpy_dealloc): Decref new field.
+	(objfpy_new): Set new field.
+	(objfpy_get_type_printers, objfpy_set_type_printers): New
+	functions.
+	(objfile_to_objfile_object): Set new field.
+	(objfile_getset): Add "type_printers".
+	* python/py-progspace.c (pspace_object) <type_printers>: New
+	field.
+	(pspy_dealloc): Decref new field.
+	(pspy_new): Set new field.
+	(pspy_get_type_printers, pspy_set_type_printers): New functions.
+	(pspace_to_pspace_object): Set new field.
+	(pspace_getset): Add "type_printers".
+	* python/python.c (start_type_printers, apply_type_printers,
+	free_type_printers): New functions.
+	(_initialize_python): Set gdb.type_printers.
+	* python/python.h (start_type_printers, apply_type_printers,
+	free_type_printers): Declare.
+	* typeprint.c (type_print_raw_options, default_ptype_flags):
+	Update for new fields.
+	(do_free_global_table, create_global_typedef_table,
+	find_global_typedef): New functions.
+	(find_typedef_in_hash): Use find_global_typedef.
+	(whatis_exp): Use create_global_typedef_table.  Change cleanup
+	handling.
+	* typeprint.h (struct type_print_options) <global_typedefs,
+	global_printers>: New fields.
+doc
+	* gdb.texinfo (Symbols): Document "info type-printers",
+	"enable type-printer" and "disable type-printer".
+	(Python API): Add new node to menu.
+	(Type Printing API): New node.
+	(Progspaces In Python): Document type_printers field.
+	(Objfiles In Python): Likewise.
+	(gdb.types) <get_type_recognizers, apply_type_recognizers,
+	register_type_printer, TypePrinter>: Document.
+testsuite
+	* gdb.base/completion.exp: Update for "info type-printers".
+	* gdb.python/py-typeprint.cc: New file.
+	* gdb.python/py-typeprint.exp: New file.
+	* gdb.python/py-typeprint.py: New file.
+@
+text
+@d36 2
+a37 2
+        sorted_type_printers = copy.copy(type_printers)
+        sorted_type_printers.sort(lambda x, y: cmp(x.name, y.name))
+d43 1
+a43 1
+            print "  %s%s" % (printer.name, enabled)
+d50 1
+a50 1
+                print "%sType printers for %s:" % (sep, objfile.name)
+d54 1
+a54 1
+            print "%sType printers for program space:" % sep
+d58 1
+a58 1
+            print "%sGlobal type printers:" % sep
+d86 1
+a86 1
+                print "No type printer named '%s'" % name
+@
+

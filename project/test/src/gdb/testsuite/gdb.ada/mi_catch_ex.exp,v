@@ -1,0 +1,518 @@
+head	1.8;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.6
+	gdb_7_6-2013-04-26-release:1.6
+	gdb_7_6-branch:1.6.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.6
+	gdb_7_5_1-2012-11-29-release:1.4
+	gdb_7_5-2012-08-17-release:1.4
+	gdb_7_5-branch:1.4.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.4
+	gdb_7_4_1-2012-04-26-release:1.3.2.1
+	gdb_7_4-2012-01-24-release:1.3.2.1
+	gdb_7_4-branch:1.3.0.2
+	gdb_7_4-2011-12-13-branchpoint:1.3
+	gdb_7_3_1-2011-09-04-release:1.1.2.1
+	gdb_7_3-2011-07-26-release:1.1.2.1
+	gdb_7_3-branch:1.1.0.2;
+locks; strict;
+comment	@# @;
+
+
+1.8
+date	2013.10.11.13.49.36;	author brobecke;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2013.10.08.10.25.22;	author brobecke;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2013.01.01.06.33.06;	author brobecke;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2012.07.26.18.43.01;	author tromey;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2012.01.04.08.17.29;	author brobecke;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2011.12.11.17.36.10;	author brobecke;	state Exp;
+branches
+	1.3.2.1;
+next	1.2;
+
+1.2
+date	2011.12.07.15.00.34;	author palves;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2011.04.01.16.59.57;	author brobecke;	state Exp;
+branches
+	1.1.2.1;
+next	;
+
+1.3.2.1
+date	2012.01.06.04.43.42;	author brobecke;	state Exp;
+branches;
+next	;
+
+1.1.2.1
+date	2011.05.17.21.25.57;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.8
+log
+@Adjust gdb.ada/mi_catch_ex.exp to use GDB/MI catch commands...
+
+... in place of the CLI "catch ..." commands.  The latter were used
+because the GDB/MI equivalents were not available at the time.
+
+gdb/testsuite/ChangeLog:
+
+        * gdb.ada/mi_catch_ex.exp: Adjusts all "catch ..." tests to
+        use the appropriate GDB/MI command instead, and verify
+        the test output.
+@
+text
+@# Copyright 2011-2013 Free Software Foundation, Inc.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+load_lib "ada.exp"
+
+standard_ada_testfile foo
+
+if {[gdb_compile_ada "${srcfile}" "${binfile}" executable [list debug additional_flags=-gnata ]] != "" } {
+  return -1
+}
+
+# Some global variables used to simplify the maintenance of some of
+# the regular expressions below.
+set any_nb "\[0-9\]+"
+set eol "\[\r\n\]+"
+
+# Before going any further, verify that we can insert exception
+# catchpoints...  That way, we won't have to do this while doing
+# the actual GDB/MI testing.
+
+clean_restart ${testfile}
+
+if ![runto_main] then {
+   fail "Cannot run to main, testcase aborted"
+   return 0
+}
+
+set msg "insert catchpoint on all Ada exceptions"
+gdb_test_multiple "catch exception" $msg {
+    -re "Catchpoint $any_nb: all Ada exceptions$eol$gdb_prompt $" {
+	pass $msg
+    }
+    -re "Your Ada runtime appears to be missing some debugging information.*\[\r\n\]+$gdb_prompt $" {
+	# If the runtime was not built with enough debug information,
+	# or if it was stripped, we can not test exception
+	# catchpoints.
+	unsupported $msg
+	return -1
+    }
+}
+
+# Now, we can start the GDB/MI testing itself...
+
+load_lib mi-support.exp
+set MIFLAGS "-i=mi"
+
+gdb_exit
+if [mi_gdb_start] {
+    continue
+}
+
+mi_delete_breakpoints
+mi_gdb_reinitialize_dir $srcdir/$subdir
+mi_gdb_load ${binfile}
+
+####################################
+# 1. Try catching all exceptions.  #
+####################################
+
+if ![mi_run_to_main] then {
+   fail "Cannot run to main, testcase aborted"
+   return 0
+}
+
+mi_gdb_test "-catch-exception" \
+            "\\^done,bkptno=\"$decimal\",bkpt={.*disp=\"keep\",enabled=\"y\",addr=\"$hex\",what=\"all Ada exceptions\",.*}" \
+            "catch all exceptions"
+
+mi_execute_to "exec-continue" \
+              "breakpoint-hit\",disp=\"keep\",bkptno=\"$any_nb\",exception-name=\"CONSTRAINT_ERROR" \
+              "foo" "" ".*" ".*" \
+              ".*" \
+              "continue until CE caught by all-exceptions catchpoint"
+
+mi_execute_to "exec-continue" \
+              "breakpoint-hit\",disp=\"keep\",bkptno=\"$any_nb\",exception-name=\"PROGRAM_ERROR" \
+              "foo" "" ".*" ".*" \
+              ".*" \
+              "continue until PE caught by all-exceptions catchpoint"
+
+################################################
+# 2. Try catching only some of the exceptions. #
+################################################
+
+# Here is the scenario:
+#  - Restart the debugger from scratch, runto_main
+#  - We'll catch only "Program_Error"
+#    We'll catch assertions
+#    We'll catch unhandled exceptions
+#  - continue, we should see the first Program_Error exception
+#  - continue, we should see the failed assertion
+#  - continue, we should see the unhandled Constrait_Error exception
+#  - continue, the program exits.
+
+if ![mi_run_to_main] then {
+   fail "Cannot run to main, testcase aborted"
+   return 0
+}
+
+mi_gdb_test "-catch-exception -e Program_Error" \
+            "\\^done,bkptno=\"$decimal\",bkpt={.*disp=\"keep\",enabled=\"y\",addr=\"$hex\",what=\"`Program_Error' Ada exception\",.*}" \
+            "catch Program_Error"
+
+mi_gdb_test "-catch-assert" \
+            "\\^done,bkptno=\"$decimal\",bkpt={.*disp=\"keep\",enabled=\"y\",addr=\"$hex\",what=\"failed Ada assertions\",.*}" \
+            "catch assert failures"
+
+mi_gdb_test "-catch-exception -u" \
+            "\\^done,bkptno=\"$decimal\",bkpt={.*disp=\"keep\",enabled=\"y\",addr=\"$hex\",what=\"unhandled Ada exceptions\",.*}" \
+            "catch unhandled exceptions"
+
+mi_execute_to "exec-continue" \
+              "breakpoint-hit\",disp=\"keep\",bkptno=\"$any_nb\",exception-name=\"PROGRAM_ERROR" \
+              "foo" "" ".*" ".*" \
+              ".*" \
+              "continue to exception catchpoint hit"
+
+mi_execute_to "exec-continue" \
+              "breakpoint-hit\",disp=\"keep\",bkptno=\"$any_nb" \
+              "foo" "" ".*" ".*" \
+              ".*" \
+              "continue to assert failure catchpoint hit"
+
+mi_execute_to "exec-continue" \
+              "breakpoint-hit\",disp=\"keep\",bkptno=\"$any_nb\",exception-name=\"CONSTRAINT_ERROR" \
+              "foo" "" ".*" ".*" \
+              ".*" \
+              "continue to unhandled exception catchpoint hit"
+
+@
+
+
+1.7
+log
+@gdb.ada/mi_catch_ex.exp: Make test names unique.
+
+gdb/testsuite/ChangeLog:
+
+        * gdb.ada/mi_catch_ex.exp: Make "mi_execute_to" test names unique.
+@
+text
+@d77 3
+a79 1
+mi_gdb_test "catch exception"
+d112 11
+a122 5
+mi_gdb_test "catch exception Program_Error"
+
+mi_gdb_test "catch assert"
+
+mi_gdb_test "catch exception unhandled"
+@
+
+
+1.6
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@d83 1
+a83 1
+              "continue to exception catchpoint hit"
+d89 1
+a89 1
+              "continue to exception catchpoint hit"
+d126 1
+a126 1
+              "continue to exception catchpoint hit"
+d132 1
+a132 1
+              "continue to exception catchpoint hit"
+@
+
+
+1.5
+log
+@	* lib/ada.exp (standard_ada_testfile): New proc.
+	* gdb.ada/aliased_array.exp: Use standard_ada_testfile.
+	* gdb.ada/array_bounds.exp: Use standard_ada_testfile.
+	* gdb.ada/array_return.exp: Use standard_ada_testfile.
+	* gdb.ada/array_subscript_addr.exp: Use standard_ada_testfile.
+	* gdb.ada/arrayidx.exp: Use standard_ada_testfile.
+	* gdb.ada/arrayparam.exp: Use standard_ada_testfile.
+	* gdb.ada/arrayptr.exp: Use standard_ada_testfile.
+	* gdb.ada/atomic_enum.exp: Use standard_ada_testfile.
+	* gdb.ada/bad-task-bp-keyword.exp: Use standard_ada_testfile.
+	* gdb.ada/bp_enum_homonym.exp: Use standard_ada_testfile.
+	* gdb.ada/bp_on_var.exp: Use standard_ada_testfile.
+	* gdb.ada/bp_range_type.exp: Use standard_ada_testfile.
+	* gdb.ada/call_pn.exp: Use standard_ada_testfile.
+	* gdb.ada/catch_ex.exp: Use standard_ada_testfile.
+	* gdb.ada/char_enum.exp: Use standard_ada_testfile.
+	* gdb.ada/char_param.exp: Use standard_ada_testfile.
+	* gdb.ada/complete.exp: Use standard_ada_testfile.
+	* gdb.ada/cond_lang.exp: Use standard_ada_testfile,
+	standard_output_file.
+	* gdb.ada/dyn_loc.exp: Use standard_ada_testfile.
+	* gdb.ada/enum_idx_packed.exp: Use standard_ada_testfile.
+	* gdb.ada/exec_changed.exp: Use standard_ada_testfile,
+	standard_output_file.
+	* gdb.ada/exprs.exp: Use standard_ada_testfile.
+	* gdb.ada/fixed_cmp.exp: Use standard_ada_testfile.
+	* gdb.ada/fixed_points.exp: Use standard_ada_testfile.
+	* gdb.ada/formatted_ref.exp: Use standard_ada_testfile.
+	* gdb.ada/frame_args.exp: Use standard_ada_testfile.
+	* gdb.ada/fullname_bp.exp: Use standard_ada_testfile.
+	* gdb.ada/fun_addr.exp: Use standard_ada_testfile.
+	* gdb.ada/fun_in_declare.exp: Use standard_ada_testfile.
+	* gdb.ada/funcall_param.exp: Use standard_ada_testfile.
+	* gdb.ada/homonym.exp: Use standard_ada_testfile.
+	* gdb.ada/info_locals_renaming.exp: Use standard_ada_testfile.
+	* gdb.ada/int_deref.exp: Use standard_ada_testfile.
+	* gdb.ada/interface.exp: Use standard_ada_testfile.
+	* gdb.ada/lang_switch.exp: Use standard_ada_testfile,
+	standard_output_file
+	* gdb.ada/mi_catch_ex.exp: Use standard_ada_testfile.
+	* gdb.ada/mi_task_arg.exp: Use standard_ada_testfile.
+	* gdb.ada/mi_task_info.exp: Use standard_ada_testfile.
+	* gdb.ada/mod_from_name.exp: Use standard_ada_testfile.
+	* gdb.ada/nested.exp: Use standard_ada_testfile.
+	* gdb.ada/null_array.exp: Use standard_ada_testfile.
+	* gdb.ada/null_record.exp: Use standard_ada_testfile.
+	* gdb.ada/operator_bp.exp: Use standard_ada_testfile.
+	* gdb.ada/packed_array.exp: Use standard_ada_testfile.
+	* gdb.ada/packed_tagged.exp: Use standard_ada_testfile.
+	* gdb.ada/print_chars.exp: Use standard_ada_testfile.
+	* gdb.ada/print_pc.exp: Use standard_ada_testfile.
+	* gdb.ada/ptr_typedef.exp: Use standard_ada_testfile.
+	* gdb.ada/ptype_field.exp: Use standard_ada_testfile.
+	* gdb.ada/ptype_tagged_param.exp: Use standard_ada_testfile.
+	* gdb.ada/rec_return.exp: Use standard_ada_testfile.
+	* gdb.ada/ref_param.exp: Use standard_ada_testfile.
+	* gdb.ada/ref_tick_size.exp: Use standard_ada_testfile.
+	* gdb.ada/same_enum.exp: Use standard_ada_testfile.
+	* gdb.ada/set_pckd_arr_elt.exp: Use standard_ada_testfile.
+	* gdb.ada/small_reg_param.exp: Use standard_ada_testfile.
+	* gdb.ada/start.exp: Use standard_ada_testfile.
+	* gdb.ada/str_ref_cmp.exp: Use standard_ada_testfile.
+	* gdb.ada/sym_print_name.exp: Use standard_ada_testfile.
+	* gdb.ada/taft_type.exp: Use standard_ada_testfile.
+	* gdb.ada/tagged.exp: Use standard_ada_testfile.
+	* gdb.ada/tagged_not_init.exp: Use standard_ada_testfile.
+	* gdb.ada/task_bp.exp: Use standard_ada_testfile.
+	* gdb.ada/tasks.exp: Use standard_ada_testfile.
+	* gdb.ada/tick_last_segv.exp: Use standard_ada_testfile.
+	* gdb.ada/type_coercion.exp: Use standard_ada_testfile.
+	* gdb.ada/uninitialized_vars.exp: Use standard_ada_testfile.
+	* gdb.ada/variant_record_packed_array.exp: Use standard_ada_testfile.
+	* gdb.ada/watch_arg.exp: Use standard_ada_testfile.
+	* gdb.ada/whatis_array_val.exp: Use standard_ada_testfile.
+	* gdb.ada/widewide.exp: Use standard_ada_testfile.
+@
+text
+@d1 1
+a1 1
+# Copyright 2011-2012 Free Software Foundation, Inc.
+@
+
+
+1.4
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d18 1
+a18 4
+set testdir "mi_catch_ex"
+set testfile "${testdir}/foo"
+set srcfile ${srcdir}/${subdir}/${testfile}.adb
+set binfile ${objdir}/${subdir}/${testfile}
+a19 1
+file mkdir ${objdir}/${subdir}/${testdir}
+@
+
+
+1.3
+log
+@Warn if missing debug info for Ada exception catchpoints
+
+This patch should help the user understand why the debugger is not
+able to insert Ada exception catchpoints when the Ada runtime was
+stripped of debugging info, as is often the case on many GNU/Linux
+distros:
+
+    (gdb) catch exception
+    Your Ada runtime appears to be missing some debugging information.
+    Cannot insert Ada exception catchpoint in this configuration.
+
+gdb/ChangeLog:
+
+        * ada-lang.c (ada_has_this_exception_support): Raise an error
+        if we could find the Ada exception hook in the Ada runtime,
+        but no debugging info for that hook.
+
+gdb/testsuite/ChangeLog:
+
+        * gdb.ada/catch_ex.exp, gdb.ada/mi_catch_ex.exp: Adjust
+        expected output for unsupported case.
+@
+text
+@d1 1
+a1 1
+# Copyright 2011 Free Software Foundation, Inc.
+@
+
+
+1.3.2.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d1 1
+a1 1
+# Copyright 2011-2012 Free Software Foundation, Inc.
+@
+
+
+1.2
+log
+@2011-12-07  Pedro Alves  <pedro@@codesourcery.com>
+
+	* gdb.ada/catch_ex.exp: Skip as unsupported if "catch exception"
+	throws "Cannot insert catchpoints in this configuration".
+	* gdb.ada/mi_catch_ex.exp: Likewise.
+@
+text
+@d49 1
+a49 1
+    -re "Cannot (insert catchpoints|break on __gnat_raise_nodefer_with_msg) in this configuration\.\[\r\n\]+$gdb_prompt $" {
+@
+
+
+1.1
+log
+@improve Ada exception catchpoint MI notification
+
+This rewrites the code generating the Ada exception catchpoint hit
+notification for both the GDB/MI case as well as the non-MI case,
+by using the relevant ui_out_* functions to generate the output.
+the MI notifications for Ada exception catchpoints now include
+the stop reason, and the breakpoint "disp", much like other breakpoint
+events do.  It also introduces a new field "exception-name" for
+exception catchpoints (excluding "failed assertion catchpoints,
+where we just want to know that it was a failed assertion).
+
+gdb/ChangeLog:
+
+        * breakpoint.h (bpdisp_text): Add declaration.
+        * breakpoint.c (bpdisp_text): Make non-static.
+        * ada-lang.c: #include "mi/mi-common.h".
+        (print_it_exception): Rewrite to improve GDB/MI output.
+
+gdb/doc/ChangeLog:
+
+        * gdb.texinfo (GDB/MI Ada Exception Information): Document
+        the "exception-name" field in the *stopped async record.
+
+gdb/testsuite/ChangeLog:
+
+        * gdb.ada/mi_catch_ex: New testcase.
+@
+text
+@d49 1
+a49 1
+    -re "Cannot break on __gnat_raise_nodefer_with_msg in this configuration\.\[\r\n\]+$gdb_prompt $" {
+@
+
+
+1.1.2.1
+log
+@improve Ada exception catchpoint MI notification
+
+This rewrites the code generating the Ada exception catchpoint hit
+notification for both the GDB/MI case as well as the non-MI case,
+by using the relevant ui_out_* functions to generate the output.
+the MI notifications for Ada exception catchpoints now include
+the stop reason, and the breakpoint "disp", much like other breakpoint
+events do.  It also introduces a new field "exception-name" for
+exception catchpoints (excluding "failed assertion catchpoints,
+where we just want to know that it was a failed assertion).
+
+gdb/ChangeLog:
+
+        * breakpoint.h (bpdisp_text): Add declaration.
+        * breakpoint.c (bpdisp_text): Make non-static.
+        * ada-lang.c: #include "mi/mi-common.h".
+        (print_it_exception): Rewrite to improve GDB/MI output.
+
+gdb/doc/ChangeLog:
+
+        * gdb.texinfo (GDB/MI Ada Exception Information): Document
+        the "exception-name" field in the *stopped async record.
+
+gdb/testsuite/ChangeLog:
+
+        * gdb.ada/mi_catch_ex: New testcase.
+@
+text
+@@
+

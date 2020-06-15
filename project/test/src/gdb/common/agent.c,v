@@ -1,0 +1,916 @@
+head	1.12;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.10
+	gdb_7_6-2013-04-26-release:1.10
+	gdb_7_6-branch:1.10.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.10
+	gdb_7_5_1-2012-11-29-release:1.8
+	gdb_7_5-2012-08-17-release:1.8
+	gdb_7_5-branch:1.8.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.8;
+locks; strict;
+comment	@ * @;
+
+
+1.12
+date	2013.04.22.16.46.15;	author tromey;	state Exp;
+branches;
+next	1.11;
+
+1.11
+date	2013.04.19.15.27.54;	author palves;	state Exp;
+branches;
+next	1.10;
+
+1.10
+date	2013.01.01.06.32.54;	author brobecke;	state Exp;
+branches;
+next	1.9;
+
+1.9
+date	2012.11.09.19.58.03;	author tromey;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2012.05.24.16.51.37;	author palves;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2012.04.16.11.24.47;	author qiyao;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2012.03.04.03.31.09;	author qiyao;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2012.03.03.09.51.28;	author qiyao;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2012.03.03.04.34.51;	author qiyao;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2012.03.03.04.04.34;	author qiyao;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2012.03.03.03.32.45;	author qiyao;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2012.03.03.03.08.36;	author qiyao;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.12
+log
+@	PR gdb/7912:
+	* Makefile.in (SFILES): Add filestuff.c
+	(COMMON_OBS): Add filestuff.o.
+	(filestuff.o): New target.
+	* auto-load.c (auto_load_objfile_script_1): Use
+	gdb_fopen_cloexec.
+	* auxv.c (procfs_xfer_auxv): Use gdb_open_cloexec.
+	* cli/cli-cmds.c (shell_escape): Call close_most_fds.
+	* cli/cli-dump.c (fopen_with_cleanup): Use gdb_fopen_cloexec.
+	* common/agent.c (gdb_connect_sync_socket): Use
+	gdb_socket_cloexec.
+	* common/filestuff.c: New file.
+	* common/filestuff.h: New file.
+	* common/linux-osdata.c (linux_common_core_of_thread)
+	(command_from_pid, commandline_from_pid, print_source_lines)
+	(linux_xfer_osdata_shm, linux_xfer_osdata_sem)
+	(linux_xfer_osdata_msg, linux_xfer_osdata_modules): Use
+	gdb_fopen_cloexec.
+	* common/linux-procfs.c (linux_proc_get_int)
+	(linux_proc_pid_has_state): Use gdb_fopen_cloexec.
+	* config.in, configure: Rebuild.
+	* configure.ac: Don't check for sys/socket.h.  Check for
+	fdwalk, pipe2.
+	* corelow.c (core_open): Use gdb_open_cloexec.
+	* dwarf2read.c (write_psymtabs_to_index): Use gdb_fopen_cloexec.
+	* fork-child.c (fork_inferior): Call close_most_fds.
+	* gdb_bfd.c (gdb_bfd_open): Use gdb_open_cloexec.
+	* inf-child.c (inf_child_fileio_readlink): Use gdb_open_cloexec.
+	* linux-nat.c (linux_nat_thread_name, linux_proc_pending_signals):
+	Use gdb_fopen_cloexec.
+	(linux_proc_xfer_partial, linux_proc_xfer_spu): Use
+	gdb_open_cloexec.
+	(linux_async_pipe): Use gdb_pipe_cloexec.
+	* remote-fileio.c (remote_fileio_func_open): Use
+	gdb_open_cloexec.
+	* remote.c (remote_file_put, remote_file_get): Use
+	gdb_fopen_cloexec.
+	* ser-pipe.c (pipe_open): Use gdb_socketpair_cloexec,
+	close_most_fds.
+	* ser-tcp.c (net_open): Use gdb_socket_cloexec.
+	* ser-unix.c (hardwire_open): Use gdb_open_cloexec.
+	* solib.c (solib_find): Use gdb_open_cloexec.
+	* source.c (openp, find_and_open_source): Use gdb_open_cloexec.
+	* tracepoint.c (tfile_start): Use gdb_fopen_cloexec.
+	(tfile_open): Use gdb_open_cloexec.
+	* tui/tui-io.c (tui_initialize_io): Use gdb_pipe_cloexec.
+	* ui-file.c (gdb_fopen): Use gdb_fopen_cloexec.
+	* xml-support.c (xml_fetch_content_from_file): Use
+	gdb_fopen_cloexec.
+	* main.c (captured_main): Call notice_open_fds.
+gdbserver
+	* Makefile.in (SFILES): Add filestuff.c.
+	(OBS): Add filestuff.o.
+	(filestuff.o): New target.
+	* config.in, configure: Rebuild.
+	* configure.ac: Check for fdwalk, pipe2.
+@
+text
+@/* Shared utility routines for GDB to interact with agent.
+
+   Copyright (C) 2009-2013 Free Software Foundation, Inc.
+
+   This file is part of GDB.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+#ifdef GDBSERVER
+#include "server.h"
+#else
+#include "defs.h"
+#include "target.h"
+#include "inferior.h" /* for non_stop */
+#endif
+
+#include <string.h>
+#include <unistd.h>
+#include "agent.h"
+#include "filestuff.h"
+
+int debug_agent = 0;
+
+#ifdef GDBSERVER
+#define DEBUG_AGENT(fmt, args...)	\
+  if (debug_agent)			\
+    fprintf (stderr, fmt, ##args);
+#else
+#define DEBUG_AGENT(fmt, args...)	\
+  if (debug_agent)			\
+    fprintf_unfiltered (gdb_stdlog, fmt, ##args);
+#endif
+
+/* Global flag to determine using agent or not.  */
+int use_agent = 0;
+
+/* Addresses of in-process agent's symbols both GDB and GDBserver cares
+   about.  */
+
+struct ipa_sym_addresses
+{
+  CORE_ADDR addr_helper_thread_id;
+  CORE_ADDR addr_cmd_buf;
+  CORE_ADDR addr_capability;
+};
+
+/* Cache of the helper thread id.  FIXME: this global should be made
+   per-process.  */
+static unsigned int helper_thread_id = 0;
+
+static struct
+{
+  const char *name;
+  int offset;
+  int required;
+} symbol_list[] = {
+  IPA_SYM(helper_thread_id),
+  IPA_SYM(cmd_buf),
+  IPA_SYM(capability),
+};
+
+static struct ipa_sym_addresses ipa_sym_addrs;
+
+static int all_agent_symbols_looked_up = 0;
+
+int
+agent_loaded_p (void)
+{
+  return all_agent_symbols_looked_up;
+}
+
+/* Look up all symbols needed by agent.  Return 0 if all the symbols are
+   found, return non-zero otherwise.  */
+
+int
+agent_look_up_symbols (void *arg)
+{
+  int i;
+
+  all_agent_symbols_looked_up = 0;
+
+  for (i = 0; i < sizeof (symbol_list) / sizeof (symbol_list[0]); i++)
+    {
+      CORE_ADDR *addrp =
+	(CORE_ADDR *) ((char *) &ipa_sym_addrs + symbol_list[i].offset);
+#ifdef GDBSERVER
+
+      if (look_up_one_symbol (symbol_list[i].name, addrp, 1) == 0)
+#else
+      struct minimal_symbol *sym =
+	lookup_minimal_symbol (symbol_list[i].name, NULL,
+			       (struct objfile *) arg);
+
+      if (sym != NULL)
+	*addrp = SYMBOL_VALUE_ADDRESS (sym);
+      else
+#endif
+	{
+	  DEBUG_AGENT ("symbol `%s' not found\n", symbol_list[i].name);
+	  return -1;
+	}
+    }
+
+  all_agent_symbols_looked_up = 1;
+  return 0;
+}
+
+static unsigned int
+agent_get_helper_thread_id (void)
+{
+  if  (helper_thread_id == 0)
+    {
+#ifdef GDBSERVER
+      if (read_inferior_memory (ipa_sym_addrs.addr_helper_thread_id,
+				(unsigned char *) &helper_thread_id,
+				sizeof helper_thread_id))
+#else
+      enum bfd_endian byte_order = gdbarch_byte_order (target_gdbarch ());
+      gdb_byte buf[4];
+
+      if (target_read_memory (ipa_sym_addrs.addr_helper_thread_id,
+			      buf, sizeof buf) == 0)
+	helper_thread_id = extract_unsigned_integer (buf, sizeof buf,
+						     byte_order);
+      else
+#endif
+	{
+	  warning (_("Error reading helper thread's id in lib"));
+	}
+    }
+
+  return helper_thread_id;
+}
+
+#ifdef HAVE_SYS_UN_H
+#include <sys/socket.h>
+#include <sys/un.h>
+#define SOCK_DIR P_tmpdir
+
+#ifndef UNIX_PATH_MAX
+#define UNIX_PATH_MAX sizeof(((struct sockaddr_un *) NULL)->sun_path)
+#endif
+
+#endif
+
+/* Connects to synchronization socket.  PID is the pid of inferior, which is
+   used to set up the connection socket.  */
+
+static int
+gdb_connect_sync_socket (int pid)
+{
+#ifdef HAVE_SYS_UN_H
+  struct sockaddr_un addr;
+  int res, fd;
+  char path[UNIX_PATH_MAX];
+
+  res = xsnprintf (path, UNIX_PATH_MAX, "%s/gdb_ust%d", P_tmpdir, pid);
+  if (res >= UNIX_PATH_MAX)
+    return -1;
+
+  res = fd = gdb_socket_cloexec (PF_UNIX, SOCK_STREAM, 0);
+  if (res == -1)
+    {
+      warning (_("error opening sync socket: %s"), strerror (errno));
+      return -1;
+    }
+
+  addr.sun_family = AF_UNIX;
+
+  res = xsnprintf (addr.sun_path, UNIX_PATH_MAX, "%s", path);
+  if (res >= UNIX_PATH_MAX)
+    {
+      warning (_("string overflow allocating socket name"));
+      close (fd);
+      return -1;
+    }
+
+  res = connect (fd, (struct sockaddr *) &addr, sizeof (addr));
+  if (res == -1)
+    {
+      warning (_("error connecting sync socket (%s): %s. "
+		 "Make sure the directory exists and that it is writable."),
+		 path, strerror (errno));
+      close (fd);
+      return -1;
+    }
+
+  return fd;
+#else
+  return -1;
+#endif
+}
+
+/* Execute an agent command in the inferior.  PID is the value of pid of the
+   inferior.  CMD is the buffer for command.  GDB or GDBserver will store the
+   command into it and fetch the return result from CMD.  The interaction
+   between GDB/GDBserver and the agent is synchronized by a synchronization
+   socket.  Return zero if success, otherwise return non-zero.  */
+
+int
+agent_run_command (int pid, const char *cmd, int len)
+{
+  int fd;
+  int tid = agent_get_helper_thread_id ();
+  ptid_t ptid = ptid_build (pid, tid, 0);
+
+#ifdef GDBSERVER
+  int ret = write_inferior_memory (ipa_sym_addrs.addr_cmd_buf,
+				   (const unsigned char *) cmd, len);
+#else
+  int ret = target_write_memory (ipa_sym_addrs.addr_cmd_buf,
+				 (gdb_byte *) cmd, len);
+#endif
+
+  if (ret != 0)
+    {
+      warning (_("unable to write"));
+      return -1;
+    }
+
+  DEBUG_AGENT ("agent: resumed helper thread\n");
+
+  /* Resume helper thread.  */
+#ifdef GDBSERVER
+{
+  struct thread_resume resume_info;
+
+  resume_info.thread = ptid;
+  resume_info.kind = resume_continue;
+  resume_info.sig = GDB_SIGNAL_0;
+  (*the_target->resume) (&resume_info, 1);
+}
+#else
+ target_resume (ptid, 0, GDB_SIGNAL_0);
+#endif
+
+  fd = gdb_connect_sync_socket (pid);
+  if (fd >= 0)
+    {
+      char buf[1] = "";
+      int ret;
+
+      DEBUG_AGENT ("agent: signalling helper thread\n");
+
+      do
+	{
+	  ret = write (fd, buf, 1);
+	} while (ret == -1 && errno == EINTR);
+
+	DEBUG_AGENT ("agent: waiting for helper thread's response\n");
+
+      do
+	{
+	  ret = read (fd, buf, 1);
+	} while (ret == -1 && errno == EINTR);
+
+      close (fd);
+
+      DEBUG_AGENT ("agent: helper thread's response received\n");
+    }
+  else
+    return -1;
+
+  /* Need to read response with the inferior stopped.  */
+  if (!ptid_equal (ptid, null_ptid))
+    {
+      struct target_waitstatus status;
+      int was_non_stop = non_stop;
+      /* Stop thread PTID.  */
+      DEBUG_AGENT ("agent: stop helper thread\n");
+#ifdef GDBSERVER
+      {
+	struct thread_resume resume_info;
+
+	resume_info.thread = ptid;
+	resume_info.kind = resume_stop;
+	resume_info.sig = GDB_SIGNAL_0;
+	(*the_target->resume) (&resume_info, 1);
+      }
+
+      non_stop = 1;
+      mywait (ptid, &status, 0, 0);
+#else
+      non_stop = 1;
+      target_stop (ptid);
+
+      memset (&status, 0, sizeof (status));
+      target_wait (ptid, &status, 0);
+#endif
+      non_stop = was_non_stop;
+    }
+
+  if (fd >= 0)
+    {
+#ifdef GDBSERVER
+      if (read_inferior_memory (ipa_sym_addrs.addr_cmd_buf,
+				(unsigned char *) cmd, IPA_CMD_BUF_SIZE))
+#else
+      if (target_read_memory (ipa_sym_addrs.addr_cmd_buf, (gdb_byte *) cmd,
+			      IPA_CMD_BUF_SIZE))
+#endif
+	{
+	  warning (_("Error reading command response"));
+	  return -1;
+	}
+    }
+
+  return 0;
+}
+
+/* Each bit of it stands for a capability of agent.  */
+static unsigned int agent_capability = 0;
+
+/* Return true if agent has capability AGENT_CAP, otherwise return false.  */
+
+int
+agent_capability_check (enum agent_capa agent_capa)
+{
+  if (agent_capability == 0)
+    {
+#ifdef GDBSERVER
+      if (read_inferior_memory (ipa_sym_addrs.addr_capability,
+				(unsigned char *) &agent_capability,
+				sizeof agent_capability))
+#else
+      enum bfd_endian byte_order = gdbarch_byte_order (target_gdbarch ());
+      gdb_byte buf[4];
+
+      if (target_read_memory (ipa_sym_addrs.addr_capability,
+			      buf, sizeof buf) == 0)
+	agent_capability = extract_unsigned_integer (buf, sizeof buf,
+						     byte_order);
+      else
+#endif
+	warning (_("Error reading capability of agent"));
+    }
+  return agent_capability & agent_capa;
+}
+
+/* Invalidate the cache of agent capability, so we'll read it from inferior
+   again.  Call it when launches a new program or reconnect to remote stub.  */
+
+void
+agent_capability_invalidate (void)
+{
+  agent_capability = 0;
+}
+@
+
+
+1.11
+log
+@gdb_byte for binary buffer, char for string: common/agent.c.
+
+Similarly to the remote code, agent commands are mostly ascii.  Cast to
+gdb_byte when treating the command buffer as raw memory bytes.
+
+2013-04-19  Pedro Alves  <palves@@redhat.com>
+
+	* common/agent.c (agent_run_command): Add cast to gdb_byte *.
+@
+text
+@d31 1
+d172 1
+a172 1
+  res = fd = socket (PF_UNIX, SOCK_STREAM, 0);
+@
+
+
+1.10
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@d221 2
+a222 1
+  int ret = target_write_memory (ipa_sym_addrs.addr_cmd_buf, cmd, len);
+@
+
+
+1.9
+log
+@	* gdbarch.sh (target_gdbarch): Remove macro.
+	(get_target_gdbarch): Rename to target_gdbarch.
+	* gdbarch.c, gdbarch.h: Rebuild.
+	* ada-tasks.c, aix-thread.c, amd64-linux-nat.c, arch-utils.c,
+	arm-tdep.c, auxv.c, breakpoint.c, bsd-uthread.c, corefile.c,
+	darwin-nat-info.c, dcache.c, dsrec.c, exec.c, fbsd-nat.c,
+	filesystem.c, gcore.c, gnu-nat.c, i386-darwin-nat.c, i386-nat.c,
+	ia64-vms-tdep.c, inf-ptrace.c, infcmd.c, jit.c, linux-nat.c,
+	linux-tdep.c, linux-thread-db.c, m32r-rom.c, memattr.c,
+	mep-tdep.c, microblaze-tdep.c, mips-linux-nat.c,
+	mips-linux-tdep.c, mips-tdep.c, monitor.c, moxie-tdep.c,
+	nto-procfs.c, nto-tdep.c, ppc-linux-nat.c, proc-service.c,
+	procfs.c, progspace.c, ravenscar-thread.c, record.c,
+	remote-m32r-sdi.c, remote-mips.c, remote-sim.c, remote.c,
+	rl78-tdep.c, rs6000-nat.c, rx-tdep.c, s390-nat.c, sol-thread.c,
+	solib-darwin.c, solib-dsbt.c, solib-frv.c, solib-ia64-hpux.c,
+	solib-irix.c, solib-pa64.c, solib-som.c, solib-spu.c,
+	solib-sunos.c, solib-svr4.c, solib.c, spu-linux-nat.c,
+	spu-multiarch.c, spu-tdep.c, symfile-mem.c, symfile.c, symtab.c,
+	target-descriptions.c, target.c, target.h, tracepoint.c,
+	windows-nat.c, windows-tdep.c, xcoffsolib.c, cli/cli-dump.c,
+	common/agent.c, mi/mi-interp.c, python/py-finishbreakpoint.c,
+	python/py-inferior.c, python/python.c: Update.
+@
+text
+@d3 1
+a3 1
+   Copyright (C) 2009-2012 Free Software Foundation, Inc.
+@
+
+
+1.8
+log
+@gdb/
+2012-05-24  Pedro Alves  <palves@@redhat.com>
+
+	PR gdb/7205
+
+        Replace TARGET_SIGNAL_ with GDB_SIGNAL_ throughout.
+
+gdb/gdbserver/
+2012-05-24  Pedro Alves  <palves@@redhat.com>
+
+	PR gdb/7205
+
+        Replace TARGET_SIGNAL_ with GDB_SIGNAL_ throughout.
+
+include/gdb/
+2012-05-24  Pedro Alves  <palves@@redhat.com>
+
+	PR gdb/7205
+
+        * gdb/signals.def: Replace TARGET_SIGNAL_ with GDB_SIGNAL_
+	throughout.
+
+sim/arm/
+2012-05-24  Pedro Alves  <palves@@redhat.com>
+
+	PR gdb/7205
+
+        Replace TARGET_SIGNAL_ with GDB_SIGNAL_ throughout.
+
+sim/avr/
+2012-05-24  Pedro Alves  <palves@@redhat.com>
+
+	PR gdb/7205
+
+        Replace TARGET_SIGNAL_ with GDB_SIGNAL_ throughout.
+
+sim/common/
+2012-05-24  Pedro Alves  <palves@@redhat.com>
+
+	PR gdb/7205
+
+        Replace TARGET_SIGNAL_ with GDB_SIGNAL_ throughout.
+
+sim/cr16/
+2012-05-24  Pedro Alves  <palves@@redhat.com>
+
+	PR gdb/7205
+
+        Replace TARGET_SIGNAL_ with GDB_SIGNAL_ throughout.
+
+sim/d10v/
+2012-05-24  Pedro Alves  <palves@@redhat.com>
+
+	PR gdb/7205
+
+        Replace TARGET_SIGNAL_ with GDB_SIGNAL_ throughout.
+
+sim/erc32/
+2012-05-24  Pedro Alves  <palves@@redhat.com>
+
+	PR gdb/7205
+
+        Replace TARGET_SIGNAL_ with GDB_SIGNAL_ throughout.
+
+sim/m32c/
+2012-05-24  Pedro Alves  <palves@@redhat.com>
+
+	PR gdb/7205
+
+        Replace TARGET_SIGNAL_ with GDB_SIGNAL_ throughout.
+
+sim/ppc/
+2012-05-24  Pedro Alves  <palves@@redhat.com>
+
+	PR gdb/7205
+
+        Replace TARGET_SIGNAL_ with GDB_SIGNAL_ throughout.
+
+sim/rl78/
+2012-05-24  Pedro Alves  <palves@@redhat.com>
+
+	PR gdb/7205
+
+        Replace TARGET_SIGNAL_ with GDB_SIGNAL_ throughout.
+
+sim/rx/
+2012-05-24  Pedro Alves  <palves@@redhat.com>
+
+	PR gdb/7205
+
+        Replace TARGET_SIGNAL_ with GDB_SIGNAL_ throughout.
+@
+text
+@d128 1
+a128 1
+      enum bfd_endian byte_order = gdbarch_byte_order (target_gdbarch);
+d335 1
+a335 1
+      enum bfd_endian byte_order = gdbarch_byte_order (target_gdbarch);
+@
+
+
+1.7
+log
+@gdb/
+
+	* common/agent.c (agent_run_command): Add one more parameter `len'.
+	Update callers.
+	* common/agent.h: Update declaration.
+	* linux-nat.c (linux_child_static_tracepoint_markers_by_strid):
+	Update.
+	(linux_child_static_tracepoint_markers_by_strid): Ditto.
+
+gdb/gdbserver/
+
+	* tracepoint.c (COPY_FIELD_TO_BUF): New macro.
+	(struct tracepoint_action_ops) <send>: New field.
+	(m_tracepoint_action_send, r_tracepoint_action_send): New.
+	(agent_expr_send, x_tracepoint_action_send): New.
+	(l_tracepoint_action_send): New.
+	(cmd_qtdp): Download and install tracepoint
+	according to `use_agent'.
+	(run_inferior_command): Add one more parameter `len'.
+	Update callers.
+	(tracepoint_send_agent): New.
+	(cmd_qtdp, cmd_qtstart): Call tracepoint_send_agent.
+@
+text
+@d239 1
+a239 1
+  resume_info.sig = TARGET_SIGNAL_0;
+d243 1
+a243 1
+ target_resume (ptid, 0, TARGET_SIGNAL_0);
+d286 1
+a286 1
+	resume_info.sig = TARGET_SIGNAL_0;
+@
+
+
+1.6
+log
+@gdb/
+	* common/agent.c (gdb_connect_sync_socket): Add _ markup and
+	remove trailing new line.
+	(agent_run_command, agent_run_command): Add _ markup.
+	(agent_capability_check): Likewise.
+@
+text
+@d211 1
+a211 1
+agent_run_command (int pid, const char *cmd)
+a215 1
+  int len = strlen (cmd) + 1;
+@
+
+
+1.5
+log
+@gdb:
+	* common/agent.c (agent_look_up_symbols): Add one parameter 'arg'.
+	* common/agent.h: Update declaration.
+	* inf-child.c (inf_child_use_agent): New.
+	(inf_child_can_use_agent): New.
+	(inf_child_target): Initialize fields `to_use_agent'
+	and `to_can_use_agent'.
+	* agent.c (agent_new_objfile): New.
+        (_initialize_agent): Add agent_new_objfile to new_objfile
+	observer.
+
+	* linux-nat.c (linux_child_static_tracepoint_markers_by_strid):
+	New.
+        (linux_target_install_ops): Initialize field
+	`to_static_tracepoint_markers_by_strid'.
+	* remote.c (free_current_marker): Move it to ...
+	* tracepoint.c (free_current_marker): ... here.  New.
+	(cleanup_target_stop): New.
+	* tracepoint.h: Declare free_current_marker.
+	* NEWS: Add one entry about `info static-tracepoint-marker'.
+
+gdb/gdbserver:
+	* tracepoint.c (tracepoint_look_up_symbols): Update call to
+	agent_look_up_symbols.
+
+gdb/testsuite:
+	* gdb.trace/strace.exp: run strace_info_marker in linux native gdb.
+@
+text
+@d138 1
+a138 1
+	  warning ("Error reading helper thread's id in lib");
+d174 1
+a174 1
+      warning ("error opening sync socket: %s\n", strerror (errno));
+d183 1
+a183 1
+      warning ("string overflow allocating socket name\n");
+d191 3
+a193 3
+      warning ("error connecting sync socket (%s): %s. "
+	       "Make sure the directory exists and that it is writable.",
+	       path, strerror (errno));
+d227 1
+a227 1
+      warning ("unable to write");
+d313 1
+a313 1
+	  warning ("Error reading command response");
+d345 1
+a345 1
+	warning ("Error reading capability of agent");
+@
+
+
+1.4
+log
+@gdb:
+        * common/agent.c (agent_loaded_p): New.
+        (agent_look_up_symbols): New global.
+        * common/agent.h: Declare agent_loaded_p.
+
+gdb/gdbserver:
+
+        * Makefile.in (linux-low.o): Keep dependence on agent.h.
+        (linux-x86-low.o): Likewise.
+        * server.h: Remove in_process_agent_loaded.
+        * tracepoint.c (in_process_agent_loaded): Removed.  Moved it
+        common/agent.c.
+        Update callers.
+@
+text
+@d86 1
+a86 1
+agent_look_up_symbols (void)
+d100 3
+a102 2
+      struct minimal_symbol *sym = lookup_minimal_symbol (symbol_list[i].name,
+							  NULL, NULL);
+@
+
+
+1.3
+log
+@gdb:
+	* common/agent.c (struct ipa_sym_addresses) <addr_capability>: New.
+	(agent_capability_check, agent_capability_invalidate): New.
+	(symbol_list): New array element.
+	* common/agent.h (enum agent_capa): New.
+	* target.c (target_pre_inferior): Call agent_capability_invalidate.
+
+gdb/gdbserver:
+	* tracepoint.c (gdb_agent_capability): New global.
+	(in_process_agent_loaded_ust): Renamed to
+	`in_process_agent_supports_ust'.
+	Update callers.
+	(in_process_agent_supports_ust): Call agent_capability_check.
+	(clear_installed_tracepoints): Assert that agent supports
+	agent.
+@
+text
+@d74 8
+d90 2
+d113 1
+@
+
+
+1.2
+log
+@gdb:
+	* target.h (struct target_ops) <to_use_agent>: New field.
+	(struct target_ops) <to_can_use_agent>: New field.
+	(target_use_agent, target_can_use_agent): New macro.
+	* target.c (update_current_target): Update.
+	* remote.c: New enum `PACKET_QAgent'.
+	(remote_protocol_features): Add a new element.
+	(remote_use_agent, remote_can_use_agent): New.
+	(init_remote_ops): Initialize field `can_use_agent' with
+	remote_can_use_agent.  Intiailize field `use_agent' with
+	remote_use_agent.
+	* common/agent.c (use_agent): New global.
+	* common/agent.h: Declare it.
+	* tracepoint.c (info_static_tracepoint_markers_command): Add
+	comment.
+	* Makefile.in (SFILES): Add common/agent.c and agent.c.
+	(COMMON_OBS): Add common/agent.o and agent.o
+	(common-agent.o): New rule.
+	* agent.c: New.
+
+gdb/doc:
+	* gdb.texinfo (In-Process Agent): New node.
+	Document new commands.
+	(General Query Packets): Add packet `QAgent'.
+
+gdb/gdbserver:
+	* linux-low.c (linux_supports_agent): New.
+	(linux_target_ops): Initialize field `supports_agent' with
+	linux_supports_agent.
+	* target.h (struct target_ops) <supports_agent>: New.
+	(target_supports_agent): New macro.
+	* server.c (handle_general_set): Handle packet 'QAgent'.
+	(handle_query): Send `QAgent+'.
+	* Makefile.in (server.o): Depends on agent.h.
+@
+text
+@d54 1
+d69 1
+d308 38
+@
+
+
+1.1
+log
+@gdb:
+
+	* common/agent.c: New.
+	* common/agent.h: New.
+	* configure.ac: Add `sys/socket.h' and `sys/un.h' to
+	AC_CHECK_HEADERS.
+	* configure, configh.in: Regenerated.
+
+gdb/gdbserver:
+
+	* Makefile.in (OBS): Add agent.o.
+	Add new rule for agent.o.
+	Track dependence of tracepoint.c on agent.h.
+	* tracepoint.c (run_inferior_command_1):
+	(run_inferior_command): Call agent_run_command.
+	(gdb_ust_connect_sync_socket): Deleted.  Move it to
+	common/agent.c.
+	(resume_thread, stop_thread): Likewise.
+	(gdb_ust_socket_init): Renamed to ...
+	(gdb_agent_socket_init): ... New.
+	(gdb_ust_thread): Renamed to ...
+	(gdb_agent_helper_thread): ... New.
+	(gdb_ust_init): Move some code to ...
+	(gdb_agent_init): ... here.  New.
+	[HAVE_UST]: Call gdb_ust_init.
+	(initialize_tracepoint_ftlib):  Call gdb_agent_init.
+	* configure.ac: Add `sys/un.h' to AC_CHECK_HEADERS.
+	* config.in, configure: Regenerated.
+@
+text
+@d44 3
+@
+

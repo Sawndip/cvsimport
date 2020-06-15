@@ -1,0 +1,145 @@
+head	1.2;
+access;
+symbols
+	binutils-2_24-branch:1.2.0.8
+	binutils-2_24-branchpoint:1.2
+	binutils-2_21_1:1.1
+	binutils-2_23_2:1.2
+	binutils-2_23_1:1.2
+	binutils-2_23:1.2
+	binutils-2_23-branch:1.2.0.6
+	binutils-2_23-branchpoint:1.2
+	binutils-2_22_branch:1.2.0.4
+	binutils-2_22:1.2
+	binutils-2_22-branch:1.2.0.2
+	binutils-2_22-branchpoint:1.2
+	binutils-2_21:1.1
+	binutils-2_21-branch:1.1.0.2
+	binutils-2_21-branchpoint:1.1
+	binutils_latest_snapshot:1.2;
+locks; strict;
+comment	@# @;
+
+
+1.2
+date	2011.03.22.00.19.14;	author ian;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2010.10.16.00.37.25;	author ccoutant;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@	* testsuite/relro_test.sh: Fail if dc is not present.
+@
+text
+@#!/bin/sh
+
+# relro_test.sh -- test -z relro
+
+# Copyright 2010, 2011 Free Software Foundation, Inc.
+# Written by Cary Coutant <ccoutant@@google.com>.
+
+# This file is part of gold.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+# MA 02110-1301, USA.
+
+# This test checks that the PT_GNU_RELRO segment is properly
+# aligned and is coincident with the beginning of the data segment.
+
+
+# Cleans a hexadecimal number for input to dc.
+clean_hex()
+{
+  echo "$1" | sed -e 's/0x//' -e 'y/abcdef/ABCDEF/'
+}
+
+check()
+{
+  # Get the address and length of the PT_GNU_RELRO segment.
+  RELRO_START=`grep GNU_RELRO "$1" | awk '{ print $3; }'`
+  RELRO_LEN=`grep GNU_RELRO "$1" | awk '{ print $6; }'`
+
+  if test -z "$RELRO_START"
+  then
+    echo "Did not find a PT_GNU_RELRO segment."
+    exit 1
+  fi
+
+  # Get the address and alignment of the PT_LOAD segment whose address
+  # matches the PT_GNU_RELRO segment.
+  LOAD_ALIGN=`grep LOAD "$1" | awk -v A=$RELRO_START '$3 == A { print $NF; }'`
+  LOAD_LEN=`grep LOAD "$1" | awk -v A=$RELRO_START '$3 == A { print $6; }'`
+
+  if test -z "$LOAD_LEN"
+  then
+    echo "Did not find a PT_LOAD segment matching the PT_GNU_RELRO segment."
+    exit 1
+  fi
+
+  # Compute the address of the end of the PT_GNU_RELRO segment,
+  # modulo the alignment of the PT_LOAD segment.
+  RELRO_START=`clean_hex "$RELRO_START"`
+  RELRO_LEN=`clean_hex "$RELRO_LEN"`
+  LOAD_ALIGN=`clean_hex "$LOAD_ALIGN"`
+  RELRO_END=`echo "16o 16i $RELRO_START $RELRO_LEN + p" | dc`
+  REM=`echo "16i $RELRO_END $LOAD_ALIGN % p" | dc`
+
+  if test "$REM" -eq 0; then
+    :
+  else
+    echo "PT_GNU_RELRO segment does not end at page boundary."
+    exit 1
+  fi
+}
+
+check relro_test.stdout
+@
+
+
+1.1
+log
+@	* layout.cc (Layout::set_segment_offsets): Don't try to realign data
+	segment that has been aligned for relro.
+	* output.cc (Output_segment::set_section_addresses): Change signature;
+	adjust all callers.  Account for alignment when totalling
+	size of relro sections.
+	* output.h (Output_segment::set_section_addresses): Change signature.
+	* testsuite/Makefile.am (relro_test.sh, relro_test.stdout): New
+	targets.
+	* testsuite/Makefile.in: Regenerate.
+	* testsuite/relro_test.cc: Add alignment attributes to test proper
+	alignment of relro sections when padding is necessary.
+	* testsuite/relro_test.sh: New script.
+@
+text
+@d5 1
+a5 1
+# Copyright 2010 Free Software Foundation, Inc.
+d66 3
+a68 2
+  if test "$REM" -ne 0
+  then
+@
+

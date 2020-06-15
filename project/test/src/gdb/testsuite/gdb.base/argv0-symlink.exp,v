@@ -1,0 +1,272 @@
+head	1.2;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.1.2.2
+	gdb_7_6-branch:1.1.0.2;
+locks; strict;
+comment	@# @;
+
+
+1.2
+date	2013.10.13.16.11.08;	author jkratoch;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2013.08.28.17.52.03;	author jkratoch;	state Exp;
+branches
+	1.1.2.1;
+next	;
+
+1.1.2.1
+date	2013.08.28.17.52.03;	author jkratoch;	state dead;
+branches;
+next	1.1.2.2;
+
+1.1.2.2
+date	2013.08.28.17.55.56;	author jkratoch;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@Improve Executable displayed path (PR 15415 regression kind #2)
+
+gdb/
+2013-10-13  Jan Kratochvil  <jan.kratochvil@@redhat.com>
+
+	Canonicalize directories for EXEC_FILENAME.
+	* exec.c (exec_file_attach): Use gdb_realpath_keepfile for
+	exec_filename.
+	* utils.c (gdb_realpath_keepfile): New function.
+	* utils.h (gdb_realpath_keepfile): New declaration.
+
+gdb/testsuite/
+2013-10-13  Jan Kratochvil  <jan.kratochvil@@redhat.com>
+
+	Canonicalize directories for EXEC_FILENAME.
+	* gdb.base/argv0-symlink.exp
+	(kept file symbolic link name for info inferiors): New.
+	(kept directory symbolic link name): Setup kfail.
+	(kept directory symbolic link name for info inferiors): New.
+@
+text
+@# Copyright 2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+standard_testfile
+
+if { [build_executable ${testfile}.exp ${testfile} ${srcfile}] == -1 } {
+    return -1
+}
+
+set test "kept file symbolic link name"
+set filelink "${testfile}-filelink"
+
+remote_file host delete [standard_output_file $filelink]
+set status [remote_exec host "ln -sf ${testfile} [standard_output_file $filelink]"]
+if {[lindex $status 0] != 0} {
+    unsupported "$test (host does not support symbolic links)"
+    return 0
+}
+
+clean_restart "$filelink"
+
+if ![runto_main] {
+    untested "could not run to main"
+    return -1
+}
+
+gdb_test {print argv[0]} "/$filelink\"" $test
+gdb_test "info inferiors" "/$subdir/$filelink *" "$test for info inferiors"
+
+
+set test "kept directory symbolic link name"
+set dirlink "${testfile}-dirlink"
+
+# 'ln -sf' does not overwrite symbol link to a directory.
+# 'remote_file host delete' uses stat (not lstat), therefore it refuses to
+# delete a directory.
+remote_exec host "rm -f [standard_output_file $dirlink]"
+set status [remote_exec host "ln -sf . [standard_output_file $dirlink]"]
+if {[lindex $status 0] != 0} {
+    unsupported "$test (host does not support symbolic links)"
+    return 0
+}
+
+clean_restart "$dirlink/$filelink"
+
+if ![runto_main] {
+    untested "could not run to main"
+    return -1
+}
+
+# gdbserver does not have this issue.
+if ![is_remote target] {
+    setup_kfail "*-*-*" gdb/15934
+}
+gdb_test {print argv[0]} "/$dirlink/$filelink\"" $test
+gdb_test "info inferiors" "/$subdir/$filelink *" "$test for info inferiors"
+@
+
+
+1.1
+log
+@PR gdb/15415
+
+gdb/
+2013-08-27  Jan Kratochvil  <jan.kratochvil@@redhat.com>
+
+	PR gdb/15415
+	* corefile.c (get_exec_file): Use exec_filename.
+	* defs.h (OPF_DISABLE_REALPATH): New definition.  Add new comment.
+	* exec.c (exec_close): Free EXEC_FILENAME.
+	(exec_file_attach): New variable canonical_pathname.  Use
+	OPF_DISABLE_REALPATH.  Call gdb_realpath explicitly.  Set
+	EXEC_FILENAME.
+	* exec.h (exec_filename): New.
+	* inferior.c (print_inferior, inferior_command): Use
+	PSPACE_EXEC_FILENAME.
+	* mi/mi-main.c (print_one_inferior): Likewise.
+	* progspace.c (clone_program_space, print_program_space): Likewise.
+	* progspace.h (struct program_space): New field pspace_exec_filename.
+	* source.c (openp): Describe OPF_DISABLE_REALPATH.  New variable
+	realpath_fptr, initialize it from OPF_DISABLE_REALPATH, use it.
+
+gdb/testsuite/
+2013-08-27  Jan Kratochvil  <jan.kratochvil@@redhat.com>
+
+	PR gdb/15415
+	* gdb.base/argv0-symlink.c: New file.
+	* gdb.base/argv0-symlink.exp: New file.
+@
+text
+@d40 1
+d63 4
+d68 1
+@
+
+
+1.1.2.1
+log
+@file argv0-symlink.exp was added on branch gdb_7_6-branch on 2013-08-28 17:55:56 +0000
+@
+text
+@d1 62
+@
+
+
+1.1.2.2
+log
+@PR gdb/15415
+
+gdb/
+2013-08-27  Jan Kratochvil  <jan.kratochvil@@redhat.com>
+
+	PR gdb/15415
+	* corefile.c (get_exec_file): Use exec_filename.
+	* defs.h (OPF_DISABLE_REALPATH): New definition.  Add new comment.
+	* exec.c (exec_close): Free EXEC_FILENAME.
+	(exec_file_attach): New variable canonical_pathname.  Use
+	OPF_DISABLE_REALPATH.  Call gdb_realpath explicitly.  Set
+	EXEC_FILENAME.
+	* exec.h (exec_filename): New.
+	* inferior.c (print_inferior, inferior_command): Use
+	PSPACE_EXEC_FILENAME.
+	* mi/mi-main.c (print_one_inferior): Likewise.
+	* progspace.c (clone_program_space, print_program_space): Likewise.
+	* progspace.h (struct program_space): New field pspace_exec_filename.
+	* source.c (openp): Describe OPF_DISABLE_REALPATH.  New variable
+	realpath_fptr, initialize it from OPF_DISABLE_REALPATH, use it.
+
+gdb/testsuite/
+2013-08-27  Jan Kratochvil  <jan.kratochvil@@redhat.com>
+
+	PR gdb/15415
+	* gdb.base/argv0-symlink.c: New file.
+	* gdb.base/argv0-symlink.exp: New file.
+@
+text
+@a0 62
+# Copyright 2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+standard_testfile
+
+if { [build_executable ${testfile}.exp ${testfile} ${srcfile}] == -1 } {
+    return -1
+}
+
+set test "kept file symbolic link name"
+set filelink "${testfile}-filelink"
+
+remote_file host delete [standard_output_file $filelink]
+set status [remote_exec host "ln -sf ${testfile} [standard_output_file $filelink]"]
+if {[lindex $status 0] != 0} {
+    unsupported "$test (host does not support symbolic links)"
+    return 0
+}
+
+clean_restart "$filelink"
+
+if ![runto_main] {
+    untested "could not run to main"
+    return -1
+}
+
+gdb_test {print argv[0]} "/$filelink\"" $test
+
+
+set test "kept directory symbolic link name"
+set dirlink "${testfile}-dirlink"
+
+# 'ln -sf' does not overwrite symbol link to a directory.
+# 'remote_file host delete' uses stat (not lstat), therefore it refuses to
+# delete a directory.
+remote_exec host "rm -f [standard_output_file $dirlink]"
+set status [remote_exec host "ln -sf . [standard_output_file $dirlink]"]
+if {[lindex $status 0] != 0} {
+    unsupported "$test (host does not support symbolic links)"
+    return 0
+}
+
+clean_restart "$dirlink/$filelink"
+
+if ![runto_main] {
+    untested "could not run to main"
+    return -1
+}
+
+gdb_test {print argv[0]} "/$dirlink/$filelink\"" $test
+@
+
+

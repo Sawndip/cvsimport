@@ -1,0 +1,270 @@
+head	1.3;
+access;
+symbols
+	binutils-2_24-branch:1.3.0.10
+	binutils-2_24-branchpoint:1.3
+	binutils-2_21_1:1.3
+	binutils-2_23_2:1.3
+	binutils-2_23_1:1.3
+	binutils-2_23:1.3
+	binutils-2_23-branch:1.3.0.8
+	binutils-2_23-branchpoint:1.3
+	binutils-2_22_branch:1.3.0.6
+	binutils-2_22:1.3
+	binutils-2_22-branch:1.3.0.4
+	binutils-2_22-branchpoint:1.3
+	binutils-2_21:1.3
+	binutils-2_21-branch:1.3.0.2
+	binutils-2_21-branchpoint:1.3
+	binutils-2_20_1:1.2
+	binutils-2_20:1.2
+	binutils-arc-20081103-branch:1.2.0.10
+	binutils-arc-20081103-branchpoint:1.2
+	binutils-2_20-branch:1.2.0.8
+	binutils-2_20-branchpoint:1.2
+	dje-cgen-play1-branch:1.2.0.6
+	dje-cgen-play1-branchpoint:1.2
+	arc-20081103-branch:1.2.0.4
+	arc-20081103-branchpoint:1.2
+	binutils-2_19_1:1.2
+	binutils-2_19:1.2
+	binutils-2_19-branch:1.2.0.2
+	binutils-2_19-branchpoint:1.2
+	binutils_latest_snapshot:1.3;
+locks; strict;
+comment	@# @;
+
+
+1.3
+date	2010.03.02.08.19.54;	author clyon;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2008.05.23.13.53.27;	author nickc;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2008.05.15.17.00.15;	author nickc;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.3
+log
+@2010-03-02  Christophe Lyon  <christophe.lyon@@st.com>
+	Alan Modra  <amodra@@gmail.com>
+
+	bfd/
+	* elf32-arm.c (a8_erratum_fix): Add st_type field to record the
+	destination mode of the a8 stub.
+	(elf32_arm_link_hash_table): Add top_id field.
+	(elf32_arm_link_hash_table_create): Initialize top_id.
+	(arm_type_of_stub): Update prototype, st_type can now be updated
+	by this function. Actual destination address in case of PLT is
+	computed here, to help factorizing code.
+	(elf32_arm_stub_name): Update prototype, use stub_type additional
+	parameter to build stub name.
+	(elf32_arm_get_stub_entry): Update prototype, use stub_type
+	additional parameter to build stub entry.
+	(arm_build_one_stub): Use bfd_put_16/bfd_put_32 instead of
+	put_thumb_insn/put_arm_insn as BE8 encoding is now handled later.
+	Call elf32_arm_final_link_relocate to process all in-stub
+	relocations.
+	(elf32_arm_setup_section_lists): Update top_id.
+	(cortex_a8_erratum_scan): Record stub destination mode.
+	(elf32_arm_size_stubs): Update call to arm_type_of_stub according
+	to new prototype.
+	(elf32_arm_final_link_relocate): Enable processing of in-stub
+	REL32 relocations. Rely on arm_type_of_stub to detect if a stub is
+	needed, enabling code factorization.
+	(elf32_arm_final_link): Process stub sections.
+	(elf32_arm_output_map_sym): Add entry to code/data map.
+
+	ld/testsuite/
+	* ld-arm/arm-elf.exp: Change .text start address for
+	farcall-thumb-arm tests. Add v4t variant for farcall-mixed-lib
+	test.
+	* ld-arm/farcall-mixed-lib-v4t.d: New test.
+	* ld-arm/farcall-mixed-lib1.s: Don't force armv5t.
+	* ld-arm/farcall-mixed-lib2.s: Likewise.
+	* ld-arm/arm-call.d: Update expected results.
+	* ld-arm/cortex-a8-far.d: Likewise.
+	* ld-arm/farcall-group-size2.d: Likewise.
+	* ld-arm/farcall-group.d: Likewise.
+	* ld-arm/farcall-mix.d: Likewise.
+	* ld-arm/farcall-mix2.d: Likewise.
+	* ld-arm/farcall-mixed-app-v5.d: Likewise.
+	* ld-arm/farcall-mixed-app.d: Likewise.
+	* ld-arm/farcall-mixed-lib.d: Likewise.
+	* ld-arm/farcall-thumb-arm.d: Likewise.
+	* ld-arm/farcall-thumb-arm-blx.d: Likewise.
+	* ld-arm/farcall-thumb-arm-pic-veneer.d: Likewise.
+	* ld-arm/farcall-thumb-arm-blx-pic-veneer.d: Likewise.
+	* ld-arm/farcall-thumb-arm.s: Update test. Add a new call to
+	potentially generate different types of stubs.
+@
+text
+@@@ Test to ensure that a Thumb to ARM call exceeding 4Mb generates a stub.
+@@ Check that we can generate two types of stub in the same section.
+
+	.global _start
+	.syntax unified
+
+@@ We will place the section .text at 0x1c01010.
+
+	.text
+	.thumb_func
+_start:
+	.global bar
+	bl bar
+@@ This call is close enough to generate a "short branch" stub
+@@ or no stub if blx is available.
+	.space 0x0300000
+	bl bar
+
+@@ We will place the section .foo at 0x2001014.
+
+	.section .foo, "xa"
+
+	.arm
+	.type bar, %function
+bar:
+	bx lr
+
+@
+
+
+1.2
+log
+@        bfd/
+        * elf32-arm.c (arm_type_of_stub): Ignore STT_SECTION symbols.
+        (elf32_arm_stub_add_mapping_symbol): Remove.
+        (elf32_arm_add_stub): Don't generate mapping symbols. Change
+        prototype.
+        (elf32_arm_size_stubs): Use new elf32_arm_add_stub
+        prototype. Don't generate thumb to arm glue for calls.
+        (arm_map_one_stub): Define.
+        (elf32_arm_output_arch_local_syms): Generate mapping symbols for
+        long calls stubs.
+
+        ld/testsuite/
+        * ld-arm/farcall-arm-arm.s: Force function type on 'bar'.
+        * ld-arm/farcall-thumb-arm.s: Likewise.
+        * ld-arm/farcall-thumb-arm-blx.d: Fix encoding.
+        * ld-arm/farcall-thumb-arm.d: Likewise.
+        * ld-arm/farcall-thumb-arm-blx-pic-veneer.d: Likewise.
+        * ld-arm/arm-elf.exp (armelftests): Add farcall-mix, farcall-mix2,
+        farcall-group-default, farcall-group-size2, farcall-section Ignore
+        gas warnings in farcall-thumb-arm, farcall-thumb-arm-blx,
+        farcall-thumb-arm-blx-pic-veneer.
+@
+text
+@d2 1
+d7 1
+a7 1
+@@ We will place the section .text at 0x1000.
+d12 5
+@
+
+
+1.1
+log
+@        bfd/
+        * elf32-arm.c (THM2_MAX_FWD_BRANCH_OFFSET): Define.
+        (THM2_MAX_BWD_BRANCH_OFFSET): Define.
+        (ARM_MAX_FWD_BRANCH_OFFSET): Define.
+        (ARM_MAX_BWD_BRANCH_OFFSET): Define.
+        (THM_MAX_FWD_BRANCH_OFFSET): Define.
+        (THM_MAX_BWD_BRANCH_OFFSET): Define.
+        (arm_long_branch_stub): Define.
+        (arm_pic_long_branch_stub): Define.
+        (arm_thumb_v4t_long_branch_stub): Define.
+        (arm_thumb_thumb_long_branch_stub): Define.
+        (arm_thumb_arm_v4t_long_branch_stub): Define.
+        (STUB_SUFFIX): Define.
+        (elf32_arm_stub_type): Define.
+        (elf32_arm_stub_hash_entry): Define.
+        (elf32_arm_link_hash_entry): Add stub_cache field.
+        (arm_stub_hash_lookup): Define.
+        (elf32_arm_link_hash_table): Add stub_hash_table, stub_bfd,
+        add_stub_section, layout_sections_again, stub_group, bfd_count,
+        top_index, input_list fields.
+        (elf32_arm_link_hash_newfunc): Init new field.
+        (stub_hash_newfunc): New function.
+        (elf32_arm_link_hash_table_create): Init stub_hash_table.
+        (elf32_arm_hash_table_free): New function.
+        (arm_type_of_stub): New function.
+        (elf32_arm_stub_name): New function.
+        (elf32_arm_get_stub_entry): New function.
+        (elf32_arm_stub_add_mapping_symbol): New function.
+        (elf32_arm_add_stub): New function.
+        (arm_build_one_stub): New function.
+        (arm_size_one_stub): New function.
+        (elf32_arm_setup_section_lists): New function.
+        (elf32_arm_next_input_section): New function.
+        (group_sections): New function.
+        (elf32_arm_size_stubs): New function.
+        (elf32_arm_build_stubs): New function.
+        (bfd_elf32_arm_add_glue_sections_to_bfd): Skip stub sections.
+        (bfd_elf32_arm_process_before_allocation): No longer handle
+        R_ARM_CALL and R_ARM_THM_CALL.
+        (using_thumb_only): New function.
+        (elf32_arm_final_link_relocate): Redirect calls to stub if range
+        exceeds encoding capabilities.
+        (bfd_elf32_bfd_link_hash_table_free): Define.
+        * bfd-in.h (R_ARM_max): Fix value to 130.
+        (elf32_arm_setup_section_lists): Protype.
+        (elf32_arm_next_input_section): Protype.
+        (elf32_arm_size_stubs): Protype.
+        (elf32_arm_build_stubs): Protype.
+
+        ld/
+        * emultempl/armelf.em (build_section_lists): New function.
+        (stub_file): Define.
+        (need_laying_out): Define.
+        (group_size): Define.
+        (hook_stub_info): Define.
+        (hook_in_stub): New function.
+        (elf32_arm_add_stub_section): New function.
+        (gldarm_layout_sections_again): New function.
+        (gld${EMULATION_NAME}_finish): Replace arm_elf_finish(). Generate
+        stubs for long calls if needed.
+        (arm_elf_create_output_section_statements): create stub_file bfd.
+        (arm_for_each_input_file_wrapper): New function.
+        (arm_lang_for_each_input_file): New function.
+        (lang_for_each_input_file): Define.
+        (PARSE_AND_LIST_PROLOGUE): Add option token OPTION_STUBGROUP_SIZE.
+        (PARSE_AND_LIST_LONGOPTS): Add option stub-group-size.
+        (PARSE_AND_LIST_OPTIONS): Add option stub-group-size.
+        (PARSE_AND_LIST_ARGS_CASES): Add OPTION_STUBGROUP_SIZE case.
+        (LDEMUL_FINISH): Update to gld${EMULATION_NAME}_finish.
+        * ld/lang.c (print_input_statement): Skip if bfd has
+        BFD_LINKER_CREATED.
+
+        ld/testsuite
+        * ld-arm/arm-elf.exp (armelftests): Add farcall-arm-arm,
+        farcall-arm-arm-pic-veneer, farcall-arm-arm-be8 farcall-arm-thumb,
+        farcall-arm-thumb-blx, farcall-arm-thumb-pic-veneer,
+        farcall-arm-thumb-blx-pic-veneer, farcall-thumb-thumb,
+        farcall-thumb-thumb-pic-veneer, farcall-thumb-thumb-blx,
+        farcall-thumb-thumb-m, farcall-thumb-thumb-m-pic-veneer,
+        farcall-thumb-thumb-blx-pic-veneer, farcall-thumb-arm,
+        farcall-thumb-arm-pic-veneer, farcall-thumb-arm-blx,
+        farcall-thumb-arm-blx-pic-veneer.
+        Change thumb2-bl-as-thumb1-bad, thumb2-bl-bad.
+        * ld-arm/thumb2-bl-as-thumb1-bad.d: Reflects farcall stub
+        generation.
+        * ld-arm/thumb2-bl-bad.d: Likewise.
+        * ld-arm/thumb2-bl-as-thumb1-bad.s: Update comments.
+        * ld-arm/thumb2-bl-bad.s: Likewise.
+@
+text
+@d17 2
+@
+

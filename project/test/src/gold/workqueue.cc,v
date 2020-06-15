@@ -1,0 +1,1683 @@
+head	1.16;
+access;
+symbols
+	binutils-2_24-branch:1.16.0.8
+	binutils-2_24-branchpoint:1.16
+	binutils-2_21_1:1.15
+	binutils-2_23_2:1.16
+	binutils-2_23_1:1.16
+	binutils-2_23:1.16
+	binutils-2_23-branch:1.16.0.6
+	binutils-2_23-branchpoint:1.16
+	binutils-2_22_branch:1.16.0.4
+	binutils-2_22:1.16
+	binutils-2_22-branch:1.16.0.2
+	binutils-2_22-branchpoint:1.16
+	binutils-2_21:1.15
+	binutils-2_21-branch:1.15.0.2
+	binutils-2_21-branchpoint:1.15
+	binutils-2_20_1:1.11
+	binutils-2_20:1.11
+	binutils-arc-20081103-branch:1.10.0.6
+	binutils-arc-20081103-branchpoint:1.10
+	binutils-2_20-branch:1.11.0.4
+	binutils-2_20-branchpoint:1.11
+	dje-cgen-play1-branch:1.11.0.2
+	dje-cgen-play1-branchpoint:1.11
+	arc-20081103-branch:1.10.0.4
+	arc-20081103-branchpoint:1.10
+	binutils-2_19_1:1.10
+	binutils-2_19:1.10
+	binutils-2_19-branch:1.10.0.2
+	binutils-2_19-branchpoint:1.10
+	binutils_latest_snapshot:1.16
+	added-to-binutils:1.10;
+locks; strict;
+comment	@// @;
+
+
+1.16
+date	2011.07.28.23.25.06;	author ccoutant;	state Exp;
+branches;
+next	1.15;
+
+1.15
+date	2009.12.29.23.45.10;	author espindola;	state Exp;
+branches;
+next	1.14;
+
+1.14
+date	2009.12.17.16.02.03;	author espindola;	state Exp;
+branches;
+next	1.13;
+
+1.13
+date	2009.12.14.19.53.05;	author ian;	state Exp;
+branches;
+next	1.12;
+
+1.12
+date	2009.12.11.13.42.12;	author nickc;	state Exp;
+branches;
+next	1.11;
+
+1.11
+date	2009.03.14.05.56.46;	author ian;	state Exp;
+branches;
+next	1.10;
+
+1.10
+date	2008.03.13.21.04.21;	author iant;	state Exp;
+branches;
+next	1.9;
+
+1.9
+date	2008.02.28.19.46.06;	author iant;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2007.12.14.19.00.21;	author iant;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2007.11.22.00.05.51;	author iant;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2007.10.17.06.24.50;	author iant;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2007.09.22.21.02.10;	author iant;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2006.11.29.17.56.40;	author iant;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2006.10.20.20.40.49;	author iant;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2006.08.04.23.20.34;	author iant;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2006.08.04.23.10.59;	author iant;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.16
+log
+@	* workqueue-internal.h (Workqueue_threader::should_cancel_thread):
+	Add thread_number parameter.
+	(Workqueue_threader_threadpool::should_cancel_thread): Likewise.
+	* workqueue-threads.cc
+	(Workqueue_threader_threadpool::should_cancel_thread): Cancel
+	current thread if its thread number is greater than desired thread
+	count.
+	* workqueue.cc (Workqueue_threader_single::should_cancel_thread):
+	Add thread_number parameter.
+	(Workqueue::should_cancel_thread): Likewise.
+	(Workqueue::find_runnable_or_wait): Pass thread_number to
+	should_cancel_thread.
+	* workqueue.h (Workqueue::should_cancel_thread): Add thread_number
+	parameter.
+@
+text
+@// workqueue.cc -- the workqueue for gold
+
+// Copyright 2006, 2007, 2008 Free Software Foundation, Inc.
+// Written by Ian Lance Taylor <iant@@google.com>.
+
+// This file is part of gold.
+
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 3 of the License, or
+// (at your option) any later version.
+
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+// MA 02110-1301, USA.
+
+#include "gold.h"
+
+#include "debug.h"
+#include "options.h"
+#include "timer.h"
+#include "workqueue.h"
+#include "workqueue-internal.h"
+
+namespace gold
+{
+
+// Class Task_list.
+
+// Add T to the end of the list.
+
+inline void
+Task_list::push_back(Task* t)
+{
+  gold_assert(t->list_next() == NULL);
+  if (this->head_ == NULL)
+    {
+      this->head_ = t;
+      this->tail_ = t;
+    }
+  else
+    {
+      this->tail_->set_list_next(t);
+      this->tail_ = t;
+    }
+}
+
+// Add T to the front of the list.
+
+inline void
+Task_list::push_front(Task* t)
+{
+  gold_assert(t->list_next() == NULL);
+  if (this->head_ == NULL)
+    {
+      this->head_ = t;
+      this->tail_ = t;
+    }
+  else
+    {
+      t->set_list_next(this->head_);
+      this->head_ = t;
+    }
+}
+
+// Remove and return the first Task waiting for this lock to be
+// released.
+
+inline Task*
+Task_list::pop_front()
+{
+  Task* ret = this->head_;
+  if (ret != NULL)
+    {
+      if (ret == this->tail_)
+	{
+	  gold_assert(ret->list_next() == NULL);
+	  this->head_ = NULL;
+	  this->tail_ = NULL;
+	}
+      else
+	{
+	  this->head_ = ret->list_next();
+	  gold_assert(this->head_ != NULL);
+	  ret->clear_list_next();
+	}
+    }
+  return ret;
+}
+
+// The simple single-threaded implementation of Workqueue_threader.
+
+class Workqueue_threader_single : public Workqueue_threader
+{
+ public:
+  Workqueue_threader_single(Workqueue* workqueue)
+    : Workqueue_threader(workqueue)
+  { }
+  ~Workqueue_threader_single()
+  { }
+
+  void
+  set_thread_count(int thread_count)
+  { gold_assert(thread_count > 0); }
+
+  bool
+  should_cancel_thread(int)
+  { return false; }
+};
+
+// Workqueue methods.
+
+Workqueue::Workqueue(const General_options& options)
+  : lock_(),
+    first_tasks_(),
+    tasks_(),
+    running_(0),
+    waiting_(0),
+    condvar_(this->lock_),
+    threader_(NULL)
+{
+  bool threads = options.threads();
+#ifndef ENABLE_THREADS
+  threads = false;
+#endif
+  if (!threads)
+    this->threader_ = new Workqueue_threader_single(this);
+  else
+    {
+#ifdef ENABLE_THREADS
+      this->threader_ = new Workqueue_threader_threadpool(this);
+#else
+      gold_unreachable();
+#endif
+    }
+}
+
+Workqueue::~Workqueue()
+{
+}
+
+// Add a task to the end of a specific queue, or put it on the list
+// waiting for a Token.
+
+void
+Workqueue::add_to_queue(Task_list* queue, Task* t, bool front)
+{
+  Hold_lock hl(this->lock_);
+
+  Task_token* token = t->is_runnable();
+  if (token != NULL)
+    {
+      if (front)
+	token->add_waiting_front(t);
+      else
+	token->add_waiting(t);
+      ++this->waiting_;
+    }
+  else
+    {
+      if (front)
+	queue->push_front(t);
+      else
+	queue->push_back(t);
+      // Tell any waiting thread that there is work to do.
+      this->condvar_.signal();
+    }
+}
+
+// Add a task to the queue.
+
+void
+Workqueue::queue(Task* t)
+{
+  this->add_to_queue(&this->tasks_, t, false);
+}
+
+// Queue a task which should run soon.
+
+void
+Workqueue::queue_soon(Task* t)
+{
+  t->set_should_run_soon();
+  this->add_to_queue(&this->first_tasks_, t, false);
+}
+
+// Queue a task which should run next.
+
+void
+Workqueue::queue_next(Task* t)
+{
+  t->set_should_run_soon();
+  this->add_to_queue(&this->first_tasks_, t, true);
+}
+
+// Return whether to cancel the current thread.
+
+inline bool
+Workqueue::should_cancel_thread(int thread_number)
+{
+  return this->threader_->should_cancel_thread(thread_number);
+}
+
+// Find a runnable task in TASKS.  Return NULL if none could be found.
+// If we find a Task waiting for a Token, add it to the list for that
+// Token.  The workqueue lock must be held when this is called.
+
+Task*
+Workqueue::find_runnable_in_list(Task_list* tasks)
+{
+  Task* t;
+  while ((t = tasks->pop_front()) != NULL)
+    {
+      Task_token* token = t->is_runnable();
+
+      if (token == NULL)
+	return t;
+
+      token->add_waiting(t);
+      ++this->waiting_;
+    }
+
+  // We couldn't find any runnable task.
+  return NULL;
+}
+
+// Find a runnable task.  Return NULL if none could be found.  The
+// workqueue lock must be held when this is called.
+
+Task*
+Workqueue::find_runnable()
+{
+  Task* t = this->find_runnable_in_list(&this->first_tasks_);
+  if (t == NULL)
+    t = this->find_runnable_in_list(&this->tasks_);
+  return t;
+}
+
+// Find a runnable a task, and wait until we find one.  Return NULL if
+// we should exit.  The workqueue lock must be held when this is
+// called.
+
+Task*
+Workqueue::find_runnable_or_wait(int thread_number)
+{
+  Task* t = this->find_runnable();
+
+  while (t == NULL)
+    {
+      if (this->running_ == 0
+	  && this->first_tasks_.empty()
+	  && this->tasks_.empty())
+	{
+	  // Kick all the threads to make them exit.
+	  this->condvar_.broadcast();
+
+	  gold_assert(this->waiting_ == 0);
+	  return NULL;
+	}
+
+      if (this->should_cancel_thread(thread_number))
+	return NULL;
+
+      gold_debug(DEBUG_TASK, "%3d sleeping", thread_number);
+
+      this->condvar_.wait();
+
+      gold_debug(DEBUG_TASK, "%3d awake", thread_number);
+
+      t = this->find_runnable();
+    }
+
+  return t;
+}
+
+// Find and run tasks.  If we can't find a runnable task, wait for one
+// to become available.  If we run a task, and it frees up another
+// runnable task, then run that one too.  This returns true if we
+// should look for another task, false if we are cancelling this
+// thread.
+
+bool
+Workqueue::find_and_run_task(int thread_number)
+{
+  Task* t;
+  Task_locker tl;
+
+  {
+    Hold_lock hl(this->lock_);
+
+    // Find a runnable task.
+    t = this->find_runnable_or_wait(thread_number);
+
+    if (t == NULL)
+      return false;
+
+    // Get the locks for the task.  This must be called while we are
+    // still holding the Workqueue lock.
+    t->locks(&tl);
+
+    ++this->running_;
+  }
+
+  while (t != NULL)
+    {
+      gold_debug(DEBUG_TASK, "%3d running   task %s", thread_number,
+		 t->name().c_str());
+
+      Timer timer;
+      if (is_debugging_enabled(DEBUG_TASK))
+        timer.start();
+
+      t->run(this);
+
+      if (is_debugging_enabled(DEBUG_TASK))
+        {
+          Timer::TimeStats elapsed = timer.get_elapsed_time();
+
+          gold_debug(DEBUG_TASK,
+                     "%3d completed task %s "
+                     "(user: %ld.%06ld sys: %ld.%06ld wall: %ld.%06ld)",
+                     thread_number,  t->name().c_str(),
+                     elapsed.user / 1000, (elapsed.user % 1000) * 1000,
+                     elapsed.sys / 1000, (elapsed.sys % 1000) * 1000,
+                     elapsed.wall / 1000, (elapsed.wall % 1000) * 1000);
+        }
+
+      Task* next;
+      {
+	Hold_lock hl(this->lock_);
+
+	--this->running_;
+
+	// Release the locks for the task.  This must be done with the
+	// workqueue lock held.  Get the next Task to run if any.
+	next = this->release_locks(t, &tl);
+
+	if (next == NULL)
+	  next = this->find_runnable();
+
+	// If we have another Task to run, get the Locks.  This must
+	// be called while we are still holding the Workqueue lock.
+	if (next != NULL)
+	  {
+	    tl.clear();
+	    next->locks(&tl);
+
+	    ++this->running_;
+	  }
+      }
+
+      // We are done with this task.
+      delete t;
+
+      t = next;
+    }
+
+  return true;
+}
+
+// Handle the return value of release_locks, and get tasks ready to
+// run.
+
+// 1) If T is not runnable, queue it on the appropriate token.
+
+// 2) Otherwise, T is runnable.  If *PRET is not NULL, then we have
+// already decided which Task to run next.  Add T to the list of
+// runnable tasks, and signal another thread.
+
+// 3) Otherwise, *PRET is NULL.  If IS_BLOCKER is false, then T was
+// waiting on a write lock.  We can grab that lock now, so we run T
+// now.
+
+// 4) Otherwise, IS_BLOCKER is true.  If we should run T soon, then
+// run it now.
+
+// 5) Otherwise, check whether there are other tasks to run.  If there
+// are, then we generally get a better ordering if we run those tasks
+// now, before T.  A typical example is tasks waiting on the Dirsearch
+// blocker.  We don't want to run those tasks right away just because
+// the Dirsearch was unblocked.
+
+// 6) Otherwise, there are no other tasks to run, so we might as well
+// run this one now.
+
+// This function must be called with the Workqueue lock held.
+
+// Return true if we set *PRET to T, false otherwise.
+
+bool
+Workqueue::return_or_queue(Task* t, bool is_blocker, Task** pret)
+{
+  Task_token* token = t->is_runnable();
+
+  if (token != NULL)
+    {
+      token->add_waiting(t);
+      ++this->waiting_;
+      return false;
+    }
+
+  bool should_queue = false;
+  bool should_return = false;
+
+  if (*pret != NULL)
+    should_queue = true;
+  else if (!is_blocker)
+    should_return = true;
+  else if (t->should_run_soon())
+    should_return = true;
+  else if (!this->first_tasks_.empty() || !this->tasks_.empty())
+    should_queue = true;
+  else
+    should_return = true;
+
+  if (should_return)
+    {
+      gold_assert(*pret == NULL);
+      *pret = t;
+      return true;
+    }
+  else if (should_queue)
+    {
+      if (t->should_run_soon())
+	this->first_tasks_.push_back(t);
+      else
+	this->tasks_.push_back(t);
+      this->condvar_.signal();
+      return false;
+    }
+
+  gold_unreachable();
+}
+
+// Release the locks associated with a Task.  Return the first
+// runnable Task that we find.  If we find more runnable tasks, add
+// them to the run queue and signal any other threads.  This must be
+// called with the Workqueue lock held.
+
+Task*
+Workqueue::release_locks(Task* t, Task_locker* tl)
+{
+  Task* ret = NULL;
+  for (Task_locker::iterator p = tl->begin(); p != tl->end(); ++p)
+    {
+      Task_token* token = *p;
+      if (token->is_blocker())
+	{
+	  if (token->remove_blocker())
+	    {
+	      // The token has been unblocked.  Every waiting Task may
+	      // now be runnable.
+	      Task* t;
+	      while ((t = token->remove_first_waiting()) != NULL)
+		{
+		  --this->waiting_;
+		  this->return_or_queue(t, true, &ret);
+		}
+	    }
+	}
+      else
+	{
+	  token->remove_writer(t);
+
+	  // One more waiting Task may now be runnable.  If we are
+	  // going to run it next, we can stop.  Otherwise we need to
+	  // move all the Tasks to the runnable queue, to avoid a
+	  // potential deadlock if the locking status changes before
+	  // we run the next thread.
+	  Task* t;
+	  while ((t = token->remove_first_waiting()) != NULL)
+	    {
+	      --this->waiting_;
+	      if (this->return_or_queue(t, false, &ret))
+		break;
+	    }
+	}
+    }
+  return ret;
+}
+
+// Process all the tasks on the workqueue.  Keep going until the
+// workqueue is empty, or until we have been told to exit.  This
+// function is called by all threads.
+
+void
+Workqueue::process(int thread_number)
+{
+  while (this->find_and_run_task(thread_number))
+    ;
+}
+
+// Set the number of threads to use for the workqueue, if we are using
+// threads.
+
+void
+Workqueue::set_thread_count(int threads)
+{
+  Hold_lock hl(this->lock_);
+
+  this->threader_->set_thread_count(threads);
+  // Wake up all the threads, since something has changed.
+  this->condvar_.broadcast();
+}
+
+// Add a new blocker to an existing Task_token.
+
+void
+Workqueue::add_blocker(Task_token* token)
+{
+  Hold_lock hl(this->lock_);
+  token->add_blocker();
+}
+
+} // End namespace gold.
+@
+
+
+1.15
+log
+@2009-12-29   Rafael Espindola  <espindola@@google.com>
+
+	* main.cc (main): Fix the sys time reporting.
+	* workqueue.cc (Workqueue::find_and_run_task): Fix the sys time reporting.
+@
+text
+@d113 1
+a113 1
+  should_cancel_thread()
+d205 1
+a205 1
+Workqueue::should_cancel_thread()
+d207 1
+a207 1
+  return this->threader_->should_cancel_thread();
+d267 1
+a267 1
+      if (this->should_cancel_thread())
+@
+
+
+1.14
+log
+@2009-12-17  Rafael Avila de Espindola  <espindola@@google.com>
+
+	* Makefile.am (CCFILES): Add timer.cc.
+	(HFILES): Add timer.h.
+	* configure.ac: Check for sysconf and times.
+	* main.cc: include timer.h.
+	(main): Use Timer instead of get_run_time.
+	* timer.cc: New.
+	* timer.h: New.
+	* workqueue.cc: include timer.h.
+	(Workqueue::find_and_run_task):
+	Report user, sys and wall time.
+	* Makefile.in: Regenerate.
+	* config.in: Regenerate.
+	* configure: Regenerate.
+@
+text
+@d330 1
+a330 1
+                     elapsed.sys / 1000, (elapsed.user % 1000) * 1000,
+@
+
+
+1.13
+log
+@	Revert -Wshadow changes, all changes from:
+	2009-12-11  Doug Kwan  <dougkwan@@google.com>
+	2009-12-11  Nick Clifton  <nickc@@redhat.com>
+	* configure.ac: Remove -Wshadow when setting WARN_CXXFLAGS.
+@
+text
+@d27 1
+d315 4
+d321 12
+a332 2
+      gold_debug(DEBUG_TASK, "%3d completed task %s", thread_number,
+		 t->name().c_str());
+@
+
+
+1.12
+log
+@Add -Wshadow to the gcc command line options used when compiling the binutils.
+Fix up all warnings generated by the addition of this switch.
+@
+text
+@d3 1
+a3 1
+// Copyright 2006, 2007, 2008, 2009 Free Software Foundation, Inc.
+d151 1
+a151 1
+Workqueue::add_to_queue(Task_list* que, Task* t, bool front)
+d167 1
+a167 1
+	que->push_front(t);
+d169 1
+a169 1
+	que->push_back(t);
+d444 2
+a445 2
+	      Task* tok;
+	      while ((tok = token->remove_first_waiting()) != NULL)
+d448 1
+a448 1
+		  this->return_or_queue(tok, true, &ret);
+d461 2
+a462 2
+	  Task* tok;
+	  while ((tok = token->remove_first_waiting()) != NULL)
+d465 1
+a465 1
+	      if (this->return_or_queue(tok, false, &ret))
+@
+
+
+1.11
+log
+@	* readsyms.cc (Read_symbols::incompatible_warning): New function.
+	(Read_symbols::requeue): New function.
+	(Read_symbols::do_read_symbols): If make_elf_object fails because
+	the target type is not configured, and the file was searched for,
+	issue a warning and retry with the next directory.
+	(Add_symbols::run): If the file has an incompatible format, and
+	it was searched for, requeue the Read_symbols task.  On error,
+	release the object.
+	* readsyms.h (class Read_symbols): Add dirindex_ field.  Add
+	dirindex parameter to constructor.  Change all callers.  Declare
+	incompatible_warning and requeue.
+	(class Add_symbols): Add dirpath_, dirindex_, mapfile_,
+	input_argument_ and input_group_ fields.  Add them to
+	constructor.  Change all callers.
+	(class Read_script): Add dirindex_ field.  Add it to constructor.
+	Change all callers.
+	* archive.cc (Archive::setup): Remove input_objects parameter.
+	Change all callers.
+	(Archive::get_file_and_offset): Likewise.
+	(Archive::read_all_symbols): Likewise.
+	(Archive::read_symbols): Likewise.
+	(Archive::get_elf_object_for_member): Remove input_objects
+	parameter.  Add punconfigured parameter.  Change all callers.
+	(Archive::add_symbols): Change return type to bool.  Check return
+	value of include_member.
+	(Archive::include_all_members): Likewise.
+	(Archive::include_member): Change return type to bool.  Return
+	false if first included object has incompatible target.  Set
+	included_member_ field.
+	(Add_archive_symbols::run): If add_symbols returns false, requeue
+	Read_symbols task.
+	* archive.h (class Archive): Add included_member_ field.
+	Initialize it in constructor.  Add input_file and searched_for
+	methods.  Update declarations.
+	(class Add_archive_symbols): Add dirpath_, dirindex_, and
+	input_argument_ fields.  Add them to constructor.  Change all
+	callers.
+	* script.cc: Include "target-select.h".
+	(class Parser_closure): Add skip_on_incompatible_target_ and
+	found_incompatible_target_ fields.  Add
+	skip_on_incompatible_target parameter to constructor.  Change all
+	callers.  Add methods skip_on_incompatible_target,
+	clear_skip_on_incompatible_target, found_incompatible_target, and
+	set_found_incompatible_target.
+	(read_input_script): Add dirindex parameter.  Change all callers.
+	If parser finds an incompatible target, requeue Read_symbols
+	task.
+	(script_set_symbol): Clear skip_on_incompatible_target in
+	closure.
+	(script_add_assertion, script_parse_option): Likewise.
+	(script_start_sections, script_add_phdr): Likewise.
+	(script_check_output_format): New function.
+	* script.h (read_input_script): Update declaration.
+	* script-c.h (script_check_output_format): Declare.
+	* yyscript.y (file_cmd): Handle OUTPUT_FORMAT.
+	(ignore_cmd): Remove OUTPUT_FORMAT.
+	* fileread.cc (Input_file::Input_file): Add explicit this.
+	(Input_file::will_search_for): New function.
+	(Input_file::open): Add pindex parameter.  Change all callers.
+	* fileread.h (class Input_file): Add input_file_argument method.
+	Declare will_search_for.  Update declarations.
+	* object.cc (make_elf_object): Add punconfigured parameter.
+	Change all callers.
+	* object.h (class Object): Make input_file public.  Add
+	searched_for method.
+	(make_elf_object): Update declaration.
+	* dirsearch.cc (Dirsearch::find): Add pindex parameter.  Use it to
+	restart search.
+	* dirsearch.h (class Dirsearch): Update declaration.
+	* options.h (class General_options): Add --warn-search-mismatch.
+	* parameters.cc (Parameters::is_compatible_target): New function.
+	* parameters.h (class Parameters): Declare is_compatible_target.
+	* workqueue.cc (Workqueue::add_blocker): New function.
+	* workqueue.h (class Workqueue): Declare add_blocker.
+@
+text
+@d3 1
+a3 1
+// Copyright 2006, 2007, 2008 Free Software Foundation, Inc.
+d151 1
+a151 1
+Workqueue::add_to_queue(Task_list* queue, Task* t, bool front)
+d167 1
+a167 1
+	queue->push_front(t);
+d169 1
+a169 1
+	queue->push_back(t);
+d444 2
+a445 2
+	      Task* t;
+	      while ((t = token->remove_first_waiting()) != NULL)
+d448 1
+a448 1
+		  this->return_or_queue(t, true, &ret);
+d461 2
+a462 2
+	  Task* t;
+	  while ((t = token->remove_first_waiting()) != NULL)
+d465 1
+a465 1
+	      if (this->return_or_queue(t, false, &ret))
+@
+
+
+1.10
+log
+@Update copyright years.  Update language files.
+@
+text
+@d497 9
+@
+
+
+1.9
+log
+@Read input scripts which look like input objects with proper
+serialization.
+@
+text
+@d3 1
+a3 1
+// Copyright 2006, 2007 Free Software Foundation, Inc.
+@
+
+
+1.8
+log
+@Rewrite workqueue.  This version eliminates the master thread, and
+reduces the amount of locking required to find a new thread to run.
+@
+text
+@d53 18
+d151 1
+a151 1
+Workqueue::add_to_queue(Task_list* queue, Task* t)
+d158 4
+a161 1
+      token->add_waiting(t);
+d166 4
+a169 1
+      queue->push_back(t);
+d180 10
+a189 1
+  this->add_to_queue(&this->tasks_, t);
+d192 1
+a192 1
+// Add a task to the front of the queue.
+d195 1
+a195 1
+Workqueue::queue_front(Task* t)
+d198 1
+a198 1
+  this->add_to_queue(&this->first_tasks_, t);
+@
+
+
+1.7
+log
+@Add threading support.
+@
+text
+@d26 1
+d33 1
+a33 1
+// Task_token methods.
+d35 1
+a35 4
+Task_token::Task_token()
+  : is_blocker_(false), readers_(0), writer_(NULL)
+{
+}
+d37 2
+a38 1
+Task_token::~Task_token()
+d40 6
+a45 63
+  gold_assert(this->readers_ == 0 && this->writer_ == NULL);
+}
+
+bool
+Task_token::is_readable() const
+{
+  gold_assert(!this->is_blocker_);
+  return this->writer_ == NULL;
+}
+
+void
+Task_token::add_reader()
+{
+  gold_assert(!this->is_blocker_);
+  gold_assert(this->is_readable());
+  ++this->readers_;
+}
+
+void
+Task_token::remove_reader()
+{
+  gold_assert(!this->is_blocker_);
+  gold_assert(this->readers_ > 0);
+  --this->readers_;
+}
+
+bool
+Task_token::is_writable() const
+{
+  gold_assert(!this->is_blocker_);
+  return this->writer_ == NULL && this->readers_ == 0;
+}
+
+void
+Task_token::add_writer(const Task* t)
+{
+  gold_assert(!this->is_blocker_);
+  gold_assert(this->is_writable());
+  this->writer_ = t;
+}
+
+void
+Task_token::remove_writer(const Task* t)
+{
+  gold_assert(!this->is_blocker_);
+  gold_assert(this->writer_ == t);
+  this->writer_ = NULL;
+}
+
+bool
+Task_token::has_write_lock(const Task* t)
+{
+  gold_assert(!this->is_blocker_);
+  return this->writer_ == t;
+}
+
+// For blockers, we just use the readers_ field.
+
+void
+Task_token::add_blocker()
+{
+  if (this->readers_ == 0 && this->writer_ == NULL)
+    this->is_blocker_ = true;
+d47 4
+a50 18
+    gold_assert(this->is_blocker_);
+  ++this->readers_;
+}
+
+bool
+Task_token::remove_blocker()
+{
+  gold_assert(this->is_blocker_ && this->readers_ > 0);
+  --this->readers_;
+  return this->readers_ == 0;
+}
+
+bool
+Task_token::is_blocked() const
+{
+  gold_assert(this->is_blocker_
+	      || (this->readers_ == 0 && this->writer_ == NULL));
+  return this->readers_ > 0;
+d53 2
+a54 10
+// The Task_block_token class.
+
+Task_block_token::Task_block_token(Task_token& token, Workqueue* workqueue)
+  : token_(token), workqueue_(workqueue)
+{
+  // We must increment the block count when the task is created and
+  // put on the queue.  This object is created when the task is run,
+  // so we don't increment the block count here.
+  gold_assert(this->token_.is_blocked());
+}
+d56 2
+a57 1
+Task_block_token::~Task_block_token()
+d59 2
+a60 1
+  if (this->token_.remove_blocker())
+d62 12
+a73 3
+      // Tell the workqueue that a blocker was cleared.  This is
+      // always called in the main thread, so no locking is required.
+      this->workqueue_->cleared_blocker();
+d75 1
+d78 1
+a78 1
+// The simple single-threaded implementation of Workqueue_runner.
+d80 1
+a80 1
+class Workqueue_runner_single : public Workqueue_runner
+d83 2
+a84 2
+  Workqueue_runner_single(Workqueue* workqueue)
+    : Workqueue_runner(workqueue)
+d86 1
+a86 1
+  ~Workqueue_runner_single()
+d90 2
+a91 1
+  run(Task*, Task_locker*);
+d93 3
+a95 2
+  void
+  set_thread_count(int);
+a97 13
+void
+Workqueue_runner_single::run(Task* t, Task_locker* tl)
+{
+  t->run(this->get_workqueue());
+  this->completed(t, tl);
+}
+
+void
+Workqueue_runner_single::set_thread_count(int thread_count)
+{
+  gold_assert(thread_count > 0);
+}
+
+d101 1
+a101 1
+  : tasks_lock_(),
+a103 2
+    completed_lock_(),
+    completed_(),
+d105 3
+a107 4
+    queued_(0),
+    completed_condvar_(this->completed_lock_),
+    cleared_blockers_(0),
+    desired_thread_count_(1)
+d114 1
+a114 1
+    this->runner_ = new Workqueue_runner_single(this);
+d118 1
+a118 1
+      this->runner_ = new Workqueue_runner_threadpool(this);
+d127 22
+a148 4
+  gold_assert(this->first_tasks_.empty());
+  gold_assert(this->tasks_.empty());
+  gold_assert(this->completed_.empty());
+  gold_assert(this->running_ == 0);
+d156 1
+a156 8
+  {
+    Hold_lock hl(this->tasks_lock_);
+    this->tasks_.push_back(t);
+  }
+  {
+    Hold_lock hl(this->completed_lock_);
+    ++this->queued_;
+  }
+d164 10
+a173 8
+  {
+    Hold_lock hl(this->tasks_lock_);
+    this->first_tasks_.push_front(t);
+  }
+  {
+    Hold_lock hl(this->completed_lock_);
+    ++this->queued_;
+  }
+d176 3
+a178 2
+// Clear the list of completed tasks.  Return whether we cleared
+// anything.  The completed_lock_ must be held when this is called.
+d180 2
+a181 2
+bool
+Workqueue::clear_completed()
+d183 2
+a184 3
+  if (this->completed_.empty())
+    return false;
+  do
+d186 7
+a192 2
+      delete this->completed_.front();
+      this->completed_.pop_front();
+d194 15
+a208 2
+  while (!this->completed_.empty());
+  return true;
+d211 3
+a213 4
+// Find a runnable task in TASKS, which is non-empty.  Return NULL if
+// none could be found.  The tasks_lock_ must be held when this is
+// called.  Sets ALL_BLOCKED if all non-runnable tasks are waiting on
+// a blocker.
+d216 1
+a216 1
+Workqueue::find_runnable(Task_list* tasks, bool* all_blocked)
+d218 3
+a220 4
+  Task* tlast = tasks->back();
+  *all_blocked = true;
+  Task* t;
+  do
+d222 3
+a224 5
+      t = tasks->front();
+      tasks->pop_front();
+
+      Task::Is_runnable_type is_runnable = t->is_runnable(this);
+      if (is_runnable == Task::IS_RUNNABLE)
+d226 2
+a227 4
+	  {
+	    Hold_lock hl(this->completed_lock_);
+	    --this->queued_;
+	  }
+d229 2
+a230 1
+	  return t;
+d233 6
+a238 2
+      if (is_runnable != Task::IS_BLOCKED)
+	*all_blocked = false;
+d240 3
+a242 1
+      tasks->push_back(t);
+a243 1
+  while (t != tlast);
+d245 1
+a245 2
+  // We couldn't find any runnable task.
+  return NULL;
+d248 5
+a252 3
+// Process all the tasks on the workqueue.  This is the main loop in
+// the linker.  Note that as we process tasks, new tasks will be
+// added.
+d254 2
+a255 2
+void
+Workqueue::process()
+d257 20
+a276 1
+  while (true)
+d278 2
+a279 3
+      Task* t;
+      bool empty;
+      bool all_blocked;
+d281 6
+a286 1
+      // Don't start more tasks than desired.
+d288 3
+a290 1
+	Hold_lock hl(this->completed_lock_);
+d292 3
+a294 7
+	this->clear_completed();
+	while (this->running_ >= this->desired_thread_count_)
+	  {
+	    this->completed_condvar_.wait();
+	    this->clear_completed();
+	  }
+      }
+d296 2
+a297 2
+      {
+	Hold_lock hl(this->tasks_lock_);
+d299 3
+a301 10
+	bool first_empty;
+	bool all_blocked_first;
+	if (this->first_tasks_.empty())
+	  {
+	    t = NULL;
+	    empty = true;
+	    first_empty = true;
+	    all_blocked_first = false;
+	  }
+	else
+d303 2
+a304 4
+	    t = this->find_runnable(&this->first_tasks_, &all_blocked_first);
+	    empty = false;
+	    first_empty = false;
+	  }
+d306 1
+a306 11
+	if (t == NULL)
+	  {
+	    if (this->tasks_.empty())
+	      all_blocked = false;
+	    else
+	      {
+		t = this->find_runnable(&this->tasks_, &all_blocked);
+		if (!first_empty && !all_blocked_first)
+		  all_blocked = false;
+		empty = false;
+	      }
+d310 2
+a311 12
+      // If T != NULL, it is a task we can run.
+      // If T == NULL && empty, then there are no tasks waiting to
+      // be run.
+      // If T == NULL && !empty, then there tasks waiting to be
+      // run, but they are waiting for something to unlock.
+
+      if (t != NULL)
+	this->run(t);
+      else if (!empty)
+	{
+	  {
+	    Hold_lock hl(this->completed_lock_);
+d313 2
+a314 36
+	    // There must be something for us to wait for, or we won't
+	    // be able to make progress.
+	    gold_assert(this->running_ > 0 || !this->completed_.empty());
+
+	    if (all_blocked)
+	      {
+		this->cleared_blockers_ = 0;
+		int queued = this->queued_;
+		this->clear_completed();
+		while (this->cleared_blockers_ == 0
+		       && queued == this->queued_)
+		  {
+		    if (this->running_ <= 0)
+		      {
+			this->show_queued_tasks();
+			gold_unreachable();
+		      }
+		    this->completed_condvar_.wait();
+		    this->clear_completed();
+		  }
+	      }
+	    else
+	      {
+		if (this->running_ > 0)
+		  {
+		    // Wait for a task to finish.
+		    this->completed_condvar_.wait();
+		  }
+		this->clear_completed();
+	      }
+	  }
+	}
+      else
+	{
+	  {
+	    Hold_lock hl(this->completed_lock_);
+d316 1
+a316 14
+	    // If there are no running tasks, then we are done.
+	    if (this->running_ == 0)
+	      {
+		this->clear_completed();
+		return;
+	      }
+
+	    // Wait for a task to finish.  Then we have to loop around
+	    // again in case it added any new tasks before finishing.
+	    this->completed_condvar_.wait();
+	    this->clear_completed();
+	  }
+	}
+    }
+d319 15
+a333 1
+// Run a task.  This is always called in the main thread.
+d335 15
+a349 2
+void
+Workqueue::run(Task* t)
+d351 38
+a388 1
+  gold_debug(DEBUG_TASK, "starting  task %s", t->name().c_str());
+d390 1
+a390 5
+  {
+    Hold_lock hl(this->completed_lock_);
+    ++this->running_;
+  }
+  this->runner_->run(t, t->locks(this));
+d393 4
+a396 3
+// This is called when a task is completed to put the locks on the
+// list to be released.  We use a list because we only want the locks
+// to be released in the main thread.
+d398 2
+a399 2
+void
+Workqueue::completed(Task* t, Task_locker* tl)
+d401 21
+a421 1
+  gold_debug(DEBUG_TASK, "completed task %s", t->name().c_str());
+d423 15
+a437 9
+  {
+    Hold_lock hl(this->completed_lock_);
+    gold_assert(this->running_ > 0);
+    --this->running_;
+    this->completed_.push_back(tl);
+    this->completed_condvar_.signal();
+  }
+
+  delete t;
+d440 3
+a442 2
+// This is called when the last task for a blocker has completed.
+// This is always called in the main thread.
+d445 1
+a445 1
+Workqueue::cleared_blocker()
+d447 2
+a448 1
+  ++this->cleared_blockers_;
+d457 1
+a457 7
+  gold_assert(threads > 0);
+  this->desired_thread_count_ = threads;
+  this->runner_->set_thread_count(threads);
+}
+
+// Dump the list of queued tasks and their current state, for
+// debugging purposes.
+d459 3
+a461 26
+void
+Workqueue::show_queued_tasks()
+{
+  fprintf(stderr, _("gold task queue:\n"));
+  Hold_lock hl(this->tasks_lock_);
+  for (Task_list::const_iterator p = this->tasks_.begin();
+       p != this->tasks_.end();
+       ++p)
+    {
+      fprintf(stderr, "  %s ", (*p)->name().c_str());
+      switch ((*p)->is_runnable(this))
+	{
+	case Task::IS_RUNNABLE:
+	  fprintf(stderr, "runnable");
+	  break;
+	case Task::IS_BLOCKED:
+	  fprintf(stderr, "blocked");
+	  break;
+	case Task::IS_LOCKED:
+	  fprintf(stderr, "locked");
+	  break;
+	default:
+	  gold_unreachable();
+	}
+      putc('\n', stderr);
+    }
+@
+
+
+1.6
+log
+@Add infrastructure for threading support.
+@
+text
+@d25 1
+a25 4
+#ifdef ENABLE_THREADS
+#include <pthread.h>
+#endif
+
+d27 1
+a145 32
+// The Workqueue_runner abstract class.
+
+class Workqueue_runner
+{
+ public:
+  Workqueue_runner(Workqueue* workqueue)
+    : workqueue_(workqueue)
+  { }
+  virtual ~Workqueue_runner()
+  { }
+
+  // Run a task.  This is always called in the main thread.
+  virtual void
+  run(Task*, Task_locker*) = 0;
+
+  // Set the number of threads to use.  This is ignored when not using
+  // threads.
+  virtual void
+  set_thread_count(int) = 0;
+
+ protected:
+  // This is called by an implementation when a task is completed.
+  void completed(Task* t, Task_locker* tl)
+  { this->workqueue_->completed(t, tl); }
+
+  Workqueue* get_workqueue() const
+  { return this->workqueue_; }
+
+ private:
+  Workqueue* workqueue_;
+};
+
+d181 1
+d186 1
+d188 2
+a189 1
+    cleared_blockers_(0)
+d198 7
+a204 1
+    gold_unreachable();
+d209 1
+d220 8
+a227 2
+  Hold_lock hl(this->tasks_lock_);
+  this->tasks_.push_back(t);
+d235 8
+a242 2
+  Hold_lock hl(this->tasks_lock_);
+  this->tasks_.push_front(t);
+d268 1
+a268 1
+Workqueue::find_runnable(Task_list& tasks, bool* all_blocked)
+d270 1
+a270 1
+  Task* tlast = tasks.back();
+d272 2
+a273 1
+  while (true)
+d275 2
+a276 2
+      Task* t = tasks.front();
+      tasks.pop_front();
+a279 8
+	return t;
+
+      if (is_runnable != Task::IS_BLOCKED)
+	*all_blocked = false;
+
+      tasks.push_back(t);
+
+      if (t == tlast)
+a280 3
+	  // We couldn't find any runnable task.  If there are any
+	  // completed tasks, free their locks and try again.
+
+d282 2
+a283 12
+	    Hold_lock hl2(this->completed_lock_);
+
+	    if (!this->clear_completed())
+	      {
+		// There had better be some tasks running, or we will
+		// never find a runnable task.
+		gold_assert(this->running_ > 0);
+
+		// We couldn't find any runnable tasks, and we
+		// couldn't release any locks.
+		return NULL;
+	      }
+d286 1
+a286 2
+	  // We're going around again, so recompute ALL_BLOCKED.
+	  *all_blocked = true;
+d288 5
+d294 4
+d313 12
+d328 3
+a330 1
+	if (this->tasks_.empty())
+d334 2
+a335 1
+	    all_blocked = false;
+d339 1
+a339 1
+	    t = this->find_runnable(this->tasks_, &all_blocked);
+d341 14
+d360 1
+a360 1
+      // be run at this level.
+d362 1
+a362 2
+      // run at this level, but they are waiting for something to
+      // unlock.
+d378 1
+d380 2
+a381 1
+		while (this->cleared_blockers_ == 0)
+d383 5
+a387 1
+		    gold_assert(this->running_ > 0);
+d429 6
+a434 1
+  ++this->running_;
+d445 2
+d454 1
+d473 2
+d476 31
+@
+
+
+1.5
+log
+@Add licensing text to every source file.
+@
+text
+@d25 4
+d160 7
+a166 1
+  virtual void run(Task*, Task_locker*) = 0;
+d191 5
+a195 1
+  void run(Task*, Task_locker*);
+d205 6
+d213 1
+a213 1
+Workqueue::Workqueue(const General_options&)
+d222 8
+a229 3
+  // At some point we will select the specific implementation of
+  // Workqueue_runner to use based on the command line options.
+  this->runner_ = new Workqueue_runner_single(this);
+d447 9
+@
+
+
+1.4
+log
+@Hash tables, dynamic section, i386 PLT, gold_assert.
+@
+text
+@d3 20
+@
+
+
+1.3
+log
+@Framework for relocation scanning.  Implement simple static TLS
+relocations.
+@
+text
+@a4 2
+#include <cassert>
+
+d19 1
+a19 1
+  assert(this->readers_ == 0 && this->writer_ == NULL);
+d25 1
+a25 1
+  assert(!this->is_blocker_);
+d32 2
+a33 2
+  assert(!this->is_blocker_);
+  assert(this->is_readable());
+d40 2
+a41 2
+  assert(!this->is_blocker_);
+  assert(this->readers_ > 0);
+d48 1
+a48 1
+  assert(!this->is_blocker_);
+d55 2
+a56 2
+  assert(!this->is_blocker_);
+  assert(this->is_writable());
+d63 2
+a64 2
+  assert(!this->is_blocker_);
+  assert(this->writer_ == t);
+d71 1
+a71 1
+  assert(!this->is_blocker_);
+d83 1
+a83 1
+    assert(this->is_blocker_);
+d90 1
+a90 1
+  assert(this->is_blocker_ && this->readers_ > 0);
+d98 2
+a99 1
+  assert(this->is_blocker_ || (this->readers_ == 0 && this->writer_ == NULL));
+d111 1
+a111 1
+  assert(this->token_.is_blocked());
+d189 3
+a191 3
+  assert(this->tasks_.empty());
+  assert(this->completed_.empty());
+  assert(this->running_ == 0);
+d265 1
+a265 1
+		assert(this->running_ > 0);
+d324 1
+a324 1
+	    assert(this->running_ > 0 || !this->completed_.empty());
+d332 1
+a332 1
+		    assert(this->running_ > 0);
+d387 1
+a387 1
+    assert(this->running_ > 0);
+@
+
+
+1.2
+log
+@Include <cassert>
+@
+text
+@d195 2
+d202 9
+@
+
+
+1.1
+log
+@Initial CVS checkin of gold
+@
+text
+@d4 3
+@
+

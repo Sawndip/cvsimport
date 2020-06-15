@@ -1,0 +1,687 @@
+head	1.12;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.11
+	gdb_7_6-2013-04-26-release:1.11
+	gdb_7_6-branch:1.11.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.11
+	gdb_7_5_1-2012-11-29-release:1.10
+	gdb_7_5-2012-08-17-release:1.10
+	gdb_7_5-branch:1.10.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.10
+	gdb_7_4_1-2012-04-26-release:1.5.2.1
+	gdb_7_4-2012-01-24-release:1.5.2.1
+	gdb_7_4-branch:1.5.0.2
+	gdb_7_4-2011-12-13-branchpoint:1.5
+	gdb_7_3_1-2011-09-04-release:1.4
+	gdb_7_3-2011-07-26-release:1.4
+	gdb_7_3-branch:1.4.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.4
+	gdb_7_2-2010-09-02-release:1.1
+	gdb_7_2-branch:1.1.0.2
+	gdb_7_2-2010-07-07-branchpoint:1.1;
+locks; strict;
+comment	@# @;
+
+
+1.12
+date	2013.08.22.13.51.08;	author tromey;	state Exp;
+branches;
+next	1.11;
+
+1.11
+date	2013.01.01.06.41.26;	author brobecke;	state Exp;
+branches;
+next	1.10;
+
+1.10
+date	2012.06.22.17.59.33;	author tromey;	state Exp;
+branches;
+next	1.9;
+
+1.9
+date	2012.04.17.15.54.35;	author jkratoch;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2012.04.17.15.51.48;	author jkratoch;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2012.01.16.16.21.52;	author palves;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2012.01.04.08.27.49;	author brobecke;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2011.05.13.22.11.47;	author devans;	state Exp;
+branches
+	1.5.2.1;
+next	1.4;
+
+1.4
+date	2011.03.13.13.39.17;	author uweigand;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2011.01.19.20.26.09;	author qiyao;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2011.01.01.15.33.49;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2010.04.23.16.20.13;	author devans;	state Exp;
+branches;
+next	;
+
+1.5.2.1
+date	2012.01.06.04.54.27;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.12
+log
+@fix gdb.python to be parallel-safe
+
+This fixes gdb.python to be parallel-safe, mostly by changing it to
+use gdb_remote_download.
+
+Tested on x86-64 Fedora 18.
+
+	* gdb.python/py-error.exp: Use gdb_remote_download.
+	* gdb.python/py-mi.exp: Use gdb_remote_download.
+	* gdb.python/py-objfile-script.exp: Use standard_output_file.
+	* gdb.python/py-prettyprint.exp: Use gdb_remote_download.
+	(run_lang_tests): Likewise.
+	* gdb.python/py-section-script.c: Use SCRIPT_FILE rather than
+	filename.
+	* gdb.python/py-section-script.exp: Set SCRIPT_FILE when
+	compiling.  Use gdb_remote_download.  Update some tests.
+	* gdb.python/py-strfns.exp (test_strfns_core_file): Use
+	standard_output_file.
+	* gdb.python/py-typeprint.exp: Use gdb_remote_download.
+	* gdb.python/py-frame-args.exp: Use gdb_remote_download.
+	* gdb.python/py-framefilter-mi.exp: Use gdb_remote_download.
+	* gdb.python/py-framefilter.exp: Use gdb_remote_download,
+	standard_output_file.
+@
+text
+@# Copyright (C) 2010-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# This file is part of the GDB testsuite.  It tests automagic loading of
+# scripts specified in the .debug_gdb_scripts section.
+
+# This test can only be run on targets which support ELF and use gas.
+# For now pick a sampling of likely targets.
+if {![istarget *-*-linux*]
+    && ![istarget *-*-gnu*]
+    && ![istarget *-*-elf*]
+    && ![istarget *-*-openbsd*]
+    && ![istarget arm*-*-eabi*]
+    && ![istarget arm*-*-symbianelf*]
+    && ![istarget powerpc-*-eabi*]} {
+    verbose "Skipping py-section-script.exp because of lack of support."
+    return
+}
+
+standard_testfile
+
+# Make this available to gdb before the program starts, it is
+# automagically loaded by gdb.
+set remote_python_file [gdb_remote_download host \
+			    ${srcdir}/${subdir}/${testfile}.py]
+
+set quoted_name "\"$remote_python_file\""
+
+if {[build_executable $testfile.exp $testfile $srcfile \
+	 [list debug additional_flags=-DSCRIPT_FILE=$quoted_name]] == -1} {
+    return -1
+}
+
+# Start with a fresh gdb.
+gdb_exit
+gdb_start
+
+# Skip all tests if Python scripting is not enabled.
+if { [skip_python_tests] } { continue }
+
+gdb_reinitialize_dir $srcdir/$subdir
+gdb_test_no_output "set auto-load safe-path ${remote_python_file}" "set auto-load safe-path"
+gdb_load ${binfile}
+
+# Verify gdb loaded the script.
+gdb_test "info auto-load python-scripts" "Yes.*${testfile}.py.*"
+# Again, with a regexp this time.
+gdb_test "info auto-load python-scripts ${testfile}" "Yes.*${testfile}.py.*"
+# Again, with a regexp that matches no scripts.
+gdb_test "info auto-load python-scripts no-script-matches-this" \
+  "No auto-load scripts matching no-script-matches-this."
+
+if ![runto_main] {
+    perror "couldn't run to main"
+    return
+}
+
+gdb_test "b [gdb_get_line_number {break to inspect} ${testfile}.c ]" \
+    ".*Breakpoint.*"
+gdb_test "continue" ".*Breakpoint.*"
+
+gdb_test "print ss" " = a=<1> b=<2>"
+
+remote_file host delete ${remote_python_file}
+@
+
+
+1.11
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@d34 9
+a42 1
+if {[build_executable $testfile.exp $testfile $srcfile debug] == -1} {
+a52 4
+# Make this available to gdb before the program starts, it is
+# automagically loaded by gdb.
+set remote_python_file [remote_download host ${srcdir}/${subdir}/${testfile}.py]
+
+d58 1
+a58 1
+gdb_test "info auto-load python-scripts" "Yes.*${testfile}.py.*full name: .*/${testfile}.py.*"
+d60 1
+a60 1
+gdb_test "info auto-load python-scripts ${testfile}" "Yes.*${testfile}.py.*full name: .*/${testfile}.py.*"
+@
+
+
+1.10
+log
+@	* gdb.python/lib-types.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.python/py-block.exp: Use standard_testfile.
+	* gdb.python/py-breakpoint.exp: Use standard_testfile.
+	* gdb.python/py-events.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.python/py-evsignal.exp: Use standard_testfile.
+	* gdb.python/py-evethreads.exp: Use standard_testfile.
+	* gdb.python/py-explore-cc.exp: Use standard_testfile.
+	* gdb.python/py-explore.exp: Use standard_testfile.
+	* gdb.python/py-finish-breakpoint.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.python/py-finish-breakpoint2.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.python/py-frame-inline.exp: Use standard_testfile.
+	* gdb.python/py-frame.exp: Use standard_testfile.
+	* gdb.python/py-inferior.exp: Use standard_testfile.
+	* gdb.python/py-infthread.exp: Use standard_testfile.
+	* gdb.python/py-mi.exp: Use standard_testfile.
+	* gdb.python/py-objfile-script.exp: Use standard_testfile,
+	build_executable.
+	* gdb.python/py-objfile.exp: Use standard_testfile.
+	* gdb.python/py-pp-maint.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.python/py-prettyprint.exp: Use standard_testfile.
+	* gdb.python/py-progspace.exp: Use standard_testfile,
+	build_executable.
+	* gdb.python/py-prompt.exp: Use standard_testfile,
+	build_executable.
+	* gdb.python/py-section-script.exp: Use standard_testfile,
+	build_executable.
+	* gdb.python/py-shared.exp: Use standard_testfile,
+	standard_output_file, clean_restart.
+	* gdb.python/py-symbol.exp: Use standard_output_file,
+	prepare_for_testing.
+	* gdb.python/py-symtab.exp: Use standard_output_file,
+	prepare_for_testing
+	* gdb.python/py-template.exp: Use standard_testfile.
+	* gdb.python/py-type.exp: Use standard_testfile.
+	* gdb.python/py-value-cc.exp: Use standard_testfile.
+	* gdb.python/py-value.exp: Use standard_testfile.
+	* gdb.python/python.exp: Use standard_testfile, build_executable.
+@
+text
+@d1 1
+a1 1
+# Copyright (C) 2010-2012 Free Software Foundation, Inc.
+@
+
+
+1.9
+log
+@gdb/
+	New option "set auto-load safe-path".
+	* NEWS: New commands "set auto-load safe-path"
+	and "show auto-load safe-path".
+	* auto-load.c: Include gdb_vecs.h, readline/tilde.h and completer.h.
+	(auto_load_safe_path, auto_load_safe_path_vec)
+	(auto_load_safe_path_vec_update, set_auto_load_safe_path)
+	(show_auto_load_safe_path, add_auto_load_safe_path, filename_is_in_dir)
+	(filename_is_in_auto_load_safe_path_vec, file_is_auto_load_safe): New.
+	(source_gdb_script_for_objfile): New variable is_safe.  Call
+	file_is_auto_load_safe.  Return if it is not.
+	(struct loaded_script): New field loaded.
+	(maybe_add_script): Add parameter loaded.  Initialize SLOT with it.
+	(print_script): Use LOADED indicator instead of FULL_PATH.  Change
+	output "Missing" to "No".
+	(_initialize_auto_load): New variable cmd.  Initialize
+	auto_load_safe_path.  Register "set auto-load safe-path",
+	"show auto-load safe-path" and "add-auto-load-safe-path".
+	* auto-load.h (maybe_add_script): Add parameter loaded.
+	(file_is_auto_load_safe): New declaration.
+	* config.in: Regenerate.
+	* configure: Regenerate.
+	* configure.ac: New parameters --with-auto-load-safe-path
+	and --without-auto-load-safe-path.
+	* linux-thread-db.c (try_thread_db_load_from_pdir_1)
+	(try_thread_db_load_from_dir): Check file_is_auto_load_safe first.
+	* main.c (captured_main): Check file_is_auto_load_safe for
+	LOCAL_GDBINIT.
+	* python/py-auto-load.c (gdbpy_load_auto_script_for_objfile): New
+	variable is_safe.  Call file_is_auto_load_safe.  Return if it is not.
+	(source_section_scripts): Call file_is_auto_load_safe.  Return if it is
+	not.
+
+gdb/doc/
+	New option "set auto-load safe-path".
+	* gdb.texinfo (Auto-loading): Extend the "show auto-load"
+	and "info auto-load" examples for safe-path.  Put there also references
+	for "set auto-load safe-path" and "show auto-load safe-path".
+	New menu item for Auto-loading safe path.
+	(Auto-loading safe path): New node.
+	(Python Auto-loading): Update the expected output from "Missing"
+	to "No".
+
+gdb/testsuite/
+	New option "set auto-load safe-path".
+	* gdb.python/py-objfile-script.exp (set auto-load safe-path): New.
+	* gdb.python/py-section-script.exp (set auto-load safe-path): New.
+@
+text
+@d32 3
+a34 5
+set testfile "py-section-script"
+set srcfile ${testfile}.c
+set binfile ${objdir}/${subdir}/${testfile}
+if { [gdb_compile "${srcdir}/${subdir}/${srcfile}" "${binfile}" executable {debug}] != "" } {
+    untested "Couldn't compile ${srcfile}"
+@
+
+
+1.8
+log
+@gdb/
+	auto-load: Implementation.
+	* NEWS: New descriptions for "info auto-load",
+	"info auto-load gdb-scripts", "info auto-load python-scripts",
+	"info auto-load local-gdbinit" and "info auto-load libthread-db".
+	Deprecate "info auto-load-scripts", "set auto-load-scripts on|off"
+	and "show auto-load-scripts".  New description for "set auto-load",
+	"show auto-load", "set auto-load gdb-scripts",
+	"show auto-load gdb-scripts", "set auto-load python-scripts",
+	"show auto-load python-scripts", "set auto-load local-gdbinit",
+	"show auto-load local-gdbinit", "set auto-load libthread-db" and
+	"show auto-load libthread-db".
+	* auto-load.c: Remove include python/python-internal.h.  Add includes
+	exceptions.h, cli/cli-script.h, gdbcmd.h, cli/cli-decode.h and
+	cli/cli-setshow.h.
+	(GDB_AUTO_FILE_NAME, source_gdb_script_for_objfile)
+	(auto_load_gdb_scripts, show_auto_load_gdb_scripts): New.
+	(gdbpy_global_auto_load): Rename to ...
+	(global_auto_load): ... here.
+	(auto_load_local_gdbinit, auto_load_local_gdbinit_pathname)
+	(auto_load_local_gdbinit_loaded, show_auto_load_local_gdbinit)
+	(script_language_gdb, source_gdb_script_for_objfile): New.
+	(struct loaded_script): New field language.
+	(hash_loaded_script_entry, eq_loaded_script_entry): Calculate also
+	LANGUAGE.
+	(maybe_add_script): Add parameter language.  Drop redundant
+	entry.full_path initialization.  Initialize entry.language and
+	(*slot)->language.
+	(auto_load_objfile_script): Change parameter suffix to language.
+	Remove the call of maybe_add_script.
+	Call language->source_script_for_objfile.
+	(load_auto_scripts_for_objfile, struct collect_matching_scripts_data):
+	New.
+	(collect_matching_scripts): Adjust it for
+	struct collect_matching_scripts_data.
+	(auto_load_info_scripts_pattern_nl): New variable.
+	(info_auto_load_scripts): Rename to ...
+	(auto_load_info_scripts): ... here, add parameter language.  Adjust it
+	for struct collect_matching_scripts_data.
+	(info_auto_load_gdb_scripts, info_auto_load_local_gdbinit)
+	(set_auto_load_cmd, auto_load_set_cmdlist_get, show_auto_load_cmd)
+	(auto_load_show_cmdlist_get, info_auto_load_cmd)
+	(auto_load_info_cmdlist_get): New.
+	(_initialize_auto_load): Move add_info of "auto-load-scripts" to
+	python/py-auto-load.c.  New installment for "set auto-load gdb-scripts",
+	"info auto-load gdb-scripts", "set auto-load local-gdbinit" and
+	"info auto-load local-gdbinit".
+	* auto-load.h (struct script_language): New.
+	(gdbpy_global_auto_load): Rename to ...
+	(global_auto_load): ... here.
+	(auto_load_local_gdbinit, auto_load_local_gdbinit_pathname)
+	(auto_load_local_gdbinit_loaded): New declarations.
+	(maybe_add_script): New parameter language.
+	(auto_load_objfile_script): Change parameter suffix to language.
+	(load_auto_scripts_for_objfile, auto_load_info_scripts_pattern_nl)
+	(auto_load_info_scripts, auto_load_set_cmdlist_get)
+	(auto_load_show_cmdlist_get, auto_load_info_cmdlist_get): New
+	declarations.
+	* linux-thread-db.c: Include auto-load.h and ctype.h.
+	(auto_load_thread_db, show_auto_load_thread_db): New.
+	(struct thread_db_info): New field filename.
+	(delete_thread_db_info): Call xfree for FILENAME.
+	(try_thread_db_load): Initialize FILENAME.
+	(try_thread_db_load_from_pdir, try_thread_db_load_from_dir): Return
+	if !AUTO_LOAD_THREAD_DB.
+	(info_auto_load_libthread_db_compare, info_auto_load_libthread_db): New.
+	(_initialize_thread_db): Install auto_load_thread_db
+	as "set auto-load libthread-db" and install info_auto_load_libthread_db
+	as "info auto-load libthread-db".
+	* main.c (captured_main): Rename gdbpy_global_auto_load to
+	global_auto_load.  Initialize AUTO_LOAD_LOCAL_GDBINIT_PATHNAME and
+	AUTO_LOAD_LOCAL_GDBINIT_LOADED.
+	(print_gdb_help): Extend the help for 'local init file'.
+	* python/py-auto-load.c: Remove a comment about gdb scripts extension.
+	(GDBPY_AUTO_SECTION_NAME): Extend the comment it is Python specific.
+	(auto_load_scripts): Rename to ...
+	(auto_load_python_scripts): ... here, update the comment.
+	(gdbpy_load_auto_script_for_objfile): New declaration.
+	(show_auto_load_python_scripts, script_language_python)
+	(gdbpy_load_auto_script_for_objfile): New.
+	(source_section_scripts): Refactor the code.
+	(load_auto_scripts_for_objfile): Rename to ...
+	(gdbpy_load_auto_scripts_for_objfile): ... here, update the
+	auto_load_objfile_script caller, drop GDBPY_GLOBAL_AUTO_LOAD checking.
+	(info_auto_load_python_scripts): New.
+	(gdbpy_initialize_auto_load): New variables cmd and cmd_name.
+	Rename "set auto-load-scripts" to "set auto-load python-scripts".
+	Register "set auto-load-scripts" as its deprecated alias.  Register
+	"info auto-load python-scripts".  Register "info auto-load-scripts" as
+	its deprecated alias.
+	(load_auto_scripts_for_objfile): Rename to ...
+	(gdbpy_load_auto_scripts_for_objfile): ... here.
+	* python/python.h (load_auto_scripts_for_objfile): Rename to ...
+	(gdbpy_load_auto_scripts_for_objfile): ... here.
+
+gdb/doc/
+	auto-load: Implementation.
+	* gdb.texinfo (Mode Options): New anchor for -nx.
+	(Startup): New anchors for Option -init-eval-command,
+	Home Directory Init File
+	and Init File in the Current Directory during Startup.
+	Mention set auto-load local-gdbinit with a reference.
+	Change the sample code to "set auto-load python-scripts".
+	(Threads): New anchor set libthread-db-search-path.
+	Provide references to libthread_db.so.1 file.
+	(Controlling GDB): New menu item for Auto-loading.
+	(Auto-loading, Init File in the Current Directory)
+	(libthread_db.so.1 file, objfile-gdb.gdb file): New nodes.
+	(Python): Rename the menu item Auto-loading to Python Auto-loading.
+	(Writing a Pretty-Printer, Objfiles In Python): Update the renamed
+	reference.
+	(Auto-loading): Rename to ...
+	(Python Auto-loading): ... here.  Change "set auto-load-scripts" to
+	"set auto-load python-scripts", new anchor for it.  Change
+	"show auto-load-scripts" to "show auto-load python-scripts", new anchor
+	for it.  Change "info auto-load-scripts"
+	to "info auto-load python-scripts", new anchor for it.  Change "scripts"
+	to "Python scripts".
+
+gdb/testsuite/
+	auto-load: Implementation.
+	* gdb.base/help.exp (test set height): Increase the height.
+	* gdb.python/py-objfile-script.exp (info auto-load-scripts): Change
+	to ...
+	(info auto-load python-scripts): ... here.
+	* gdb.python/py-section-script.exp (info auto-load-scripts *): Change
+	to ...
+	(info auto-load python-scripts *): ... here.
+@
+text
+@d52 1
+@
+
+
+1.7
+log
+@2012-01-16  Pedro Alves  <palves@@redhat.com>
+
+	Remove all calls to strace.
+@
+text
+@d55 1
+a55 1
+gdb_test "info auto-load-scripts" "Yes.*${testfile}.py.*full name: .*/${testfile}.py.*"
+d57 1
+a57 1
+gdb_test "info auto-load-scripts ${testfile}" "Yes.*${testfile}.py.*full name: .*/${testfile}.py.*"
+d59 1
+a59 1
+gdb_test "info auto-load-scripts no-script-matches-this" \
+@
+
+
+1.6
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@a31 4
+if $tracelevel then {
+    strace $tracelevel
+}
+
+@
+
+
+1.5
+log
+@	* NEWS: Mention "info auto-load-scripts".
+	* python/py-auto-load.c (struct auto_load_pspace_info): New member
+	script_not_found_warning_printed.
+	(init_loaded_scripts_info): Renamed from create_loaded_scripts_hash,
+	all callers updated.  Initialize script_not_found_warning_printed.
+	(get_auto_load_pspace_data_for_loading): New function.
+	(maybe_add_script): New function.
+	(source_section_scripts): Simplify.  Only print one warning regardless
+	of the number of auto-load scripts not found.
+	(clear_section_scripts): Clear script_not_found_warning_printed.
+	(auto_load_objfile_script): Record script in hash table.
+	(count_matching_scripts): New function.
+	(maybe_print_script): Renamed from maybe_print_section_script, all
+	callers updated.  Rewrite to use ui_out_*.
+	(info_auto_load_scripts): Renamed from
+	maintenance_print_section_scripts, all callers updated.
+	(gdbpy_initialize_auto_load): "maintenance print section-scripts"
+	renamed as "info auto-load-scripts".
+
+	doc/
+	* gdb.texinfo (Auto-loading): Document "info auto-load-scripts".
+
+	testsuite/
+	* gdb.python/py-objfile-script.exp: New file.
+	* gdb.python/py-objfile-script.c: New file.
+	* gdb.python/py-objfile-script-gdb.py: New file.
+	* testsuite/gdb.python/py-section-script.exp: Test
+	"info auto-load-scripts".
+@
+text
+@d1 1
+a1 1
+# Copyright (C) 2010, 2011 Free Software Foundation, Inc.
+@
+
+
+1.5.2.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d1 1
+a1 1
+# Copyright (C) 2010-2012 Free Software Foundation, Inc.
+@
+
+
+1.4
+log
+@	* gdb.python/py-section-script.exp: Skip test if no Python support.
+@
+text
+@d58 8
+@
+
+
+1.3
+log
+@2011-01-19  Yao Qi  <yao@@codesourcery.com>
+
+	* gdb.asm/asm-source.exp: Replace ARM target triplet with a
+	canonical form.
+	Remove "xscale-*-*"
+	* gdb.xml/tdesc-regs.exp: Likewise.
+	* gdb.python/py-section-script.exp: Replace ARM target triplet
+	with canonical form.
+	Match arm*-*-symbianelf*.
+	* gdb.base/dup-sect.exp: Likewise.
+	* lib/dwarf.exp: New.
+	* gdb.dwarf2/callframecfa.exp: Check dwarf2 support by routine
+	dwarf2_support.
+	* gdb.dwarf2/dup-psym.exp: Likewise.
+	* gdb.dwarf2/dw2-ada-ffffffff.exp: Likewise.
+	* gdb.dwarf2/dw2-anonymous-func.exp: Likewise.
+	* gdb.dwarf2/dw2-bad-parameter-type.exp: Likewise.
+	* gdb.dwarf2/dw2-basic.exp: Likewise.
+	* gdb.dwarf2/dw2-compressed.exp: Likewise.
+	* gdb.dwarf2/dw2-const.exp: Likewise.
+	* gdb.dwarf2/dw2-cp-infcall-ref-static.exp: Likewise.
+	* gdb.dwarf2/dw2-cu-size.exp: Likewise.
+	* gdb.dwarf2/dw2-double-set-die-type.exp: Likewise.
+	* gdb.dwarf2/dw2-empty-namespace.exp: Likewise.
+	* gdb.dwarf2/dw2-filename.exp: Likewise.
+	* gdb.dwarf2/dw2-inheritance.exp: Likewise.
+	* gdb.dwarf2/dw2-inline-param.exp: Likewise.
+	* gdb.dwarf2/dw2-intercu.exp: Likewise.
+	* gdb.dwarf2/dw2-intermix.exp: Likewise.
+	* gdb.dwarf2/dw2-modula2-self-type.exp: Likewise.
+	* gdb.dwarf2/dw2-noloc.exp: Likewise.
+	* gdb.dwarf2/dw2-op-call.exp: Likewise.
+	* gdb.dwarf2/dw2-producer.exp: Likewise.
+	* gdb.dwarf2/dw2-ranges.exp: Likewise.
+	* gdb.dwarf2/dw2-ref-missing-frame.exp: Likewise.
+	* gdb.dwarf2/dw2-stack-boundary.exp: Likewise.
+	* gdb.dwarf2/dw2-strp.exp: Likewise.
+	* gdb.dwarf2/dw2-unresolved.exp: Likewise.
+	* gdb.dwarf2/implptr.exp: Likewise.
+	* gdb.dwarf2/mac-fileno.exp: Likewise.
+	* gdb.dwarf2/member-ptr-forwardref.exp: Likewise.
+	* gdb.dwarf2/pieces.exp: Likewise.
+	* gdb.dwarf2/pr11465.exp: Likewise.
+	* gdb.dwarf2/valop.exp: Likewise.
+	* gdb.dwarf2/watch-notconst.exp: Likewise.
+	* gdb.mi/dw2-ref-missing-frame.exp: Likewise.
+@
+text
+@d44 7
+a54 4
+# Start with a fresh gdb.
+
+gdb_exit
+gdb_start
+@
+
+
+1.2
+log
+@run copyright.sh for 2011.
+@
+text
+@d25 2
+a26 1
+    && ![istarget arm-*-eabi*]
+@
+
+
+1.1
+log
+@	Add support for auto-loading scripts from .debug_gdb_scripts section.
+	* NEWS: Add entry for .debug_gdb_scripts.
+	* Makefile.in SUBDIR_PYTHON_OBS): Add py-auto-load.o.
+	(SUBDIR_PYTHON_SRCS): Add py-auto-load.c.
+	(py-auto-load.o): New rule.
+	* cli/cli-cmds.c (find_and_open_script): Make externally visible.
+	* cli/cli-cmds.h (find_and_open_script): Update prototype.
+	* python/py-auto-load.c: New file.
+	* python/python-internal.h: #include <stdio.h>.
+	(set_python_list, show_python_list): Declare.
+	(gdbpy_initialize_auto_load): Declare.
+	(source_python_script_for_objfile): Declare.
+	* python/python.c: Remove #include of observer.h.
+	(gdbpy_auto_load): Moved to py-auto-load.c.
+	(GDBPY_AUTO_FILENAME): Ditto.
+	(gdbpy_new_objfile): Delete.
+	(source_python_script_for_objfile): New function.
+	(set_python_list, show_python_list): Make externally visible.
+	(_initialize_python): Move "auto-load" command to py-auto-load.c
+	and observer_attach_new_objfile to py-auto-load.c.
+
+	doc/
+	* gdb.texinfo (Python): Move Auto-loading section here ...
+	(Python API): from here.
+	(Auto-loading): Add docs for .debug_gdb_scripts auto-loaded scripts.
+	(Maintenance Commands): Add docs for "maint print section-scripts".
+
+	testsuite/
+	* gdb.python/py-section-script.c: New file.
+	* gdb.python/py-section-script.exp: New file.
+	* gdb.python/py-section-script.py: New file.
+@
+text
+@d1 1
+a1 1
+# Copyright (C) 2010 Free Software Foundation, Inc.
+@
+

@@ -1,0 +1,344 @@
+head	1.5;
+access;
+symbols
+	binutils-2_24-branch:1.5.0.2
+	binutils-2_24-branchpoint:1.5
+	binutils-2_23_2:1.4
+	binutils-2_23_1:1.4
+	binutils-2_23:1.4
+	binutils-2_23-branch:1.4.0.2
+	binutils-2_23-branchpoint:1.4
+	binutils-2_22_branch:1.3.0.4
+	binutils-2_22:1.3
+	binutils-2_22-branch:1.3.0.2
+	binutils-2_22-branchpoint:1.3
+	binutils_latest_snapshot:1.5;
+locks; strict;
+comment	@# @;
+
+
+1.5
+date	2013.04.06.22.22.02;	author davem;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2011.09.27.04.30.28;	author davem;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2011.09.21.20.49.15;	author davem;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2011.09.08.16.40.45;	author davem;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2011.08.05.16.52.48;	author davem;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.5
+log
+@Increase the accuracy of sparc instruction aliases.
+
+Make current with UA2011 specification.
+
+Add an F_PREFERRED opcode flag that indicates a preferred alias
+when multiple aliases for the same opcode exists.
+
+For 'lzd':
+
+	Add 'lzcnt' as primary instruction, and make 'lzd' an alias.
+
+Add 'ldtw', 'ldtwa', 'sttw', 'sttwa':
+
+	The modern opcode for for 'ldd', 'ldda', 'std', and 'stda' on
+	integer registers.  Mark the latter now as aliases.
+
+For 'flush':
+
+	Support "[address]" syntax as well as plain "address".
+
+Rework 'mov' aliases for 'wr':
+
+	Eliminate bogus three operand moves, and encode the
+	instructions properly for the "mov REG, %ASR" cases,
+	specifically we should encode the register in rs2 not rs1 as
+	per The SPARC V8 Architecture Manual.
+
+Add missing cbcond aliases:
+
+	c{w,x}bz, c{w,x}blu, c{w,x}bnz, c{w,x}bgeu
+
+Add 'd' suffix VIS logical ops:
+
+	The primary opcode for 'fzero' is now 'fzerod' (compare with
+	'fzeros'), for example.  And thus 'fzero' is now an alias.
+
+Add modern opcodes for condition code setting edge instructions:
+
+	They are now edgeN{,l}cc instead of plain edgeN{,l}.
+
+Add modern opcodes for VIS comparisons:
+
+	All VIS comparisons now start with prefix "fp", retain the
+	older variants as aliases.
+
+	The signed variants for equal and not-equal have "u" aliases
+	to show that these comparisons are equally suited for unsigned
+	compares.
+
+Update existing test cases as needed, and add several new ones.
+
+include/opcode/
+
+	* sparc.h (F_PREFERRED): Define.
+	(F_PREF_ALIAS): Define.
+
+opcodes/
+
+	* sparc-dis.c (compare_opcodes): When encountering multiple aliases
+	of an opcode, prefer the one with F_PREFERRED set.
+	* sparc-opc.c (sparc_opcodes): Add ldtw, ldtwa, sttw, sttwa,
+	lzcnt, flush with '[address]' syntax, and missing cbcond pseudo
+	ops.  Make 64-bit VIS logical ops have "d" suffix in their names,
+	mark existing mnenomics as aliases.  Add "cc" suffix to edge
+	instructions generating condition codes, mark existing mnenomics
+	as aliases.  Add "fp" prefix to VIS compare instructions, mark
+	existing mnenomics as aliases.
+
+gas/testsuite/
+
+	* gas/sparc/cbcond.s: Add tests for new opcode aliases.
+	* gas/sparc/cbcond.d: Updated.
+	* gas/sparc/hpcvis3.s: Add tests for new opcode aliases.
+	* gas/sparc/hpcvis3.d: Updated.
+	* gas/sparc/v8-movwr-imm.d: Fix expected disassembly.
+	* gas/sparc/edge.s: New test.
+	* gas/sparc/edge.d: Expected disassembly.
+	* gas/sparc/flush.s: New test.
+	* gas/sparc/flush.d: Expected disassembly.
+	* gas/sparc/ldd_std.s: New test.
+	* gas/sparc/ldd_std.d: Expected disassembly.
+	* gas/sparc/ldtw_sttw.s: New test.
+	* gas/sparc/ldtw_sttw.d: Expected disassembly.
+	* gas/sparc/sparc.exp: Run new tests.
+@
+text
+@# Test HPC/VIS3 instructions
+	.text
+	rd	%cps, %g1
+	wr	%g2, 0x3, %cps
+	ldx	[%g3], %efsr
+	chkpt	1f
+1:	commit
+	fnadds	%f1, %f2, %f3
+	fnaddd	%f2, %f4, %f6
+	fnmuls	%f3, %f5, %f7
+	fnmuld	%f6, %f8, %f10
+	fhadds	%f7, %f9, %f11
+	fhaddd	%f8, %f10, %f12
+	fhsubs	%f9, %f11, %f13
+	fhsubd	%f10, %f12, %f14
+	fnhadds	%f11, %f13, %f15
+	fnhaddd	%f12, %f14, %f16
+	fnsmuld	%f13, %f15, %f16
+	fmadds	%f15, %f17, %f19, %f21
+	fmaddd	%f14, %f16, %f18, %f20
+	fmsubs	%f17, %f19, %f21, %f23
+	fmsubd	%f16, %f18, %f20, %f22
+	fnmsubs	%f19, %f21, %f23, %f25
+	fnmsubd	%f18, %f20, %f22, %f24
+	fnmadds	%f21, %f23, %f25, %f27
+	fnmaddd	%f20, %f22, %f24, %f26
+	fumadds	%f23, %f25, %f27, %f29
+	fumaddd	%f22, %f24, %f26, %f28
+	fumsubs	%f25, %f27, %f29, %f31
+	fumsubd	%f24, %f26, %f28, %f30
+	fnumsubs %f1, %f3, %f5, %f7
+	fnumsubd %f2, %f4, %f6, %f8
+	fnumadds %f3, %f5, %f7, %f9
+	fnumaddd %f4, %f6, %f8, %f10
+	addxc	%g5, %g6, %g7
+	addxccc	%o1, %o2, %o3
+	random	%f6
+	umulxhi	%o5, %o6, %o7
+	lzcnt	%i1, %i2
+	cmask8	%i3
+	cmask16	%i4
+	cmask32	%i5
+	fsll16	%f32, %f34, %f36
+	fsrl16	%f34, %f36, %f38
+	fsll32	%f36, %f38, %f40
+	fsrl32	%f38, %f40, %f42
+	fslas16	%f40, %f42, %f44
+	fsra16	%f42, %f44, %f46
+	fslas32	%f44, %f46, %f48
+	fsra32	%f46, %f48, %f50
+	pdistn	%f48, %f50, %g1
+	fmean16	%f50, %f52, %f54
+	fpadd64	%f52, %f54, %f56
+	fchksm16 %f54, %f56, %f58
+	fpsub64	%f56, %f58, %f60
+	fpadds16 %f58, %f60, %f62
+	fpadds16s %f2, %f4, %f6
+	fpadds32 %f4, %f6, %f8
+	fpadds32s %f6, %f8, %f10
+	fpsubs16 %f8, %f10, %f12
+	fpsubs16s %f10, %f12, %f14
+	fpsubs32 %f12, %f14, %f16
+	fpsubs32s %f14, %f16, %f18
+	movdtox	%f20, %g1
+	movstouw %f21, %g2
+	movstosw %f23, %g3
+	movxtod %g4, %f22
+	movwtos %g5, %f23
+	xmulx	%o1, %o2, %o3
+	xmulxhi	%o4, %o5, %o6
+	fucmple8 %f16, %f18, %g1
+	fucmpne8 %f18, %f20, %g2
+	fucmpgt8 %f20, %f22, %g3
+	fucmpeq8 %f22, %f24, %g4
+	flcmps	%fcc0, %f1, %f3
+	flcmps	%fcc1, %f3, %f5
+	flcmps	%fcc2, %f5, %f7
+	flcmps	%fcc3, %f7, %f9
+	flcmpd	%fcc0, %f12, %f14
+	flcmpd	%fcc1, %f14, %f16
+	flcmpd	%fcc2, %f16, %f18
+	flcmpd	%fcc3, %f18, %f20
+	lzd	%i1, %i2
+@
+
+
+1.4
+log
+@opcodes/
+
+	* sparc-opc.c (sparc_opcodes): Fix random instruction to write
+	to a float instead of an integer register.
+
+gas/testsuite/
+
+	* gas/sparc/hpcvis3.s: Update to use float reg for random insn.
+	* gas/sparc/hpcvis3.d: Likewise.
+@
+text
+@d39 1
+a39 1
+	lzd	%i1, %i2
+d83 1
+@
+
+
+1.3
+log
+@Annotate sparc objects with cpu hardware capabilities used.
+
+bfd/
+
+	* elfxx-sparc.c (_bfd_sparc_elf_merge_private_bfd_data): New.
+	* elfxx-sparc.h: Declare it.
+	* elf32-sparc.c (elf32_sparc_merge_private_bfd_data): Call it.
+	* elf64-sparc.c (elf64_sparc_merge_private_bfd_data): Likewise.
+
+binutils/
+
+	* readelf.c (display_sparc_hwcaps): New.
+	(display_sparc_gnu_attribute): New.
+	(process_sparc_specific): New.
+	(process_arch_specific): When EM_SPARC, EM_SPARC32PLUS,
+	or EM_SPARCV9 invoke process_sparc_specific.
+
+gas/
+
+	* config/tc-sparc.c (hwcap_seen): New bitmask, defined when
+	not TE_SOLARIS.
+	(sparc_ip): When not TE_SOLARIS, accumulate hwcap bits from
+	sparc_opcode->flags of instruction into hwcap_seen.
+	(sparc_md_end): Create Tag_GNU_Sparc_HWCAPS attribute if
+	hwcap_seen is non-zero and not TE_SOLARIS.
+
+gas/testsuite/
+
+	* gas/sparc/hpcvis3.s: Update for fixed fchksum16 mnemonic.
+	* gas/sparc/hpcvis3.d: Likewise.
+
+include/elf/
+
+	* sparc.h (Tag_GNU_Sparc_HWCAPS): New object attribute.
+	(ELF_SPARC_HWCAP_*): New HWCAPS bitmask values.
+
+include/opcode/
+
+	* sparc.h (struct sparc_opcode): Expand 'flags' to unsigned int.
+	(F_MUL32, F_DIV32, F_FSMULD, F_V8PLUS, F_POPC, F_VIS, F_VIS2,
+	F_ASI_BLK_INIT, F_FMAF, F_VIS3, F_HPC, F_RANDOM, F_TRANS,
+	F_FJFMAU, F_IMA, F_ASI_CACHE_SPARING): New flag bits.
+
+opcodes/
+
+	* sparc-opc.c (sparc_opcodes): Annotate table with HWCAP flag
+	bits.  Fix "fchksm16" mnemonic.
+@
+text
+@d37 1
+a37 1
+	random	%o4
+@
+
+
+1.2
+log
+@opcodes/
+
+	* sparc-opc.c (pdistn): Destination is integer not float register.
+
+gas/testsuite/
+
+	* gas/sparc/hpcvis3.s: Correct pdistn test.
+	* gas/sparc/hpcvis3.d: Likewise.
+@
+text
+@d54 1
+a54 1
+	fchksum16 %f54, %f56, %f58
+@
+
+
+1.1
+log
+@include/opcode/
+	* sparc.h: Document new format codes '4', '5', and '('.
+	(OPF_LOW4, RS3): New macros.
+opcodes/
+	* sparc-dis.c (v9a_ast_reg_names): Add "cps".
+	(X_RS3): New macro.
+	(print_insn_sparc): Handle '4', '5', and '(' format codes.
+	Accept %asr numbers below 28.
+	* sparc-opc.c (sparc_opcodes): Add entries for HPC and VIS3
+	instructions.
+gas/
+	* config/tc-sparc.c (v9a_asr_table): Add "cps".
+	(sparc_ip): Handle '4', '5' and '(' format codes.
+gas/testsuite
+	* gas/sparc/hpcvis3.d: New test.
+	* gas/sparc/hpcvis3.s: New test source.
+	* gas/sparc/sparc.exp: Run new test.
+@
+text
+@d51 1
+a51 1
+	pdistn	%f48, %f50, %f52
+@
+

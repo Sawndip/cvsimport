@@ -1,0 +1,496 @@
+head	1.4;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.2.2.1
+	gdb_7_6-2013-04-26-release:1.2.2.1
+	gdb_7_6-branch:1.2.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.2;
+locks; strict;
+comment	@ * @;
+
+
+1.4
+date	2013.09.24.13.57.37;	author jkratoch;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2013.04.12.16.04.07;	author jkratoch;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2013.01.01.06.32.47;	author brobecke;	state Exp;
+branches
+	1.2.2.1;
+next	1.1;
+
+1.1
+date	2012.11.26.22.31.29;	author tromey;	state Exp;
+branches;
+next	;
+
+1.2.2.1
+date	2013.04.12.16.04.50;	author jkratoch;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.4
+log
+@Code cleanup: Add objfile_name accessor
+
+gdb/
+2013-09-24  Jan Kratochvil  <jan.kratochvil@@redhat.com>
+
+	Code cleanup: Add objfile_name accessor function.
+	* ada-lang.c (is_known_support_routine): Use objfile_name.
+	* auto-load.c (source_gdb_script_for_objfile)
+	(auto_load_objfile_script): Likewise.
+	* coffread.c (coff_symtab_read, read_one_sym): Likewise.
+	* dbxread.c (dbx_symfile_read): Likewise.
+	* dwarf2-frame.c (dwarf2_build_frame_info): Likewise.
+	* dwarf2loc.c (locexpr_describe_location_piece): Likewise.
+	* dwarf2read.c (dwarf2_get_dwz_file, dwarf2_read_index)
+	(dw2_symtab_iter_next, dw2_expand_symtabs_matching)
+	(lookup_dwp_signatured_type, lookup_dwo_unit)
+	(dwarf2_build_psymtabs_hard, scan_partial_symbols, process_queue)
+	(fixup_go_packaging, process_imported_unit_die, dwarf2_physname)
+	(read_import_statement, create_dwo_cu, open_and_init_dwp_file)
+	(lookup_dwo_cutu, read_call_site_scope, dwarf2_ranges_read)
+	(dwarf2_record_block_ranges, read_common_block, read_typedef)
+	(read_subrange_type, load_partial_dies, read_partial_die)
+	(read_addr_index_1, read_str_index, dwarf_decode_lines_1)
+	(die_containing_type, build_error_marker_type, lookup_die_type)
+	(follow_die_ref_or_sig, follow_die_ref, dwarf2_fetch_die_loc_sect_off)
+	(dwarf2_fetch_constant_bytes, follow_die_sig, get_signatured_type)
+	(get_DW_AT_signature_type, write_psymtabs_to_index)
+	(save_gdb_index_command): Likewise.
+	* elfread.c (find_separate_debug_file_by_buildid, elf_symfile_read):
+	Likewise.
+	* expprint.c (dump_subexp_body_standard): Likewise.
+	* gdbtypes.c (type_name_no_tag_or_error): Likewise.
+	* jit.c (jit_object_close_impl): Use the objfile field name renamed to
+	original_name.
+	* linux-thread-db.c (try_thread_db_load_from_pdir_1): New variable
+	obj_name, use objfile_name for it, use the variable.
+	(try_thread_db_load_from_pdir, has_libpthread, thread_db_new_objfile):
+	Use objfile_name.
+	* machoread.c (macho_symtab_read, macho_check_dsym)
+	(macho_symfile_relocate): Likewise.
+	* maint.c (maintenance_translate_address): Likewise.
+	* minidebug.c (find_separate_debug_file_in_section): Likewise.
+	* minsyms.c (install_minimal_symbols): Likewise.
+	* objfiles.c (allocate_objfile): Use the objfile field name renamed to
+	original_name.
+	(filter_overlapping_sections): Use objfile_name.
+	(objfile_name): New function.
+	* objfiles.h (struct objfile): Rename field name to original_name.
+	(objfile_name): New prototype.
+	* printcmd.c (sym_info, address_info): Use objfile_name.
+	* probe.c (parse_probes, collect_probes, compare_probes)
+	(info_probes_for_ops): Likewise.
+	* progspace.c (clone_program_space): Likewise.
+	* psymtab.c (require_partial_symbols, dump_psymtab, allocate_psymtab)
+	(maintenance_info_psymtabs): Likewise.
+	* python/py-auto-load.c (gdbpy_load_auto_script_for_objfile)
+	(source_section_scripts): Likewise.
+	* python/py-objfile.c (objfpy_get_filename): Likewise.
+	* python/py-progspace.c (pspy_get_filename): Likewise.
+	* solib-aix.c (solib_aix_get_toc_value): Likewise.
+	* solib-som.c (match_main, som_solib_section_offsets): Likewise.
+	* solib.c (solib_read_symbols): Likewise.
+	* stabsread.c (scan_file_globals): Likewise.
+	* stap-probe.c (handle_stap_probe): Likewise.
+	* symfile.c (symbol_file_clear, separate_debug_file_exists)
+	(find_separate_debug_file_by_debuglink): Likewise.
+	(reread_symbols): Likewise.  Use the objfile field name renamed to
+	original_name.
+	(allocate_symtab): Use objfile_name.
+	* symmisc.c (print_symbol_bcache_statistics, print_objfile_statistics)
+	(dump_objfile, dump_msymbols, dump_symtab_1)
+	(maintenance_print_msymbols, maintenance_print_objfiles)
+	(maintenance_info_symtabs, maintenance_check_symtabs): Likewise.
+	* target.c (target_translate_tls_address, target_info): Likewise.
+	* xcoffread.c (xcoff_initial_scan): Make variable name const.  Use
+	objfile_name.
+@
+text
+@/* Read MiniDebugInfo data from an objfile.
+
+   Copyright (C) 2012-2013 Free Software Foundation, Inc.
+
+   This file is part of GDB.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+#include "defs.h"
+#include "gdb_bfd.h"
+#include "gdb_string.h"
+#include "symfile.h"
+#include "objfiles.h"
+#include "gdbcore.h"
+
+#ifdef HAVE_LIBLZMA
+
+#include <lzma.h>
+
+/* Allocator function for LZMA.  */
+
+static void *
+alloc_lzma (void *opaque, size_t nmemb, size_t size)
+{
+  return xmalloc (nmemb * size);
+}
+
+/* Free function for LZMA.  */
+
+static void
+free_lzma (void *opaque, void *ptr)
+{
+  xfree (ptr);
+}
+
+/* The allocator object for LZMA.  Note that 'gdb_lzma_allocator'
+   cannot be const due to the lzma library function prototypes.  */
+
+static lzma_allocator gdb_lzma_allocator = { alloc_lzma, free_lzma, NULL };
+
+/* Custom bfd_openr_iovec implementation to read compressed data from
+   a section.  This keeps only the last decompressed block in memory
+   to allow larger data without using to much memory.  */
+
+struct lzma_stream
+{
+  /* Section of input BFD from which we are decoding data.  */
+  asection *section;
+
+  /* lzma library decompression state.  */
+  lzma_index *index;
+
+  /* Currently decoded block.  */
+  bfd_size_type data_start;
+  bfd_size_type data_end;
+  gdb_byte *data;
+};
+
+/* bfd_openr_iovec OPEN_P implementation for
+   find_separate_debug_file_in_section.  OPEN_CLOSURE is 'asection *'
+   of the section to decompress.
+
+   Return 'struct lzma_stream *' must be freed by caller by xfree, together
+   with its INDEX lzma data.  */
+
+static void *
+lzma_open (struct bfd *nbfd, void *open_closure)
+{
+  asection *section = open_closure;
+  bfd_size_type size, offset;
+  lzma_stream_flags options;
+  gdb_byte footer[LZMA_STREAM_HEADER_SIZE];
+  gdb_byte *indexdata;
+  lzma_index *index;
+  int ret;
+  uint64_t memlimit = UINT64_MAX;
+  struct lzma_stream *lstream;
+  size_t pos;
+
+  size = bfd_get_section_size (section);
+  offset = section->filepos + size - LZMA_STREAM_HEADER_SIZE;
+  if (size < LZMA_STREAM_HEADER_SIZE
+      || bfd_seek (section->owner, offset, SEEK_SET) != 0
+      || bfd_bread (footer, LZMA_STREAM_HEADER_SIZE, section->owner)
+         != LZMA_STREAM_HEADER_SIZE
+      || lzma_stream_footer_decode (&options, footer) != LZMA_OK
+      || offset < options.backward_size)
+    {
+      bfd_set_error (bfd_error_wrong_format);
+      return NULL;
+    }
+
+  offset -= options.backward_size;
+  indexdata = xmalloc (options.backward_size);
+  index = NULL;
+  pos = 0;
+  if (bfd_seek (section->owner, offset, SEEK_SET) != 0
+      || bfd_bread (indexdata, options.backward_size, section->owner)
+         != options.backward_size
+      || lzma_index_buffer_decode (&index, &memlimit, &gdb_lzma_allocator,
+				   indexdata, &pos, options.backward_size)
+         != LZMA_OK
+      || lzma_index_size (index) != options.backward_size)
+    {
+      xfree (indexdata);
+      bfd_set_error (bfd_error_wrong_format);
+      return NULL;
+    }
+  xfree (indexdata);
+
+  lstream = xzalloc (sizeof (struct lzma_stream));
+  lstream->section = section;
+  lstream->index = index;
+
+  return lstream;
+}
+
+/* bfd_openr_iovec PREAD_P implementation for
+   find_separate_debug_file_in_section.  Passed STREAM
+   is 'struct lzma_stream *'.  */
+
+static file_ptr
+lzma_pread (struct bfd *nbfd, void *stream, void *buf, file_ptr nbytes,
+	    file_ptr offset)
+{
+  struct lzma_stream *lstream = stream;
+  bfd_size_type chunk_size;
+  lzma_index_iter iter;
+  gdb_byte *compressed, *uncompressed;
+  file_ptr block_offset;
+  lzma_filter filters[LZMA_FILTERS_MAX + 1];
+  lzma_block block;
+  size_t compressed_pos, uncompressed_pos;
+  file_ptr res;
+
+  res = 0;
+  while (nbytes > 0)
+    {
+      if (lstream->data == NULL
+	  || lstream->data_start > offset || offset >= lstream->data_end)
+	{
+	  asection *section = lstream->section;
+
+	  lzma_index_iter_init (&iter, lstream->index);
+	  if (lzma_index_iter_locate (&iter, offset))
+	    break;
+
+	  compressed = xmalloc (iter.block.total_size);
+	  block_offset = section->filepos + iter.block.compressed_file_offset;
+	  if (bfd_seek (section->owner, block_offset, SEEK_SET) != 0
+	      || bfd_bread (compressed, iter.block.total_size, section->owner)
+		 != iter.block.total_size)
+	    {
+	      xfree (compressed);
+	      break;
+	    }
+
+	  uncompressed = xmalloc (iter.block.uncompressed_size);
+
+	  memset (&block, 0, sizeof (block));
+	  block.filters = filters;
+	  block.header_size = lzma_block_header_size_decode (compressed[0]);
+	  if (lzma_block_header_decode (&block, &gdb_lzma_allocator, compressed)
+	      != LZMA_OK)
+	    {
+	      xfree (compressed);
+	      xfree (uncompressed);
+	      break;
+	    }
+
+	  compressed_pos = block.header_size;
+	  uncompressed_pos = 0;
+	  if (lzma_block_buffer_decode (&block, &gdb_lzma_allocator,
+					compressed, &compressed_pos,
+					iter.block.total_size,
+					uncompressed, &uncompressed_pos,
+					iter.block.uncompressed_size)
+	      != LZMA_OK)
+	    {
+	      xfree (compressed);
+	      xfree (uncompressed);
+	      break;
+	    }
+
+	  xfree (compressed);
+
+	  xfree (lstream->data);
+	  lstream->data = uncompressed;
+	  lstream->data_start = iter.block.uncompressed_file_offset;
+	  lstream->data_end = (iter.block.uncompressed_file_offset
+			       + iter.block.uncompressed_size);
+	}
+
+      chunk_size = min (nbytes, lstream->data_end - offset);
+      memcpy (buf, lstream->data + offset - lstream->data_start, chunk_size);
+      buf = (gdb_byte *) buf + chunk_size;
+      offset += chunk_size;
+      nbytes -= chunk_size;
+      res += chunk_size;
+    }
+
+  return res;
+}
+
+/* bfd_openr_iovec CLOSE_P implementation for
+   find_separate_debug_file_in_section.  Passed STREAM
+   is 'struct lzma_stream *'.  */
+
+static int
+lzma_close (struct bfd *nbfd,
+	    void *stream)
+{
+  struct lzma_stream *lstream = stream;
+
+  lzma_index_end (lstream->index, &gdb_lzma_allocator);
+  xfree (lstream->data);
+  xfree (lstream);
+
+  /* Zero means success.  */
+  return 0;
+}
+
+/* bfd_openr_iovec STAT_P implementation for
+   find_separate_debug_file_in_section.  Passed STREAM
+   is 'struct lzma_stream *'.  */
+
+static int
+lzma_stat (struct bfd *abfd,
+	   void *stream,
+	   struct stat *sb)
+{
+  struct lzma_stream *lstream = stream;
+
+  sb->st_size = lzma_index_uncompressed_size (lstream->index);
+  return 0;
+}
+
+#endif /* HAVE_LIBLZMA  */
+
+/* This looks for a xz compressed separate debug info object file embedded
+   in a section called .gnu_debugdata.  See
+   http://fedoraproject.org/wiki/Features/MiniDebugInfo
+   or the "Separate Debug Sections" of the manual for details.
+   If we find one we create a iovec based bfd that decompresses the
+   object data on demand.  If we don't find one, return NULL.  */
+
+bfd *
+find_separate_debug_file_in_section (struct objfile *objfile)
+{
+  asection *section;
+  bfd *abfd;
+
+  if (objfile->obfd == NULL)
+    return NULL;
+
+  section = bfd_get_section_by_name (objfile->obfd, ".gnu_debugdata");
+  if (section == NULL)
+    return NULL;
+
+#ifdef HAVE_LIBLZMA
+  abfd = gdb_bfd_openr_iovec (objfile_name (objfile), gnutarget, lzma_open,
+			      section, lzma_pread, lzma_close, lzma_stat);
+  if (abfd == NULL)
+    return NULL;
+
+  if (!bfd_check_format (abfd, bfd_object))
+    {
+      warning (_("Cannot parse .gnu_debugdata section; not a BFD object"));
+      gdb_bfd_unref (abfd);
+      return NULL;
+    }
+#else
+  warning (_("Cannot parse .gnu_debugdata section; LZMA support was "
+	     "disabled at compile time"));
+  abfd = NULL;
+#endif /* !HAVE_LIBLZMA */
+
+  return abfd;
+}
+@
+
+
+1.3
+log
+@gdb/
+	Fix GDB regression related to PR binutils/14813.
+	* jit.c (mem_bfd_iovec_close): Return 0 for success.
+	* minidebug.c (lzma_close): Add return value comment.
+	* remote.c (remote_bfd_iovec_close): Return 0 for success.
+	* solib-spu.c (spu_bfd_iovec_close): Likewise.
+	* spu-linux-nat.c (spu_bfd_iovec_close): Likewise.
+@
+text
+@d272 2
+a273 2
+  abfd = gdb_bfd_openr_iovec (objfile->name, gnutarget, lzma_open, section,
+			      lzma_pread, lzma_close, lzma_stat);
+@
+
+
+1.2
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@d229 2
+@
+
+
+1.2.2.1
+log
+@gdb/
+	Fix GDB regression related to PR binutils/14813.
+	* jit.c (mem_bfd_iovec_close): Return 0 for success.
+	* minidebug.c (lzma_close): Add return value comment.
+	* remote.c (remote_bfd_iovec_close): Return 0 for success.
+	* solib-spu.c (spu_bfd_iovec_close): Likewise.
+	* spu-linux-nat.c (spu_bfd_iovec_close): Likewise.
+@
+text
+@a228 2
+
+  /* Zero means success.  */
+@
+
+
+1.1
+log
+@2012-11-26  Alexander Larsson  <alexl@@redhat.com>
+	    Jan Kratochvil  <jan.kratochvil@@redhat.com>
+	    Tom Tromey  <tromey@@redhat.com>
+
+	* NEWS: Mention mini debuginfo feature.
+	* minidebug.c: New file.
+	* configure.ac: Check for lzma.
+	* configure, config.in: Rebuild.
+	* Makefile.in (LIBLZMA): New variable.
+	(CLIBS): Include LIBLZMA.
+	(SFILES): Mention minidebug.c.
+	(COMMON_OBS): Mention minidebug.o.
+	* symfile.c (read_symbols): New function.
+	(syms_from_objfile, reread_symbols): Call it.
+	* symfile.h (find_separate_debug_file_in_section): Declare.
+doc
+	* gdb.texinfo (MiniDebugInfo): New node.
+	(GDB Files): Update.
+testsuite
+	* gdb.base/gnu-debugdata.exp: New file.
+	* gdb.base/gnu-debugdata.c: New file.
+	* lib/gdb.exp (gdb_file_cmd): Handle LZMA warning.
+	(gdb_unload): Return 0 on success.
+@
+text
+@d3 1
+a3 1
+   Copyright (C) 2012 Free Software Foundation, Inc.
+@
+

@@ -1,0 +1,476 @@
+head	1.8;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.8
+	gdb_7_6-2013-04-26-release:1.8
+	gdb_7_6-branch:1.8.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.8
+	gdb_7_5_1-2012-11-29-release:1.6
+	gdb_7_5-2012-08-17-release:1.6
+	gdb_7_5-branch:1.6.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.6
+	gdb_7_4_1-2012-04-26-release:1.4.2.1
+	gdb_7_4-2012-01-24-release:1.4.2.1
+	gdb_7_4-branch:1.4.0.2
+	gdb_7_4-2011-12-13-branchpoint:1.4
+	gdb_7_3_1-2011-09-04-release:1.2
+	gdb_7_3-2011-07-26-release:1.2
+	gdb_7_3-branch:1.2.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.2;
+locks; strict;
+comment	@# @;
+
+
+1.8
+date	2013.01.01.06.33.01;	author brobecke;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2012.11.12.17.41.58;	author tromey;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2012.04.18.06.46.46;	author jkratoch;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2012.01.04.08.17.24;	author brobecke;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2011.10.28.14.48.38;	author pkoning;	state Exp;
+branches
+	1.4.2.1;
+next	1.3;
+
+1.3
+date	2011.10.26.15.09.40;	author pkoning;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2011.01.01.15.33.27;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2010.10.13.20.08.45;	author devans;	state Exp;
+branches;
+next	;
+
+1.4.2.1
+date	2012.01.06.04.43.40;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.8
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@# Type utilities.
+# Copyright (C) 2010-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+"""Utilities for working with gdb.Types."""
+
+import gdb
+
+
+def get_basic_type(type_):
+    """Return the "basic" type of a type.
+
+    Arguments:
+        type_: The type to reduce to its basic type.
+
+    Returns:
+        type_ with const/volatile is stripped away,
+        and typedefs/references converted to the underlying type.
+    """
+
+    while (type_.code == gdb.TYPE_CODE_REF or
+           type_.code == gdb.TYPE_CODE_TYPEDEF):
+        if type_.code == gdb.TYPE_CODE_REF:
+            type_ = type_.target()
+        else:
+            type_ = type_.strip_typedefs()
+    return type_.unqualified()
+
+
+def has_field(type_, field):
+    """Return True if a type has the specified field.
+
+    Arguments:
+        type_: The type to examine.
+            It must be one of gdb.TYPE_CODE_STRUCT, gdb.TYPE_CODE_UNION.
+        field: The name of the field to look up.
+
+    Returns:
+        True if the field is present either in type_ or any baseclass.
+
+    Raises:
+        TypeError: The type is not a struct or union.
+    """
+
+    type_ = get_basic_type(type_)
+    if (type_.code != gdb.TYPE_CODE_STRUCT and
+        type_.code != gdb.TYPE_CODE_UNION):
+        raise TypeError("not a struct or union")
+    for f in type_.fields():
+        if f.is_base_class:
+            if has_field(f.type, field):
+                return True
+        else:
+            # NOTE: f.name could be None
+            if f.name == field:
+                return True
+    return False
+
+
+def make_enum_dict(enum_type):
+    """Return a dictionary from a program's enum type.
+
+    Arguments:
+        enum_type: The enum to compute the dictionary for.
+
+    Returns:
+        The dictionary of the enum.
+
+    Raises:
+        TypeError: The type is not an enum.
+    """
+
+    if enum_type.code != gdb.TYPE_CODE_ENUM:
+        raise TypeError("not an enum type")
+    enum_dict = {}
+    for field in enum_type.fields():
+        # The enum's value is stored in "enumval".
+        enum_dict[field.name] = field.enumval
+    return enum_dict
+
+
+def deep_items (type_):
+    """Return an iterator that recursively traverses anonymous fields.
+
+    Arguments:
+        type_: The type to traverse.  It should be one of
+        gdb.TYPE_CODE_STRUCT or gdb.TYPE_CODE_UNION.
+
+    Returns:
+        an iterator similar to gdb.Type.iteritems(), i.e., it returns
+        pairs of key, value, but for any anonymous struct or union
+        field that field is traversed recursively, depth-first.
+    """
+    for k, v in type_.iteritems ():
+        if k:
+            yield k, v
+        else:
+            for i in deep_items (v.type):
+                yield i
+
+class TypePrinter(object):
+    """The base class for type printers.
+
+    Instances of this type can be used to substitute type names during
+    'ptype'.
+
+    A type printer must have at least 'name' and 'enabled' attributes,
+    and supply an 'instantiate' method.
+
+    The 'instantiate' method must either return None, or return an
+    object which has a 'recognize' method.  This method must accept a
+    gdb.Type argument and either return None, meaning that the type
+    was not recognized, or a string naming the type.
+    """
+
+    def __init__(self, name):
+        self.name = name
+        self.enabled = True
+
+    def instantiate(self):
+        return None
+
+# Helper function for computing the list of type recognizers.
+def _get_some_type_recognizers(result, plist):
+    for printer in plist:
+        if printer.enabled:
+            inst = printer.instantiate()
+            if inst is not None:
+                result.append(inst)
+    return None
+
+def get_type_recognizers():
+    "Return a list of the enabled type recognizers for the current context."
+    result = []
+
+    # First try the objfiles.
+    for objfile in gdb.objfiles():
+        _get_some_type_recognizers(result, objfile.type_printers)
+    # Now try the program space.
+    _get_some_type_recognizers(result, gdb.current_progspace().type_printers)
+    # Finally, globals.
+    _get_some_type_recognizers(result, gdb.type_printers)
+
+    return result
+
+def apply_type_recognizers(recognizers, type_obj):
+    """Apply the given list of type recognizers to the type TYPE_OBJ.
+    If any recognizer in the list recognizes TYPE_OBJ, returns the name
+    given by the recognizer.  Otherwise, this returns None."""
+    for r in recognizers:
+        result = r.recognize(type_obj)
+        if result is not None:
+            return result
+    return None
+
+def register_type_printer(locus, printer):
+    """Register a type printer.
+    PRINTER is the type printer instance.
+    LOCUS is either an objfile, a program space, or None, indicating
+    global registration."""
+
+    if locus is None:
+        locus = gdb
+    locus.type_printers.insert(0, printer)
+@
+
+
+1.7
+log
+@	* NEWS: Update.
+	* data-directory/Makefile.in (PYTHON_FILES): Add
+	type_printers.py.
+	* python/lib/gdb/command/type_printers.py: New file.
+	* python/lib/gdb/command/types.py (TypePrinter): New class.
+	(_get_some_type_recognizers, get_type_recognizers,
+	apply_type_recognizers, register_type_printer): New
+	functions.
+	* python/py-objfile.c (objfile_object) <type_printers>: New
+	field.
+	(objfpy_dealloc): Decref new field.
+	(objfpy_new): Set new field.
+	(objfpy_get_type_printers, objfpy_set_type_printers): New
+	functions.
+	(objfile_to_objfile_object): Set new field.
+	(objfile_getset): Add "type_printers".
+	* python/py-progspace.c (pspace_object) <type_printers>: New
+	field.
+	(pspy_dealloc): Decref new field.
+	(pspy_new): Set new field.
+	(pspy_get_type_printers, pspy_set_type_printers): New functions.
+	(pspace_to_pspace_object): Set new field.
+	(pspace_getset): Add "type_printers".
+	* python/python.c (start_type_printers, apply_type_printers,
+	free_type_printers): New functions.
+	(_initialize_python): Set gdb.type_printers.
+	* python/python.h (start_type_printers, apply_type_printers,
+	free_type_printers): Declare.
+	* typeprint.c (type_print_raw_options, default_ptype_flags):
+	Update for new fields.
+	(do_free_global_table, create_global_typedef_table,
+	find_global_typedef): New functions.
+	(find_typedef_in_hash): Use find_global_typedef.
+	(whatis_exp): Use create_global_typedef_table.  Change cleanup
+	handling.
+	* typeprint.h (struct type_print_options) <global_typedefs,
+	global_printers>: New fields.
+doc
+	* gdb.texinfo (Symbols): Document "info type-printers",
+	"enable type-printer" and "disable type-printer".
+	(Python API): Add new node to menu.
+	(Type Printing API): New node.
+	(Progspaces In Python): Document type_printers field.
+	(Objfiles In Python): Likewise.
+	(gdb.types) <get_type_recognizers, apply_type_recognizers,
+	register_type_printer, TypePrinter>: Document.
+testsuite
+	* gdb.base/completion.exp: Update for "info type-printers".
+	* gdb.python/py-typeprint.cc: New file.
+	* gdb.python/py-typeprint.exp: New file.
+	* gdb.python/py-typeprint.py: New file.
+@
+text
+@d2 1
+a2 1
+# Copyright (C) 2010-2012 Free Software Foundation, Inc.
+@
+
+
+1.6
+log
+@gdb/
+	PR symtab/7259:
+	* ada-exp.y (convert_char_literal): Use TYPE_FIELD_ENUMVAL.
+	* ada-lang.c (ada_discrete_type_high_bound)
+	(ada_discrete_type_low_bound): Use TYPE_FIELD_ENUMVAL for
+	TYPE_CODE_ENUM.
+	(ada_identical_enum_types_p): Use TYPE_FIELD_ENUMVAL.
+	(pos_atr, value_val_atr): Use TYPE_FIELD_ENUMVAL for TYPE_CODE_ENUM.
+	* ada-typeprint.c (print_enum_type): Change variable lastval to LONGEST.
+	Use TYPE_FIELD_ENUMVAL.
+	* ada-valprint.c (print_optional_low_bound, ada_print_scalar)
+	(ada_val_print_1): Use TYPE_FIELD_ENUMVAL for TYPE_CODE_ENUM.
+	* c-typeprint.c (c_type_print_base): Move variable lastval to inner
+	block, change it to LONGEST.  Use TYPE_FIELD_ENUMVAL for
+	TYPE_CODE_ENUM.
+	* coffread.c (coff_read_enum_type): Use SET_FIELD_ENUMVAL.
+	* dwarf2read.c (process_enumeration_scope): Likewise.
+	* gdb-gdb.py (TypeFlagsPrinter): Use field.enumval instead of
+	field.bitpos.
+	(class StructMainTypePrettyPrinter): Support also
+	FIELD_LOC_KIND_ENUMVAL.
+	* gdbtypes.c (get_discrete_bounds): Use TYPE_FIELD_ENUMVAL for
+	TYPE_CODE_ENUM.
+	(recursive_dump_type): Use TYPE_FIELD_ENUMVAL for TYPE_CODE_ENUM.
+	(copy_type_recursive): Support also FIELD_LOC_KIND_ENUMVAL.
+	* gdbtypes.h (enum field_loc_kind): New FIELD_LOC_KIND_ENUMVAL.
+	(struct main_type.flds_bnds.fields.loc): Adjust bitpos comment.  New
+	field enumval.
+	(struct main_type.flds_bnds.bields): Adjust loc_kind and bitsize to
+	accommodate enumval.
+	(struct call_site): Adjust loc_kind to accommodate enumval.
+	(FIELD_ENUMVAL, FIELD_ENUMVAL_LVAL, SET_FIELD_ENUMVAL)
+	(TYPE_FIELD_ENUMVAL): New macros.
+	* m2-typeprint.c (m2_enum): Use TYPE_FIELD_ENUMVAL.
+	* mdebugread.c (parse_symbol): Use TYPE_FIELD_ENUMVAL for
+	TYPE_CODE_ENUM.
+	* p-typeprint.c (pascal_type_print_base): Likewise.
+	* python/lib/gdb/printing.py (class FlagEnumerationPrinter): Use
+	enumval.
+	* python/lib/gdb/types.py (make_enum_dict): Likewise.
+	* python/py-type.c (convert_field): New variable addrstring.  Use
+	TYPE_FIELD_ENUMVAL for TYPE_CODE_ENUM.
+	(check_types_equal): Support also FIELD_LOC_KIND_ENUMVAL.
+	* stabsread.c (read_enum_type): Use SET_FIELD_ENUMVAL.
+	* typepint.c (print_type_scalar): Use TYPE_FIELD_ENUMVAL for
+	TYPE_CODE_ENUM.
+	* valprint.c (generic_val_print): Likewise.
+
+gdb/testsuite/
+	PR symtab/7259:
+	* gdb.base/enumval.c: New test case.
+	* gdb.base/enumval.exp: New test case.
+	* gdb.python/py-type.exp (test_enums): Use field.enumval instead of
+	field.bitpos.
+@
+text
+@d112 65
+@
+
+
+1.5
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d89 2
+a90 2
+        # The enum's value is stored in "bitpos".
+        enum_dict[field.name] = field.bitpos
+@
+
+
+1.4
+log
+@* python/lib/gdb/types.py (deep_items): Rename from deepitems.
+* NEWS: Mention deep_items.
+@
+text
+@d2 1
+a2 1
+# Copyright (C) 2010, 2011 Free Software Foundation, Inc.
+@
+
+
+1.4.2.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d2 1
+a2 1
+# Copyright (C) 2010-2012 Free Software Foundation, Inc.
+@
+
+
+1.3
+log
+@* python/lib/gdb/types.py (deepitems): New function.
+@
+text
+@d94 1
+a94 1
+def deepitems (type_):
+d110 1
+a110 1
+            for i in deepitems (v.type):
+@
+
+
+1.2
+log
+@run copyright.sh for 2011.
+@
+text
+@d92 20
+@
+
+
+1.1
+log
+@	New python module gdb.types.
+	* NEWS: Document it.
+	* data-directory/Makefile.in (PYTHON_FILES): Add gdb/types.py.
+	* python/lib/gdb/types.py: New file.
+
+	testsuite/
+	* lib/gdb-python.exp (gdb_check_python_config): New function.
+	* gdb.python/Makefile.in (EXECUTABLES): Add lib-types.
+	* gdb.python/lib-types.cc: New file.
+	* gdb.python/lib-types.exp: New file.
+
+	doc/
+	* gdb.texinfo (Python): Add "Python modules".
+	(Types in Python): Add reference to gdb.types section.
+	(Python modules): New node.
+@
+text
+@d2 1
+a2 1
+# Copyright (C) 2010 Free Software Foundation, Inc.
+@
+

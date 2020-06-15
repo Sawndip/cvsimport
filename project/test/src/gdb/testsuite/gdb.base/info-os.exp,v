@@ -1,0 +1,510 @@
+head	1.7;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.5
+	gdb_7_6-2013-04-26-release:1.5
+	gdb_7_6-branch:1.5.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.5
+	gdb_7_5_1-2012-11-29-release:1.3
+	gdb_7_5-2012-08-17-release:1.3
+	gdb_7_5-branch:1.3.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.3;
+locks; strict;
+comment	@# @;
+
+
+1.7
+date	2013.06.27.18.51.31;	author tromey;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2013.03.14.13.34.02;	author qiyao;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2013.01.01.06.33.25;	author brobecke;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2012.10.23.15.49.11;	author qiyao;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2012.07.03.23.17.13;	author shebs;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2012.05.18.17.51.30;	author jkratoch;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2012.05.11.22.24.24;	author shebs;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.7
+log
+@test suite update - gdb.base/[h-m]
+
+Convert files gdb.base/[h-m]*.exp to use standard_output_file et al.
+
+	* hook-stop-continue.exp, hook-stop-frame.exp, huge.exp,
+	included.exp, inferior-died.exp, infnan.exp, info-fun.exp,
+	info-macros.exp, info-os.exp, info-proc.exp, info-target.exp,
+	infoline.exp, interp.exp, interrupt.exp, jit-simple.exp,
+	jit-so.exp, jump.exp, kill-after-signal.exp, label.exp, langs.exp,
+	lineinc.exp, list.exp, logical.exp, long_long.exp, longjmp.exp,
+	macscp.exp, maint.exp, memattr.exp, mips_pro.exp, miscexprs.exp,
+	morestack.exp, moribund-step.exp, multi-forks.exp: Use
+	standard_testfile, standard_output_file, prepare_for_testing,
+	clean_restart.
+@
+text
+@# Copyright 2011-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+standard_testfile .c
+
+# This test is Linux-only.
+if ![istarget *-*-linux*] then {
+    unsupported "info-os.exp"
+    return -1
+}
+
+# Support for XML-output is needed to run this test.
+if [gdb_skip_xml_test] then {
+    unsupported "info-os.exp"
+    return -1
+}
+
+# Compile test program.
+if { [prepare_for_testing ${testfile}.exp $testfile $srcfile {debug additional_flags=-lpthread}] } {
+    fail "cannot compile test program"
+    return -1
+}
+
+if ![runto_main] then {
+    fail "cannot run to main"
+    return -1
+}
+
+# Get PID of test program.
+set inferior_pid -1
+set test "get inferior process ID"
+gdb_test_multiple "call getpid()" $test {
+    -re ".* = ($decimal).*$gdb_prompt $" {
+	set inferior_pid $expect_out(1,string)
+	pass $test
+    }
+}
+
+gdb_breakpoint ${srcfile}:[gdb_get_line_number "Set breakpoint here"]
+gdb_continue_to_breakpoint "Set breakpoint here"
+
+# Get keys and IDs of the IPC object instances.
+set shmkey -1
+set test "get shared memory key"
+gdb_test_multiple "print shmkey" $test {
+    -re ".* = ($decimal).*$gdb_prompt $" {
+	set shmkey $expect_out(1,string)
+	pass $test
+    }
+}
+set shmid -1
+set test "get shared memory ID"
+gdb_test_multiple "print shmid" $test {
+    -re ".* = ($decimal).*$gdb_prompt $" {
+	set shmid $expect_out(1,string)
+	pass $test
+    }
+}
+
+set semkey -1
+set test "get semaphore key"
+gdb_test_multiple "print semkey" $test {
+    -re ".* = ($decimal).*$gdb_prompt $" {
+	set semkey $expect_out(1,string)
+	pass $test
+    }
+}
+
+set semid -1
+set test "get semaphore ID"
+gdb_test_multiple "print semid" $test {
+    -re ".* = ($decimal).*$gdb_prompt $" {
+	set semid $expect_out(1,string)
+	pass $test
+    }
+}
+
+set msgkey -1
+set test "get message queue key"
+gdb_test_multiple "print msgkey" $test {
+    -re ".* = ($decimal).*$gdb_prompt $" {
+	set msgkey $expect_out(1,string)
+	pass $test
+    }
+}
+
+set msqid -1
+set test "get message queue ID"
+gdb_test_multiple "print msqid" $test {
+    -re ".* = ($decimal).*$gdb_prompt $" {
+	set msqid $expect_out(1,string)
+	pass $test
+    }
+}
+
+# Get port number of test socket.
+set port -1
+set test "get socket port number"
+gdb_test_multiple "print port" $test {
+    -re ".* = ($decimal).*$gdb_prompt $" {
+	set port $expect_out(1,string)
+	pass $test
+    }
+}
+
+# Act like gdb_test but prevent: +ERROR: internal buffer is full.
+
+proc expect_multiline { command expect test } {
+    global gdb_prompt
+
+    # Do not duplicate FAILs from gdb_test_multiple.
+    set pass 0
+    set fail 0
+    gdb_test_multiple $command $test {
+	-re "^$expect *\r\n" {
+	    pass $test
+	    set pass 1
+	    exp_continue
+	}
+	-re "^$gdb_prompt $" {
+	    if !$pass {
+		set fail 1
+	    }
+	    # Exit the loop.
+	}
+	-re "\r\n" {
+	    # Drop the buffer.
+	    exp_continue
+	}
+    }
+    if $fail {
+	fail $test
+    }
+}
+
+# Test output of the 'info os' commands against the expected results.
+
+#                                     pid            user  command      cores
+expect_multiline "info os processes" "$inferior_pid +\\S+ +\\S*info-os +\[0-9,\]+" "get process list"
+
+#                                      pgid           leader   pid            command line
+expect_multiline "info os procgroups" "$inferior_pid +info-os +$inferior_pid +\\S*info-os" "get process groups"
+
+#                                   pid            command  tid   core
+expect_multiline "info os threads" "$inferior_pid +info-os +\\d+ +\\d+" "get threads"
+
+#                                 pid            command  fd    name
+expect_multiline "info os files" "$inferior_pid +info-os +\\d+ +/dev/null" "get file descriptors"
+
+#                                   local address  l-port remote addr r-port state  user family protocol
+expect_multiline "info os sockets" "0\\.0\\.0\\.0 +$port +0\\.0\\.0\\.0 +0 +LISTEN +\\S+ +INET +STREAM" "get internet-domain sockets"
+
+#                               key   shmid   perm size creator command last op  command  num attached  user  group  creator user  creator group  last shmat() time  last shmdt() time  last shmctl() time
+expect_multiline "info os shm" "$shmkey +$shmid +666 +4096 +info-os .*" "get shared-memory regions"
+
+#                                      key   semid   perm num semaphores  user  group  creator user  creator group  last semop() time  last semctl() time
+expect_multiline "info os semaphores" "$semkey +$semid +666 +1 .*" "get semaphores"
+
+#                               key   msqid   perm  num used bytes  num messages  last msgsnd() command  last msgrcv() command  user  group  creator user  creator group  last msgsnd() time  last msgrcv() time  last msgctl() time
+expect_multiline "info os msg" "$msgkey +$msqid +666 .*" "get message queues"
+
+
+# The SysV IPC primitives linger on after the creating process is killed
+# unless they are destroyed explicitly, so allow the test program to tidy
+# up after itself.
+gdb_test "continue" "exited.*"
+@
+
+
+1.6
+log
+@gdb/testsuite/
+
+	* config/monitor.exp (gdb_target_cmd): Remove semicolon after
+	'return'.
+	(gdb_target_monitor, gdb_load): Likewise.
+	* config/sid.exp (gdb_load): Likewise.
+	* config/slite.exp (gdb_load): Likewise.
+	* config/vx.exp (gdb_start, spawn_vxgdb): Likewise.
+	* gdb.ada/arrayidx.exp, gdb.ada/null_array.exp: Likewise.
+	* gdb.arch/mips-octeon-bbit.exp (single_step): Likewise.
+	(single_step_until): Likewise.
+	* gdb.arch/powerpc-d128-regs.exp: Likewise.
+	* gdb.arch/system-gcore.exp: Likewise.
+	* gdb.base/bigcore.exp (extract_heap): Likewise.
+	* gdb.base/break-on-linker-gcd-function.exp: Likewise.
+	* gdb.base/call-ar-st.exp: Likewise.
+	* gdb.base/call-rt-st.exp: Likewise.
+	* gdb.base/call-sc.exp, gdb.base/call-strs.exp: Likewise.
+	* gdb.base/callfuncs.exp, gdb.base/completion.exp: Likewise.
+	* gdb.base/condbreak.exp, gdb.base/constvars.exp: Likewise.
+	* gdb.base/corefile.exp: Likewise.
+	* gdb.base/dbx.exp (gdb_file_cmd): Likewise.
+	* gdb.base/exprs.exp, gdb.base/fileio.exp: Likewise.
+	* gdb.base/fixsection.exp: Likewise.
+	* gdb.base/funcargs.exp: Likewise.
+	* gdb.base/gcore-buffer-overflow.exp: Likewise.
+	* gdb.base/gcore-relro.exp: Likewise.
+	* gdb.base/gcore.exp, gdb.base/gdb11530.exp: Likewise.
+	* gdb.base/gdb11531.exp, gdb.base/gnu-ifunc.exp: Likewise.
+	* gdb.base/info-os.exp, gdb.base/info-proc.exp: Likewise.
+	* gdb.base/interp.exp, gdb.base/langs.exp:: Likewise.
+	* gdb.base/list.exp: Likewise.
+	(set_listsize): Likewise.
+	* gdb.base/logical.exp, gdb.base/mips_pro.exp: Likewise.
+	* gdb.base/miscexprs.exp, gdb.base/nodebug.exp: Likewise.
+	* gdb.base/opaque.exp, gdb.base/pointers.exp: Likewise.
+	* gdb.base/psymtab.exp, gdb.base/ptype.exp: Likewise.
+	* gdb.base/relational.exp, gdb.base/scope.exp: Likewise.
+	* gdb.base/setvar.exp: Likewise.
+	(test_set): Likewise.
+	* gdb.base/signals.exp, gdb.base/sizeof.exp: Likewise.
+	* gdb.base/solib-overlap.exp: Likewise.
+	* gdb.base/store.exp, gdb.base/structs.exp: Likewise.
+	* gdb.base/structs2.exp, gdb.base/volatile.exp: Likewise.
+	* gdb.base/watchpoint.exp (initialize): Likewise.
+	(test_simple_watchpoint): Likewise.
+	(test_disabling_watchpoints): Likewise.
+	(test_watchpoint_triggered_in_syscall): Likewise.
+	* gdb.base/whatis.exp, gdb.cp/ambiguous.exp: Likewise.
+	* gdb.cp/casts.exp, gdb.cp/ctti.exp: Likewise.
+	* gdb.cp/namespace.exp, gdb.cp/nsdecl.exp: Likewise.
+	* gdb.cp/psmang.exp, gdb.dwarf2/dw2-ranges.exp: Likewise.
+	* gdb.hp/gdb.aCC/optimize.exp: Likewise.
+	* gdb.hp/gdb.aCC/watch-cmd.exp: Likewise.
+	* gdb.hp/gdb.base-hp/callfwmall.exp: Likewise.
+	* gdb.hp/gdb.base-hp/pxdb.exp: Likewise.
+	* gdb.hp/gdb.compat/xdb1.exp: Likewise.
+	* gdb.hp/gdb.compat/xdb2.exp: Likewise.
+	* gdb.hp/gdb.compat/xdb3.exp: Likewise.
+	* gdb.hp/gdb.defects/bs14602.exp: Likewise.
+	* gdb.hp/gdb.defects/solib-d.exp: Likewise.
+	* gdb.mi/gdb792.exp: Likewise.
+	* gdb.mi/mi-inheritance-syntax-error.exp: Likewise.
+	* gdb.mi/mi-logging.exp, gdb.mi/mi-var-cp.exp : Likewise.
+	* gdb.mi/mi-var-rtti.exp, gdb.python/py-type.exp: Likewise.
+	* gdb.threads/gcore-thread.exp: Likewise.
+	(load_core): Likewise.
+	* gdb.threads/pthreads.exp (all_threads_running): Likewise.
+	(test_startup, check_control_c): Likewise.
+	* gdb.threads/sigstep-threads.exp: Likewise.
+	* gdb.threads/thread_check.exp: Likewise.
+	* gdb.trace/backtrace.exp, gdb.trace/change-loc.exp: Likewise.
+	* gdb.trace/circ.exp (run_trace_experiment): Likewise.
+	(set_a_tracepoint, trace_buffer_normal): Likewise.
+	(gdb_trace_circular_tests): Likewise.
+	* gdb.trace/collection.exp: Likewise.
+	* gdb.trace/disconnected-tracing.exp: Likewise.
+	* gdb.trace/infotrace.exp: Likewise.
+	* gdb.trace/mi-traceframe-changed.exp: Likewise.
+	* gdb.trace/mi-tracepoint-changed.exp: Likewise.
+	* gdb.trace/mi-tsv-changed.exp (test_create_delete_modify_tsv): Likewise.
+	* gdb.trace/packetlen.exp, gdb.trace/passc-dyn.exp: Likewise.
+	* gdb.trace/pending.exp, gdb.trace/report.exp: Likewise.
+	* gdb.trace/stap-trace.exp: Likewise.
+	* gdb.trace/status-stop.exp,gdb.trace/strace.exp: Likewise.
+	* gdb.trace/tfind.exp, gdb.trace/trace-break.exp: Likewise.
+	* gdb.trace/trace-buffer-size.exp: Likewise.
+	* gdb.trace/tspeed.exp, gdb.trace/tsv.exp: Likewise.
+	* gdb.trace/unavailable.exp: Likewise.
+	* gdb.trace/while-dyn.exp: Likewise.
+	* lib/fortran.exp (set_lang_fortran): Likewise.
+	* lib/gdb.exp (default_gdb_version, gdb_start_cmd): Likewise.
+	(gdb_breakpoint, gdb_reinitialize_dir): Likewise.
+	(default_gdb_start, get_compiler_info): Likewise.
+	(gdb_compile, gdb_compile_objc, gdb_reload, gdb_init): Likewise.
+	(get_debug_format, setup_xfail_format): Likewise.
+	(rerun_to_main, gdb_skip_float_test): Likewise.
+	(build_id_debug_filename_get, get_remotetimeout): Likewise.
+	* lib/java.exp (set_lang_java): Likewise.
+	* lib/mi-support.exp (default_mi_gdb_start): Likewise.
+	(mi_gdb_reinitialize_dir, mi_gdb_target_cmd): Likewise.
+	(mi_gdb_file_cmd, mi_gdb_test): Likewise.
+	(mi_run_cmd_full, mi_expect_interrupt): Likewise.
+	* lib/objc.exp (set_lang_objc): Likewise.
+	* lib/pascal.exp (set_lang_pascal): Likewise.
+	* lib/prompt.exp (default_prompt_gdb_start): Likewise.
+	* lib/trace-support.exp (gdb_trace_setactions, gdb_tfind_test): Likewise.
+	(gdb_readexpr, gdb_gettpnum, gdb_find_recursion_test_baseline): Likewise.
+@
+text
+@d16 1
+a16 2
+set testfile "info-os"
+set srcfile ${testfile}.c
+@
+
+
+1.5
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@d39 1
+a39 1
+    return -1;
+@
+
+
+1.4
+log
+@gdb/testsuite:
+
+	* gdb.base/info-os.exp: Resume the inferior until it exits.
+@
+text
+@d1 1
+a1 1
+# Copyright 2011, 2012 Free Software Foundation, Inc.
+@
+
+
+1.3
+log
+@	* gdb.base/info-os.c (main): Retry resource acquisition until an
+	available one is found.
+	* gdb.base/info-os.exp: Collect resource keys from the program
+	and use them in matching.
+@
+text
+@d179 1
+a179 1
+send_gdb "continue\n"
+@
+
+
+1.2
+log
+@gdb/testsuite/
+	Fix ERROR: internal buffer is full.
+	* gdb.base/info-os.exp (expect_multiline): New function.
+	(get process list, get process groups, get threads)
+	(get file descriptors, get internet-domain sockets)
+	(get shared-memory regions, get semaphores, get message queues): Use
+	it for these tests.
+@
+text
+@d1 1
+a1 1
+# Copyright 2011 Free Software Foundation, Inc.
+d55 9
+a63 1
+# Get IDs of the IPC object instances.
+d73 9
+d91 9
+d167 1
+a167 1
+expect_multiline "info os shm" "3925 +$shmid +666 +4096 +info-os .*" "get shared-memory regions"
+d170 1
+a170 1
+expect_multiline "info os semaphores" "7428 +$semid +666 +1 .*" "get semaphores"
+d173 1
+a173 1
+expect_multiline "info os msg" "5294 +$msqid +666 .*" "get message queues"
+d178 1
+a178 5
+# up after itself.  Note that the test program attempts to delete and
+# recreate the shared-memory region if it already exists, in case a
+# previous run failed before having a chance to clean up.  The tests for
+# semaphores and message queues should still work with primitives from
+# previous runs.
+@
+
+
+1.1
+log
+@2012-05-11  Stan Shebs  <stan@@codesourcery.com>
+	    Kwok Cheung Yeung  <kcy@@codesourcery.com>
+
+	* NEWS: Describe new info os commands.
+	* common/linux-osdata.c (PID_T, TIME_T): Define.
+	(MAX_PID_T_STRLEN): New.
+	(linux_common_core_of_thread): Add comment.  Change to use PID_T and
+	MAX_PID_T_STRLEN.
+	(command_from_pid): Add comment.  Change to use PID_T.
+	(commandline_from_pid):  Change to use PID_T.
+	(user_from_pid): Add comment.
+	(get_process_owner): Add comment. Change to use PID_T and
+	MAX_PID_T_STRLEN.
+	(get_number_of_cpu_cores): Add comment.
+	(get_cores_used_by_process): Add comment.  Change to use PID_T and
+	MAX_PID_T_STRLEN.
+	(linux_xfer_osdata_processes): Change to use PID_T and
+	MAX_PID_T_STRLEN.
+	(compare_processes): New function.
+	(linux_xfer_osdata_processgroups): New function.
+	(linux_xfer_osdata_threads): Change to use PID_T.
+	(linux_xfer_osdata_fds): New function.
+	(format_socket_state, print_sockets): New functions.
+	(union socket_addr): New union.
+	(linux_xfer_osdata_isockets): New function.
+	(time_from_time_t, group_from_gid): New functions.
+	(linux_xfer_osdata_shm): New function.
+	(linux_xfer_osdata_sem): New function.
+	(linux_xfer_osdata_msg): New function.
+	(linux_xfer_osdata_modules): New function.
+	(osdata_table): Add new entries.
+	* common/buffer.c (buffer_xml_printf): Add support for long and
+	long long format specifiers.
+
+	* gdb.texinfo (Operating System Auxiliary Information): Document new
+	'info os' subcommands.
+
+	* gdb.base/info-os.exp: New file.
+	* gdb.base/info-os.c: New file.
+@
+text
+@d93 30
+d124 25
+a148 8
+gdb_test "info os processes" ".*pid +user +command +cores.*$inferior_pid +\\S+ +\\S*info-os +\[0-9\]+.*" "get process list"
+gdb_test "info os procgroups" ".*pgid +leader command +pid +command line.*$inferior_pid +info-os +$inferior_pid +\\S*info-os.*" "get process groups"
+gdb_test "info os threads" ".*pid +command +tid +core.*$inferior_pid +info-os +\\d+ +\\d+.*" "get threads"
+gdb_test "info os files" ".*pid +command +file descriptor +name.*$inferior_pid +info-os +\\d+ +/dev/null.*" "get file descriptors"
+gdb_test "info os sockets" ".*local address +local port +remote address +remote port +state +user +family +protocol.*0\\.0\\.0\\.0 +$port +0\\.0\\.0\\.0 +0 +LISTEN +\\S+ +INET +STREAM.*" "get internet-domain sockets"
+gdb_test "info os shm" ".*key +shmid +permissions +size +creator command +last op\\. command +num attached +user +group +creator user +creator group +last shmat\\(\\) time +last shmdt\\(\\) time +last shmctl\\(\\) time.*3925 +$shmid +666 +4096 +info-os +.*" "get shared-memory regions"
+gdb_test "info os semaphores" ".*key +semid +permissions +num semaphores +user +group +creator user +creator group +last semop\\(\\) time +last semctl\\(\\) time.*7428 +$semid +666 +1 +.*" "get semaphores"
+gdb_test "info os msg" ".*key +msqid +permissions +num used bytes +num messages +last msgsnd\\(\\) command +last msgrcv\\(\\) command +user +group +creator user +creator group +last msgsnd\\(\\) time +last msgrcv\\(\\) time +last msgctl\\(\\) time.*5294 +$msqid +666 +.*" "get message queues"
+@
+

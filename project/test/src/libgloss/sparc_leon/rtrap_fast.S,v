@@ -1,0 +1,241 @@
+head	1.1;
+access;
+symbols
+	newlib-2_2_0:1.1.0.2
+	newlib-2_1_0:1.1
+	newlib-2_0_0:1.1
+	newlib-1_20_0:1.1;
+locks; strict;
+comment	@# @;
+
+
+1.1
+date	2011.12.15.22.58.40;	author jjohnstn;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.1
+log
+@
+2011-12-15  Konrad Eisele <konrad@@gaisler.com>
+
+        * configure.in: Add SPARC LEON support.
+        * configure: Regenerated.
+        * sparc_leon/asm-leon/amba.h, sparc_leon/asm-leon/asmmacro.h,
+        sparc_leon/asm-leon/clock.h, sparc_leon/asm-leon/contextswitch.h,
+        sparc_leon/asm-leon/elfmacro.h, sparc_leon/asm-leon/head.h,
+        sparc_leon/asm-leon/irq.h, sparc_leon/asm-leon/jiffies.h,
+        sparc_leon/asm-leon/lambapp.h, sparc_leon/asm-leon/lambapp_devs.h,
+        sparc_leon/asm-leon/leon.h, sparc_leon/asm-leon/leon3.h,
+        sparc_leon/asm-leon/leonbare_debug.h, sparc_leon/asm-leon/leonbare_kernel.h,
+        sparc_leon/asm-leon/leonbare_kernel_queue.h, sparc_leon/asm-leon/leoncompat.h,
+        sparc_leon/asm-leon/leondbg.h, sparc_leon/asm-leon/leonstack.h,
+        sparc_leon/asm-leon/liblocks.h, sparc_leon/asm-leon/linkage.h,
+        sparc_leon/asm-leon/param.h, sparc_leon/asm-leon/queue.h,
+        sparc_leon/asm-leon/spinlock.h, sparc_leon/asm-leon/stack.h,
+        sparc_leon/asm-leon/time.h, sparc_leon/asm-leon/timer.h,
+        sparc_leon/asm-leon/types.h, sparc_leon/asm-leon/winmacros.h:
+        New file.
+        * sparc_leon/Makefile.in, sparc_leon/_exit.c,
+        sparc_leon/amba.c, sparc_leon/amba_dbg.c,
+        sparc_leon/amba_driver.c, sparc_leon/amba_scan.c,
+        sparc_leon/asm-leon, sparc_leon/bdinit.S,
+        sparc_leon/busscan.S, sparc_leon/cacheA.S,
+        sparc_leon/catch_interrupt.c, sparc_leon/catch_interrupt_mvt.c,
+        sparc_leon/catch_interrupt_pending.c, sparc_leon/catch_interrupt_svt.c,
+        sparc_leon/configure.in,
+        sparc_leon/console.c, sparc_leon/console_dbg.c,
+        sparc_leon/console_init.c, sparc_leon/contextswitch.c,
+        sparc_leon/contextswitch_asm.S, sparc_leon/crt0.S,
+        sparc_leon/crti.S, sparc_leon/crtn.S,
+        sparc_leon/etrap.S, sparc_leon/etrap_fast.S,
+        sparc_leon/fpu.S, sparc_leon/gettimeofday.c,
+        sparc_leon/initcalls.c, sparc_leon/io.c,
+        sparc_leon/irqinstall.S, sparc_leon/irqtrap.S,
+        sparc_leon/irqtrap_fast.S, sparc_leon/jiffies.c,
+        sparc_leon/kernel.c, sparc_leon/kernel_context.S,
+        sparc_leon/kernel_debug.c, sparc_leon/kernel_debug_var.c,
+        sparc_leon/kernel_mm.c, sparc_leon/kernel_mutex.c,
+        sparc_leon/kernel_queue.c, sparc_leon/kernel_sched.c,
+        sparc_leon/kernel_thread.c, sparc_leon/lcpuinit.S,
+        sparc_leon/locore.S, sparc_leon/locore_atexit.c,
+        sparc_leon/locore_clean.S, sparc_leon/locore_mvt.S,
+        sparc_leon/locore_mvt_reset.S, sparc_leon/locore_svt.S,
+        sparc_leon/locore_svt_reset.S, sparc_leon/locore_svtdisp.S,
+        sparc_leon/locore_var.S, sparc_leon/locore_var_svt.S,
+        sparc_leon/mmu_asm.S, sparc_leon/mutex.c,
+        sparc_leon/nocache.S, sparc_leon/pnpinit.c,
+        sparc_leon/pnpinit_malloc.c, sparc_leon/pnpinit_simple.c,
+        sparc_leon/regwin.S, sparc_leon/regwin_patch.c,
+        sparc_leon/regwin_slow.S, sparc_leon/regwinflush.S,
+        sparc_leon/rtc.c, sparc_leon/rtrap.S,
+        sparc_leon/rtrap_fast.S, sparc_leon/stop.S,
+        sparc_leon/timer.c, sparc_leon/times.c:
+        New file
+        * sparc_leon/configure: Regenerate
+@
+text
+@/*
+ * Copyright (c) 2011 Aeroflex Gaisler
+ *
+ * BSD license:
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
+
+
+#include <asm-leon/leonstack.h>
+#include <asm-leon/winmacros.h>
+                         
+/* Registers to not touch at all. */
+#define t_psr     l0
+#define t_pc      l1
+#define t_npc     l2
+#define t_wim     l3
+#define twin_tmp1 l4
+#define glob_tmp  g4
+#define curptr    g6
+
+	/* Number of register windows */
+	.global _nwindows_min1, _nwindows
+
+        .text
+	.align 4
+	.globl	leonbare_trapreturn_fast, schedule_callback
+
+
+/* rtap return special for irqtrap.S */
+leonbare_trapreturn_fast:
+
+        /* a optional scheduler can be called here */
+        set schedule_callback, %g2
+        ld [%g2], %g2
+        cmp %g2,%g0
+        beq 3f
+         nop
+                 
+        jmpl %g2,%o7
+#ifndef _SOFT_FLOAT
+	 add	%sp, FW_REGS_SZ + 8 + SF_REGS_SZ , %o1	! pt_regs ptr
+#else
+	 add	%sp, SF_REGS_SZ , %o1		   ! pt_regs ptr
+#endif
+	
+3:
+	
+#ifndef _SOFT_FLOAT
+	ld [%sp + (SF_REGS_SZ + PT_REGS_SZ + FW_REGS_SZ - 4)],%g2
+	sethi %hi(fpustate_current), %g3 
+	st %g2, [%g3+%lo(fpustate_current)]
+	sethi	%hi(fpustate_owner), %g3
+	ld	[%g3+%lo(fpustate_owner)], %g3
+	cmp	%g2, %g3
+	bne	didusefpu
+	 nop
+	
+	/* avoid fpu exception */
+	ld 	[%sp + (SF_REGS_SZ + PT_REGS_SZ + FW_REGS_SZ - 8)], %g2
+	set	SPARC_PSR_EF_MASK, %g3
+	and 	%g2, %g3, %g2
+	andn	%t_psr, %g3, %t_psr
+	or	%t_psr, %g2, %t_psr
+	ba,a	1f
+	
+didusefpu:
+	add 	%sp,SF_REGS_SZ + PT_REGS_SZ,%g2
+	cmp	%g2, %g3
+	bne	1f
+
+	sethi	%hi(fpustate_owner), %g3
+	st	%g0, [%g3+%lo(fpustate_owner)]
+	
+1:	
+#endif
+		
+	wr	%t_psr, 0x0, %psr       ! enable nesting again, clear ET
+	
+#ifndef _FLAT
+	/* Will the rett land us in the invalid window? */
+	mov	2, %g1
+	sll	%g1, %t_psr, %g1
+
+	sethi %hi(_nwindows), %g2	!NWINDOWS
+	ld [%g2+%lo(_nwindows)], %g2
+	
+       	srl	%g1, %g2, %g2
+	or	%g1, %g2, %g1
+	rd	%wim, %g2
+	andcc	%g2, %g1, %g0
+	be	1f		! Nope, just return from the trap
+	 sll	%g2, 0x1, %g1
+
+        	/* We have to grab a window before returning. */
+		sethi %hi(_nwindows_min1), %g3	!NWINDOWS-1
+		ld [%g3+%lo(_nwindows_min1)], %g3
+
+                srl	%g2, %g3,  %g2
+                or	%g1, %g2, %g1
+                and	%g1, 0xff, %g1
+
+                wr	%g1, 0x0, %wim
+
+        	/* Grrr, make sure we load from the right %sp... */
+                PT_LOAD_ALL_FAST(sp, t_psr, t_pc, t_npc, g1)
+	
+        	restore	%g0, %g0, %g0
+                RW_LOAD(sp)
+                b	2f
+                 save	%g0, %g0, %g0
+
+	/* Reload the entire frame in case this is from a
+	 * kernel system call or whatever...
+	 */
+1:
+#endif
+ 	PT_LOAD_ALL_FAST(sp, t_psr, t_pc, t_npc, g1)
+	
+2:      /*PT_LOAD_GLOBALS(sp)*/
+
+#ifdef _FLAT
+	restore
+	RW_LOAD(sp)
+	save
+#endif
+	
+	wr	%t_psr, 0x0, %psr
+	nop; nop; nop  
+
+	jmp	%t_pc
+	rett	%t_npc
+
+
+
+
+        
+#ifdef _FLAT
+#warning _FLAT not implemented
+#endif
+        
+
+@

@@ -1,0 +1,375 @@
+head	1.6;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.5
+	gdb_7_6-2013-04-26-release:1.5
+	gdb_7_6-branch:1.5.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.5
+	gdb_7_5_1-2012-11-29-release:1.4
+	gdb_7_5-2012-08-17-release:1.4
+	gdb_7_5-branch:1.4.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.4
+	gdb_7_4_1-2012-04-26-release:1.3.2.1
+	gdb_7_4-2012-01-24-release:1.3.2.1
+	gdb_7_4-branch:1.3.0.2
+	gdb_7_4-2011-12-13-branchpoint:1.3
+	gdb_7_3_1-2011-09-04-release:1.1.2.1
+	gdb_7_3-2011-07-26-release:1.1.2.1
+	gdb_7_3-branch:1.1.0.2;
+locks; strict;
+comment	@# @;
+
+
+1.6
+date	2013.08.22.13.39.12;	author tromey;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2013.01.01.06.33.28;	author brobecke;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2012.01.04.08.17.50;	author brobecke;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2011.09.12.18.07.22;	author devans;	state Exp;
+branches
+	1.3.2.1;
+next	1.2;
+
+1.2
+date	2011.05.13.18.54.59;	author tromey;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2011.05.13.18.54.47;	author tromey;	state dead;
+branches
+	1.1.2.1;
+next	;
+
+1.3.2.1
+date	2012.01.06.04.44.05;	author brobecke;	state Exp;
+branches;
+next	;
+
+1.1.2.1
+date	2011.05.13.18.54.47;	author tromey;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.6
+log
+@fix some gdb.dwarf2 tests for parallel safety
+
+This fixes a few gdb.dwarf2 tests to be more parallel-safe.  This
+mostly amounts to changing them to write their files into the
+directory designated by standard_output_file.
+
+Built and regtested on x86-64 Fedora 18.
+
+	* gdb.dwarf2/clztest.exp: Use standard_testfile.
+	* gdb.dwarf2/dw2-minsym-in-cu.exp: Use standard_testfile.
+	* gdb.dwarf2/fission-base.S: Remove directory from
+	DW_AT_GNU_dwo_name.
+	* gdb.dwarf2/fission-base.exp: Use build_executable.  Set
+	debug-file-directory.
+	* gdb.dwarf2/fission-reread.S: Remove directory from
+	DW_AT_GNU_dwo_name.
+	* gdb.dwarf2/fission-reread.exp: Use build_executable.  Set
+	debug-file-directory.
+@
+text
+@# Copyright 2011-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+load_lib dwarf.exp
+
+standard_testfile .S
+set test "clztest"
+
+# This test can only be run on targets which support DWARF-2 and use gas.
+if ![dwarf2_support] {
+    return 0  
+}
+
+# This test can only be run on x86-64 targets.
+if {![istarget x86_64-*] || ![is_lp64_target]} {
+    return 0
+}
+
+if { [prepare_for_testing "${test}.exp" "${test}" ${test}.S {nodebug additional_flags=-nostdlib}] } {
+    return -1
+}
+
+if ![runto_main] {
+    return -1
+}
+
+# Initialize tests to be an empty array.
+unset -nocomplain tests
+array set tests {}
+
+proc gdb-test {line var value} {
+    global tests
+
+    lappend tests($line) [list $var $value 0]
+}
+
+proc xfail-gdb-test {line var value} {
+    global tests
+
+    lappend tests($line) [list $var $value 1]
+}
+
+proc scan_gdb_tests {} {
+    global srcdir subdir test
+
+    set file "$srcdir/$subdir/$test.c"
+
+    set fd [open "$file"]
+    while {![eof $fd]} {
+	set line [gets $fd]
+	if {! [regexp "\{ (gdb-test .+) \} \}" $line ignore test_cmd]} {
+	    continue
+	}
+
+	eval $test_cmd
+    }
+    close $fd
+}
+
+scan_gdb_tests
+
+foreach line [lsort [array names tests]] {
+    gdb_test "break ${test}.c:$line" "Breakpoint .*" \
+	"set breakpoint at ${test}.c:$line"
+    gdb_continue_to_breakpoint "continue to ${test}.c:$line"
+
+    foreach testvec $tests($line) {
+	set var [lindex $testvec 0]
+	set value [lindex $testvec 1]
+	set should_xfail [lindex $testvec 2]
+
+	if {$should_xfail} {
+	    setup_xfail *-*-*
+	}
+
+	gdb_test "print $var" \
+	    " = $value" \
+	    "check value of $var at ${test}.c:$line"
+    }
+}
+@
+
+
+1.5
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@d18 1
+@
+
+
+1.4
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d1 1
+a1 1
+# Copyright 2011-2012 Free Software Foundation, Inc.
+@
+
+
+1.3
+log
+@	* gdb.dwarf2/clztest.exp: Fix initialization of tests array.
+	* gdb.dwarf2/typeddwarf.exp: Ditto.
+@
+text
+@d1 1
+a1 1
+# Copyright 2011 Free Software Foundation, Inc.
+@
+
+
+1.3.2.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d1 1
+a1 1
+# Copyright 2011-2012 Free Software Foundation, Inc.
+@
+
+
+1.2
+log
+@gdb
+	* dwarf2expr.c (read_uleb128): Cast intermediate result.
+	(read_sleb128): Likewise.
+gdb/testsuite
+	* gdb.dwarf2/clztest.exp: New file.
+	* gdb.dwarf2/clztest.c: New file.
+	* gdb.dwarf2/clztest.S: New file.
+@
+text
+@d38 3
+a40 3
+global tests
+set tests(_) -
+unset tests(_)
+@
+
+
+1.1
+log
+@file clztest.exp was initially added on branch gdb_7_3-branch.
+@
+text
+@d1 91
+@
+
+
+1.1.2.1
+log
+@gdb
+	* dwarf2expr.c (read_uleb128): Cast intermediate result.
+	(read_sleb128): Likewise.
+gdb/testsuite
+	* gdb.dwarf2/clztest.exp: New file.
+	* gdb.dwarf2/clztest.c: New file.
+	* gdb.dwarf2/clztest.S: New file.
+@
+text
+@a0 91
+# Copyright 2011 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+load_lib dwarf.exp
+
+set test "clztest"
+
+# This test can only be run on targets which support DWARF-2 and use gas.
+if ![dwarf2_support] {
+    return 0  
+}
+
+# This test can only be run on x86-64 targets.
+if {![istarget x86_64-*] || ![is_lp64_target]} {
+    return 0
+}
+
+if { [prepare_for_testing "${test}.exp" "${test}" ${test}.S {nodebug additional_flags=-nostdlib}] } {
+    return -1
+}
+
+if ![runto_main] {
+    return -1
+}
+
+global tests
+set tests(_) -
+unset tests(_)
+
+proc gdb-test {line var value} {
+    global tests
+
+    lappend tests($line) [list $var $value 0]
+}
+
+proc xfail-gdb-test {line var value} {
+    global tests
+
+    lappend tests($line) [list $var $value 1]
+}
+
+proc scan_gdb_tests {} {
+    global srcdir subdir test
+
+    set file "$srcdir/$subdir/$test.c"
+
+    set fd [open "$file"]
+    while {![eof $fd]} {
+	set line [gets $fd]
+	if {! [regexp "\{ (gdb-test .+) \} \}" $line ignore test_cmd]} {
+	    continue
+	}
+
+	eval $test_cmd
+    }
+    close $fd
+}
+
+scan_gdb_tests
+
+foreach line [lsort [array names tests]] {
+    gdb_test "break ${test}.c:$line" "Breakpoint .*" \
+	"set breakpoint at ${test}.c:$line"
+    gdb_continue_to_breakpoint "continue to ${test}.c:$line"
+
+    foreach testvec $tests($line) {
+	set var [lindex $testvec 0]
+	set value [lindex $testvec 1]
+	set should_xfail [lindex $testvec 2]
+
+	if {$should_xfail} {
+	    setup_xfail *-*-*
+	}
+
+	gdb_test "print $var" \
+	    " = $value" \
+	    "check value of $var at ${test}.c:$line"
+    }
+}
+@
+

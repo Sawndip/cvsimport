@@ -1,0 +1,376 @@
+head	1.4;
+access;
+symbols
+	binutils-2_24-branch:1.4.0.8
+	binutils-2_24-branchpoint:1.4
+	binutils-2_21_1:1.2
+	binutils-2_23_2:1.4
+	binutils-2_23_1:1.4
+	binutils-2_23:1.4
+	binutils-2_23-branch:1.4.0.6
+	binutils-2_23-branchpoint:1.4
+	binutils-2_22_branch:1.4.0.4
+	binutils-2_22:1.4
+	binutils-2_22-branch:1.4.0.2
+	binutils-2_22-branchpoint:1.4
+	binutils-2_21:1.2
+	binutils-2_21-branch:1.2.0.2
+	binutils-2_21-branchpoint:1.2
+	binutils-2_20_1:1.1.10.1
+	binutils-2_20:1.1.10.1
+	binutils-arc-20081103-branch:1.1.0.12
+	binutils-arc-20081103-branchpoint:1.1
+	binutils-2_20-branch:1.1.0.10
+	binutils-2_20-branchpoint:1.1
+	dje-cgen-play1-branch:1.1.0.8
+	dje-cgen-play1-branchpoint:1.1
+	arc-20081103-branch:1.1.0.6
+	arc-20081103-branchpoint:1.1
+	binutils-2_19_1:1.1
+	binutils-2_19:1.1
+	binutils-2_19-branch:1.1.0.4
+	binutils-2_19-branchpoint:1.1
+	binutils-2_18:1.1.2.1
+	binutils_latest_snapshot:1.4
+	binutils-2_18-branch:1.1.0.2;
+locks; strict;
+comment	@ * @;
+
+
+1.4
+date	2011.03.11.14.18.24;	author nickc;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2011.02.28.18.32.52;	author ktietz;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2009.09.11.15.27.33;	author nickc;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2007.08.24.21.49.55;	author jsm28;	state Exp;
+branches
+	1.1.2.1
+	1.1.10.1;
+next	;
+
+1.1.2.1
+date	2007.08.24.21.56.45;	author jsm28;	state Exp;
+branches;
+next	;
+
+1.1.10.1
+date	2009.09.11.15.28.43;	author nickc;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.4
+log
+@	* remap.c (remap_debug_filename): Always allocate a buffer for the
+	returned pointer.
+	* stabs.c (stabs_generate_asm_file): Free the pointer returned by
+	remap_debug_filename.
+@
+text
+@/* Remap file names for debug info for GNU assembler.
+   Copyright 2007 Free Software Foundation, Inc.
+
+   This file is part of GAS, the GNU Assembler.
+
+   GAS is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3, or (at your option)
+   any later version.
+
+   GAS is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with GAS; see the file COPYING.  If not, write to the Free
+   Software Foundation, 51 Franklin Street - Fifth Floor, Boston, MA
+   02110-1301, USA.  */
+
+#include "as.h"
+#include "filenames.h"
+
+/* Structure recording the mapping from source file and directory
+   names at compile time to those to be embedded in debug
+   information.  */
+typedef struct debug_prefix_map
+{
+  const char *old_prefix;
+  const char *new_prefix;
+  size_t old_len;
+  size_t new_len;
+  struct debug_prefix_map *next;
+} debug_prefix_map;
+
+/* Linked list of such structures.  */
+debug_prefix_map *debug_prefix_maps;
+
+
+/* Record a debug file prefix mapping.  ARG is the argument to
+   -fdebug-prefix-map and must be of the form OLD=NEW.  */
+
+void
+add_debug_prefix_map (const char *arg)
+{
+  debug_prefix_map *map;
+  const char *p;
+  char *o;
+
+  p = strchr (arg, '=');
+  if (!p)
+    {
+      as_fatal (_("invalid argument '%s' to -fdebug-prefix-map"), arg);
+      return;
+    }
+  map = (struct debug_prefix_map *) xmalloc (sizeof (debug_prefix_map));
+  o = xstrdup (arg);
+  map->old_prefix = o;
+  map->old_len = p - arg;
+  o[map->old_len] = 0;
+  p++;
+  map->new_prefix = xstrdup (p);
+  map->new_len = strlen (p);
+  map->next = debug_prefix_maps;
+  debug_prefix_maps = map;
+}
+
+/* Perform user-specified mapping of debug filename prefixes.  Returns
+   a newly allocated buffer containing the name corresponding to FILENAME.
+   It is the caller's responsibility to free the buffer.  */
+
+const char *
+remap_debug_filename (const char *filename)
+{
+  debug_prefix_map *map;
+  char *s;
+  const char *name;
+  size_t name_len;
+
+  for (map = debug_prefix_maps; map; map = map->next)
+    if (filename_ncmp (filename, map->old_prefix, map->old_len) == 0)
+      break;
+  if (!map)
+    return xstrdup (filename);
+  name = filename + map->old_len;
+  name_len = strlen (name) + 1;
+  s = (char *) alloca (name_len + map->new_len);
+  memcpy (s, map->new_prefix, map->new_len);
+  memcpy (s + map->new_len, name, name_len);
+  return xstrdup (s);
+}
+@
+
+
+1.3
+log
+@ChangeLog binutils/
+2011-02-28  Kai Tietz  <kai.tietz@@onevision.com>
+
+	* debug.c (debug_start_source): Use filename_(n)cmp.
+	* ieee.c (ieee_finish_compilation_unit): Likewise.
+	(ieee_lineno): Likewise.
+	* nlmconv.c (main): Likewise.
+	* objcopy.c (strip_main): Likewise.
+	(copy_main): Likewise.
+	* objdump.c (show_line): Likewise.
+	(dump_reloc_set): Likewise.
+	* srconv.c (main): Likewise.
+	* wrstabs.c (stab_lineno): Likewise.
+
+ChangeLog gas/
+2011-02-28  Kai Tietz  <kai.tietz@@onevision.com>
+
+	* depend.c (register_dependency): Use filename_(n)cmp.
+	* dwarf2dbg.c (get_filenum): Likewise.
+	* ecoff.c (add_file): Likewise.
+	(ecoff_generate_asm_lineno): Likewise.
+	* input-scrub.c (new_logical_line_flags): Likewise.
+	* listing.c (file_info): Likewise.
+	(listing_newline): Likewise.
+	* remap.c (remap_debug_filename): Likewise.
+	* stabs.c (generate_asm_file): Likewise.
+	(stabs_generate_asm_lineno): Likewise.
+@
+text
+@d68 3
+a70 2
+/* Perform user-specified mapping of debug filename prefixes.  Return
+   the new name corresponding to FILENAME.  */
+d84 1
+a84 1
+    return filename;
+@
+
+
+1.2
+log
+@        * po/bfd.pot: Updated by the Translation project.
+        * po/binutils.pot: Updated by the Translation project.
+        * po/gold.pot: Updated by the Translation project.
+        * po/gold.pot: Updated by the Translation project.
+        * po/gprof.pot: Updated by the Translation project.
+        * po/sv.po: Updated Swedish translation.
+        * po/ld.pot: Updated by the Translation project.
+        * po/fi.po: Updated Finnish translation.
+        * po/ld.pot: Updated by the Translation project.
+        * po/fi.po: Updated Finnish translation.
+
+        Updated sources to compile cleanly with -Wc++-compat:
+        * basic_blocks.c: Add casts.
+        * cg_dfn.c: Add cast.
+        * corefile.c: Add casts.
+        * gmon_io.c: Add casts.
+        * hist.c: Add cast.
+        * source.c: Add cast.
+        * sym_ids.c (struct match): Moved to top level.
+
+        Updated soruces in ld/* to compile cleanly with -Wc++-compat:
+        * ld.h (enum endian_enum,enum symbolic_enum,enum dynamic_list_enum): Move to top level.
+        * ldcref.c: Add casts.
+        * ldctor.c: Add casts.
+        * ldexp.c
+        * ldexp.h (enum node_tree_enum,enum phase_enum): Move to top level.
+        * ldlang.c: Add casts. (lang_insert_orphan): Use enum name instead of integer.
+        * ldlang.h (enum statement_enum): Move to top level.
+        * ldmain.c: Add casts.
+        * ldwrite.c: Add casts.
+        * lexsup.c: Add casts. (enum control_enum): Move to top level.
+        * mri.c: Add casts. (mri_draw_tree): Use enum name instead of integer.
+
+        Updated sources to compile cleanly with -Wc++-compat:
+        * basic_blocks.c: Add casts.
+        * cg_dfn.c: Add cast.
+        * corefile.c: Add casts.
+        * gmon_io.c: Add casts.
+        * hist.c: Add cast.
+        * source.c: Add cast.
+        * sym_ids.c (struct match): Moved to top level.
+
+        * as.c (main): Call dwarf2_init.
+        * config/obj-elf.c (struct group_list): New field.
+        (build_group_lists): Use hash lookup.
+        (free_section_idx): New function.
+        (elf_frob_file): Adjust.
+        * dwarf2dbg.c (all_segs_hash, last_seg_ptr): New variables.
+        (get_line_subseg): Adjust.
+        (dwarf2_init): New function.
+        * dwarf2dbg.h (dwarf2_init): New declaration.
+@
+text
+@d22 1
+d80 1
+a80 1
+    if (strncmp (filename, map->old_prefix, map->old_len) == 0)
+@
+
+
+1.1
+log
+@2007-08-24  Joseph Myers  <joseph@@codesourcery.com>
+            Paul Brook  <paul@@codesourcery.com>
+
+	* remap.c: New.
+	* as.h (remap_debug_filename, add_debug_prefix_map): Declare.
+	* as.c (show_usage): Document --debug-prefix-map option.
+	(parse_args): Handle --debug-prefix-map.
+	* dwarf2dbg.c (out_file_list, out_debug_info): Remap debug paths.
+	* stabs.c (stabs_generate_asm_file): Remap debug paths.
+	* Makefile.am (GAS_CFILES): Add remap.c
+	(GENERIC_OBJS): Add remap.o.
+	Regenerate dependencies.
+	* Makefile.in: Regenerate.
+	* doc/as.texinfo (--debug-prefix-map): Document.
+@
+text
+@d55 1
+a55 1
+  map = xmalloc (sizeof (debug_prefix_map));
+@
+
+
+1.1.10.1
+log
+@        * po/bfd.pot: Updated by the Translation project.
+        * po/binutils.pot: Updated by the Translation project.
+        * po/gold.pot: Updated by the Translation project.
+        * po/gold.pot: Updated by the Translation project.
+        * po/gprof.pot: Updated by the Translation project.
+        * po/sv.po: Updated Swedish translation.
+        * po/ld.pot: Updated by the Translation project.
+        * po/fi.po: Updated Finnish translation.
+        * po/ld.pot: Updated by the Translation project.
+        * po/fi.po: Updated Finnish translation.
+
+        Updated sources to compile cleanly with -Wc++-compat:
+        * basic_blocks.c: Add casts.
+        * cg_dfn.c: Add cast.
+        * corefile.c: Add casts.
+        * gmon_io.c: Add casts.
+        * hist.c: Add cast.
+        * source.c: Add cast.
+        * sym_ids.c (struct match): Moved to top level.
+
+        Updated soruces in ld/* to compile cleanly with -Wc++-compat:
+        * ld.h (enum endian_enum,enum symbolic_enum,enum dynamic_list_enum): Move to top level.
+        * ldcref.c: Add casts.
+        * ldctor.c: Add casts.
+        * ldexp.c
+        * ldexp.h (enum node_tree_enum,enum phase_enum): Move to top level.
+        * ldlang.c: Add casts. (lang_insert_orphan): Use enum name instead of integer.
+        * ldlang.h (enum statement_enum): Move to top level.
+        * ldmain.c: Add casts.
+        * ldwrite.c: Add casts.
+        * lexsup.c: Add casts. (enum control_enum): Move to top level.
+        * mri.c: Add casts. (mri_draw_tree): Use enum name instead of integer.
+
+        Updated sources to compile cleanly with -Wc++-compat:
+        * basic_blocks.c: Add casts.
+        * cg_dfn.c: Add cast.
+        * corefile.c: Add casts.
+        * gmon_io.c: Add casts.
+        * hist.c: Add cast.
+        * source.c: Add cast.
+        * sym_ids.c (struct match): Moved to top level.
+@
+text
+@d55 1
+a55 1
+  map = (struct debug_prefix_map *) xmalloc (sizeof (debug_prefix_map));
+@
+
+
+1.1.2.1
+log
+@2007-08-24  Joseph Myers  <joseph@@codesourcery.com>
+            Paul Brook  <paul@@codesourcery.com>
+
+	* remap.c: New.
+	* as.h (remap_debug_filename, add_debug_prefix_map): Declare.
+	* as.c (show_usage): Document --debug-prefix-map option.
+	(parse_args): Handle --debug-prefix-map.
+	* dwarf2dbg.c (out_file_list, out_debug_info): Remap debug paths.
+	* stabs.c (stabs_generate_asm_file): Remap debug paths.
+	* Makefile.am (GAS_CFILES): Add remap.c
+	(GENERIC_OBJS): Add remap.o.
+	Regenerate dependencies.
+	* Makefile.in: Regenerate.
+	* doc/as.texinfo (--debug-prefix-map): Document.
+@
+text
+@@
+

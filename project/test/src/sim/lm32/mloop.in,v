@@ -1,0 +1,354 @@
+head	1.3;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.3
+	gdb_7_6-2013-04-26-release:1.3
+	gdb_7_6-branch:1.3.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.3
+	gdb_7_5_1-2012-11-29-release:1.1
+	gdb_7_5-2012-08-17-release:1.1
+	gdb_7_5-branch:1.1.0.14
+	gdb_7_5-2012-07-18-branchpoint:1.1
+	gdb_7_4_1-2012-04-26-release:1.1
+	gdb_7_4-2012-01-24-release:1.1
+	gdb_7_4-branch:1.1.0.12
+	gdb_7_4-2011-12-13-branchpoint:1.1
+	gdb_7_3_1-2011-09-04-release:1.1
+	gdb_7_3-2011-07-26-release:1.1
+	gdb_7_3-branch:1.1.0.10
+	gdb_7_3-2011-04-01-branchpoint:1.1
+	gdb_7_2-2010-09-02-release:1.1
+	gdb_7_2-branch:1.1.0.8
+	gdb_7_2-2010-07-07-branchpoint:1.1
+	gdb_7_1-2010-03-18-release:1.1
+	gdb_7_1-branch:1.1.0.6
+	gdb_7_1-2010-02-18-branchpoint:1.1
+	gdb_7_0_1-2009-12-22-release:1.1
+	gdb_7_0-2009-10-06-release:1.1
+	gdb_7_0-branch:1.1.0.4
+	gdb_7_0-2009-09-16-branchpoint:1.1
+	msnyder-checkpoint-072509-branch:1.1.0.2
+	msnyder-checkpoint-072509-branchpoint:1.1;
+locks; strict;
+comment	@# @;
+
+
+1.3
+date	2012.12.19.07.18.18;	author brobecke;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2012.12.19.07.11.59;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2009.05.18.13.25.35;	author jbeniston;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.3
+log
+@[sim] Update old contact info in GPL license notices
+
+sim/ChangeLog:
+
+        Update old contact info in GPL license notices.
+@
+text
+@# Simulator main loop for lm32. -*- C -*-
+# Contributed by Jon Beniston <jon@@beniston.com>
+#
+# This file is part of the GNU Simulators.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3, or (at your option)
+# any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, see <http://www.gnu.org/licenses/>.
+
+# Syntax:
+# /bin/sh mainloop.in command
+#
+# Command is one of:
+#
+# init
+# support
+# extract-{simple,scache,pbb}
+# {full,fast}-exec-{simple,scache,pbb}
+#
+
+case "x$1" in
+
+xsupport)
+
+cat <<EOF
+
+static INLINE const IDESC *
+extract (SIM_CPU *current_cpu, PCADDR pc, CGEN_INSN_INT insn,
+	   ARGBUF *abuf, int fast_p)
+{
+  const IDESC *id = @@cpu@@_decode (current_cpu, pc, insn, insn, abuf);
+
+  @@cpu@@_fill_argbuf (current_cpu, abuf, id, pc, fast_p);
+  if (! fast_p)
+    {
+      int trace_p = PC_IN_TRACE_RANGE_P (current_cpu, pc);
+      int profile_p = PC_IN_PROFILE_RANGE_P (current_cpu, pc);
+      @@cpu@@_fill_argbuf_tp (current_cpu, abuf, trace_p, profile_p);
+    }
+  return id;
+}
+
+static INLINE SEM_PC
+execute (SIM_CPU *current_cpu, SCACHE *sc, int fast_p)
+{
+  SEM_PC vpc;
+
+  if (fast_p)
+    {
+#if ! WITH_SEM_SWITCH_FAST
+#if WITH_SCACHE
+      vpc = (*sc->argbuf.semantic.sem_fast) (current_cpu, sc);
+#else
+      vpc = (*sc->argbuf.semantic.sem_fast) (current_cpu, &sc->argbuf);
+#endif
+#else
+      abort ();
+#endif /* WITH_SEM_SWITCH_FAST */
+    }
+  else
+    {
+#if ! WITH_SEM_SWITCH_FULL
+      ARGBUF *abuf = &sc->argbuf;
+      const IDESC *idesc = abuf->idesc;
+      const CGEN_INSN *idata = idesc->idata;
+#if WITH_SCACHE_PBB
+      int virtual_p = CGEN_INSN_ATTR_VALUE (idata, CGEN_INSN_VIRTUAL);
+#else
+      int virtual_p = 0;
+#endif
+      if (! virtual_p)
+	{
+	  /* FIXME: call x-before */
+	  if (ARGBUF_PROFILE_P (abuf))
+	    PROFILE_COUNT_INSN (current_cpu, abuf->addr, idesc->num);
+	  /* FIXME: Later make cover macros: PROFILE_INSN_{INIT,FINI}.  */
+	  if (PROFILE_MODEL_P (current_cpu)
+	      && ARGBUF_PROFILE_P (abuf))
+	    @@cpu@@_model_insn_before (current_cpu, 1 /*first_p*/);
+	  TRACE_INSN_INIT (current_cpu, abuf, 1);
+	  TRACE_INSN (current_cpu, idata,
+		      (const struct argbuf *) abuf, abuf->addr);
+	}
+#if WITH_SCACHE
+      vpc = (*sc->argbuf.semantic.sem_full) (current_cpu, sc);
+#else
+      vpc = (*sc->argbuf.semantic.sem_full) (current_cpu, abuf);
+#endif
+      if (! virtual_p)
+	{
+	  /* FIXME: call x-after */
+	  if (PROFILE_MODEL_P (current_cpu)
+	      && ARGBUF_PROFILE_P (abuf))
+	    {
+	      int cycles;
+
+	      cycles = (*idesc->timing->model_fn) (current_cpu, sc);
+	      @@cpu@@_model_insn_after (current_cpu, 1 /*last_p*/, cycles);
+	    }
+	  TRACE_INSN_FINI (current_cpu, abuf, 1);
+	}
+#else
+      abort ();
+#endif /* WITH_SEM_SWITCH_FULL */
+    }
+
+  return vpc;
+}
+
+EOF
+
+;;
+
+xinit)
+
+# Nothing needed.
+
+;;
+
+xextract-simple | xextract-scache)
+
+cat <<EOF
+{
+  CGEN_INSN_INT insn = GETIMEMUSI (current_cpu, vpc);
+  extract (current_cpu, vpc, insn, SEM_ARGBUF (sc), FAST_P);
+}
+EOF
+
+;;
+
+xextract-pbb)
+
+# Inputs:  current_cpu, pc, sc, max_insns, FAST_P
+# Outputs: sc, pc
+# sc must be left pointing past the last created entry.
+# pc must be left pointing past the last created entry.
+# If the pbb is terminated by a cti insn, SET_CTI_VPC(sc) must be called
+# to record the vpc of the cti insn.
+# SET_INSN_COUNT(n) must be called to record number of real insns.
+
+cat <<EOF
+{
+  const IDESC *idesc;
+  int icount = 0;
+
+  while (max_insns > 0)
+    {
+      USI insn = GETIMEMUSI (current_cpu, pc);
+      
+      idesc = extract (current_cpu, pc, insn, &sc->argbuf, FAST_P);
+      ++sc;
+      --max_insns;
+      ++icount;
+      pc += idesc->length;
+
+      if (IDESC_CTI_P (idesc))
+        {
+          SET_CTI_VPC (sc - 1);
+          break;
+        }
+    }
+
+ Finish:
+  SET_INSN_COUNT (icount);
+}
+EOF
+
+;;
+
+xfull-exec-* | xfast-exec-*)
+
+# Inputs: current_cpu, vpc, FAST_P
+# Outputs: vpc
+
+cat <<EOF
+  /* Update cycle counter */
+  SET_H_CSR (LM32_CSR_CC, GET_H_CSR (LM32_CSR_CC) + 1);
+#if (! FAST_P && WITH_SEM_SWITCH_FULL) || (FAST_P && WITH_SEM_SWITCH_FAST)
+#define DEFINE_SWITCH
+#include "sem-switch.c"
+#else
+  vpc = execute (current_cpu, vpc, FAST_P);
+#endif
+EOF
+
+;;
+
+*)
+  echo "Invalid argument to mainloop.in: $1" >&2
+  exit 1
+  ;;
+
+esac
+@
+
+
+1.2
+log
+@Update sim copyright headers from GPLv2-or-later to GPLv3-or-later.
+
+gdb/sim/ChangeLog:
+
+        Update the non-FSF-copyrighted files in sim to GPLv3 or later.
+@
+text
+@d17 1
+a17 2
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+@
+
+
+1.1
+log
+@gdb/
+2009-05-18  Jon Beniston <jon@@beniston.com>
+
+        * MAINTAINERS: Add lm32 target.
+        * Makefile.in: Add lm32 dependencies.
+        * NEWS: Indicate lm32 is a new target.
+        * configure.tgt: Add lm32 targets.
+        * lm32-tdep.c: New file.
+
+gdb/testsuite
+2009-05-18  Jon Beniston <jon@@beniston.com>
+
+        * gdb.asm/asm-source.exp: Add lm32 target.
+
+include/gdb/
+2009-05-18  Jon Beniston <jon@@beniston.com>
+
+        * sim-lm32.h: New file.
+
+sim/
+2009-05-18  Jon Beniston <jon@@beniston.com>
+
+        * MAINTAINERS: Add Jon Beniston as maintainer of lm32 sim.
+        * configure.ac: Add lm32 target.
+        * lm32: New directory.
+
+sim/common
+2009-05-18  Jon Beniston <jon@@beniston.com>
+
+        * gennltvals.sh: Add lm32 target.
+        * nltvals.def: Add lm32 syscall definitions.
+
+sim/lm32/
+2009-05-18  Jon Beniston <jon@@beniston.com>
+
+        * Makefile.in: New file.
+        * arch.c: New file.
+        * arch.h: New file.
+        * config.in: New file.
+        * configure: New file.
+        * configure.ac: New file.
+        * cpu.c: New file.
+        * cpu.h: New file.
+        * cpuall.h: New file.
+        * decode.c: New file.
+        * decode.h: New file.
+        * dv-lm32cpu.c: New file.
+        * dv-lm32timer.c: New file.
+        * dv-lm32uart.c: New file.
+        * lm32.c: New file.
+        * lm32-sim.h: New file.
+        * mloop.in: New file.
+        * model.c: New file.
+        * sem.c: New file.
+        * sem-switch.c: New file.
+        * sim-if.c: New file.
+        * sim-main.c: New file.
+        * tconfig.in: New file.
+        * traps.c: New file.
+        * user.c: New file.
+@
+text
+@d8 1
+a8 1
+# the Free Software Foundation; either version 2, or (at your option)
+@
+

@@ -1,0 +1,729 @@
+head	1.5;
+access;
+symbols
+	cygwin-1_7_35-release:1.5
+	cygwin-1_7_34-release:1.5
+	newlib-2_2_0:1.5.0.2
+	cygwin-1_7_33-release:1.5
+	cygwin-1_7_32-release:1.5
+	cygwin-1_7_31-release:1.5
+	cygwin-1_7_30-release:1.5
+	cygwin-1_7_29-release:1.5
+	cygwin-1_7_28-release:1.5
+	newlib-2_1_0:1.5
+	cygwin-1_7_27-release:1.5
+	cygwin-1_7_26-release:1.5
+	cygwin-1_7_25-release:1.5
+	cygwin-1_7_24-release:1.5
+	cygwin-1_7_23-release:1.5
+	cygwin-1_7_22-release:1.5
+	cygwin-1_7_21-release:1.5
+	cygwin-1_7_20-release:1.4
+	cygwin-1_7_19-release:1.4
+	cygwin-64bit-postmerge:1.4
+	cygwin-64bit-premerge-branch:1.4.0.4
+	cygwin-64bit-premerge:1.4
+	cygwin-1_7_18-release:1.4
+	newlib-2_0_0:1.4
+	cygwin-1_7_17-release:1.4
+	cygwin-64bit-branch:1.4.0.2
+	cygwin-1_7_16-release:1.4
+	cygwin-1_7_15-release:1.4
+	cygwin-1_7_14_2-release:1.4
+	cygwin-1_7_14-release:1.4
+	cygwin-1_7_12-release:1.4
+	cygwin-1_7_11-release:1.4
+	cygwin-1_7_10-release:1.4
+	newlib-1_20_0:1.4
+	cygwin-1_7_9-release:1.4
+	cygwin-1_7_8-release:1.4
+	newlib-1_19_0:1.4
+	cygwin-1_7_7-release:1.4
+	cygwin-1_7_5-release:1.4
+	cygwin-1_7_4-release:1.4
+	cygwin-1_7_3-release:1.4
+	cygwin-1_7_2-release:1.4
+	newlib-1_18_0:1.4
+	cygwin-1_7_1-release:1.4
+	newlib-1_17_0-arc:1.1.0.6
+	binutils-arc-20080908-branch:1.1.0.4
+	binutils-arc-20080908-branchpoint:1.1
+	newlib-1_17_0:1.1
+	newlib-1_16_0:1.1
+	newlib-1_15_0:1.1
+	newlib-csl-sourcerygxx-3_4_4-25:1.1
+	cr-0x5f1:1.1.0.2;
+locks; strict;
+comment	@ * @;
+
+
+1.5
+date	2013.06.10.15.27.43;	author corinna;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2009.06.16.17.44.20;	author corinna;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2009.03.26.10.04.40;	author corinna;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2009.03.24.10.13.27;	author corinna;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2006.06.22.17.59.52;	author jjohnstn;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.5
+log
+@	* libc/stdlib/gdtoa-gethex.c (__hexdig): Constify.
+	(hexdig_init): Remove.
+	(__hexdig_fun): New function.
+	hexdig_init, added __hexdig_fun
+	(gethex): Call __get_hexdig macro rather than hexdig.
+	* libc/stdlib/gdtoa-hexnan.c (hexnan): Constify fpi argument.
+	Call __get_hexdig macro rather than hexdig.
+	* libc/stdlib/ldtoa.c: Throughout constify functions arguments where
+	required by constifying the following arrays.
+	(ezero): Constify.
+	(eone): Constify.
+	(ermsg): Constify.
+	(etens): Constify.
+	(emtens): Constify.
+	(nan113): Constify.
+	(nan64): Constify.
+	(nan53): Constify.
+	(nan24): Constify.
+	* libc/stdlib/mprec.h (__get_hexdig): Define.
+	(gethex): Constify args in declaration where appropriate.
+	(hexnan): Ditto.
+	(hexdig_init): Remove declaration.
+	(__hexdig_fun): Declare.
+	* libc/stdlib/strtod.c (fpi): Constify.
+	(fpinan): Constify.
+@
+text
+@/****************************************************************
+
+The author of this software is David M. Gay.
+
+Copyright (C) 1998 by Lucent Technologies
+All Rights Reserved
+
+Permission to use, copy, modify, and distribute this software and
+its documentation for any purpose and without fee is hereby
+granted, provided that the above copyright notice appear in all
+copies and that both that the copyright notice and this
+permission notice and warranty disclaimer appear in supporting
+documentation, and that the name of Lucent or any of its entities
+not be used in advertising or publicity pertaining to
+distribution of the software without specific, written prior
+permission.
+
+LUCENT DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE,
+INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS.
+IN NO EVENT SHALL LUCENT OR ANY OF ITS ENTITIES BE LIABLE FOR ANY
+SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER
+IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
+ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
+THIS SOFTWARE.
+
+****************************************************************/
+
+/* Please send bug reports to David M. Gay (dmg at acm dot org,
+ * with " at " changed at "@@" and " dot " changed to ".").	*/
+
+#include <_ansi.h>
+#include <reent.h>
+#include <string.h>
+#include "mprec.h"
+#include "gdtoa.h"
+#include "gd_qnan.h"
+#include "locale.h"
+
+#if !defined(PREFER_SIZE_OVER_SPEED) && !defined(__OPTIMIZE_SIZE__) && !defined(_SMALL_HEXDIG)
+_CONST unsigned char __hexdig[256]=
+{
+	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+	16,17,18,19,20,21,22,23,24,25,0,0,0,0,0,0,
+	0,26,27,28,29,30,31,0,0,0,0,0,0,0,0,0,
+	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+	0,26,27,28,29,30,31,0,0,0,0,0,0,0,0,0,
+	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+};
+#else /* !defined(PREFER_SIZE_OVER_SPEED) && !defined(__OPTIMIZE_SIZE__) && !defined(_SMALL_HEXDIG) */
+unsigned char
+_DEFUN (__hexdig_fun, (c),
+		unsigned char c)
+{
+	if(c>='0' && c<='9') return c-'0'+0x10;
+	else if(c>='a' && c<='f') return c-'a'+0x10+10;
+	else if(c>='A' && c<='F') return c-'A'+0x10+10;
+	else return 0;
+}
+#endif /* !defined(PREFER_SIZE_OVER_SPEED) && !defined(__OPTIMIZE_SIZE__) && !defined(_SMALL_HEXDIG) */
+
+static void
+_DEFUN(rshift, (b, k),
+	_Bigint *b _AND
+	int k)
+{
+	__ULong *x, *x1, *xe, y;
+	int n;
+
+	x = x1 = b->_x;
+	n = k >> kshift;
+	if (n < b->_wds) {
+		xe = x + b->_wds;
+		x += n;
+		if (k &= kmask) {
+			n = ULbits - k;
+			y = *x++ >> k;
+			while(x < xe) {
+				*x1++ = (y | (*x << n)) & ALL_ON;
+				y = *x++ >> k;
+				}
+			if ((*x1 = y) !=0)
+				x1++;
+			}
+		else
+			while(x < xe)
+				*x1++ = *x++;
+		}
+	if ((b->_wds = x1 - b->_x) == 0)
+		b->_x[0] = 0;
+}
+
+static _Bigint *
+_DEFUN (increment, (ptr, b),
+	struct _reent *ptr _AND
+	_Bigint *b)
+{
+	__ULong *x, *xe;
+	_Bigint *b1;
+#ifdef Pack_16
+	__ULong carry = 1, y;
+#endif
+
+	x = b->_x;
+	xe = x + b->_wds;
+#ifdef Pack_32
+	do {
+		if (*x < (__ULong)0xffffffffL) {
+			++*x;
+			return b;
+			}
+		*x++ = 0;
+		} while(x < xe);
+#else
+	do {
+		y = *x + carry;
+		carry = y >> 16;
+		*x++ = y & 0xffff;
+		if (!carry)
+			return b;
+		} while(x < xe);
+	if (carry)
+#endif
+	{
+		if (b->_wds >= b->_maxwds) {
+			b1 = Balloc(ptr, b->_k+1);
+			Bcopy(b1, b);
+			Bfree(ptr, b);
+			b = b1;
+			}
+		b->_x[b->_wds++] = 1;
+		}
+	return b;
+}
+
+
+int
+_DEFUN(gethex, (ptr, sp, fpi, exp, bp, sign),
+	struct _reent *ptr _AND
+	_CONST char **sp _AND
+	_CONST FPI *fpi _AND
+	Long *exp _AND
+	_Bigint **bp _AND
+	int sign)
+{
+	_Bigint *b;
+	_CONST unsigned char *decpt, *s0, *s, *s1;
+	int esign, havedig, irv, k, n, nbits, up, zret;
+	__ULong L, lostbits, *x;
+	Long e, e1;
+	unsigned char *decimalpoint = (unsigned char *)
+				      _localeconv_r (ptr)->decimal_point;
+	size_t decp_len = strlen ((const char *) decimalpoint);
+	unsigned char decp_end = decimalpoint[decp_len - 1];
+
+	havedig = 0;
+	s0 = *(_CONST unsigned char **)sp + 2;
+	while(s0[havedig] == '0')
+		havedig++;
+	s0 += havedig;
+	s = s0;
+	decpt = 0;
+	zret = 0;
+	e = 0;
+	if (!__get_hexdig(*s)) {
+		zret = 1;
+		if (strncmp ((const char *) s, (const char *) decimalpoint,
+			     decp_len) != 0)
+			goto pcheck;
+		decpt = (s += decp_len);
+		if (!__get_hexdig(*s))
+			goto pcheck;
+		while(*s == '0')
+			s++;
+		if (__get_hexdig(*s))
+			zret = 0;
+		havedig = 1;
+		s0 = s;
+		}
+	while(__get_hexdig(*s))
+		s++;
+	if (strncmp ((const char *) s, (const char *) decimalpoint,
+		     decp_len) == 0
+	    && !decpt) {
+		decpt = (s += decp_len);
+		while(__get_hexdig(*s))
+			s++;
+		}
+	if (decpt)
+		e = -(((Long)(s-decpt)) << 2);
+ pcheck:
+	s1 = s;
+	switch(*s) {
+	  case 'p':
+	  case 'P':
+		esign = 0;
+		switch(*++s) {
+		  case '-':
+			esign = 1;
+			/* no break */
+		  case '+':
+			s++;
+		  }
+		if ((n = __get_hexdig(*s)) == 0 || n > 0x19) {
+			s = s1;
+			break;
+			}
+		e1 = n - 0x10;
+		while((n = __get_hexdig(*++s)) !=0 && n <= 0x19)
+			e1 = 10*e1 + n - 0x10;
+		if (esign)
+			e1 = -e1;
+		e += e1;
+	  }
+	*sp = (char*)s;
+	if (zret)
+		return havedig ? STRTOG_Zero : STRTOG_NoNumber;
+	n = s1 - s0 - 1;
+	for(k = 0; n > 7; n >>= 1)
+		k++;
+	b = Balloc(ptr, k);
+	x = b->_x;
+	n = 0;
+	L = 0;
+	while(s1 > s0) {
+		if (*--s1 == decp_end && s1 - decp_len + 1 >= s0
+		    && strncmp ((const char *) s1 - decp_len + 1,
+				(const char *) decimalpoint, decp_len) == 0) {
+			s1 -= decp_len - 1; /* Note the --s1 above! */
+			continue;
+		}
+		if (n == 32) {
+			*x++ = L;
+			L = 0;
+			n = 0;
+			}
+		L |= (__get_hexdig(*s1) & 0x0f) << n;
+		n += 4;
+		}
+	*x++ = L;
+	b->_wds = n = x - b->_x;
+	n = 32*n - hi0bits(L);
+	nbits = fpi->nbits;
+	lostbits = 0;
+	x = b->_x;
+	if (n > nbits) {
+		n -= nbits;
+		if (any_on(b,n)) {
+			lostbits = 1;
+			k = n - 1;
+			if (x[k>>kshift] & 1 << (k & kmask)) {
+				lostbits = 2;
+				if (k > 1 && any_on(b,k-1))
+					lostbits = 3;
+				}
+			}
+		rshift(b, n);
+		e += n;
+		}
+	else if (n < nbits) {
+		n = nbits - n;
+		b = lshift(ptr, b, n);
+		e -= n;
+		x = b->_x;
+		}
+	if (e > fpi->emax) {
+ ovfl:
+		Bfree(ptr, b);
+		*bp = 0;
+		return STRTOG_Infinite | STRTOG_Overflow | STRTOG_Inexhi;
+		}
+	irv = STRTOG_Normal;
+	if (e < fpi->emin) {
+		irv = STRTOG_Denormal;
+		n = fpi->emin - e;
+		if (n >= nbits) {
+			switch (fpi->rounding) {
+			  case FPI_Round_near:
+				if (n == nbits && (n < 2 || any_on(b,n-1)))
+					goto one_bit;
+				break;
+			  case FPI_Round_up:
+				if (!sign)
+					goto one_bit;
+				break;
+			  case FPI_Round_down:
+				if (sign) {
+ one_bit:
+					*exp = fpi->emin;
+					x[0] = b->_wds = 1;
+					*bp = b;
+					return STRTOG_Denormal | STRTOG_Inexhi
+						| STRTOG_Underflow;
+					}
+			  }
+			Bfree(ptr, b);
+			*bp = 0;
+			return STRTOG_Zero | STRTOG_Inexlo | STRTOG_Underflow;
+			}
+		k = n - 1;
+		if (lostbits)
+			lostbits = 1;
+		else if (k > 0)
+			lostbits = any_on(b,k);
+		if (x[k>>kshift] & 1 << (k & kmask))
+			lostbits |= 2;
+		nbits -= n;
+		rshift(b,n);
+		e = fpi->emin;
+		}
+	if (lostbits) {
+		up = 0;
+		switch(fpi->rounding) {
+		  case FPI_Round_zero:
+			break;
+		  case FPI_Round_near:
+		    if ((lostbits & 2)
+			    && ((lostbits & 1) | (x[0] & 1)))
+				up = 1;
+			break;
+		  case FPI_Round_up:
+			up = 1 - sign;
+			break;
+		  case FPI_Round_down:
+			up = sign;
+		  }
+		if (up) {
+			k = b->_wds;
+			b = increment(ptr, b);
+			x = b->_x;
+			if (irv == STRTOG_Denormal) {
+				if (nbits == fpi->nbits - 1
+				 && x[nbits >> kshift] & 1 << (nbits & kmask))
+					irv =  STRTOG_Normal;
+				}
+			else if ((b->_wds > k)
+			 || ((n = nbits & kmask) !=0
+			     && (hi0bits(x[k-1]) < 32-n))) {
+				rshift(b,1);
+				if (++e > fpi->emax)
+					goto ovfl;
+				}
+			irv |= STRTOG_Inexhi;
+			}
+		else
+			irv |= STRTOG_Inexlo;
+		}
+	*bp = b;
+	*exp = e;
+	return irv;
+}
+
+@
+
+
+1.4
+log
+@	* libc/stdio/vfprintf.c (_VFPRINTF_R): Use actual length of
+	radix char instead of assuming length 1.
+	* libc/stdlib/gdtoa-gethex.c: Remove use of USE_LOCALE.
+	(gethex): Allow multibyte decimal point.
+	Fix compiler warnings due to different signedness of pointer types.
+	* libc/stdlib/strtod.c: Remove use of USE_LOCALE.
+	(_strtod_r): Allow multibyte decimal point.
+	* libc/stdlib/wcstod.c (_wcstod_r): Evaluate correct wide char
+	endptr position if the decimal point is a multibyte char.
+@
+text
+@d40 2
+a41 7
+unsigned char hexdig[256];
+
+static void
+_DEFUN (htinit, (h, s, inc),
+	unsigned char *h _AND
+	unsigned char *s _AND
+	int inc)
+d43 21
+a63 7
+	int i, j;
+	for(i = 0; (j = s[i]) !=0; i++)
+		h[j] = i + inc;
+}
+
+void
+_DEFUN_VOID (hexdig_init)
+d65 4
+a68 4
+#define USC (unsigned char *)
+	htinit(hexdig, USC "0123456789", 0x10);
+	htinit(hexdig, USC "abcdef", 0x10 + 10);
+	htinit(hexdig, USC "ABCDEF", 0x10 + 10);
+d70 1
+d151 1
+a151 1
+	FPI *fpi _AND
+a165 2
+	if (!hexdig['0'])
+		hexdig_init();
+d175 1
+a175 1
+	if (!hexdig[*s]) {
+d181 1
+a181 1
+		if (!hexdig[*s])
+d185 1
+a185 1
+		if (hexdig[*s])
+d190 1
+a190 1
+	while(hexdig[*s])
+d196 1
+a196 1
+		while(hexdig[*s])
+d214 1
+a214 1
+		if ((n = hexdig[*s]) == 0 || n > 0x19) {
+d219 1
+a219 1
+		while((n = hexdig[*++s]) !=0 && n <= 0x19)
+d247 1
+a247 1
+		L |= (hexdig[*s1] & 0x0f) << n;
+@
+
+
+1.3
+log
+@	Revert erroneously checked in files.
+@
+text
+@a37 2
+
+#ifdef USE_LOCALE
+a38 1
+#endif
+d151 4
+a154 5
+#ifdef USE_LOCALE
+	unsigned char decimalpoint = *localeconv()->decimal_point;
+#else
+#define decimalpoint '.'
+#endif
+d169 2
+a170 1
+		if (*s != decimalpoint)
+d172 1
+a172 1
+		decpt = ++s;
+d184 4
+a187 2
+	if (*s == decimalpoint && !decpt) {
+		decpt = ++s;
+d228 4
+a231 1
+		if (*--s1 == decimalpoint)
+d233 1
+@
+
+
+1.2
+log
+@	* libc/ctype/iswalpha.c: Handle all wchar_t as unicode on
+	_MB_CAPABLE systems.
+	* libc/ctype/iswblank.c: Ditto.
+	* libc/ctype/iswcntrl.c: Ditto.
+	* libc/ctype/iswprint.c: Ditto.
+	* libc/ctype/iswpunct.c: Ditto.
+	* libc/ctype/iswspace.c: Ditto.
+	* libc/ctype/jp2uc.c (__jp2uc): On Cygwin, just return c.
+	Explain why.
+	* libc/ctype/towlower.c: Ditto.
+	* libc/ctype/towupper.c: Ditto.
+	* libc/include/sys/config.h: Define _MB_EXTENDED_CHARSETS_ISO
+	and _MB_EXTENDED_CHARSETS_WINDOWS if _MB_EXTENDED_CHARSETS_ALL is
+	defined.  Define _MB_EXTENDED_CHARSETS_ALL on Cygwin only for now.
+	* libc/include/sys/reent.h (struct _reent): Mark _current_category
+	and _current_locale as unused.
+	* libc/locale/locale.c: Add new charset support to documentation.
+	Include ../stdio/local.h from here.
+	(lc_ctype_charset): Set to "ASCII" by default.
+	(lc_message_charset): Ditto.
+	(_setlocale_r): Don't set _current_category and _current_locale.
+	(loadlocale): Add Cygwin codepage support.  On _MB_CAPABLE
+	systems, set __mbtowc and __wctomb function pointers to function
+	corresponding with current charset.  Don't allow non-existant
+	ISO-8859-12 charset.  Add support for Windows singlebyte codepages.
+	On Cygwin, add support for GBK, CP949, and BIG5.  On Cygwin,
+	call __set_ctype() in case the catorgy is LC_CTYPE.  Don't set
+	_current_category and _current_locale.
+	* libc/stdlib/Makefile.am (GENERAL_SOURCES): Add sb_charsets.c.
+	* libc/stdlib/Makefile.in: Regenerate.
+	* libc/stdlib/local.h: Add prototype for __locale_charset.
+	Add prototypes for __mbtowc and __wctomb pointers.
+	Add prototypes for charset-specific _wctomb_r and _mbtowc_r
+	functions.
+	Declare tables and functions from sb_charsets.c.
+	* libc/stdlib/mbtowc_r.c (__mbtowc): Define.  Set to __ascii_mbtowc
+	by default.
+	(_mbtowc_r): Just call __mbtowc from here.
+	(__ascii_mbtowc): New function.
+	(__iso_mbtowc): New function.
+	(__cp_mbtowc): New function.
+	(__utf8_mbtowc): New function.
+	(__sjis_mbtowc): New function.  Disable on Cygwin.
+	(__eucjp_mbtowc): New function.  Disable on Cygwin.
+	(__jis_mbtowc): New function.  Disable on Cygwin.
+	* libc/stdlib/sb_charsets.c: New file, adding singlebyte to UTF
+	conversion tables for all ISO and CP charsets.
+	(__iso_8859_index): New function.
+	(__cp_index): New function.
+	* libc/stdlib/wctomb_r.c (__wctomb): Define.  Set to __ascii_wctomb
+	by default.
+	(_wctomb_r): Just call __wctomb from here.
+	(__ascii_wctomb): New function.
+	(__utf8_wctomb): New function.
+	(__sjis_wctomb): New function.  Disable on Cygwin.
+	(__eucjp_wctomb): New function.  Disable on Cygwin.
+	(__jis_wctomb): New function.  Disable on Cygwin.
+	(__iso_wctomb): New function.
+	(__cp_wctomb): New function.
+@
+text
+@d38 2
+d41 1
+d154 5
+a158 4
+	unsigned char *decimalpoint = (unsigned char *)
+				      localeconv()->decimal_point;
+	size_t decp_len = strlen ((const char *) decimalpoint);
+	unsigned char decp_end = decimalpoint[decp_len - 1];
+d173 1
+a173 1
+		if (strcmp ((const char *) s, (const char *) decimalpoint) != 0)
+d175 1
+a175 1
+		decpt = (s += decp_len);
+d187 2
+a188 3
+	if (strcmp ((const char *) s, (const char *) decimalpoint) == 0
+	    && !decpt) {
+		decpt = (s += decp_len);
+d229 1
+a229 4
+		if (*--s1 == decp_end && s1 - decp_len + 1 >= s0
+		    && strcmp ((const char *) s1 - decp_len + 1,
+			       (const char *) decimalpoint) == 0) {
+			s1 -= decp_len - 1; /* Note the --s1 above! */
+a230 1
+		}
+@
+
+
+1.1
+log
+@
+2006-06-22  Jeff Johnston  <jjohnstn@@redhat.com>
+
+        * libc/stdlib/Makefile.am: Add new gdtoa routines.
+        * libc/stdlib/Makefile.in: Regenerated.
+        * libc/stdlib/gd_qnan.h: New file.
+        * libc/stdlib/gdtoa-gethex.c: Ditto.
+        * libc/stdlib/gdtoa-hexnan.c: Ditto.
+        * libc/stdlib/gdtoa.h: Ditto.
+        * libc/stdlib/mprec.c: Add new helper routines needed by
+        the new gdtoa code.
+        * libc/stdlib/mprec.h: Integrate some defines and prototypes
+        used by gdtoa routines here.
+        * libc/stdlib/strtod.c: Rebased on David M. Gay's gdtoa-strtod.c
+        which adds C99 support such as nan, inf, and hexadecimal input
+        format.
+@
+text
+@a37 2
+
+#ifdef USE_LOCALE
+a38 1
+#endif
+d151 4
+a154 5
+#ifdef USE_LOCALE
+	unsigned char decimalpoint = *localeconv()->decimal_point;
+#else
+#define decimalpoint '.'
+#endif
+d169 1
+a169 1
+		if (*s != decimalpoint)
+d171 1
+a171 1
+		decpt = ++s;
+d183 3
+a185 2
+	if (*s == decimalpoint && !decpt) {
+		decpt = ++s;
+d226 4
+a229 1
+		if (*--s1 == decimalpoint)
+d231 1
+@
+

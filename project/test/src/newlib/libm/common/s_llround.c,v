@@ -1,0 +1,292 @@
+head	1.3;
+access;
+symbols
+	cygwin-1_7_35-release:1.3
+	cygwin-1_7_34-release:1.3
+	newlib-2_2_0:1.3.0.6
+	cygwin-1_7_33-release:1.3
+	cygwin-1_7_32-release:1.3
+	cygwin-1_7_31-release:1.3
+	cygwin-1_7_30-release:1.3
+	cygwin-1_7_29-release:1.3
+	cygwin-1_7_28-release:1.3
+	newlib-2_1_0:1.3
+	cygwin-1_7_27-release:1.3
+	cygwin-1_7_26-release:1.3
+	cygwin-1_7_25-release:1.3
+	cygwin-1_7_24-release:1.3
+	cygwin-1_7_23-release:1.3
+	cygwin-1_7_22-release:1.3
+	cygwin-1_7_21-release:1.3
+	cygwin-1_7_20-release:1.3
+	cygwin-1_7_19-release:1.3
+	cygwin-64bit-postmerge:1.3
+	cygwin-64bit-premerge-branch:1.3.0.4
+	cygwin-64bit-premerge:1.3
+	cygwin-1_7_18-release:1.3
+	newlib-2_0_0:1.3
+	cygwin-1_7_17-release:1.3
+	cygwin-64bit-branch:1.3.0.2
+	cygwin-1_7_16-release:1.3
+	cygwin-1_7_15-release:1.3
+	cygwin-1_7_14_2-release:1.3
+	cygwin-1_7_14-release:1.3
+	cygwin-1_7_12-release:1.3
+	cygwin-1_7_11-release:1.3
+	cygwin-1_7_10-release:1.3
+	newlib-1_20_0:1.3
+	cygwin-1_7_9-release:1.3
+	cygwin-1_7_8-release:1.3
+	newlib-1_19_0:1.3
+	cygwin-1_7_7-release:1.3
+	cygwin-1_7_5-release:1.1
+	cygwin-1_7_4-release:1.1
+	cygwin-1_7_3-release:1.1
+	cygwin-1_7_2-release:1.1
+	newlib-1_18_0:1.1
+	cygwin-1_7_1-release:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.3
+date	2010.08.03.18.21.20;	author jjohnstn;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2010.07.20.01.33.05;	author davek;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2009.03.25.19.13.01;	author jjohnstn;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.3
+log
+@
+2010-08-03  Craig Howland <howland@@LGSInnovations.com>
+
+        * libm/common/s_lrint.c (lrint):  Annotate shift operations with
+        possible shift amount ranges, and use SAFE_RIGHT_SHIFT to avoid
+        undefined behaviour.
+        * libm/common/s_llrint.c (llrint):  Likewise.
+        * libm/common/s_lround.c (lround):  Correct some comments on ranges.
+        * libm/common/s_llround.c (llround):  Likewise.
+@
+text
+@/* lround adapted to be llround for Newlib, 2009 by Craig Howland.  */
+/*
+ * ====================================================
+ * Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+ *
+ * Developed at SunPro, a Sun Microsystems, Inc. business.
+ * Permission to use, copy, modify, and distribute this
+ * software is freely granted, provided that this notice 
+ * is preserved.
+ * ====================================================
+ */
+
+#include "fdlibm.h"
+
+#ifndef _DOUBLE_IS_32BITS
+
+long long int
+llround(double x)
+{
+  __int32_t sign, exponent_less_1023;
+  /* Most significant word, least significant word. */
+  __uint32_t msw, lsw;
+  long long int result;
+  
+  EXTRACT_WORDS(msw, lsw, x);
+
+  /* Extract sign. */
+  sign = ((msw & 0x80000000) ? -1 : 1);
+  /* Extract exponent field. */
+  exponent_less_1023 = ((msw & 0x7ff00000) >> 20) - 1023;
+  msw &= 0x000fffff;
+  msw |= 0x00100000;
+
+  /* exponent_less_1023 in [-1023,1024] */
+  if (exponent_less_1023 < 20)
+    {
+      /* exponent_less_1023 in [-1023,19] */
+      if (exponent_less_1023 < 0)
+        {
+          if (exponent_less_1023 < -1)
+            return 0;
+          else
+            return sign;
+        }
+      else
+        {
+          /* exponent_less_1023 in [0,19] */
+	  /* shift amt in [0,19] */
+          msw += 0x80000 >> exponent_less_1023;
+	  /* shift amt in [20,1] */
+          result = msw >> (20 - exponent_less_1023);
+        }
+    }
+  else if (exponent_less_1023 < (8 * sizeof (long long int)) - 1)
+    {
+      /* 64bit longlong: exponent_less_1023 in [20,62] */
+      if (exponent_less_1023 >= 52)
+	/* 64bit longlong: exponent_less_1023 in [52,62] */
+	/* 64bit longlong: shift amt in [32,42] */
+        result = ((long long int) msw << (exponent_less_1023 - 20))
+		    /* 64bit longlong: shift amt in [0,10] */
+                    | (lsw << (exponent_less_1023 - 52));
+      else
+        {
+	  /* 64bit longlong: exponent_less_1023 in [20,51] */
+          unsigned int tmp = lsw
+		    /* 64bit longlong: shift amt in [0,31] */
+                    + (0x80000000 >> (exponent_less_1023 - 20));
+          if (tmp < lsw)
+            ++msw;
+	  /* 64bit longlong: shift amt in [0,31] */
+          result = ((long long int) msw << (exponent_less_1023 - 20))
+		    /* ***64bit longlong: shift amt in [32,1] */
+                    | SAFE_RIGHT_SHIFT (tmp, (52 - exponent_less_1023));
+        }
+    }
+  else
+    /* Result is too large to be represented by a long long int. */
+    return (long long int)x;
+
+  return sign * result;
+}
+
+#endif /* _DOUBLE_IS_32BITS */
+@
+
+
+1.2
+log
+@	* libm/common/fdlibm.h (SAFE_LEFT_SHIFT): New macro definition.
+	(SAFE_RIGHT_SHIFT): Likewise.
+	* libm/common/s_llround.c (llround): Annotate shift operations with
+	possible shift amount ranges, and use SAFE_RIGHT_SHIFT to avoid
+	undefined behaviour.
+	* libm/common/s_lround.c (lround): Likewise.
+@
+text
+@d34 1
+a34 1
+  /* exponent_less_1023 in [-1024,1023] */
+d37 1
+a37 1
+      /* exponent_less_1023 in [-1024,19] */
+@
+
+
+1.1
+log
+@
+2009-03-25  Craig Howland <howland@@LGSInnovations.com>
+
+	* libc/include/math.h:  (llround, llroundf): Declare.
+	* libm/common/s_llround.c: New file, implementing llround().
+	* libm/common/sf_llround.c: New file, implementing llroundf().
+	* libm/common/sf_lround.c: Remove spurious cast in _DOUBLE_IS_32BITS
+	version of function.
+	* libm/common/sf_lrint.c: Ditto.
+	* libm/common/sf_logb.c:  Corrected return for subnormal argument
+	by replacing existing function with a version created from sf_ilogb.c.
+	* libm/common/s_logb.c: Ditto, except starting point s_ilogb.c.  Also
+	added documentation for logb() and logbf().
+	* libm/common/s_signbit.c:  Add signbit() documentation.
+	* libm/common/s_log2.c: Update return values to match what w_log2.c has,
+	since log2 uses log(); add note about being derived instead of direct.
+	* libm/common/sf_fma.c: Add casts to attempt to get correct results,
+	as well as comments pointing out problems with the implementation.
+	* libm/common/s_fma.c: Add fma() and fmaf() documentation.
+	* libm/common/sf_remquo.c: Incorrect quotient returns for large values
+	corrected by discarding existing function and replacing with Sun
+	verion, with some enhancements.
+	* libm/common/s_remquo.c: Ditto.  Add remquo() and remquof()
+	documentation.
+	* libm/common/s_fmax.c: Add fmax() and fmaxf() documentation.
+	* libm/common/s_fmin.c: Add fmin() and fminf() documentation.
+	* libm/common/s_fdim.c: Return NAN for NAN arg, add fdim() and fdimf()
+	documentation.
+	* libm/common/sf_fdim.c: Return NAN for NAN arg, HUGE_VALF for inf arg.
+	* libm/common/s_trunc.c: Add trunc() and truncf() documentation.
+	* libm/common/s_rint.c: Add rint() and rintf() documentation.
+	* libm/common/s_round.c: Add round() and roundf() documentation.
+	* libm/common/s_scalbn.c: Add scalbln() and scalblnf() documentation.
+	* libm/common/s_infinity.c: Add infinity() and infinityf()
+	documentation.
+	* libm/common/s_lround.c: Add lround(), lroundf(), llround(), and
+	llroundf() documentation.
+	* libm/common/s_lrint.c: Add lrint(), lrintf(), llrint(), and llrintf()
+	documentation.
+	* libm/common/isgreater.c: New file for documenting math.h function-like
+	macros isgreater(), isgreaterequal(), isless(), islessequal(),
+	islessgreater(), and isunordered().
+	* libm/common/s_isnan.c: Add documentation for function-like macros
+	fpclassify(), isfinite(), isinf(), isnan(), and isnormal().
+	* libm/common/s_nearbyint.c: Add nearbyint() and nearbyintf()
+	documentation.
+	* libm/common/Makefile.am: Add s_llround.c (src); sf_llround.c (fsrc);
+	s_fdim.def, s_fma.def, s_fmax.def, s_fmin.def,
+	s_logb.def, s_lrint.def, s_lround.def, s_nearbyint.def, s_remquo.def,
+        s_rint.def, s_round.def, s_signbit.def, s_trunc.def, and
+        isgreater.def (chobj);
+	re-name all existing chew files (chobj) to match source file base
+	names (put in underscores), delete all special targets for chew files
+	(leaving all to be generated by rule).
+	* libm/common/Makefile.in: regenerate.
+	* libm/math/w_exp2.c: Add "base 2" to documentation description (and
+	delete TRAD_SYNOPSIS).
+	* libm/math/w_gamma.c: Add tgamma() and tgammaf() documentation, along
+	with some history behind the function names.
+	* libm/math/math.tex: Add includes for newly-added documentation (see
+	.def additions to common/Makefile.am and math/Makefile.am in this
+	ChangeLog list), adjusted existing .def file names to match source file
+	base names (added underscores); add mention of HUGE_VALF; rename
+	"Version of library" section to "Error Handling" and add some text
+	about floating-point exception; added section "Standards Compliance And
+	Portability".
+	* libm/math/Makefile.am: Add w_exp2.def (chobj);
+	re-name all existing chew files (chobj) to match source file base
+	names, delete all special targets for chew files (leaving all to be
+	generated by rule).
+	* libm/math/Makefile.in: regenerated
+	* doc/makedoc.c: Change silent ignoring of commands < 5 characters
+	to a failure when reading macro file for commands < 4 characters;
+	add -v (verbose) option for printing some debugging information;
+	get rid of spurious translation of "@@*" to "*" (no source files used @@*,
+	so no existing doc pages were affected); clean up some compiler
+	warnings.
+	* doc/doc.str: add BUGS and SEEALSO sections (to match texi2pod.pl
+	which has them); Remove ITEM command (redundant with makedoc built-in
+	"o", not used in any present source file so nothing is lost, anyway).
+	* HOWTO: New file to hold information for maintainers regarding how
+	to do things.  Initial sections on documentation and ELIX levels.
+@
+text
+@d34 1
+d37 1
+d47 2
+d50 1
+d56 1
+d58 5
+a62 1
+        result = ((long long int) msw << (exponent_less_1023 - 20)) | (lsw << (exponent_less_1023 - 52));
+d65 4
+a68 1
+          unsigned int tmp = lsw + (0x80000000 >> (exponent_less_1023 - 20));
+d71 4
+a74 1
+          result = ((long long int) msw << (exponent_less_1023 - 20)) | (tmp >> (52 - exponent_less_1023));
+@
+

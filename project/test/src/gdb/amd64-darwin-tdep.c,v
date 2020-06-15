@@ -1,0 +1,695 @@
+head	1.11;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.10
+	gdb_7_6-2013-04-26-release:1.10
+	gdb_7_6-branch:1.10.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.10
+	gdb_7_5_1-2012-11-29-release:1.8
+	gdb_7_5-2012-08-17-release:1.8
+	gdb_7_5-branch:1.8.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.8
+	gdb_7_4_1-2012-04-26-release:1.4.4.1
+	gdb_7_4-2012-01-24-release:1.4.4.1
+	gdb_7_4-branch:1.4.0.4
+	gdb_7_4-2011-12-13-branchpoint:1.4
+	gdb_7_3_1-2011-09-04-release:1.4
+	gdb_7_3-2011-07-26-release:1.4
+	gdb_7_3-branch:1.4.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.4
+	gdb_7_2-2010-09-02-release:1.2
+	gdb_7_2-branch:1.2.0.4
+	gdb_7_2-2010-07-07-branchpoint:1.2
+	gdb_7_1-2010-03-18-release:1.2
+	gdb_7_1-branch:1.2.0.2
+	gdb_7_1-2010-02-18-branchpoint:1.2
+	gdb_7_0_1-2009-12-22-release:1.1
+	gdb_7_0-2009-10-06-release:1.1
+	gdb_7_0-branch:1.1.0.4
+	gdb_7_0-2009-09-16-branchpoint:1.1
+	msnyder-checkpoint-072509-branch:1.1.0.2
+	msnyder-checkpoint-072509-branchpoint:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.11
+date	2013.05.06.12.33.00;	author brobecke;	state Exp;
+branches;
+next	1.10;
+
+1.10
+date	2013.02.12.19.03.54;	author palves;	state Exp;
+branches;
+next	1.9;
+
+1.9
+date	2013.01.01.06.32.37;	author brobecke;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2012.05.18.21.02.47;	author sergiodj;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2012.03.02.00.06.12;	author jkratoch;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2012.02.20.09.40.57;	author gingold;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2012.01.04.08.16.56;	author brobecke;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2011.01.07.19.36.15;	author msnyder;	state Exp;
+branches
+	1.4.4.1;
+next	1.3;
+
+1.3
+date	2011.01.01.15.32.56;	author brobecke;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2010.01.01.07.31.29;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2009.07.03.12.06.36;	author gingold;	state Exp;
+branches;
+next	;
+
+1.4.4.1
+date	2012.01.06.04.43.04;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.11
+log
+@amd64-darwin-tdep.c: Remove #include "gdb_assert.h"
+
+gdb_assert.h is already included from darwin-nat.h, so no need to
+include it again...
+
+gdb/ChangeLog:
+
+        * amd64-darwin-tdep.c: Remove #include "gdb_assert.h".
+@
+text
+@/* Darwin support for GDB, the GNU debugger.
+   Copyright (C) 1997-2013 Free Software Foundation, Inc.
+
+   Contributed by Apple Computer, Inc.
+
+   This file is part of GDB.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+#include "defs.h"
+#include "frame.h"
+#include "inferior.h"
+#include "gdbcore.h"
+#include "target.h"
+#include "floatformat.h"
+#include "symtab.h"
+#include "regcache.h"
+#include "libbfd.h"
+#include "objfiles.h"
+
+#include "i387-tdep.h"
+#include "amd64-tdep.h"
+#include "osabi.h"
+#include "ui-out.h"
+#include "symtab.h"
+#include "frame.h"
+#include "amd64-darwin-tdep.h"
+#include "i386-darwin-tdep.h"
+#include "solib.h"
+#include "solib-darwin.h"
+#include "dwarf2-frame.h"
+
+/* Offsets into the struct x86_thread_state64 where we'll find the saved regs.
+   From <mach/i386/thread_status.h> and amd64-tdep.h.  */
+int amd64_darwin_thread_state_reg_offset[] =
+{
+  0 * 8,			/* %rax */
+  1 * 8,			/* %rbx */
+  2 * 8,			/* %rcx */
+  3 * 8,			/* %rdx */
+  5 * 8,			/* %rsi */
+  4 * 8,			/* %rdi */
+  6 * 8,			/* %rbp */
+  7 * 8,			/* %rsp */
+  8 * 8,			/* %r8 ...  */
+  9 * 8,
+  10 * 8,
+  11 * 8,
+  12 * 8,
+  13 * 8,
+  14 * 8,
+  15 * 8,			/* ... %r15 */
+  16 * 8,			/* %rip */
+  17 * 8,			/* %rflags */
+  18 * 8,			/* %cs */
+  -1,				/* %ss */
+  -1,				/* %ds */
+  -1,				/* %es */
+  19 * 8,			/* %fs */
+  20 * 8			/* %gs */
+};
+
+const int amd64_darwin_thread_state_num_regs = 
+  ARRAY_SIZE (amd64_darwin_thread_state_reg_offset);
+
+/* Assuming THIS_FRAME is a Darwin sigtramp routine, return the
+   address of the associated sigcontext structure.  */
+
+static CORE_ADDR
+amd64_darwin_sigcontext_addr (struct frame_info *this_frame)
+{
+  struct gdbarch *gdbarch = get_frame_arch (this_frame);
+  enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
+  CORE_ADDR rbx;
+  gdb_byte buf[8];
+
+  /* A pointer to the ucontext is passed as the fourth argument
+     to the signal handler, which is saved in rbx.  */
+  get_frame_register (this_frame, AMD64_RBX_REGNUM, buf);
+  rbx = extract_unsigned_integer (buf, 8, byte_order);
+
+  /* The pointer to mcontext is at offset 48.  */
+  read_memory (rbx + 48, buf, 8);
+
+  /* First register (rax) is at offset 16.  */
+  return extract_unsigned_integer (buf, 8, byte_order) + 16;
+}
+
+static void
+x86_darwin_init_abi_64 (struct gdbarch_info info, struct gdbarch *gdbarch)
+{
+  struct gdbarch_tdep *tdep = gdbarch_tdep (gdbarch);
+
+  amd64_init_abi (info, gdbarch);
+
+  tdep->struct_return = reg_struct_return;
+
+  dwarf2_frame_set_signal_frame_p (gdbarch, darwin_dwarf_signal_frame_p);
+
+  tdep->sigtramp_p = i386_sigtramp_p;
+  tdep->sigcontext_addr = amd64_darwin_sigcontext_addr;
+  tdep->sc_reg_offset = amd64_darwin_thread_state_reg_offset;
+  tdep->sc_num_regs = amd64_darwin_thread_state_num_regs;
+
+  tdep->jb_pc_offset = 56;
+
+  set_solib_ops (gdbarch, &darwin_so_ops);
+}
+
+/* -Wmissing-prototypes */
+extern initialize_file_ftype _initialize_amd64_darwin_tdep;
+
+void
+_initialize_amd64_darwin_tdep (void)
+{
+  gdbarch_register_osabi (bfd_arch_i386, bfd_mach_x86_64,
+                          GDB_OSABI_DARWIN, x86_darwin_init_abi_64);
+}
+@
+
+
+1.10
+log
+@Consistent use of (C) after "Copyright".
+
+While writing the previous patch, I noticed that we're not consistent
+with the (C) in the copyright header.  The maintainers manual prefers
+having it, though also says it's optional.  We have over 10x more
+files with (C) than without in gdb's code, so I spent a few minutes
+grepping and fixing.  Funny enough, the testsuite has it backwards.
+I'll leave that for another time.
+
+gdb/
+2013-02-12  Pedro Alves  <palves@@redhat.com>
+
+	* amd64-darwin-tdep.c: Add (C) after Copyright.
+	* cli/cli-cmds.h: Ditto.
+	* cli/cli-decode.c: Ditto.
+	* cli/cli-decode.h: Ditto.
+	* cli/cli-dump.c: Ditto.
+	* cli/cli-dump.h: Ditto.
+	* cli/cli-interp.c: Ditto.
+	* cli/cli-logging.c: Ditto.
+	* cli/cli-script.c: Ditto.
+	* cli/cli-script.h: Ditto.
+	* cli/cli-setshow.c: Ditto.
+	* cli/cli-setshow.h: Ditto.
+	* cli/cli-utils.c: Ditto.
+	* cli/cli-utils.h: Ditto.
+	* config/alpha/nm-osf3.h: Ditto.
+	* config/djgpp/djconfig.sh: Ditto.
+	* config/i386/nm-fbsd.h: Ditto.
+	* config/i386/nm-i386gnu.h: Ditto.
+	* config/nm-linux.h: Ditto.
+	* config/nm-nto.h: Ditto.
+	* config/rs6000/nm-rs6000.h: Ditto.
+	* config/sparc/nm-sol2.h: Ditto.
+	* darwin-nat-info.c: Ditto.
+	* dfp.c: Ditto.
+	* dfp.h: Ditto.
+	* gdb-demangle.h: Ditto.
+	* i386-darwin-nat.c: Ditto.
+	* i386-darwin-tdep.c: Ditto.
+	* linux-fork.h: Ditto.
+	* m32c-tdep.c: Ditto.
+	* microblaze-linux-tdep.c: Ditto.
+	* microblaze-rom.c: Ditto.
+	* microblaze-tdep.c: Ditto.
+	* microblaze-tdep.h: Ditto.
+	* mips-linux-tdep.h: Ditto.
+	* ppc-ravenscar-thread.c: Ditto.
+	* ppc-ravenscar-thread.h: Ditto.
+	* prologue-value.c: Ditto.
+	* prologue-value.h: Ditto.
+	* ravenscar-thread.c: Ditto.
+	* ravenscar-thread.h: Ditto.
+	* sparc-ravenscar-thread.c: Ditto.
+	* sparc-ravenscar-thread.h: Ditto.
+	* tilegx-linux-tdep.c: Ditto.
+	* unwind_stop_reasons.def: Ditto.
+	* windows-nat.h: Ditto.
+	* xtensa-linux-tdep.c: Ditto.
+	* xtensa-xtregs.c: Ditto.
+	* regformats/regdat.sh: Ditto.
+	* regformats/regdef.h: Ditto.
+
+gdb/gdbserver/
+2013-02-12  Pedro Alves  <palves@@redhat.com>
+
+	* linux-xtensa-low.c: Ditto.
+	* xtensa-xtregs.c: Ditto.
+@
+text
+@a37 1
+#include "gdb_assert.h"
+@
+
+
+1.9
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@d2 1
+a2 1
+   Copyright 1997-2013 Free Software Foundation, Inc.
+@
+
+
+1.8
+log
+@2012-05-18  Sergio Durigan Junior  <sergiodj@@redhat.com>
+
+	* ada-lang.c:
+	* ada-tasks.c:
+	* ada-varobj.c:
+	* amd64-darwin-tdep.c:
+	* arm-symbian-tdep.c:
+	* arm-tdep.c:
+	* avr-tdep.c:
+	* ax-gdb.c:
+	* bfin-linux-tdep.c:
+	* breakpoint.c:
+	* c-valprint.c:
+	* cli/cli-cmds.c:
+	* coffread.c:
+	* cp-support.c:
+	* cris-tdep.c:
+	* dwarf2-frame-tailcall.c:
+	* dwarf2-frame.c:
+	* dwarf2expr.c:
+	* dwarf2loc.c:
+	* dwarf2read.c:
+	* elfread.c:
+	* eval.c:
+	* expprint.c:
+	* f-valprint.c:
+	* frv-tdep.c:
+	* h8300-tdep.c:
+	* hppa-hpux-tdep.c:
+	* hppa-tdep.c:
+	* hppanbsd-tdep.c:
+	* i386-nto-tdep.c:
+	* i386-tdep.c:
+	* i387-tdep.c:
+	* ia64-tdep.c:
+	* jit.c:
+	* linespec.c:
+	* linux-tdep.c:
+	* lm32-tdep.c:
+	* m2-valprint.c:
+	* m32c-tdep.c:
+	* m32r-rom.c:
+	* m32r-tdep.c:
+	* m68k-tdep.c:
+	* m68klinux-tdep.c:
+	* mi/mi-main.c:
+	* microblaze-tdep.c:
+	* mips-linux-tdep.c:
+	* mips-tdep.c:
+	* mn10300-tdep.c:
+	* p-valprint.c:
+	* parse.c:
+	* ppc-linux-tdep.c:
+	* ppc-sysv-tdep.c:
+	* printcmd.c:
+	* python/py-finishbreakpoint.c:
+	* python/py-inferior.c:
+	* python/py-infthread.c:
+	* python/py-type.c:
+	* python/python.c:
+	* remote-fileio.c:
+	* remote-m32r-sdi.c:
+	* remote-mips.c:
+	* reverse.c:
+	* rl78-tdep.c:
+	* rs6000-aix-tdep.c:
+	* rs6000-tdep.c:
+	* s390-tdep.c:
+	* score-tdep.c:
+	* sh64-tdep.c:
+	* skip.c:
+	* solib-darwin.c:
+	* solib-dsbt.c:
+	* solib-frv.c:
+	* sparc-tdep.c:
+	* spu-multiarch.c:
+	* spu-tdep.c:
+	* stack.c:
+	* symfile.c:
+	* symtab.c:
+	* tic6x-tdep.c:
+	* tracepoint.c:
+	* v850-tdep.c:
+	* valarith.c:
+	* valprint.c:
+	* value.c:
+	* xcoffread.c:
+	* xtensa-tdep.c:
+	* ada-lang.c:
+	* ada-tasks.c:
+	* ada-varobj.c:
+	* amd64-darwin-tdep.c:
+	* arm-symbian-tdep.c:
+	* arm-tdep.c: Delete unused variables.
+@
+text
+@d2 1
+a2 1
+   Copyright 1997-2002, 2005, 2008-2012 Free Software Foundation, Inc.
+@
+
+
+1.7
+log
+@gdb/
+	Fix -Wmissing-prototypes build.
+	* alpha-tdep.c (alpha_deal_with_atomic_sequence): Make it static.
+	* amd64-darwin-tdep.c (_initialize_amd64_darwin_tdep): New prototype.
+	* amd64-windows-tdep.c (_initialize_amd64_windows_tdep): Likewise.
+	* arm-symbian-tdep.c (arm_symbian_skip_trampoline_code): Make it static.
+	(_initialize_arm_symbian_tdep): New prototype.
+	* arm-wince-tdep.c (arm_wince_skip_main_prologue): Make it static.
+	* i386-darwin-tdep.c (_initialize_i386_darwin_tdep): New prototype.
+	* i386-linux-tdep.c (i386_linux_displaced_step_copy_insn): Make it
+	static.
+	* lm32-tdep.c (_initialize_lm32_tdep): New prototype.
+	* microblaze-linux-tdep.c (_initialize_microblaze_linux_tdep): New
+	prototype.
+	* microblaze-tdep.c (microblaze_debug, microblaze_fetch_instruction)
+	(microblaze_skip_prologue, microblaze_frame_cache): Make them static.
+	* mips-linux-tdep.c (mips_linux_regset_from_core_section): Make it
+	static.
+	* moxie-tdep.c (moxie_process_record): Likewise.
+	* remote-mips.c (mips_can_use_watchpoint, mips_insert_watchpoint)
+	(mips_remove_watchpoint, mips_stopped_by_watchpoint): Make them static.
+	* rl78-tdep.c (rl78_breakpoint_from_pc): Make it static.
+	(_initialize_rl78_tdep): New prototype.
+	* rx-tdep.c (rx_breakpoint_from_pc): Make it static.
+	(_initialize_rx_tdep): New prototype.
+	* solib-darwin.c (darwin_in_dynsym_resolve_code): Make it static.
+	(_initialize_darwin_solib): New prototype.
+	* solib-spu.c: Include solib-spu.h.
+	(_initialize_spu_solib): New prototype.
+	* spu-multiarch.c (_initialize_spu_multiarch): New prototype.
+	* tic6x-tdep.c (tic6x_analyze_prologue, tic6x_skip_prologue)
+	(tic6x_breakpoint_from_pc, tic6x_frame_unwind_cache)
+	(tic6x_software_single_step): Make it static.
+	(_initialize_tic6x_tdep): New prototype.
+@
+text
+@a86 1
+  CORE_ADDR si;
+@
+
+
+1.6
+log
+@2012-02-20  Tristan Gingold  <gingold@@adacore.com>
+
+	* amd64-darwin-tdep.c (x86_darwin_init_abi_64): Fix jb_pc_offset
+	value.
+@
+text
+@d123 3
+@
+
+
+1.5
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d118 1
+a118 1
+  tdep->jb_pc_offset = 148;
+@
+
+
+1.4
+log
+@2011-01-07  Michael Snyder  <msnyder@@vmware.com>
+
+	* ada-lang.c: Comment cleanup, mostly periods and spaces.
+	* ada-lang.h: Ditto.
+	* ada-tasks.c: Ditto.
+	* ada-valprint.c: Ditto.
+	* aix-threads.c: Ditto.
+	* alpha-linux-nat.c: Ditto.
+	* alpha-linux-tdep.c: Ditto.
+	* alpha-mdebug-tdep.c: Ditto.
+	* alpha-nat.c: Ditto.
+	* alpha-osf1-tdep.c: Ditto.
+	* alpha-tdep.c: Ditto.
+	* alphabsd-nat.c: Ditto.
+	* alphabsd-tdep.c: Ditto.
+	* amd64-darwin-tdep.c: Ditto.
+	* amd64-linux-nat.c: Ditto.
+	* amd64-linux-tdep.c: Ditto.
+	* amd64-sol2-tdep.c: Ditto.
+	* amd64-tdep.c: Ditto.
+	* amd64-fbsd-tdep.c: Ditto.
+	* amd64-nbsd-tdep.c: Ditto.
+	* amd64-obsd-tdep.c: Ditto.
+	* amd64-linux-nat.c: Ditto.
+	* amd64-linux-tdep.c: Ditto.
+	* arm-tdep.c: Ditto.
+	* arm-tdep.h: Ditto.
+	* armnbsd-nat.c: Ditto.
+	* avr-tdep.c: Ditto.
+	* bfin-tdep.c: Ditto.
+	* bsd-kvm.c: Ditto.
+	* c-typeprintc: Ditto.
+	* c-valprint.c: Ditto.
+	* coff-pe-read.h: Ditto.
+	* coffreead.c: Ditto.
+	* cris-tdep.c: Ditto.
+	* d-lang.c: Ditto.
+	* darwin-nat-info.c: Ditto.
+	* darwin-nat.c: Ditto.
+	* dbug-rom.c: Ditto.
+	* dbxread.c: Ditto.
+	* dcache.c: Ditto.
+	* dcache.h: Ditto.
+	* dec-thread.c: Ditto.
+	* defs.h: Ditto.
+	* demangle.c: Ditto.
+	* dicos-tdep.c: Ditto.
+	* dictionary.c: Ditto.
+	* dictionary.h: Ditto.
+	* dink32-rom.c: Ditto.
+	* disasm.c: Ditto.
+	* doublest.c: Ditto.
+	* dsrec.c: Ditto.
+	* dummy-frame.c: Ditto.
+	* dwarf2-frame.c: Ditto.
+	* dwarf2expr.c: Ditto.
+	* dwarf2loc.c: Ditto.
+	* dwarf2read.c: Ditto.
+	* elfread.c: Ditto.
+	* environ.c: Ditto.
+	* eval.c: Ditto.
+	* event-top.h: Ditto.
+	* exceptions.c: Ditto.
+	* exceptions.h: Ditto.
+	* exec.c: Ditto.
+	* expprint.c: Ditto.
+	* expression.h: Ditto.
+	* f-exp.y: Ditto.
+	* f-lang.c: Ditto.
+	* f-lang.h: Ditto.
+	* f-typeprint.c: Ditto.
+	* f-valprint.c: Ditto.
+	* fbsd-nat.c: Ditto.
+	* findvar.c: Ditto.
+	* fork-child.c: Ditto.
+	* frame.c: Ditto.
+	* frame.h: Ditto.
+	* frv-linux-tdep.c: Ditto.
+	* frv-tdep.c: Ditto.
+	* gcore.c: Ditto.
+	* gdb-stabs.h: Ditto.
+	* gdb_assert.h: Ditto.
+	* gdb_string.h: Ditto.
+	* gdb_thread_db.h: Ditto.
+	* gdb_wait.h: Ditto.
+	* gdbarch.sh: Ditto.
+	* gdbcore.h: Ditto.
+	* gdbthread.h: Ditto.
+	* gdbtypes.c: Ditto.
+	* gdbtypes.h: Ditto.
+	* gnu-nat.c: Ditto.
+	* gnu-nat.h: Ditto.
+	* gnu-v2-abi.c: Ditto.
+	* gnu-v3-abi.c: Ditto.
+	* go32-nat.c: Ditto.
+	* gdbarch.c: Regenerate.
+	* gdbarch.h: Regenerate.
+@
+text
+@d2 1
+a2 2
+   Copyright 1997, 1998, 1999, 2000, 2001, 2002, 2005, 2008, 2009, 2010, 2011
+   Free Software Foundation, Inc.
+@
+
+
+1.4.4.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d2 2
+a3 1
+   Copyright 1997-2002, 2005, 2008-2012 Free Software Foundation, Inc.
+@
+
+
+1.3
+log
+@run copyright.sh for 2011.
+@
+text
+@d58 1
+a58 1
+  8 * 8,			/* %r8 ... */
+@
+
+
+1.2
+log
+@Update copyright year in most headers.
+
+Automatic update by copyright.sh.
+@
+text
+@d2 1
+a2 1
+   Copyright 1997, 1998, 1999, 2000, 2001, 2002, 2005, 2008, 2009, 2010
+@
+
+
+1.1
+log
+@2009-06-29  Tristan Gingold  <gingold@@adacore.com>
+
+	* i386-darwin-tdep.c (amd64_darwin_thread_state_reg_offset)
+	(amd64_darwin_thread_state_num_regs)
+	(amd64_darwin_sigcontext_addr, x86_darwin_init_abi_64): Moved to
+	amd64-darwin-tdep.c
+	(_initialize_i386_darwin_tdep): Remove 64 bits parts.
+	(darwin_dwarf_signal_frame_p): Make public.
+	* amd64-darwin-tdep.c: New file with most chunks from
+	i386-darwin-tdep.c
+	* i386-darwin-tdep.h: Add a prototype for darwin_dwarf_signal_frame_p.
+	(amd64_darwin_thread_state_reg_offset)
+	(amd64_darwin_thread_state_num_regs): Moved to amd64-darwin-tdep.h
+	* amd64-darwin-tdep.h: New file.
+	* i386-darwin-nat.c: Only includes amd64-nat.h and amd64-darwin-tdep.h
+	if BFD64 is defined.
+	(i386_darwin_fetch_inferior_registers): Add #ifdef BFD64/#endif around
+	64 bits parts.
+	(i386_darwin_store_inferior_registers): Ditto.
+	(darwin_set_sstep): Ditto.
+	(darwin_complete_target): Ditto.
+	(amd64_darwin_sstep_at_sigreturn): Ditto.
+	* configure.tgt: Create a separate entry for x86_64-*-darwin.
+	Add 64 bits support for i386-*-darwin if --enable-64-bit-bfd.
+	* Makefile.in (ALLDEPFILES): Add amd64-darwin-tdep.c, darwin-nat.c,
+	i386-darwin-tdep.c i386-darwin-nat.c
+	(ALL_64_TARGET_OBS): Add amd64-darwin-tdep.o
+@
+text
+@d2 1
+a2 1
+   Copyright 1997, 1998, 1999, 2000, 2001, 2002, 2005, 2008, 2009
+@
+

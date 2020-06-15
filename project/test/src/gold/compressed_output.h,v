@@ -1,0 +1,382 @@
+head	1.7;
+access;
+symbols
+	binutils-2_24-branch:1.7.0.10
+	binutils-2_24-branchpoint:1.7
+	binutils-2_21_1:1.7
+	binutils-2_23_2:1.7
+	binutils-2_23_1:1.7
+	binutils-2_23:1.7
+	binutils-2_23-branch:1.7.0.8
+	binutils-2_23-branchpoint:1.7
+	binutils-2_22_branch:1.7.0.6
+	binutils-2_22:1.7
+	binutils-2_22-branch:1.7.0.4
+	binutils-2_22-branchpoint:1.7
+	binutils-2_21:1.7
+	binutils-2_21-branch:1.7.0.2
+	binutils-2_21-branchpoint:1.7
+	binutils-2_20_1:1.4
+	binutils-2_20:1.4
+	binutils-arc-20081103-branch:1.4.0.10
+	binutils-arc-20081103-branchpoint:1.4
+	binutils-2_20-branch:1.4.0.8
+	binutils-2_20-branchpoint:1.4
+	dje-cgen-play1-branch:1.4.0.6
+	dje-cgen-play1-branchpoint:1.4
+	arc-20081103-branch:1.4.0.4
+	arc-20081103-branchpoint:1.4
+	binutils-2_19_1:1.4
+	binutils-2_19:1.4
+	binutils-2_19-branch:1.4.0.2
+	binutils-2_19-branchpoint:1.4
+	binutils_latest_snapshot:1.7
+	added-to-binutils:1.3;
+locks; strict;
+comment	@ * @;
+
+
+1.7
+date	2010.07.12.17.59.58;	author ccoutant;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2009.12.14.19.53.04;	author ian;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2009.12.11.13.42.12;	author nickc;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2008.04.03.14.18.37;	author ian;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2008.03.13.21.04.21;	author iant;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2007.12.01.06.34.12;	author iant;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2007.11.30.00.35.27;	author iant;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.7
+log
+@	* compressed_output.cc (zlib_decompress): New function.
+	(get_uncompressed_size): New function.
+	(decompress_input_section): New function.
+	* compressed_output.h (get_uncompressed_size): New function.
+	(decompress_input_section): New function.
+	* dwarf_reader.cc (Sized_dwarf_line_info::Sized_dwarf_line_info)
+	Handle compressed debug sections.
+	* layout.cc (is_compressed_debug_section): New function.
+	(Layout::output_section_name): Map compressed section names to
+	canonical names.
+	* layout.h (is_compressed_debug_section): New function.
+	(is_debug_info_section): Recognize compressed debug sections.
+	* merge.cc: Include compressed_output.h.
+	(Output_merge_data::do_add_input_section): Handle compressed
+	debug sections.
+	(Output_merge_string::do_add_input_section): Handle compressed
+	debug sections.
+	* object.cc: Include compressed_output.h.
+	(Sized_relobj::Sized_relobj): Initialize new data members.
+	(build_compressed_section_map): New function.
+	(Sized_relobj::do_read_symbols): Handle compressed debug sections.
+	* object.h (Object::section_is_compressed): New method.
+	(Object::do_section_is_compressed): New method.
+	(Sized_relobj::Compressed_section_map): New type.
+	(Sized_relobj::do_section_is_compressed): New method.
+	(Sized_relobj::compressed_sections_): New data member.
+	* output.cc (Output_section::add_input_section): Handle compressed
+	debug sections.
+	* reloc.cc: Include compressed_output.h.
+	(Sized_relobj::write_sections): Handle compressed debug sections.
+@
+text
+@// compressed_output.h -- compressed output sections for gold  -*- C++ -*-
+
+// Copyright 2007, 2008, 2010 Free Software Foundation, Inc.
+// Written by Ian Lance Taylor <iant@@google.com>.
+
+// This file is part of gold.
+
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 3 of the License, or
+// (at your option) any later version.
+
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+// MA 02110-1301, USA.
+
+// We support compressing .debug_* sections on output.  (And,
+// potentially one day, other sections.)  This is a form of
+// relaxation.  This file adds support for merging and emitting the
+// compressed sections.
+
+#ifndef GOLD_COMPRESSED_OUTPUT_H
+#define GOLD_COMPRESSED_OUTPUT_H
+
+#include <string>
+
+#include "output.h"
+
+namespace gold
+{
+
+class General_options;
+
+// Read the compression header of a compressed debug section and return
+// the uncompressed size.
+
+extern uint64_t
+get_uncompressed_size(const unsigned char*, section_size_type);
+
+// Decompress a compressed debug section directly into the output file.
+
+extern bool
+decompress_input_section(const unsigned char*, unsigned long, unsigned char*,
+			 unsigned long);
+
+// This is used for a section whose data should be compressed.  It is
+// a regular Output_section which computes its contents into a buffer
+// and then postprocesses it.
+
+class Output_compressed_section : public Output_section
+{
+ public:
+  Output_compressed_section(const General_options* options,
+			    const char* name, elfcpp::Elf_Word flags,
+			    elfcpp::Elf_Xword type)
+    : Output_section(name, flags, type),
+      options_(options)
+  { this->set_requires_postprocessing(); }
+
+ protected:
+  // Set the final data size.
+  void
+  set_final_data_size();
+
+  // Write out the compressed contents.
+  void
+  do_write(Output_file*);
+
+ private:
+  // The options--this includes the compression type.
+  const General_options* options_;
+  // The compressed data.
+  unsigned char* data_;
+  // The new section name if we do compress.
+  std::string new_section_name_;
+};
+
+} // End namespace gold.
+
+#endif // !defined(GOLD_COMPRESSED_OUTPUT_H)
+@
+
+
+1.6
+log
+@	Revert -Wshadow changes, all changes from:
+	2009-12-11  Doug Kwan  <dougkwan@@google.com>
+	2009-12-11  Nick Clifton  <nickc@@redhat.com>
+	* configure.ac: Remove -Wshadow when setting WARN_CXXFLAGS.
+@
+text
+@d3 1
+a3 1
+// Copyright 2007, 2008 Free Software Foundation, Inc.
+d40 12
+@
+
+
+1.5
+log
+@Add -Wshadow to the gcc command line options used when compiling the binutils.
+Fix up all warnings generated by the addition of this switch.
+@
+text
+@d3 1
+a3 1
+// Copyright 2007, 2008, 2009 Free Software Foundation, Inc.
+d48 3
+a50 3
+			    const char* cname, elfcpp::Elf_Word cflags,
+			    elfcpp::Elf_Xword ctype)
+    : Output_section(cname, cflags, ctype),
+@
+
+
+1.4
+log
+@	* compressed_output.h (class Output_compressed_section): Use
+	unsigned buffer.
+	* compressed_output.cc (zlib_compress): Use unsigned buffers,
+	add zlib header.
+	(zlib_compressed_suffix): Removed.
+	(Output_compressed_section::set_final_data_size): Use unsigned
+	buffers.
+	* testsuite/Makefile.am (flagstest_compress_debug_sections):
+	Fix linker invocation.
+	(flagstest_o_specialfile_and_compress_debug_sections):
+	Likewise.
+	* testsuite/Makefile.in: Regenerated.
+@
+text
+@d3 1
+a3 1
+// Copyright 2007, 2008 Free Software Foundation, Inc.
+d48 3
+a50 3
+			    const char* name, elfcpp::Elf_Word flags,
+			    elfcpp::Elf_Xword type)
+    : Output_section(name, flags, type),
+@
+
+
+1.3
+log
+@Update copyright years.  Update language files.
+@
+text
+@d67 1
+a67 1
+  char* data_;
+@
+
+
+1.2
+log
+@Compress all debug sections.
+@
+text
+@d3 1
+a3 1
+// Copyright 2007 Free Software Foundation, Inc.
+@
+
+
+1.1
+log
+@From Craig Silverstein: Add support for compressing .debug_str section.
+@
+text
+@a31 1
+#include <vector>
+a33 1
+#include "merge.h"
+d40 3
+a42 8
+// This is used for compressing a section before emitting it in the
+// output file.  This only works for unloaded sections, since it
+// assumes the final section contents are available at
+// set_final_data_size() time.  For loaded sections (those that end up
+// in segments), this is not true; relocations are applied after
+// set_final_data_size() is called.  However, for unloaded sections,
+// we can -- and do -- postpone calling finalize_data_size() until
+// after relocations are applies.
+d44 1
+a44 1
+class Output_compressed_section_data : public Output_section_data
+d47 6
+a52 4
+  Output_compressed_section_data(uint64_t addralign,
+                                 const General_options& options)
+    : Output_section_data(addralign), options_(options), data_(NULL)
+  { }
+a54 4
+  // Add an input section.
+  bool
+  do_add_input_section(Relobj* object, unsigned int shndx);
+
+d59 1
+a59 5
+  // Change the name of the output section to reflect it's compressed.
+  const char*
+  do_modified_output_section_name(const char* name);
+
+  // Write the data to the file.
+d64 3
+a66 14
+  struct Object_entry
+  {
+    Relobj* object;
+    unsigned int shndx;
+    const unsigned char* contents;
+    off_t length;
+
+    Object_entry(Relobj* o, unsigned int s)
+      : object(o), shndx(s), contents(NULL), length(0)
+    { }
+  };
+
+  const General_options& options_;
+  std::vector<Object_entry> objects_;
+d68 1
+a68 40
+  std::string new_section_name_;
+};
+
+// This is a special case for when the output section is a string
+// section and does not have any relocations to apply to it.
+
+template<typename Char_type>
+class Output_compressed_string : public Output_merge_string<Char_type>
+{
+ public:
+  Output_compressed_string(uint64_t addralign,
+                           const General_options& options)
+    : Output_merge_string<Char_type>(addralign),
+      options_(options), compressed_data_(NULL)
+  { }
+
+  ~Output_compressed_string()
+  { delete[] compressed_data_; }
+
+ protected:
+  // Add an input section.
+  bool
+  do_add_input_section(Relobj* object, unsigned int shndx);
+
+  // Set the final data size.  Also compresses the buffer.
+  void
+  set_final_data_size();
+
+  // Change the name of the output section to reflect it's compressed.
+  const char*
+  do_modified_output_section_name(const char* name);
+
+  // Write the data to the file.
+  void
+  do_write(Output_file*);
+
+ private:
+  const General_options& options_;
+  char* compressed_data_;
+  // This is just a buffer to store the section name in "permanent" storage.
+@
+

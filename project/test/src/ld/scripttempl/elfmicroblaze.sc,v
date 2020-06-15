@@ -1,0 +1,577 @@
+head	1.4;
+access;
+symbols
+	binutils-2_24-branch:1.4.0.10
+	binutils-2_24-branchpoint:1.4
+	binutils-2_21_1:1.4
+	binutils-2_23_2:1.4
+	binutils-2_23_1:1.4
+	binutils-2_23:1.4
+	binutils-2_23-branch:1.4.0.8
+	binutils-2_23-branchpoint:1.4
+	binutils-2_22_branch:1.4.0.6
+	binutils-2_22:1.4
+	binutils-2_22-branch:1.4.0.4
+	binutils-2_22-branchpoint:1.4
+	binutils-2_21:1.4
+	binutils-2_21-branch:1.4.0.2
+	binutils-2_21-branchpoint:1.4
+	binutils-2_20_1:1.1.2.3
+	binutils-2_20:1.1.2.3
+	binutils-2_20-branch:1.1.0.2
+	binutils-2_20-branchpoint:1.1
+	binutils_latest_snapshot:1.4;
+locks; strict;
+comment	@# @;
+
+
+1.4
+date	2009.10.10.04.34.39;	author amodra;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2009.09.28.07.08.50;	author amodra;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2009.09.09.11.59.14;	author amodra;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2009.08.06.17.38.04;	author nickc;	state Exp;
+branches
+	1.1.2.1;
+next	;
+
+1.1.2.1
+date	2009.09.09.12.00.22;	author amodra;	state Exp;
+branches;
+next	1.1.2.2;
+
+1.1.2.2
+date	2009.09.29.03.18.21;	author amodra;	state Exp;
+branches;
+next	1.1.2.3;
+
+1.1.2.3
+date	2009.10.09.05.43.07;	author amodra;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.4
+log
+@Revert 2009-09-28 changes.
+@
+text
+@# Adapted from mips.sc
+# These variables may be overridden by the emulation file.  The
+# defaults are appropriate for a DECstation running Ultrix.
+test -z "$ENTRY" && ENTRY=_start
+
+#test -z "$TEXT_START_ADDR" && TEXT_START_ADDR="0x0"
+
+CTOR=".ctors ${CONSTRUCTING-0} : 
+  {
+    ${CONSTRUCTING+${CTOR_START}}
+    /* gcc uses crtbegin.o to find the start of
+       the constructors, so we make sure it is
+       first.  Because this is a wildcard, it
+       doesn't matter if the user does not
+       actually link against crtbegin.o; the
+       linker won't look for a file to match a
+       wildcard.  The wildcard also means that it
+       doesn't matter which directory crtbegin.o
+       is in.  */
+
+    KEEP (*crtbegin.o(.ctors))
+
+    /* We don't want to include the .ctor section from
+       from the crtend.o file until after the sorted ctors.
+       The .ctor section from the crtend file contains the
+       end of ctors marker and it must be last */
+
+    KEEP (*(EXCLUDE_FILE (*crtend.o) .ctors))
+    KEEP (*(SORT(.ctors.*)))
+    KEEP (*(.ctors))
+    ${CONSTRUCTING+${CTOR_END}}
+  }"
+
+DTOR=" .dtors       ${CONSTRUCTING-0} :
+  {
+    ${CONSTRUCTING+${DTOR_START}}
+    KEEP (*crtbegin.o(.dtors))
+    KEEP (*(EXCLUDE_FILE (*crtend.o) .dtors))
+    KEEP (*(SORT(.dtors.*)))
+    KEEP (*(.dtors))
+    ${CONSTRUCTING+${DTOR_END}}
+  }"
+
+cat <<EOF
+OUTPUT_FORMAT("${OUTPUT_FORMAT}", "${BIG_OUTPUT_FORMAT}",
+	      "${LITTLE_OUTPUT_FORMAT}")
+/*${LIB_SEARCH_DIRS}*/
+${RELOCATING+${LIB_SEARCH_DIRS}}
+
+${RELOCATING+ENTRY (${ENTRY})}
+
+_TEXT_START_ADDR = DEFINED(_TEXT_START_ADDR) ? _TEXT_START_ADDR : 0x50;		
+_HEAP_SIZE = DEFINED(_HEAP_SIZE) ? _HEAP_SIZE : 0x0;
+_STACK_SIZE = DEFINED(_STACK_SIZE) ? _STACK_SIZE : 0x400;
+
+SECTIONS
+{
+  .vectors.reset 0x0 : { KEEP (*(.vectors.reset)) } = 0
+  .vectors.sw_exception 0x8 : { KEEP (*(.vectors.sw_exception)) } = 0
+  .vectors.interrupt 0x10 : { KEEP (*(.vectors.interrupt)) } = 0
+  .vectors.debug_sw_break 0x18 : { KEEP (*(.vectors.debug_sw_break)) } = 0
+  .vectors.hw_exception 0x20 : { KEEP (*(.vectors.hw_exception)) } = 0
+
+  ${RELOCATING+. = _TEXT_START_ADDR;}
+
+  ${RELOCATING+ _ftext  =  .;}
+  .text : {
+    ${RELOCATING+*(.text)}
+    ${RELOCATING+*(.text.*)}
+    ${RELOCATING+*(.gnu.linkonce.t.*)}
+  }
+  ${RELOCATING+ _etext  =  .;}
+
+  .init : { KEEP (*(.init))	} =0
+  .fini : { KEEP (*(.fini))	} =0
+
+  ${RELOCATING+PROVIDE (__CTOR_LIST__ = .);}
+  ${RELOCATING+PROVIDE (___CTOR_LIST__ = .);}
+  ${RELOCATING+${CTOR}}
+  ${RELOCATING+PROVIDE (__CTOR_END__ = .);}
+  ${RELOCATING+PROVIDE (___CTOR_END__ = .);}
+
+  ${RELOCATING+PROVIDE (__DTOR_LIST__ = .);}
+  ${RELOCATING+PROVIDE (___DTOR_LIST__ = .);}
+  ${RELOCATING+${DTOR}}
+  ${RELOCATING+PROVIDE (__DTOR_END__ = .);}
+  ${RELOCATING+PROVIDE (___DTOR_END__ = .);}
+
+  ${RELOCATING+ . = ALIGN(4);}
+   ${RELOCATING+ _frodata = . ;}
+  .rodata : {
+    ${RELOCATING+*(.rodata)}
+    ${RELOCATING+*(.rodata.*)}
+    ${RELOCATING+*(.gnu.linkonce.r.*)}
+    ${CONSTRUCTING+CONSTRUCTORS}; /* Is this needed? */
+  }
+  ${RELOCATING+ _erodata = .;}
+
+  /* Alignments by 8 to ensure that _SDA2_BASE_ on a word boundary */
+  /* Note that .sdata2 and .sbss2 must be contiguous */
+  ${RELOCATING+. = ALIGN(8);}
+  ${RELOCATING+ _ssrw = .;}
+  .sdata2 : {
+    ${RELOCATING+*(.sdata2)}
+    ${RELOCATING+*(.sdata2.*)}
+    ${RELOCATING+*(.gnu.linkonce.s2.*)}
+  }
+  ${RELOCATING+. = ALIGN(4);}
+  .sbss2 : {
+    ${RELOCATING+PROVIDE (__sbss2_start = .);}	
+    ${RELOCATING+*(.sbss2)}
+    ${RELOCATING+*(.sbss2.*)}
+    ${RELOCATING+*(.gnu.linkonce.sb2.*)}
+    ${RELOCATING+PROVIDE (__sbss2_end = .);}
+  }
+  ${RELOCATING+. = ALIGN(8);}
+  ${RELOCATING+ _essrw = .;}
+  ${RELOCATING+ _ssrw_size = _essrw - _ssrw;}
+  ${RELOCATING+ PROVIDE (_SDA2_BASE_ = _ssrw + (_ssrw_size / 2 ));}
+
+  ${RELOCATING+ . = ALIGN(4);}
+  ${RELOCATING+ _fdata = .;}
+  .data : {
+    ${RELOCATING+*(.data)}
+    ${RELOCATING+*(.gnu.linkonce.d.*)}
+    ${CONSTRUCTING+CONSTRUCTORS}; /* Is this needed? */
+  }
+  ${RELOCATING+ _edata = . ;}
+  
+   /* Added to handle pic code */
+  .got : {  
+    ${RELOCATING+*(.got)}
+  }
+
+  .got1 : {  
+    ${RELOCATING+*(.got1)}
+  }
+
+  .got2 : {  
+    ${RELOCATING+*(.got2)}
+  }
+
+  /* Added by Sathya to handle C++ exceptions */
+  .eh_frame : {  
+    ${RELOCATING+*(.eh_frame)}
+  }
+  
+  .jcr : {  
+    ${RELOCATING+*(.jcr)}
+  }
+
+  .gcc_except_table : {  
+    ${RELOCATING+*(.gcc_except_table)}
+  }
+
+  /* Alignments by 8 to ensure that _SDA_BASE_ on a word boundary */
+  /* Note that .sdata and .sbss must be contiguous */
+  ${RELOCATING+. = ALIGN(8);}
+  ${RELOCATING+ _ssro = .;}
+  .sdata : {
+    ${RELOCATING+*(.sdata)}
+    ${RELOCATING+*(.sdata.*)}
+    ${RELOCATING+*(.gnu.linkonce.s.*)}
+  }
+  ${RELOCATING+. = ALIGN(4);}
+  .sbss : {
+    ${RELOCATING+PROVIDE (__sbss_start = .);}	
+    ${RELOCATING+*(.sbss)}
+    ${RELOCATING+*(.sbss.*)}
+    ${RELOCATING+*(.gnu.linkonce.sb.*)}
+    ${RELOCATING+PROVIDE (__sbss_end = .);}
+  }
+  ${RELOCATING+. = ALIGN(8);}
+  ${RELOCATING+ _essro = .;}
+  ${RELOCATING+ _ssro_size = _essro - _ssro;}
+  ${RELOCATING+PROVIDE (_SDA_BASE_ = _ssro + (_ssro_size / 2 ));}
+
+  ${RELOCATING+ . = ALIGN(4);}
+  ${RELOCATING+ _fbss = .;}
+  .bss : {
+    ${RELOCATING+PROVIDE (__bss_start = .);}	
+    ${RELOCATING+*(.bss)}
+    ${RELOCATING+*(.bss.*)}
+    ${RELOCATING+*(.gnu.linkonce.b.*)}
+    ${RELOCATING+*(COMMON)}
+    ${RELOCATING+. = ALIGN(4);}  
+    
+    ${RELOCATING+PROVIDE (__bss_end = .);}
+
+  }
+
+  ${RELOCATING+ . = ALIGN(4);}
+
+  .heap : {
+    ${RELOCATING+ _heap = .;}
+    ${RELOCATING+ _heap_start = .;}
+    ${RELOCATING+ . += _HEAP_SIZE;}
+    ${RELOCATING+ _heap_end = .;}
+  } 
+
+  ${RELOCATING+ . = ALIGN(4);}
+
+  .stack : {
+    ${RELOCATING+ _stack_end = .;}
+    ${RELOCATING+ . += _STACK_SIZE;}
+    ${RELOCATING+ . = ALIGN(8);}
+    ${RELOCATING+ _stack = .;}
+    ${RELOCATING+ _end = .;}
+  }
+
+  .tdata : {  
+    ${RELOCATING+*(.tdata)}
+    ${RELOCATING+*(.tdata.*)}
+    ${RELOCATING+*(.gnu.linkonce.td.*)}
+  }
+  .tbss : {  
+    ${RELOCATING+*(.tbss)}
+    ${RELOCATING+*(.tbss.*)}
+    ${RELOCATING+*(.gnu.linkonce.tb.*)}
+  }
+}
+EOF
+@
+
+
+1.3
+log
+@	* scripttempl/elf32cr16.sc: Emit empty script for ld -r and ld -Ur.
+	* scripttempl/elf32cr16c.sc: Likewise.
+	* scripttempl/elf32crx.sc: Likewise.
+	* scripttempl/tic54xcoff.sc: Likewise.
+	* scripttempl/aix.sc: Delete ${RELOCATING-0}.
+	* scripttempl/avr.sc: Likewise.
+	* scripttempl/elf32msp430.sc: Likewise.
+	* scripttempl/elf32msp430_3.sc: Likewise.
+	* scripttempl/elf32sh-symbian.sc: Likewise.
+	* scripttempl/elf_chaos.sc: Likewise.
+	* scripttempl/elfi370.sc: Likewise.
+	* scripttempl/nw.sc: Likewise.
+	* scripttempl/psos.sc: Likewise.
+	* scripttempl/armbpabi.sc: Delete ${RELOCATING-0} and ${CONSTRUCTING-0}.
+	* scripttempl/elf.sc: Likewise.
+	* scripttempl/elf64hppa.sc: Likewise.
+	* scripttempl/elfd10v.sc: Likewise.
+	* scripttempl/elfd30v.sc: Likewise.
+	* scripttempl/elfm68hc11.sc: Likewise.
+	* scripttempl/elfm68hc12.sc: Likewise.
+	* scripttempl/elfmicroblaze.sc: Likewise.
+	* scripttempl/elfxtensa.sc: Likewise.
+	* scripttempl/iq2000.sc: Likewise.
+	* scripttempl/mep.sc: Likewise.
+	* scripttempl/xstormy16.sc: Likewise.
+@
+text
+@d8 1
+a8 1
+CTOR=".ctors  : 
+d34 1
+a34 1
+DTOR=" .dtors        :
+@
+
+
+1.2
+log
+@Only provide ENTRY on final link.
+@
+text
+@d8 1
+a8 1
+CTOR=".ctors ${CONSTRUCTING-0} : 
+d34 1
+a34 1
+DTOR=" .dtors       ${CONSTRUCTING-0} :
+@
+
+
+1.1
+log
+@        Add support for Xilinx MicroBlaze processor.
+
+        * bfd/Makefile.am: Add cpu-microblaze.{lo,c}, elf32-microblaze.{lo,c}.
+        * bfd/Makefile.in: Same.
+        * bfd/archures.c: Add bfd_arch_microblaze.
+        * bfd/bfd-in2.h: Regenerate.
+        * bfd/config.bfd: Add microblaze target.
+        * bfd/configure: Add bfd_elf32_microblaze_vec target.
+        * bfd/configure.in: Same.
+        * bfd/cpu-microblaze.c: New.
+        * bfd/elf32-microblaze.c: New.
+        * bfd/libbfd-in.h: Add prototype _bfd_dwarf2_fixup_section_debug_loc().
+        * bfd/libbfd.h: Regenerate.
+        * bfd/reloc.c: Add MICROBLAZE relocations.
+        * bfd/section.c: Add struct relax_table and relax_count to section.
+        * bfd/targets.c: Add bfd_elf32_microblaze_vec.
+        * binutils/MAINTAINERS: Add self as maintainer.
+        * binutils/readelf.c: Include elf/microblaze.h, add EM_MICROBLAZE &
+        EM_MICROBLAZE_OLD to guess_is_rela(), dump_relocations(),
+        get_machine_name().
+        * config.sub: Add microblaze target.
+        * configure: Same.
+        * configure.ac: Same.
+        * gas/Makefile.am: add microblaze to CPU_TYPES, config/tc-microblaze.c to
+        TARGET_CPU_CFILES, config/tc-microblaze.h to TARGET_CPU_HFILES, add
+        DEP_microblaze_elf target.
+        * gas/Makefile.in: Same.
+        * gas/config/tc-microblaze.c: Add MicroBlaze assembler.
+        * gas/config/tc-microblaze.h: Add header for tc-microblaze.c.
+        * gas/configure: Add microblaze target.
+        * gas/configure.in: Same.
+        * gas/configure.tgt: Same.
+        * gas/doc/Makefile.am: Add c-microblaze.texi to CPU_DOCS.
+        * gas/doc/Makefile.in: Same.
+        * gas/doc/all.texi: Set MICROBLAZE.
+        * gas/doc/as.texinfo: Add MicroBlaze doc links.
+        * gas/doc/c-microblaze.texi: New MicroBlaze docs.
+        * include/dis-asm.h: Decl print_insn_microblaze().
+        * include/elf/common.h: Define EM_MICROBLAZE & EM_MICROBLAZE_OLD.
+        * include/elf/microblaze.h: New reloc definitions.
+        * ld/Makefile.am: Add eelf32mb_linux.o, eelf32microblaze.o to
+        ALL_EMULATIONS, targets.
+        * ld/Makefile.in: Same.
+        * ld/configure.tgt: Add microblaze*-linux*, microblaze* targets.
+        * ld/emulparams/elf32mb_linux.sh: New.
+        * ld/emulparams/elf32microblaze.sh. New.
+        * ld/scripttempl/elfmicroblaze.sc: New.
+        * opcodes/Makefile.am: Add microblaze-opc.h to HFILES, microblaze-dis.c to
+        CFILES, microblaze-dis.lo to ALL_MACHINES, targets.
+        * opcodes/Makefile.in: Same.
+        * opcodes/configure: Add bfd_microblaze_arch target.
+        * opcodes/configure.in: Same.
+        * opcodes/disassemble.c: Define ARCH_microblaze, return
+        print_insn_microblaze().
+        * opcodes/microblaze-dis.c: New MicroBlaze disassembler.
+        * opcodes/microblaze-opc.h: New MicroBlaze opcode definitions.
+        * opcodes/microblaze-opcm.h: New MicroBlaze opcode types.
+@
+text
+@d50 1
+a50 1
+ENTRY(${ENTRY})
+@
+
+
+1.1.2.1
+log
+@Only provide ENTRY on final link.
+@
+text
+@d50 1
+a50 1
+${RELOCATING+ENTRY (${ENTRY})}
+@
+
+
+1.1.2.2
+log
+@2009-09-29  Alan Modra  <amodra@@bigpond.net.au>
+
+	* ldlang.c (lang_size_sections_1): Allow scripts to specify a
+	non-zero vma even when relocatable.
+
+2009-09-28  Alan Modra  <amodra@@bigpond.net.au>
+
+	* scripttempl/elf32cr16.sc: Emit empty script for ld -r and ld -Ur.
+	* scripttempl/elf32cr16c.sc: Likewise.
+	* scripttempl/elf32crx.sc: Likewise.
+	* scripttempl/tic54xcoff.sc: Likewise.
+	* scripttempl/aix.sc: Delete ${RELOCATING-0}.
+	* scripttempl/avr.sc: Likewise.
+	* scripttempl/elf32msp430.sc: Likewise.
+	* scripttempl/elf32msp430_3.sc: Likewise.
+	* scripttempl/elf32sh-symbian.sc: Likewise.
+	* scripttempl/elf_chaos.sc: Likewise.
+	* scripttempl/elfi370.sc: Likewise.
+	* scripttempl/nw.sc: Likewise.
+	* scripttempl/psos.sc: Likewise.
+	* scripttempl/armbpabi.sc: Delete ${RELOCATING-0} and ${CONSTRUCTING-0}.
+	* scripttempl/elf.sc: Likewise.
+	* scripttempl/elf64hppa.sc: Likewise.
+	* scripttempl/elfd10v.sc: Likewise.
+	* scripttempl/elfd30v.sc: Likewise.
+	* scripttempl/elfm68hc11.sc: Likewise.
+	* scripttempl/elfm68hc12.sc: Likewise.
+	* scripttempl/elfmicroblaze.sc: Likewise.
+	* scripttempl/elfxtensa.sc: Likewise.
+	* scripttempl/iq2000.sc: Likewise.
+	* scripttempl/mep.sc: Likewise.
+	* scripttempl/xstormy16.sc: Likewise.
+
+2009-09-27  Christopher Faylor  <me+cygwin@@cgf.cx>
+
+	* ldlang.c (lang_size_sections_1): Always force output vma to zero for
+	relocatable sections.
+	(lang_size_sections_1): Revert previous COFF-only accommodation for
+	relocatable sections.
+@
+text
+@d8 1
+a8 1
+CTOR=".ctors  : 
+d34 1
+a34 1
+DTOR=" .dtors        :
+@
+
+
+1.1.2.3
+log
+@	PR ld/10749
+	* ldlang.c (lang_size_sections_1): Zero section vmas only for COFF.
+	* scripttempl/elf32cr16.sc: Revert 2009-09-28 change.
+	* scripttempl/elf32cr16c.sc: Likewise.
+	* scripttempl/elf32crx.sc: Likewise.
+	* scripttempl/tic54xcoff.sc: Likewise.
+	* scripttempl/aix.sc: Likewise.
+	* scripttempl/avr.sc: Likewise.
+	* scripttempl/elf32msp430.sc: Likewise.
+	* scripttempl/elf32msp430_3.sc: Likewise.
+	* scripttempl/elf32sh-symbian.sc: Likewise.
+	* scripttempl/elf_chaos.sc: Likewise.
+	* scripttempl/elfi370.sc: Likewise.
+	* scripttempl/nw.sc: Likewise.
+	* scripttempl/psos.sc: Likewise.
+	* scripttempl/armbpabi.sc: Likewise.
+	* scripttempl/elf.sc: Likewise.
+	* scripttempl/elf64hppa.sc: Likewise.
+	* scripttempl/elfd10v.sc: Likewise.
+	* scripttempl/elfd30v.sc: Likewise.
+	* scripttempl/elfm68hc11.sc: Likewise.
+	* scripttempl/elfm68hc12.sc: Likewise.
+	* scripttempl/elfmicroblaze.sc: Likewise.
+	* scripttempl/elfxtensa.sc: Likewise.
+	* scripttempl/iq2000.sc: Likewise.
+	* scripttempl/mep.sc: Likewise.
+	* scripttempl/xstormy16.sc: Likewise.
+
+2009-10-03  Alan Modra  <amodra@@bigpond.net.au>
+
+	* emultempl/ppc32elf.em (emit_stub_syms): Init to -1.
+	(ppc_after_open): Set emit_stubs_syms by default when shared.
+	(OPTION_NO_STUBSYMS): Define.
+	(PARSE_AND_LIST_LONGOPTS, PARSE_AND_LIST_OPTIONS,
+	PARSE_AND_LIST_ARGS_CASES): Handle --no-emit-stub-syms.
+	* emultempl/ppc64elf.em (emit_stub_syms): Init to -1.
+	(gld${EMULATION_NAME}_finish): Set emit_stubs_syms by default.
+	(OPTION_NO_STUBSYMS): Define.
+	(PARSE_AND_LIST_LONGOPTS, PARSE_AND_LIST_OPTIONS,
+	PARSE_AND_LIST_ARGS_CASES): Handle --no-emit-stub-syms.
+
+2009-09-30  Matthias Klose  <doko@@ubuntu.com>
+
+	PR ld/9863
+	* emulparams/armelf_linux.sh (DATA_START_SYMBOLS): Use PROVIDE
+	with __data_start.
+
+2009-09-29  Joel Sherrill <joel.sherrill@@oarcorp.com>
+
+	* emulparams/m68kelf.sh (NOP): Use 0x4e71 (nop) rather than 0x4e75
+	(rts).
+
+2009-09-29  Alan Modra  <amodra@@bigpond.net.au>
+
+	* ldlang.c (lang_size_sections_1): Allow scripts to specify a
+	non-zero vma even when relocatable.
+
+2009-09-28  Alan Modra  <amodra@@bigpond.net.au>
+
+	* scripttempl/elf32cr16.sc: Emit empty script for ld -r and ld -Ur.
+	* scripttempl/elf32cr16c.sc: Likewise.
+	* scripttempl/elf32crx.sc: Likewise.
+	* scripttempl/tic54xcoff.sc: Likewise.
+	* scripttempl/aix.sc: Delete ${RELOCATING-0}.
+	* scripttempl/avr.sc: Likewise.
+	* scripttempl/elf32msp430.sc: Likewise.
+	* scripttempl/elf32msp430_3.sc: Likewise.
+	* scripttempl/elf32sh-symbian.sc: Likewise.
+	* scripttempl/elf_chaos.sc: Likewise.
+	* scripttempl/elfi370.sc: Likewise.
+	* scripttempl/nw.sc: Likewise.
+	* scripttempl/psos.sc: Likewise.
+	* scripttempl/armbpabi.sc: Delete ${RELOCATING-0} and ${CONSTRUCTING-0}.
+	* scripttempl/elf.sc: Likewise.
+	* scripttempl/elf64hppa.sc: Likewise.
+	* scripttempl/elfd10v.sc: Likewise.
+	* scripttempl/elfd30v.sc: Likewise.
+	* scripttempl/elfm68hc11.sc: Likewise.
+	* scripttempl/elfm68hc12.sc: Likewise.
+	* scripttempl/elfmicroblaze.sc: Likewise.
+	* scripttempl/elfxtensa.sc: Likewise.
+	* scripttempl/iq2000.sc: Likewise.
+	* scripttempl/mep.sc: Likewise.
+	* scripttempl/xstormy16.sc: Likewise.
+@
+text
+@d8 1
+a8 1
+CTOR=".ctors ${CONSTRUCTING-0} : 
+d34 1
+a34 1
+DTOR=" .dtors       ${CONSTRUCTING-0} :
+@
+
+

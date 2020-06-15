@@ -1,0 +1,1461 @@
+head	1.13;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.12.2.1
+	gdb_7_6-2013-04-26-release:1.12
+	gdb_7_6-branch:1.12.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.12
+	gdb_7_5_1-2012-11-29-release:1.10
+	gdb_7_5-2012-08-17-release:1.10
+	gdb_7_5-branch:1.10.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.10
+	gdb_7_4_1-2012-04-26-release:1.8.2.1
+	gdb_7_4-2012-01-24-release:1.8.2.1
+	gdb_7_4-branch:1.8.0.2
+	gdb_7_4-2011-12-13-branchpoint:1.8
+	gdb_7_3_1-2011-09-04-release:1.7
+	gdb_7_3-2011-07-26-release:1.7
+	gdb_7_3-branch:1.7.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.7
+	gdb_7_2-2010-09-02-release:1.4
+	gdb_7_2-branch:1.4.0.4
+	gdb_7_2-2010-07-07-branchpoint:1.4
+	gdb_7_1-2010-03-18-release:1.4
+	gdb_7_1-branch:1.4.0.2
+	gdb_7_1-2010-02-18-branchpoint:1.4;
+locks; strict;
+comment	@ * @;
+
+
+1.13
+date	2013.08.28.17.52.03;	author jkratoch;	state Exp;
+branches;
+next	1.12;
+
+1.12
+date	2013.01.01.06.32.49;	author brobecke;	state Exp;
+branches
+	1.12.2.1;
+next	1.11;
+
+1.11
+date	2012.08.22.15.17.21;	author tromey;	state Exp;
+branches;
+next	1.10;
+
+1.10
+date	2012.01.24.21.39.15;	author tromey;	state Exp;
+branches;
+next	1.9;
+
+1.9
+date	2012.01.04.08.17.09;	author brobecke;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2011.07.26.15.17.47;	author ppluzhnikov;	state Exp;
+branches
+	1.8.2.1;
+next	1.7;
+
+1.7
+date	2011.01.10.20.38.50;	author msnyder;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2011.01.05.22.22.50;	author msnyder;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2011.01.01.15.33.13;	author brobecke;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2010.01.01.07.31.38;	author brobecke;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2009.11.15.20.08.03;	author palves;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2009.10.20.11.09.01;	author palves;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2009.10.19.09.51.41;	author palves;	state Exp;
+branches;
+next	;
+
+1.12.2.1
+date	2013.08.28.17.55.55;	author jkratoch;	state Exp;
+branches;
+next	;
+
+1.8.2.1
+date	2012.01.06.04.43.26;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.13
+log
+@PR gdb/15415
+
+gdb/
+2013-08-27  Jan Kratochvil  <jan.kratochvil@@redhat.com>
+
+	PR gdb/15415
+	* corefile.c (get_exec_file): Use exec_filename.
+	* defs.h (OPF_DISABLE_REALPATH): New definition.  Add new comment.
+	* exec.c (exec_close): Free EXEC_FILENAME.
+	(exec_file_attach): New variable canonical_pathname.  Use
+	OPF_DISABLE_REALPATH.  Call gdb_realpath explicitly.  Set
+	EXEC_FILENAME.
+	* exec.h (exec_filename): New.
+	* inferior.c (print_inferior, inferior_command): Use
+	PSPACE_EXEC_FILENAME.
+	* mi/mi-main.c (print_one_inferior): Likewise.
+	* progspace.c (clone_program_space, print_program_space): Likewise.
+	* progspace.h (struct program_space): New field pspace_exec_filename.
+	* source.c (openp): Describe OPF_DISABLE_REALPATH.  New variable
+	realpath_fptr, initialize it from OPF_DISABLE_REALPATH, use it.
+
+gdb/testsuite/
+2013-08-27  Jan Kratochvil  <jan.kratochvil@@redhat.com>
+
+	PR gdb/15415
+	* gdb.base/argv0-symlink.c: New file.
+	* gdb.base/argv0-symlink.exp: New file.
+@
+text
+@/* Program and address space management, for GDB, the GNU debugger.
+
+   Copyright (C) 2009-2013 Free Software Foundation, Inc.
+
+   This file is part of GDB.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+
+#ifndef PROGSPACE_H
+#define PROGSPACE_H
+
+#include "target.h"
+#include "vec.h"
+#include "gdb_vecs.h"
+#include "registry.h"
+
+struct target_ops;
+struct bfd;
+struct objfile;
+struct inferior;
+struct exec;
+struct address_space;
+struct program_space_data;
+
+typedef struct so_list *so_list_ptr;
+DEF_VEC_P (so_list_ptr);
+
+/* A program space represents a symbolic view of an address space.
+   Roughly speaking, it holds all the data associated with a
+   non-running-yet program (main executable, main symbols), and when
+   an inferior is running and is bound to it, includes the list of its
+   mapped in shared libraries.
+
+   In the traditional debugging scenario, there's a 1-1 correspondence
+   among program spaces, inferiors and address spaces, like so:
+
+     pspace1 (prog1) <--> inf1(pid1) <--> aspace1
+
+   In the case of debugging more than one traditional unix process or
+   program, we still have:
+
+     |-----------------+------------+---------|
+     | pspace1 (prog1) | inf1(pid1) | aspace1 |
+     |----------------------------------------|
+     | pspace2 (prog1) | no inf yet | aspace2 |
+     |-----------------+------------+---------|
+     | pspace3 (prog2) | inf2(pid2) | aspace3 |
+     |-----------------+------------+---------|
+
+   In the former example, if inf1 forks (and GDB stays attached to
+   both processes), the new child will have its own program and
+   address spaces.  Like so:
+
+     |-----------------+------------+---------|
+     | pspace1 (prog1) | inf1(pid1) | aspace1 |
+     |-----------------+------------+---------|
+     | pspace2 (prog1) | inf2(pid2) | aspace2 |
+     |-----------------+------------+---------|
+
+   However, had inf1 from the latter case vforked instead, it would
+   share the program and address spaces with its parent, until it
+   execs or exits, like so:
+
+     |-----------------+------------+---------|
+     | pspace1 (prog1) | inf1(pid1) | aspace1 |
+     |                 | inf2(pid2) |         |
+     |-----------------+------------+---------|
+
+   When the vfork child execs, it is finally given new program and
+   address spaces.
+
+     |-----------------+------------+---------|
+     | pspace1 (prog1) | inf1(pid1) | aspace1 |
+     |-----------------+------------+---------|
+     | pspace2 (prog1) | inf2(pid2) | aspace2 |
+     |-----------------+------------+---------|
+
+   There are targets where the OS (if any) doesn't provide memory
+   management or VM protection, where all inferiors share the same
+   address space --- e.g. uClinux.  GDB models this by having all
+   inferiors share the same address space, but, giving each its own
+   program space, like so:
+
+     |-----------------+------------+---------|
+     | pspace1 (prog1) | inf1(pid1) |         |
+     |-----------------+------------+         |
+     | pspace2 (prog1) | inf2(pid2) | aspace1 |
+     |-----------------+------------+         |
+     | pspace3 (prog2) | inf3(pid3) |         |
+     |-----------------+------------+---------|
+
+   The address space sharing matters for run control and breakpoints
+   management.  E.g., did we just hit a known breakpoint that we need
+   to step over?  Is this breakpoint a duplicate of this other one, or
+   do I need to insert a trap?
+
+   Then, there are targets where all symbols look the same for all
+   inferiors, although each has its own address space, as e.g.,
+   Ericsson DICOS.  In such case, the model is:
+
+     |---------+------------+---------|
+     |         | inf1(pid1) | aspace1 |
+     |         +------------+---------|
+     | pspace  | inf2(pid2) | aspace2 |
+     |         +------------+---------|
+     |         | inf3(pid3) | aspace3 |
+     |---------+------------+---------|
+
+   Note however, that the DICOS debug API takes care of making GDB
+   believe that breakpoints are "global".  That is, although each
+   process does have its own private copy of data symbols (just like a
+   bunch of forks), to the breakpoints module, all processes share a
+   single address space, so all breakpoints set at the same address
+   are duplicates of each other, even breakpoints set in the data
+   space (e.g., call dummy breakpoints placed on stack).  This allows
+   a simplification in the spaces implementation: we avoid caring for
+   a many-many links between address and program spaces.  Either
+   there's a single address space bound to the program space
+   (traditional unix/uClinux), or, in the DICOS case, the address
+   space bound to the program space is mostly ignored.  */
+
+/* The program space structure.  */
+
+struct program_space
+  {
+    /* Pointer to next in linked list.  */
+    struct program_space *next;
+
+    /* Unique ID number.  */
+    int num;
+
+    /* The main executable loaded into this program space.  This is
+       managed by the exec target.  */
+
+    /* The BFD handle for the main executable.  */
+    bfd *ebfd;
+    /* The last-modified time, from when the exec was brought in.  */
+    long ebfd_mtime;
+    /* Similar to bfd_get_filename (exec_bfd) but in original form given
+       by user, without symbolic links and pathname resolved.
+       It needs to be freed by xfree.  It is not NULL iff EBFD is not NULL.  */
+    char *pspace_exec_filename;
+
+    /* The address space attached to this program space.  More than one
+       program space may be bound to the same address space.  In the
+       traditional unix-like debugging scenario, this will usually
+       match the address space bound to the inferior, and is mostly
+       used by the breakpoints module for address matches.  If the
+       target shares a program space for all inferiors and breakpoints
+       are global, then this field is ignored (we don't currently
+       support inferiors sharing a program space if the target doesn't
+       make breakpoints global).  */
+    struct address_space *aspace;
+
+    /* True if this program space's section offsets don't yet represent
+       the final offsets of the "live" address space (that is, the
+       section addresses still require the relocation offsets to be
+       applied, and hence we can't trust the section addresses for
+       anything that pokes at live memory).  E.g., for qOffsets
+       targets, or for PIE executables, until we connect and ask the
+       target for the final relocation offsets, the symbols we've used
+       to set breakpoints point at the wrong addresses.  */
+    int executing_startup;
+
+    /* True if no breakpoints should be inserted in this program
+       space.  */
+    int breakpoints_not_allowed;
+
+    /* The object file that the main symbol table was loaded from
+       (e.g. the argument to the "symbol-file" or "file" command).  */
+    struct objfile *symfile_object_file;
+
+    /* All known objfiles are kept in a linked list.  This points to
+       the head of this list.  */
+    struct objfile *objfiles;
+
+    /* The set of target sections matching the sections mapped into
+       this program space.  Managed by both exec_ops and solib.c.  */
+    struct target_section_table target_sections;
+
+    /* List of shared objects mapped into this space.  Managed by
+       solib.c.  */
+    struct so_list *so_list;
+
+    /* Number of calls to solib_add.  */
+    unsigned solib_add_generation;
+
+    /* When an solib is added, it is also added to this vector.  This
+       is so we can properly report solib changes to the user.  */
+    VEC (so_list_ptr) *added_solibs;
+
+    /* When an solib is removed, its name is added to this vector.
+       This is so we can properly report solib changes to the user.  */
+    VEC (char_ptr) *deleted_solibs;
+
+    /* Per pspace data-pointers required by other GDB modules.  */
+    REGISTRY_FIELDS;
+  };
+
+/* The object file that the main symbol table was loaded from (e.g. the
+   argument to the "symbol-file" or "file" command).  */
+
+#define symfile_objfile current_program_space->symfile_object_file
+
+/* All known objfiles are kept in a linked list.  This points to the
+   root of this list.  */
+#define object_files current_program_space->objfiles
+
+/* The set of target sections matching the sections mapped into the
+   current program space.  */
+#define current_target_sections (&current_program_space->target_sections)
+
+/* The list of all program spaces.  There's always at least one.  */
+extern struct program_space *program_spaces;
+
+/* The current program space.  This is always non-null.  */
+extern struct program_space *current_program_space;
+
+#define ALL_PSPACES(pspace) \
+  for ((pspace) = program_spaces; (pspace) != NULL; (pspace) = (pspace)->next)
+
+/* Add a new empty program space, and assign ASPACE to it.  Returns the
+   pointer to the new object.  */
+extern struct program_space *add_program_space (struct address_space *aspace);
+
+/* Release PSPACE and removes it from the pspace list.  */
+extern void remove_program_space (struct program_space *pspace);
+
+/* Returns the number of program spaces listed.  */
+extern int number_of_program_spaces (void);
+
+/* Copies program space SRC to DEST.  Copies the main executable file,
+   and the main symbol file.  Returns DEST.  */
+extern struct program_space *clone_program_space (struct program_space *dest,
+						struct program_space *src);
+
+/* Save the current program space so that it may be restored by a later
+   call to do_cleanups.  Returns the struct cleanup pointer needed for
+   later doing the cleanup.  */
+extern struct cleanup *save_current_program_space (void);
+
+/* Sets PSPACE as the current program space.  This is usually used
+   instead of set_current_space_and_thread when the current
+   thread/inferior is not important for the operations that follow.
+   E.g., when accessing the raw symbol tables.  If memory access is
+   required, then you should use switch_to_program_space_and_thread.
+   Otherwise, it is the caller's responsibility to make sure that the
+   currently selected inferior/thread matches the selected program
+   space.  */
+extern void set_current_program_space (struct program_space *pspace);
+
+/* Saves the current thread (may be null), frame and program space in
+   the current cleanup chain.  */
+extern struct cleanup *save_current_space_and_thread (void);
+
+/* Switches full context to program space PSPACE.  Switches to the
+   first thread found bound to PSPACE.  */
+extern void switch_to_program_space_and_thread (struct program_space *pspace);
+
+/* Create a new address space object, and add it to the list.  */
+extern struct address_space *new_address_space (void);
+
+/* Maybe create a new address space object, and add it to the list, or
+   return a pointer to an existing address space, in case inferiors
+   share an address space.  */
+extern struct address_space *maybe_new_address_space (void);
+
+/* Returns the integer address space id of ASPACE.  */
+extern int address_space_num (struct address_space *aspace);
+
+/* Update all program spaces matching to address spaces.  The user may
+   have created several program spaces, and loaded executables into
+   them before connecting to the target interface that will create the
+   inferiors.  All that happens before GDB has a chance to know if the
+   inferiors will share an address space or not.  Call this after
+   having connected to the target interface and having fetched the
+   target description, to fixup the program/address spaces
+   mappings.  */
+extern void update_address_spaces (void);
+
+/* Prune away automatically added program spaces that aren't required
+   anymore.  */
+extern void prune_program_spaces (void);
+
+/* Reset saved solib data at the start of an solib event.  This lets
+   us properly collect the data when calling solib_add, so it can then
+   later be printed.  */
+extern void clear_program_space_solib_cache (struct program_space *);
+
+/* Keep a registry of per-pspace data-pointers required by other GDB
+   modules.  */
+
+DECLARE_REGISTRY (program_space);
+
+#endif
+@
+
+
+1.12
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@d151 4
+@
+
+
+1.12.2.1
+log
+@PR gdb/15415
+
+gdb/
+2013-08-27  Jan Kratochvil  <jan.kratochvil@@redhat.com>
+
+	PR gdb/15415
+	* corefile.c (get_exec_file): Use exec_filename.
+	* defs.h (OPF_DISABLE_REALPATH): New definition.  Add new comment.
+	* exec.c (exec_close): Free EXEC_FILENAME.
+	(exec_file_attach): New variable canonical_pathname.  Use
+	OPF_DISABLE_REALPATH.  Call gdb_realpath explicitly.  Set
+	EXEC_FILENAME.
+	* exec.h (exec_filename): New.
+	* inferior.c (print_inferior, inferior_command): Use
+	PSPACE_EXEC_FILENAME.
+	* mi/mi-main.c (print_one_inferior): Likewise.
+	* progspace.c (clone_program_space, print_program_space): Likewise.
+	* progspace.h (struct program_space): New field pspace_exec_filename.
+	* source.c (openp): Describe OPF_DISABLE_REALPATH.  New variable
+	realpath_fptr, initialize it from OPF_DISABLE_REALPATH, use it.
+
+gdb/testsuite/
+2013-08-27  Jan Kratochvil  <jan.kratochvil@@redhat.com>
+
+	PR gdb/15415
+	* gdb.base/argv0-symlink.c: New file.
+	* gdb.base/argv0-symlink.exp: New file.
+@
+text
+@a150 4
+    /* Similar to bfd_get_filename (exec_bfd) but in original form given
+       by user, without symbolic links and pathname resolved.
+       It needs to be freed by xfree.  It is not NULL iff EBFD is not NULL.  */
+    char *pspace_exec_filename;
+@
+
+
+1.11
+log
+@	* auto-load.c (_initialize_auto_load): Update.
+	* solib-svr4.c (_initialize_svr4_solib): Update
+	* solib-dsbt.c (_initialize_dsbt_solib): Update.
+	* solib-darwin.c (_initialize_darwin_solib): Update.
+	* registry.h: New file.
+	* python/py-progspace.c (gdbpy_initialize_pspace): Update.
+	* python/py-inferior.c (gdbpy_initialize_inferior): Update.
+	* progspace.h: Include registry.h.  Use DECLARE_REGISTRY.
+	(register_program_space_data_with_cleanup)
+	(register_program_space_data, program_space_alloc_data)
+	(clear_program_space_data, set_program_space_data)
+	(program_space_data): Don't declare.
+	* progspace.c: Use DEFINE_REGISTRY.
+	(struct program_space_data, struct
+	program_space_data_registration, struct
+	program_space_data_registry, program_space_data_registry)
+	(register_program_space_data_with_cleanup)
+	(register_program_space_data, program_space_alloc_data)
+	(program_space_free_data, clear_program_space_data)
+	(set_program_space_data, program_space_data): Remove.
+	* objfiles.h: Include registry.h.  Use DECLARE_REGISTRY.
+	(struct objfile) <data, num_data>: Replace with REGISTRY_FIELDS.
+	(register_objfile_data_with_cleanup, register_objfile_data)
+	(clear_objfile_data, set_objfile_data, objfile_data): Don't
+	declare.
+	* objfiles.c: Use DEFINE_REGISTRY.
+	(struct objfile_data, struct objfile_data_registration, struct
+	objfile_data_registry, objfile_data_registry)
+	(register_objfile_data_with_cleanup, register_objfile_data)
+	(objfile_alloc_data, objfile_free_data, clear_objfile_data)
+	(set_objfile_data, objfile_data): Remove.
+	(_initialize_objfiles): Update.
+	* jit.c (_initialize_jit): Update.
+	* inflow.c (_initialize_inflow): Update.
+	* inferior.h: Include registry.h.  Use DECLARE_REGISTRY.
+	(struct inferior) <data, num_data>: Replace with REGISTRY_FIELDS.
+	(register_inferior_data_with_cleanup, register_inferior_data)
+	(clear_inferior_data, set_inferior_data, inferior_data): Don't
+	declare.
+	* inferior.c: Use DEFINE_REGISTRY.
+	(struct inferior_data, struct inferior_data_registration, struct
+	inferior_data_registry, inferior_data_registry)
+	(register_inferior_data_with_cleanup, register_inferior_data)
+	(inferior_alloc_data, inferior_free_data  clear_inferior_data)
+	(set_inferior_data, inferior_data): Remove.
+	* auxv.c (_initialize_auxv): Update.
+	* ada-lang.c (_initialize_ada_language): Update.
+	* breakpoint.c (_initialize_breakpoint): Update.
+	* i386-nat.c (i386_use_watchpoints): Update.
+@
+text
+@d3 1
+a3 1
+   Copyright (C) 2009-2012 Free Software Foundation, Inc.
+@
+
+
+1.10
+log
+@	PR symtab/12406:
+	* solib.c (update_solib_list): Update the program space's
+	added_solibs and deleted_solibs fields.
+	* progspace.h (struct program_space) <added_solibs,
+	deleted_solibs>: New fields.
+	(clear_program_space_solib_cache): Declare.
+	* progspace.c (release_program_space): Call
+	clear_program_space_solib_cache.
+	(clear_program_space_solib_cache): New function.
+	* infrun.c (handle_inferior_event) <TARGET_WAITKIND_LOADED>: Call
+	bpstat_stop_status.  Use handle_solib_event.
+	* breakpoint.c: Include gdb_regex.h.
+	(print_solib_event): New function.
+	(bpstat_print): Use print_solib_event.
+	(bpstat_stop_status): Add special case for bp_shlib_event.
+	(handle_solib_event): New function.
+	(bpstat_what): Use handle_solib_event.
+	(struct solib_catchpoint): New.
+	(dtor_catch_solib, insert_catch_solib, remove_catch_solib)
+	(breakpoint_hit_catch_solib, check_status_catch_solib)
+	(print_it_catch_solib, print_one_catch_solib)
+	(print_mention_catch_solib, print_recreate_catch_solib): New
+	functions.
+	(catch_solib_breakpoint_ops): New global.
+	(catch_load_or_unload, catch_load_command_1)
+	(catch_unload_command_1): New functions.
+	(internal_bkpt_check_status): Add special case for
+	bp_shlib_event.
+	(internal_bkpt_print_it): Use print_solib_event.
+	(initialize_breakpoint_ops): Initialize
+	catch_solib_breakpoint_ops.
+	(_initialize_breakpoint): Register "catch load" and "catch
+	unload".
+	* breakpoint.h (handle_solib_event): Declare.
+	* NEWS: Add entry for "catch load" and "catch unload".
+gdb/doc
+	* gdb.texinfo (Set Catchpoints): Document "catch load" and "catch
+	unload".
+	(Files): Mention new catch commands.
+	(GDB/MI Async Records): Likewise.
+gdb/testsuite
+	* lib/mi-support.exp (mi_expect_stop): Add special case for
+	solib-event.
+	* gdb.base/catch-load-so.c: New file.
+	* gdb.base/catch-load.exp: New file.
+	* gdb.base/catch-load.c: New file.
+	* gdb.base/break-interp.exp (reach_1): Update regexp.
+@
+text
+@d27 1
+d205 1
+a205 2
+    void **data;
+    unsigned num_data;
+d301 1
+a301 9
+extern const struct program_space_data *register_program_space_data (void);
+extern const struct program_space_data *register_program_space_data_with_cleanup
+  (void (*cleanup) (struct program_space *, void *));
+extern void clear_program_space_data (struct program_space *pspace);
+extern void set_program_space_data (struct program_space *pspace,
+				    const struct program_space_data *data,
+				    void *value);
+extern void *program_space_data (struct program_space *pspace,
+			   const struct program_space_data *data);
+@
+
+
+1.9
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d26 1
+d36 3
+d195 8
+d293 5
+@
+
+
+1.8
+log
+@2011-07-26  Paul Pluzhnikov  <ppluzhnikov@@google.com>
+
+	* progspace.h (struct program_space): Add solib_add_generation.
+	* infcmd.c (post_create_inferior): Only call solib_add if not
+	already done.
+	* solib.c (solib_add): Increment solib_add_generation.
+@
+text
+@d3 1
+a3 1
+   Copyright (C) 2009, 2010, 2011 Free Software Foundation, Inc.
+@
+
+
+1.8.2.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d3 1
+a3 1
+   Copyright (C) 2009-2012 Free Software Foundation, Inc.
+@
+
+
+1.7
+log
+@2011-01-10  Michael Snyder  <msnyder@@vmware.com>
+
+	* nto-procfs.c: Comment cleanup, mostly periods and spaces.
+	* nto-tdep.c: Ditto.
+	* nto-tdep.h: Ditto.
+	* objc-exp.y: Ditto.
+	* objc-lang.c: Ditto.
+	* objfiles.c: Ditto.
+	* objfiles.h: Ditto.
+	* observer.c: Ditto.
+	* opencl-lang.c: Ditto.
+	* osabi.c: Ditto.
+	* parse.c: Ditto.
+	* parser-defs.h: Ditto.
+	* p-exp.y: Ditto.
+	* p-lang.c: Ditto.
+	* posix-hdep.c: Ditto.
+	* ppcbug-rom.c: Ditto.
+	* ppc-linux-nat.c: Ditto.
+	* ppc-linux-tdep.c: Ditto.
+	* ppc-linux-tdep.h: Ditto.
+	* ppcnbsd-tdep.c: Ditto.
+	* ppcobsd-tdep.c: Ditto.
+	* ppcobsd-tdep.h: Ditto.
+	* ppc-sysv-tdep.c: Ditto.
+	* ppc-tdep.h: Ditto.
+	* printcmd.c: Ditto.
+	* proc-abi.c: Ditto.
+	* proc-flags.c: Ditto.
+	* procfs.c: Ditto.
+	* proc-utils.h: Ditto.
+	* progspace.h: Ditto.
+	* prologue-value.c: Ditto.
+	* prologue-value.h: Ditto.
+	* psympriv.h: Ditto.
+	* psymtab.c: Ditto.
+	* p-typeprint.c: Ditto.
+	* p-valprint.c: Ditto.
+	* ravenscar-sparc-thread.c: Ditto.
+	* ravenscar-thread.c: Ditto.
+	* ravenscar-thread.h: Ditto.
+	* record.c: Ditto.
+	* regcache.c: Ditto.
+	* regcache.h: Ditto.
+	* remote.c: Ditto.
+	* remote-fileio.c: Ditto.
+	* remote-fileio.h: Ditto.
+	* remote.h: Ditto.
+	* remote-m32r-sdi.c: Ditto.
+	* remote-mips.c: Ditto.
+	* remote-sim.c: Ditto.
+	* rs6000-aix-tdep.c: Ditto.
+	* rs6000-nat.c: Ditto.
+	* rs6000-tdep.c: Ditto.
+@
+text
+@d188 3
+@
+
+
+1.6
+log
+@2011-01-05  Michael Snyder  <msnyder@@vmware.com>
+
+	* addrmap.c: Shorten lines of >= 80 columns.
+	* arch-utils.c: Ditto.
+	* arch-utils.h: Ditto.
+	* ax-gdb.c: Ditto.
+	* ax-general.c: Ditto.
+	* bcache.c: Ditto.
+	* blockframe.c: Ditto.
+	* breakpoint.c: Ditto.
+	* buildsym.c: Ditto.
+	* c-lang.c: Ditto.
+	* c-typeprint.c: Ditto.
+	* charset.c: Ditto.
+	* coffread.c: Ditto.
+	* command.h: Ditto.
+	* corelow.c: Ditto.
+	* cp-abi.c: Ditto.
+	* cp-namespace.c: Ditto.
+	* cp-support.c: Ditto.
+	* dbug-rom.c: Ditto.
+	* dbxread.c: Ditto.
+	* defs.h: Ditto.
+	* dfp.c: Ditto.
+	* dfp.h: Ditto.
+	* dictionary.c: Ditto.
+	* disasm.c: Ditto.
+	* doublest.c: Ditto.
+	* dwarf2-frame.c: Ditto.
+	* dwarf2expr.c: Ditto.
+	* dwarf2loc.c: Ditto.
+	* dwarf2read.c: Ditto.
+	* elfread.c: Ditto.
+	* eval.c: Ditto.
+	* event-loop.c: Ditto.
+	* event-loop.h: Ditto.
+	* exceptions.h: Ditto.
+	* exec.c: Ditto.
+	* expprint.c: Ditto.
+	* expression.h: Ditto.
+	* f-lang.c: Ditto.
+	* f-valprint.c: Ditto.
+	* findcmd.c: Ditto.
+	* frame-base.c: Ditto.
+	* frame-unwind.c: Ditto.
+	* frame-unwind.h: Ditto.
+	* frame.c: Ditto.
+	* frame.h: Ditto.
+	* gcore.c: Ditto.
+	* gdb-stabs.h: Ditto.
+	* gdb_assert.h: Ditto.
+	* gdb_dirent.h: Ditto.
+	* gdb_obstack.h: Ditto.
+	* gdbcore.h: Ditto.
+	* gdbtypes.c: Ditto.
+	* gdbtypes.h: Ditto.
+	* inf-ttrace.c: Ditto.
+	* infcall.c: Ditto.
+	* infcmd.c: Ditto.
+	* inflow.c: Ditto.
+	* infrun.c: Ditto.
+	* inline-frame.h: Ditto.
+	* language.c: Ditto.
+	* language.h: Ditto.
+	* libunwind-frame.c: Ditto.
+	* libunwind-frame.h: Ditto.
+	* linespec.c: Ditto.
+	* linux-nat.c: Ditto.
+	* linux-nat.h: Ditto.
+	* linux-thread-db.c: Ditto.
+	* machoread.c: Ditto.
+	* macroexp.c: Ditto.
+	* macrotab.c: Ditto.
+	* main.c: Ditto.
+	* maint.c: Ditto.
+	* mdebugread.c: Ditto.
+	* memattr.c: Ditto.
+	* minsyms.c: Ditto.
+	* monitor.c: Ditto.
+	* monitor.h: Ditto.
+	* objfiles.c: Ditto.
+	* objfiles.h: Ditto.
+	* osabi.c: Ditto.
+	* p-typeprint.c: Ditto.
+	* p-valprint.c: Ditto.
+	* parse.c: Ditto.
+	* printcmd.c: Ditto.
+	* proc-events.c: Ditto.
+	* procfs.c: Ditto.
+	* progspace.c: Ditto.
+	* progspace.h: Ditto.
+	* psympriv.h: Ditto.
+	* psymtab.c: Ditto.
+	* record.c: Ditto.
+	* regcache.c: Ditto.
+	* regcache.h: Ditto.
+	* remote-fileio.c: Ditto.
+	* remote.c: Ditto.
+	* ser-mingw.c: Ditto.
+	* ser-tcp.c: Ditto.
+	* ser-unix.c: Ditto.
+	* serial.c: Ditto.
+	* serial.h: Ditto.
+	* solib-frv.c: Ditto.
+	* solib-irix.c: Ditto.
+	* solib-osf.c: Ditto.
+	* solib-pa64.c: Ditto.
+	* solib-som.c: Ditto.
+	* solib-sunos.c: Ditto.
+	* solib-svr4.c: Ditto.
+	* solib-target.c: Ditto.
+	* solib.c: Ditto.
+	* somread.c: Ditto.
+	* source.c: Ditto.
+	* stabsread.c: Ditto.
+	* stabsread.c: Ditto.
+	* stack.c: Ditto.
+	* stack.h: Ditto.
+	* symfile-mem.c: Ditto.
+	* symfile.c: Ditto.
+	* symfile.h: Ditto.
+	* symmisc.c: Ditto.
+	* symtab.c: Ditto.
+	* symtab.h: Ditto.
+	* target-descriptions.c: Ditto.
+	* target-memory.c: Ditto.
+	* target.c: Ditto.
+	* target.h: Ditto.
+	* terminal.h: Ditto.
+	* thread.c: Ditto.
+	* top.c: Ditto.
+	* tracepoint.c: Ditto.
+	* tracepoint.h: Ditto.
+	* ui-file.c: Ditto.
+	* ui-file.h: Ditto.
+	* ui-out.h: Ditto.
+	* user-regs.c: Ditto.
+	* user-regs.h: Ditto.
+	* utils.c: Ditto.
+	* valarith.c: Ditto.
+	* valops.c: Ditto.
+	* valprint.c: Ditto.
+	* valprint.h: Ditto.
+	* value.c: Ditto.
+	* varobj.c: Ditto.
+	* varobj.h: Ditto.
+	* vec.h: Ditto.
+	* xcoffread.c: Ditto.
+	* xcoffsolib.c: Ditto.
+	* xcoffsolib.h: Ditto.
+	* xml-syscall.c: Ditto.
+	* xml-tdesc.c: Ditto.
+@
+text
+@d177 1
+a177 1
+       the head of this list. */
+d199 1
+a199 1
+   root of this list. */
+@
+
+
+1.5
+log
+@run copyright.sh for 2011.
+@
+text
+@d286 2
+a287 1
+			      const struct program_space_data *data, void *value);
+@
+
+
+1.4
+log
+@Update copyright year in most headers.
+
+Automatic update by copyright.sh.
+@
+text
+@d3 1
+a3 1
+   Copyright (C) 2009, 2010 Free Software Foundation, Inc.
+@
+
+
+1.3
+log
+@	* breakpoint.c (should_be_inserted): Don't insert breakpoints if
+	the pspace doesn't allow breakpoints.
+	(insert_breakpoint_locations): Remove waiting_for_vfork_done
+	special case.  Expect watchpoints that shouldn't be inserted, to
+	not be inserted.
+	* progspace.h (struct program_space) <breakpoints_not_allowed>:
+	New field.
+	* infrun.c (handle_inferior_event): Clear it.
+	* linux-nat.c (linux_child_follow_fork): Set it.
+@
+text
+@d3 1
+a3 1
+   Copyright (C) 2009 Free Software Foundation, Inc.
+@
+
+
+1.2
+log
+@	* linux-nat.c (linux_nat_thread_address_space): New.
+	(linux_nat_add_target): Install it.
+	* progspace.c (address_space_num): New.
+	* progspace.h (address_space_num): Declare.
+	* target.c (target_thread_address_space): Really query the target.
+	* target.h (struct target_ops) <to_thread_address_space>: New
+	field.
+@
+text
+@d168 4
+@
+
+
+1.1
+log
+@2009-10-19  Pedro Alves	 <pedro@@codesourcery.com>
+	    Stan Shebs	<stan@@codesourcery.com>
+
+	Add base multi-executable/process support to GDB.
+
+	gdb/
+	* Makefile.in (SFILES): Add progspace.c.
+	(COMMON_OBS): Add progspace.o.
+	* progspace.h: New.
+	* progspace.c: New.
+
+	* breakpoint.h (struct bp_target_info) <placed_address_space>: New
+	field.
+	(struct bp_location) <pspace>: New field.
+	(struct breakpoint) <pspace>: New field.
+	(bpstat_stop_status, breakpoint_here_p)
+	(moribund_breakpoint_here_p, breakpoint_inserted_here_p)
+	(regular_breakpoint_inserted_here_p)
+	(software_breakpoint_inserted_here_p, breakpoint_thread_match)
+	(set_default_breakpoint): Adjust prototypes.
+	(remove_breakpoints_pid, breakpoint_program_space_exit): Declare.
+	(insert_single_step_breakpoint, deprecated_insert_raw_breakpoint):
+	Adjust prototypes.
+	* breakpoint.c (executing_startup): Delete.
+	(default_breakpoint_sspace): New.
+	(breakpoint_restore_shadows): Skip if the address space doesn't
+	match.
+	(update_watchpoint): Record the frame's program space in the
+	breakpoint location.
+	(insert_bp_location): Record the address space in target_info.
+	Adjust to pass the symbol space to solib_name_from_address.
+	(breakpoint_program_space_exit): New.
+	(insert_breakpoint_locations): Switch the symbol space and thread
+	when inserting breakpoints.  Don't insert breakpoints in a vfork
+	parent waiting for vfork done if we're not attached to the vfork
+	child.
+	(remove_breakpoints_pid): New.
+	(reattach_breakpoints): Switch to a thread of PID.  Ignore
+	breakpoints of other symbol spaces.
+	(create_internal_breakpoint): Store the symbol space in the sal.
+	(create_longjmp_master_breakpoint): Iterate over all symbol
+	spaces.
+	(update_breakpoints_after_exec): Ignore breakpoints for other
+	symbol spaces.
+	(remove_breakpoint): Rename to ...
+	(remove_breakpoint_1): ... this.  Pass the breakpoints symbol
+	space to solib_name_from_address.
+	(remove_breakpoint): New.
+	(mark_breakpoints_out): Ignore breakpoints from other symbol
+	spaces.
+	(breakpoint_init_inferior): Ditto.
+	(breakpoint_here_p): Add an address space argument and adjust to
+	use breakpoint_address_match.
+	(moribund_breakpoint_here_p): Ditto.
+	(regular_breakpoint_inserted_here_p): Ditto.
+	(breakpoint_inserted_here_p): Ditto.
+	(software_breakpoint_inserted_here_p): Ditto.
+	(breakpoint_thread_match): Ditto.
+	(bpstat_check_location): Ditto.
+	(bpstat_stop_status): Ditto.
+	(print_breakpoint_location): If there's a location to print,
+	switch the current symbol space.
+	(print_one_breakpoint_location): Add `allflag' argument.
+	(print_one_breakpoint): Ditto.	Adjust.
+	(do_captured_breakpoint_query): Adjust.
+	(breakpoint_1): Adjust.
+	(breakpoint_has_pc): Also match the symbol space.
+	(describe_other_breakpoints): Add a symbol space argument and
+	adjust.
+	(set_default_breakpoint): Add a symbol space argument.	Set
+	default_breakpoint_sspace.
+	(breakpoint_address_match): New.
+	(check_duplicates_for): Add an address space argument, and adjust.
+	(set_raw_breakpoint): Record the symbol space in the location and
+	in the breakpoint.
+	(set_longjmp_breakpoint): Skip longjmp master breakpoints from
+	other symbol spaces.
+	(remove_thread_event_breakpoints, remove_solib_event_breakpoints)
+	(disable_breakpoints_in_shlibs): Skip breakpoints from other
+	symbol spaces.
+	(disable_breakpoints_in_unloaded_shlib): Match symbol spaces.
+	(create_catchpoint): Set the symbol space in the sal.
+	(disable_breakpoints_before_startup): Skip breakpoints from other
+	symbol spaces.	Set executing_startup in the current symbol space.
+	(enable_breakpoints_after_startup): Clear executing_startup in the
+	current symbol space.  Skip breakpoints from other symbol spaces.
+	(clone_momentary_breakpoint): Also copy the symbol space.
+	(add_location_to_breakpoint): Set the location's symbol space.
+	(bp_loc_is_permanent): Switch thread and symbol space.
+	(create_breakpoint): Adjust.
+	(expand_line_sal_maybe): Expand comment to mention symbol spaces.
+	Switch thread and symbol space when reading memory.
+	(parse_breakpoint_sals): Set the symbol space in the sal.
+	(break_command_really): Ditto.
+	(skip_prologue_sal): Switch and space.
+	(resolve_sal_pc): Ditto.
+	(watch_command_1): Record the symbol space in the sal.
+	(create_ada_exception_breakpoint): Adjust.
+	(clear_command): Adjust.  Match symbol spaces.
+	(update_global_location_list): Use breakpoint_address_match.
+	(breakpoint_re_set_one): Switch thread and space.
+	(breakpoint_re_set): Save symbol space.
+	(breakpoint_re_set_thread): Also reset the symbol space.
+	(deprecated_insert_raw_breakpoint): Add an address space argument.
+	Adjust.
+	(insert_single_step_breakpoint): Ditto.
+	(single_step_breakpoint_inserted_here_p): Ditto.
+	(clear_syscall_counts): New.
+	(_initialize_breakpoint): Install it as inferior_exit observer.
+
+	* exec.h: Include "progspace.h".
+	(exec_bfd, exec_bfd_mtime): New defines.
+	(exec_close): Declare.
+	* exec.c: Include "gdbthread.h" and "progspace.h".
+	(exec_bfd, exec_bfd_mtime, current_target_sections_1): Delete.
+	(using_exec_ops): New.
+	(exec_close_1): Rename to exec_close, and make public.
+	(exec_close): Rename to exec_close_1, and adjust all callers.  Add
+	description.  Remove target sections and close executables from
+	all program spaces.
+	(exec_file_attach): Add comment.
+	(add_target_sections): Check on `using_exec_ops' to check if the
+	target should be pushed.
+	(remove_target_sections): Only unpush the target if there are no
+	more target sections in any symbol space.
+	* gdbcore.h: Include "exec.h".
+	(exec_bfd, exec_bfd_mtime): Remove declarations.
+
+	* frame.h (get_frame_program_space, get_frame_address_space)
+	(frame_unwind_program_space): Declare.
+	* frame.c (struct frame_info) <pspace, aspace>: New fields.
+	(create_sentinel_frame): Add program space argument.  Set the
+	pspace and aspace fields of the frame object.
+	(get_current_frame, create_new_frame): Adjust.
+	(get_frame_program_space): New.
+	(frame_unwind_program_space): New.
+	(get_frame_address_space): New.
+	* stack.c (print_frame_info): Adjust.
+	(print_frame): Use the frame's program space.
+
+	* gdbthread.h (any_live_thread_of_process): Declare.
+	* thread.c (any_live_thread_of_process): New.
+	(switch_to_thread): Switch the program space as well.
+	(restore_selected_frame): Don't warn if trying to restore frame
+	level 0.
+
+	* inferior.h: Include "progspace.h".
+	(detach_fork): Declare.
+	(struct inferior) <removable, aspace, pspace>
+	<vfork_parent, vfork_child, pending_detach>
+	<waiting_for_vfork_done>: New fields.
+	<terminal_info>: Remove field.
+	<data, num_data>: New fields.
+	(register_inferior_data, register_inferior_data_with_cleanup)
+	(clear_inferior_data, set_inferior_data, inferior_data): Declare.
+	(exit_inferior, exit_inferior_silent, exit_inferior_num_silent)
+	(inferior_appeared): Declare.
+	(find_inferior_pid): Typo.
+	(find_inferior_id, find_inferior_for_program_space): Declare.
+	(set_current_inferior, save_current_inferior, prune_inferiors)
+	(number_of_inferiors): Declare.
+	(inferior_list): Declare.
+	* inferior.c: Include "gdbcore.h" and "symfile.h".
+	(inferior_list): Make public.
+	(delete_inferior_1): Always delete thread silently.
+	(find_inferior_id): Make public.
+	(current_inferior_): New.
+	(current_inferior): Use it.
+	(set_current_inferior): New.
+	(restore_inferior): New.
+	(save_current_inferior): New.
+	(free_inferior): Free the per-inferior data.
+	(add_inferior_silent): Allocate per-inferior data.
+	Call inferior_appeared.
+	(delete_threads_of_inferior): New.
+	(delete_inferior_1): Adjust interface to take an inferior pointer.
+	(delete_inferior): Adjust.
+	(delete_inferior_silent): Adjust.
+	(exit_inferior_1): New.
+	(exit_inferior): New.
+	(exit_inferior_silent): New.
+	(exit_inferior_num_silent): New.
+	(detach_inferior): Adjust.
+	(inferior_appeared): New.
+	(discard_all_inferiors): Adjust.
+	(find_inferior_id): Make public.  Assert pid is not zero.
+	(find_inferior_for_program_space): New.
+	(have_inferiors): Check if we have any inferior with pid not zero.
+	(have_live_inferiors): Go over all pushed targets looking for
+	process_stratum.
+	(prune_inferiors): New.
+	(number_of_inferiors): New.
+	(print_inferior): Add executable column.  Print vfork parent/child
+	relationships.
+	(inferior_command): Adjust to cope with not running inferiors.
+	(remove_inferior_command): New.
+	(add_inferior_command): New.
+	(clone_inferior_command): New.
+	(struct inferior_data): New.
+	(struct inferior_data_registration): New.
+	(struct inferior_data_registry): New.
+	(inferior_data_registry): New.
+	(register_inferior_data_with_cleanup): New.
+	(register_inferior_data): New.
+	(inferior_alloc_data): New.
+	(inferior_free_data): New.
+	(clear_inferior_data): New.
+	(set_inferior_data): New.
+	(inferior_data): New.
+	(initialize_inferiors): New.
+	(_initialize_inferiors): Register "add-inferior",
+	"remove-inferior" and "clone-inferior" commands.
+
+	* objfiles.h: Include "progspace.h".
+	(struct objfile) <pspace>: New field.
+	(symfile_objfile, object_files): Don't declare.
+	(ALL_PSPACE_OBJFILES): New.
+	(ALL_PSPACE_OBJFILES_SAFE): New.
+	(ALL_OBJFILES, ALL_OBJFILES_SAFE): Adjust.
+	(ALL_PSPACE_SYMTABS): New.
+	(ALL_PRIMARY_SYMTABS): Adjust.
+	(ALL_PSPACE_PRIMARY_SYMTABS): New.
+	(ALL_PSYMTABS): Adjust.
+	(ALL_PSPACE_PSYMTABS): New.
+	* objfiles.c (object_files, symfile_objfile): Delete.
+	(struct objfile_sspace_info): New.
+	(objfiles_pspace_data): New.
+	(objfiles_pspace_data_cleanup): New.
+	(get_objfile_pspace_data): New.
+	(objfiles_changed_p): Delete.
+	(allocate_objfile): Set the objfile's program space.  Adjust to
+	reference objfiles_changed_p in pspace data.
+	(free_objfile): Adjust to reference objfiles_changed_p in pspace
+	data.
+	(objfile_relocate): Ditto.
+	(update_section_map): Add pspace argument.  Adjust to iterate over
+	objfiles in the passed in pspace.
+	(find_pc_section): Delete sections and num_sections statics.
+	Adjust to refer to program space's objfiles_changed_p.	Adjust to
+	refer to sections and num_sections store in the objfile's pspace
+	data.
+	(objfiles_changed): Adjust to reference objfiles_changed_p in
+	pspace data.
+	(_initialize_objfiles): New.
+	* linespec.c (decode_all_digits, decode_dollar): Set the sal's
+	program space.
+	* source.c (current_source_pspace): New.
+	(get_current_source_symtab_and_line): Set the sal's program space.
+	(set_current_source_symtab_and_line): Set current_source_pspace.
+	(select_source_symtab): Ditto.	Use ALL_OBJFILES.
+	(forget_cached_source_info): Iterate over all program spaces.
+	* symfile.c (clear_symtab_users): Adjust.
+	* symmisc.c (print_symbol_bcache_statistics): Iterate over all
+	program spaces.
+	(print_objfile_statistics): Ditto.
+	(maintenance_print_msymbols): Ditto.
+	(maintenance_print_objfiles): Ditto.
+	(maintenance_info_symtabs): Ditto.
+	(maintenance_info_psymtabs): Ditto.
+	* symtab.h (SYMTAB_PSPACE): New.
+	(struct symtab_and_line) <pspace>: New field.
+	* symtab.c (init_sal): Clear the sal's program space.
+	(find_pc_sect_symtab): Set the sal's program space.  Switch thread
+	and space.
+	(append_expanded_sal): Add program space argument.  Iterate over
+	all program spaces.
+	(expand_line_sal): Iterate over all program spaces.  Switch
+	program space.
+
+	* target.h (enum target_waitkind) <TARGET_WAITKIND_VFORK_DONE>: New.
+	(struct target_ops) <to_thread_address_space>: New field.
+	(target_thread_address_space): Define.
+	* target.c (target_detach): Only remove breakpoints from the
+	inferior we're detaching.
+	(target_thread_address_space): New.
+
+	* defs.h (initialize_progspace): Declare.
+	* top.c (gdb_init): Call it.
+
+	* solist.h (struct so_list) <sspace>: New field.
+	* solib.h (struct program_space): Forward declare.
+	(solib_name_from_address): Adjust prototype.
+	* solib.c (so_list_head): Replace with a macro referencing the
+	program space.
+	(update_solib_list): Set the so's program space.
+	(solib_name_from_address): Add a program space argument and adjust.
+
+	* solib-svr4.c (struct svr4_info) <pid>: Delete field.
+	<interp_text_sect_low, interp_text_sect_high, interp_plt_sect_low>
+	<interp_plt_sect_high>: New fields.
+	(svr4_info_p, svr4_info): Delete.
+	(solib_svr4_sspace_data): New.
+	(get_svr4_info): Rewrite.
+	(svr4_sspace_data_cleanup): New.
+	(open_symbol_file_object): Adjust.
+	(svr4_default_sos): Adjust.
+	(svr4_fetch_objfile_link_map): Adjust.
+	(interp_text_sect_low, interp_text_sect_high, interp_plt_sect_low)
+	(interp_plt_sect_high): Delete.
+	(svr4_in_dynsym_resolve_code): Adjust.
+	(enable_break): Adjust.
+	(svr4_clear_solib): Revert bit that removed the svr4_info here,
+	and reinstate clearing debug_base, debug_loader_offset_p,
+	debug_loader_offset and debug_loader_name.
+	(_initialize_svr4_solib): Register solib_svr4_pspace_data.  Don't
+	install an inferior_exit observer anymore.
+
+	* printcmd.c (struct display) <pspace>: New field.
+	(display_command): Set the display's sspace.
+	(do_one_display): Match the display's sspace.
+	(display_uses_solib_p): Ditto.
+
+	* linux-fork.c (detach_fork): Moved to infrun.c.
+	(_initialize_linux_fork): Moved "detach-on-fork" command to
+	infrun.c.
+	* infrun.c (detach_fork): Moved from linux-fork.c.
+	(proceed_after_vfork_done): New.
+	(handle_vfork_child_exec_or_exit): New.
+	(follow_exec_mode_replace, follow_exec_mode_keep)
+	(follow_exec_mode_names, follow_exec_mode_string)
+	(show_follow_exec_mode_string): New.
+	(follow_exec): New.  Reinstate the mark_breakpoints_out call.
+	Remove shared libraries before attaching new executable.  If user
+	wants to keep the inferior, keep it.
+	(displaced_step_fixup): Adjust to pass an address space to the
+	breakpoints module.
+	(resume): Ditto.
+	(clear_proceed_status): In all-stop mode, always clear the proceed
+	status of all threads.
+	(prepare_to_proceed): Adjust to pass an address space to the
+	breakpoints module.
+	(proceed): Ditto.
+	(adjust_pc_after_break): Ditto.
+	(handle_inferior_event): When handling a process exit, switch the
+	program space to the inferior's that had exited.  Call
+	handle_vfork_child_exec_or_exit.  Adjust to pass an address space
+	to the breakpoints module.  In non-stop mode, when following a
+	fork and detach-fork is off, also resume the other branch.  Handle
+	TARGET_WAITKIND_VFORK_DONE.  Set the program space in sals.
+	(normal_stop): Prune inferiors.
+	(_initialize_infrun): Install the new "follow-exec-mode" command.
+	"detach-on-fork" moved here.
+
+	* regcache.h (get_regcache_aspace): Declare.
+	* regcache.c (struct regcache) <aspace>: New field.
+	(regcache_xmalloc): Clear the aspace.
+	(get_regcache_aspace): New.
+	(regcache_cpy): Copy the aspace field.
+	(regcache_cpy_no_passthrough): Ditto.
+	(get_thread_regcache): Fetch the thread's address space from the
+	target, and store it in the regcache.
+
+	* infcall.c (call_function_by_hand): Set the sal's pspace.
+
+	* arch-utils.c (default_has_shared_address_space): New.
+	* arch-utils.h (default_has_shared_address_space): Declare.
+
+	* gdbarch.sh (has_shared_address_space): New.
+	* gdbarch.h, gdbarch.c: Regenerate.
+
+	* linux-tdep.c: Include auxv.h, target.h, elf/common.h.
+	(linux_has_shared_address_space): New.
+	(_initialize_linux_tdep): Declare.
+
+	* arm-tdep.c (arm_software_single_step): Pass the frame's address
+	space to insert_single_step_breakpoint.
+	* arm-linux-tdep.c (arm_linux_software_single_step): Pass the
+	frame's pspace to breakpoint functions.
+	* cris-tdep.c (crisv32_single_step_through_delay): Ditto.
+	(cris_software_single_step): Ditto.
+	* mips-tdep.c (deal_with_atomic_sequence): Add frame argument.
+	Pass the frame's pspace to breakpoint functions.
+	(mips_software_single_step): Adjust.
+	(mips_single_step_through_delay): Adjust.
+	* rs6000-aix-tdep.c (rs6000_software_single_step): Adjust.
+	* rs6000-tdep.c (ppc_deal_with_atomic_sequence): Adjust.
+	* solib-irix.c (enable_break): Adjust to pass the current frame's
+	address space to breakpoint functions.
+	* sparc-tdep.c (sparc_software_single_step): Ditto.
+	* spu-tdep.c (spu_software_single_step): Ditto.
+	* alpha-tdep.c (alpha_software_single_step): Ditto.
+	* record.c (record_wait): Adjust to pass an address space to the
+	breakpoints module.
+
+	* fork-child.c (fork_inferior): Set the new inferior's program and
+	address spaces.
+	* inf-ptrace.c (inf_ptrace_follow_fork): Copy the parent's program
+	and address spaces.
+	(inf_ptrace_attach): Set the inferior's program and address spaces.
+	* linux-nat.c: Include "solib.h".
+	(linux_child_follow_fork): Manage parent and child's program and
+	address spaces.	 Clone the parent's program space if necessary.
+	Don't wait for the vfork to be done here.  Refuse to resume if
+	following the vfork parent while leaving the child stopped.
+	(resume_callback): Don't resume a vfork parent.
+	(linux_nat_resume): Also check for pending events in the
+	lp->waitstatus field.
+	(linux_handle_extended_wait): Report TARGET_WAITKIND_VFORK_DONE
+	events to the core.
+	(stop_wait_callback): Don't wait for SIGSTOP on vfork parents.
+	(cancel_breakpoint): Adjust.
+	* linux-thread-db.c (thread_db_wait): Don't remove thread event
+	breakpoints here.
+	(thread_db_mourn_inferior): Don't mark breakpoints out here.
+	Remove thread event breakpoints after mourning.
+	* corelow.c: Include progspace.h.
+	(core_open): Set the inferior's program and address spaces.
+	* remote.c (remote_add_inferior): Set the new inferior's program
+	and address spaces.
+	(remote_start_remote): Update address spaces.
+	(extended_remote_create_inferior_1): Don't init the thread list if
+	we already debugging other inferiors.
+	* darwin-nat.c (darwin_attach): Set the new inferior's program and
+	address spaces.
+	* gnu-nat.c (gnu_attach): Ditto.
+	* go32-nat.c (go32_create_inferior): Ditto.
+	* inf-ttrace.c (inf_ttrace_follow_fork, inf_ttrace_attach): Ditto.
+	* monitor.c (monitor_open): Ditto.
+	* nto-procfs.c (procfs_attach, procfs_create_inferior): Ditto.
+	* procfs.c (do_attach): Ditto.
+	* windows-nat.c (do_initial_windows_stuff): Ditto.
+
+	* inflow.c (inferior_process_group)
+	(terminal_init_inferior_with_pgrp, terminal_inferior,
+	(terminal_ours_1, inflow_inferior_exit, copy_terminal_info)
+	(child_terminal_info, new_tty_postfork, set_sigint_trap): Adjust
+	to use per-inferior data instead of inferior->terminal_info.
+	(inflow_inferior_data): New.
+	(inflow_new_inferior): Delete.
+	(inflow_inferior_data_cleanup): New.
+	(get_inflow_inferior_data): New.
+
+	* mi/mi-interp.c (mi_new_inferior): Rename to...
+	(mi_inferior_appeared): ... this.
+	(mi_interpreter_init): Adjust.
+
+	* tui/tui-disasm.c: Include "progspace.h".
+	(tui_set_disassem_content): Pass an address space to
+	breakpoint_here_p.
+
+	* NEWS: Mention multi-program debugging support.  Mention new
+	commands "add-inferior", "clone-inferior", "remove-inferior",
+	"maint info program-spaces", and new option "set
+	follow-exec-mode".
+
+2009-10-19  Pedro Alves	 <pedro@@codesourcery.com>
+	    Stan Shebs	<stan@@codesourcery.com>
+
+	gdb/doc/
+	* observer.texi (new_inferior): Rename to...
+	(inferior_appeared): ... this.
+
+2009-10-19  Pedro Alves	 <pedro@@codesourcery.com>
+	    Stan Shebs	<stan@@codesourcery.com>
+
+	gdb/testsuite/
+	* gdb.base/foll-vfork.exp: Adjust to spell out "follow-fork".
+	* gdb.base/foll-exec.exp: Adjust to expect a process id before
+	"Executing new program".
+	* gdb.base/foll-fork.exp: Adjust to spell out "follow-fork".
+	* gdb.base/multi-forks.exp: Ditto.  Adjust to the inferior being
+	left listed after having been killed.
+	* gdb.base/attach.exp: Adjust to spell out "symbol-file".
+	* gdb.base/maint.exp: Adjust test.
+
+	* Makefile.in (ALL_SUBDIRS): Add gdb.multi.
+	* gdb.multi/Makefile.in: New.
+	* gdb.multi/base.exp: New.
+	* gdb.multi/goodbye.c: New.
+	* gdb.multi/hangout.c: New.
+	* gdb.multi/hello.c: New.
+	* gdb.multi/bkpt-multi-exec.c: New.
+	* gdb.multi/bkpt-multi-exec.exp: New.
+	* gdb.multi/crashme.c: New.
+
+2009-10-19  Pedro Alves	 <pedro@@codesourcery.com>
+	    Stan Shebs	<stan@@codesourcery.com>
+
+	gdb/doc/
+	* gdb.texinfo (Inferiors): Rename node to ...
+	(Inferiors and Programs): ... this.  Mention running multiple
+	programs in the same debug session.
+	<info inferiors>: Mention the new 'Executable' column if "info
+	inferiors".  Update examples.  Document the "add-inferior",
+	"clone-inferior", "remove-inferior" and "maint info
+	program-spaces" commands.
+	(Process): Rename node to...
+	(Forks): ... this.  Document "set|show follow-exec-mode".
+@
+text
+@d257 3
+@
+

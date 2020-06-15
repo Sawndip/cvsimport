@@ -1,0 +1,253 @@
+head	1.1;
+access;
+symbols;
+locks; strict;
+comment	@ * @;
+
+
+1.1
+date	2013.04.04.19.22.38;	author palves;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.1
+log
+@tracepoint->step_count fixes
+
+If a tracepoint's actions list includes a while-stepping action, and
+then the actions are changed to a list without any while-stepping
+action, the tracepoint's step_count will be left with a stale value.
+For example:
+
+ (gdb) trace subr
+ Tracepoint 1 at 0x4004d9: file ../../../src/gdb/testsuite//actions-changed.c, line 31.
+ (gdb) actions
+ Enter actions for tracepoint 1, one per line.
+ End with a line saying just "end".
+ >collect $reg
+ >end
+ (gdb) set debug remote 1
+ (gdb) tstart
+ Sending packet: $QTinit#59...Packet received: OK
+ Sending packet: $QTDP:1:00000000004004d9:E:0:0-#a3...Packet received: OK
+ Sending packet: $QTDP:-1:00000000004004d9:R03FFFFFFFFFFFFFFFFFF#2b...Packet received: OK
+ (gdb) tstop
+ Sending packet: $QTStop#4b...Packet received: OK
+ Sending packet: $QTNotes:#e8...Packet received: OK
+ (gdb) actions
+ Enter actions for tracepoint 1, one per line.
+ End with a line saying just "end".
+ >collect $reg
+ >while-stepping 1
+   >collect $reg
+   >end
+ >end
+ (gdb) tstart
+ Sending packet: $QTinit#59...Packet received: OK
+ Sending packet: $QTDP:1:00000000004004d9:E:1:0-#a4...Packet received: OK
+ Sending packet: $QTDP:-1:00000000004004d9:R03FFFFFFFFFFFFFFFFFF-#58...Packet received: OK
+ Sending packet: $QTDP:-1:00000000004004d9:SR03FFFFFFFFFFFFFFFFFF#7e...Packet received: OK
+ (gdb) tstop
+ Sending packet: $QTStop#4b...Packet received: OK
+ Sending packet: $QTNotes:#e8...Packet received: OK
+ (gdb) actions
+ Enter actions for tracepoint 1, one per line.
+ End with a line saying just "end".
+ >collect $regs
+ >end
+ (gdb) tstart
+ Sending packet: $QTinit#59...Packet received: OK
+ Sending packet: $QTDP:1:00000000004004d9:E:1:0-#a4...Packet received: OK
+ Sending packet: $QTDP:-1:00000000004004d9:R03FFFFFFFFFFFFFFFFFF#2b...Packet received: OK
+
+The last "$QTDP:1:00000000004004d9:E:1:0-#a4" should be "$QTDP:1:00000000004004d9:E:0:0-#a3".
+In pseudo-diff:
+
+  -$QTDP:1:00000000004004d9:E:1:0-#a4
+  +$QTDP:1:00000000004004d9:E:0:0-#a3
+
+A related issue is that the "commands" command actually supports
+setting commands to a range of breakpoints/tracepoints at once.  But,
+hacking "maint info breakpoints" to print t->step_count, reveals:
+
+ (gdb) trace main
+ Tracepoint 5 at 0x45a2ab: file ../../src/gdb/gdb.c, line 29.
+ (gdb) trace main
+ Note: breakpoint 5 also set at pc 0x45a2ab.
+ Tracepoint 6 at 0x45a2ab: file ../../src/gdb/gdb.c, line 29.
+ (gdb) commands 5-6
+ Type commands for breakpoint(s) 5-6, one per line.
+ End with a line saying just "end".
+ > while-stepping 5
+  >end
+ > end
+ (gdb) maint info breakpoints 5
+ Num     Type           Disp Enb Address            What
+ 5       tracepoint     keep y   0x000000000045a2ab in main at ../../src/gdb/gdb.c:29 inf 1
+         step_count=5
+         ^^^^^^^^^^^^
+         while-stepping 5
+         end
+         not installed on target
+ (gdb) maint info breakpoints 6
+ Num     Type           Disp Enb Address            What
+ 6       tracepoint     keep y   0x000000000045a2ab in main at ../../src/gdb/gdb.c:29 inf 1
+         step_count=0
+         ^^^^^^^^^^^^
+         while-stepping 5
+         end
+         not installed on target
+ (gdb)
+
+that tracepoint 6 doesn't end up with the correct step_count.
+
+The issue is that here:
+
+ static void
+ do_map_commands_command (struct breakpoint *b, void *data)
+ {
+  struct commands_info *info = data;
+
+  if (info->cmd == NULL)
+    {
+      struct command_line *l;
+
+      if (info->control != NULL)
+	l = copy_command_lines (info->control->body_list[0]);
+      else
+	{
+	  struct cleanup *old_chain;
+	  char *str;
+
+	  str = xstrprintf (_("Type commands for breakpoint(s) "
+			      "%s, one per line."),
+			    info->arg);
+
+	  old_chain = make_cleanup (xfree, str);
+
+	  l = read_command_lines (str,
+				  info->from_tty, 1,
+				  (is_tracepoint (b)
+				   ? check_tracepoint_command : 0),
+				  b);
+
+	  do_cleanups (old_chain);
+	}
+
+      info->cmd = alloc_counted_command_line (l);
+    }
+
+validate_actionline is never called for tracepoints other than the
+first (the copy_command_lines path).  Right below, we have:
+
+  /* If a breakpoint was on the list more than once, we don't need to
+     do anything.  */
+  if (b->commands != info->cmd)
+    {
+      validate_commands_for_breakpoint (b, info->cmd->commands);
+      incref_counted_command_line (info->cmd);
+      decref_counted_command_line (&b->commands);
+      b->commands = info->cmd;
+      observer_notify_breakpoint_modified (b);
+    }
+
+And validate_commands_for_breakpoint looks like the right place to put
+a call; if we reset step_count there too, we have a nice central fix
+for the first issue as well, because trace_actions_command calls
+breakpoint_set_commands that also calls
+validate_commands_for_breakpoint.
+
+We end up calling validate_actionline twice for the first tracepoint,
+since read_command_lines calls it too, through
+check_tracepoint_command, but that should be harmless.
+
+2013-04-04  Pedro Alves  <palves@@redhat.com>
+	    Hui Zhu  <hui@@codesourcery.com>
+
+	* breakpoint.c (validate_commands_for_breakpoint): If validating a
+	tracepoint, reset its STEP_COUNT and call validate_actionline.
+
+2013-04-04  Stan Shebs  <stan@@codesourcery.com>
+	    Pedro Alves  <palves@@redhat.com>
+
+	* gdb.trace/Makefile.in (PROGS): Add actions-changed.
+	* gdb.trace/actions-changed.c: New file.
+	* gdb.trace/actions-changed.exp: New file.
+	* lib/trace-support.exp (gdb_trace_setactions): Rename to ...
+	(gdb_trace_setactions_command): ... this.  Add "actions_command"
+	parameter, and handle it.
+	(gdb_trace_setactions, gdb_trace_setcommands): New procedures.
+@
+text
+@/* This testcase is part of GDB, the GNU debugger.
+
+   Copyright 2013 Free Software Foundation, Inc.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+int
+end (int i)
+{
+}
+
+int
+subr2 (int parm)
+{
+  int keeping, busy;
+
+  keeping = parm + parm;
+  busy = keeping * keeping;
+
+  return busy;
+}
+
+int
+subr (int parm)
+{
+  int keeping, busy;
+
+  keeping = parm + parm;
+  busy = keeping * keeping;
+
+  return busy;
+}
+
+main()
+{
+  subr (1);
+  end (1);
+
+  subr (2);
+  end (2);
+
+  subr (3);
+  end (3);
+
+  subr (4);
+  end (4);
+
+  subr (5);
+  subr2 (5);
+  end (5);
+
+  subr (6);
+  subr2 (6);
+  end (6);
+}
+@

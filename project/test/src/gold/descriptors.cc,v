@@ -1,0 +1,847 @@
+head	1.12;
+access;
+symbols
+	binutils-2_24-branch:1.12.0.2
+	binutils-2_24-branchpoint:1.12
+	binutils-2_21_1:1.9
+	binutils-2_23_2:1.10.6.1
+	binutils-2_23_1:1.10.6.1
+	binutils-2_23:1.10
+	binutils-2_23-branch:1.10.0.6
+	binutils-2_23-branchpoint:1.10
+	binutils-2_22_branch:1.10.0.4
+	binutils-2_22:1.10
+	binutils-2_22-branch:1.10.0.2
+	binutils-2_22-branchpoint:1.10
+	binutils-2_21:1.9
+	binutils-2_21-branch:1.9.0.2
+	binutils-2_21-branchpoint:1.9
+	binutils-2_20_1:1.7.4.1
+	binutils-2_20:1.7.4.1
+	binutils-arc-20081103-branch:1.2.0.4
+	binutils-arc-20081103-branchpoint:1.2
+	binutils-2_20-branch:1.7.0.4
+	binutils-2_20-branchpoint:1.7
+	dje-cgen-play1-branch:1.7.0.2
+	dje-cgen-play1-branchpoint:1.7
+	arc-20081103-branch:1.2.0.2
+	arc-20081103-branchpoint:1.2
+	binutils-2_19_1:1.1
+	binutils-2_19:1.1
+	binutils-2_19-branch:1.1.0.2
+	binutils-2_19-branchpoint:1.1
+	binutils_latest_snapshot:1.12;
+locks; strict;
+comment	@// @;
+
+
+1.12
+date	2013.02.11.16.12.59;	author ian;	state Exp;
+branches;
+next	1.11;
+
+1.11
+date	2012.11.01.22.43.26;	author roland;	state Exp;
+branches;
+next	1.10;
+
+1.10
+date	2011.04.22.23.20.28;	author ian;	state Exp;
+branches
+	1.10.6.1;
+next	1.9;
+
+1.9
+date	2010.07.14.10.38.59;	author ian;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2009.10.10.04.56.43;	author ian;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2009.03.24.04.50.32;	author ian;	state Exp;
+branches
+	1.7.4.1;
+next	1.6;
+
+1.6
+date	2009.03.19.19.02.53;	author ian;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2009.03.17.17.09.44;	author ian;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2009.02.28.03.05.08;	author ian;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2009.01.15.01.29.25;	author ccoutant;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2008.09.19.22.54.57;	author ccoutant;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2008.07.25.04.25.49;	author ian;	state Exp;
+branches;
+next	;
+
+1.10.6.1
+date	2012.11.07.17.33.11;	author roland;	state Exp;
+branches;
+next	;
+
+1.7.4.1
+date	2009.10.16.05.51.17;	author ian;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.12
+log
+@	* descriptors.cc (Descriptors::close_all): New function.
+	* descriptors.h (class Descriptors): Declare close_all.
+	(close_all_descriptors): New inline function.
+	* plugin.cc: Include "descriptors.h".
+	(Plugin_manager::cleanup): Call close_all_descriptors.
+@
+text
+@// descriptors.cc -- manage file descriptors for gold
+
+// Copyright 2008, 2009, 2010, 2011, 2012, 2013 Free Software Foundation, Inc.
+// Written by Ian Lance Taylor <iant@@google.com>.
+
+// This file is part of gold.
+
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 3 of the License, or
+// (at your option) any later version.
+
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+// MA 02110-1301, USA.
+
+#include "gold.h"
+
+#include <cerrno>
+#include <cstdio>
+#include <cstring>
+#include <fcntl.h>
+#include <unistd.h>
+
+#include "parameters.h"
+#include "options.h"
+#include "gold-threads.h"
+#include "descriptors.h"
+#include "binary-io.h"
+
+// O_CLOEXEC is only available on newer systems.
+#ifndef O_CLOEXEC
+#define O_CLOEXEC 0
+#endif
+
+// Very old systems may not define FD_CLOEXEC.
+#ifndef FD_CLOEXEC
+#define FD_CLOEXEC 1
+#endif
+
+static inline void
+set_close_on_exec(int fd ATTRIBUTE_UNUSED)
+{
+// Mingw does not define F_SETFD.
+#ifdef F_SETFD
+  fcntl(fd, F_SETFD, FD_CLOEXEC);
+#endif
+}
+
+namespace gold
+{
+
+// Class Descriptors.
+
+// The default for limit_ is meant to simply be large.  It gets
+// adjusted downward if we run out of file descriptors.
+
+Descriptors::Descriptors()
+  : lock_(NULL), initialize_lock_(&this->lock_), open_descriptors_(),
+    stack_top_(-1), current_(0), limit_(8192 - 16)
+{
+  this->open_descriptors_.reserve(128);
+}
+
+// Open a file.
+
+int
+Descriptors::open(int descriptor, const char* name, int flags, int mode)
+{
+  // We don't initialize this until we are called, because we can't
+  // initialize a Lock until we have parsed the options to find out
+  // whether we are running with threads.  We can be called before
+  // options are valid when reading a linker script.
+  bool lock_initialized = this->initialize_lock_.initialize();
+
+  gold_assert(lock_initialized || descriptor < 0);
+
+  if (descriptor >= 0)
+    {
+      Hold_lock hl(*this->lock_);
+
+      gold_assert(static_cast<size_t>(descriptor)
+		  < this->open_descriptors_.size());
+      Open_descriptor* pod = &this->open_descriptors_[descriptor];
+      if (pod->name == name
+	  || (pod->name != NULL && strcmp(pod->name, name) == 0))
+	{
+	  gold_assert(!pod->inuse);
+	  pod->inuse = true;
+	  if (descriptor == this->stack_top_)
+	    {
+	      this->stack_top_ = pod->stack_next;
+	      pod->stack_next = -1;
+	      pod->is_on_stack = false;
+	    }
+	  return descriptor;
+	}
+    }
+
+  while (true)
+    {
+      // We always want to set the close-on-exec flag; we don't
+      // require callers to pass it.
+      flags |= O_CLOEXEC;
+
+      // Always open the file as a binary file.
+      flags |= O_BINARY;
+
+      int new_descriptor = ::open(name, flags, mode);
+      if (new_descriptor < 0
+	  && errno != ENFILE
+	  && errno != EMFILE)
+	{
+	  if (descriptor >= 0 && errno == ENOENT)
+	    {
+	      {
+		Hold_lock hl(*this->lock_);
+
+		gold_error(_("file %s was removed during the link"), name);
+	      }
+
+	      errno = ENOENT;
+	    }
+
+	  return new_descriptor;
+	}
+
+      if (new_descriptor >= 0)
+	{
+	  // If we have any plugins, we really do need to set the
+	  // close-on-exec flag, even if O_CLOEXEC is not defined.
+	  // FIXME: In some cases O_CLOEXEC may be defined in the
+	  // header file but not supported by the kernel.
+	  // Unfortunately there doesn't seem to be any obvious way to
+	  // detect that, as unknown flags passed to open are ignored.
+	  if (O_CLOEXEC == 0
+	      && parameters->options_valid()
+	      && parameters->options().has_plugins())
+	    set_close_on_exec(new_descriptor);
+
+	  {
+	    Hold_optional_lock hl(this->lock_);
+
+	    if (static_cast<size_t>(new_descriptor)
+		>= this->open_descriptors_.size())
+	      this->open_descriptors_.resize(new_descriptor + 64);
+
+	    Open_descriptor* pod = &this->open_descriptors_[new_descriptor];
+	    pod->name = name;
+	    pod->stack_next = -1;
+	    pod->inuse = true;
+	    pod->is_write = (flags & O_ACCMODE) != O_RDONLY;
+	    pod->is_on_stack = false;
+
+	    ++this->current_;
+	    if (this->current_ >= this->limit_)
+	      this->close_some_descriptor();
+
+	    return new_descriptor;
+	  }
+	}
+
+      // We ran out of file descriptors.
+      {
+	Hold_optional_lock hl(this->lock_);
+
+	this->limit_ = this->current_ - 16;
+	if (this->limit_ < 8)
+	  this->limit_ = 8;
+	if (!this->close_some_descriptor())
+	  gold_fatal(_("out of file descriptors and couldn't close any"));
+      }
+    }
+}
+
+// Release a descriptor.
+
+void
+Descriptors::release(int descriptor, bool permanent)
+{
+  Hold_optional_lock hl(this->lock_);
+
+  gold_assert(descriptor >= 0
+	      && (static_cast<size_t>(descriptor)
+		  < this->open_descriptors_.size()));
+  Open_descriptor* pod = &this->open_descriptors_[descriptor];
+
+  if (permanent
+      || (this->current_ > this->limit_ && !pod->is_write))
+    {
+      if (::close(descriptor) < 0)
+	gold_warning(_("while closing %s: %s"), pod->name, strerror(errno));
+      pod->name = NULL;
+      --this->current_;
+    }
+  else
+    {
+      pod->inuse = false;
+      if (!pod->is_write && !pod->is_on_stack)
+	{
+	  pod->stack_next = this->stack_top_;
+	  this->stack_top_ = descriptor;
+	  pod->is_on_stack = true;
+	}
+    }
+}
+
+// Close some descriptor.  The lock is held when this is called.  We
+// close the descriptor on the top of the free stack.  Note that this
+// is the opposite of an LRU algorithm--we close the most recently
+// used descriptor.  That is because the linker tends to cycle through
+// all the files; after we release a file, we are unlikely to need it
+// again until we have looked at all the other files.  Return true if
+// we closed a descriptor.
+
+bool
+Descriptors::close_some_descriptor()
+{
+  int last = -1;
+  int i = this->stack_top_;
+  while (i >= 0)
+    {
+      gold_assert(static_cast<size_t>(i) < this->open_descriptors_.size());
+      Open_descriptor* pod = &this->open_descriptors_[i];
+      if (!pod->inuse && !pod->is_write)
+	{
+	  if (::close(i) < 0)
+	    gold_warning(_("while closing %s: %s"), pod->name, strerror(errno));
+	  --this->current_;
+	  pod->name = NULL;
+	  if (last < 0)
+	    this->stack_top_ = pod->stack_next;
+	  else
+	    this->open_descriptors_[last].stack_next = pod->stack_next;
+	  pod->stack_next = -1;
+	  pod->is_on_stack = false;
+	  return true;
+	}
+      last = i;
+      i = pod->stack_next;
+    }
+
+  // We couldn't find any descriptors to close.  This is weird but not
+  // necessarily an error.
+  return false;
+}
+
+// Close all the descriptors open for reading.
+
+void
+Descriptors::close_all()
+{
+  Hold_optional_lock hl(this->lock_);
+
+  for (size_t i = 0; i < this->open_descriptors_.size(); i++)
+    {
+      Open_descriptor* pod = &this->open_descriptors_[i];
+      if (pod->name != NULL && !pod->inuse && !pod->is_write)
+	{
+	  if (::close(i) < 0)
+	    gold_warning(_("while closing %s: %s"), pod->name, strerror(errno));
+	  pod->name = NULL;
+	  pod->stack_next = -1;
+	  pod->is_on_stack = false;
+	}
+    }
+  this->stack_top_ = -1;
+}
+
+// The single global variable which manages descriptors.
+
+Descriptors descriptors;
+
+} // End namespace gold.
+@
+
+
+1.11
+log
+@gold/
+	* descriptors.cc (set_close_on_exec): Add ATTRIBUTE_UNUSED to the
+	parameter, which is unused in the [!F_SETFD] case.
+@
+text
+@d3 1
+a3 1
+// Copyright 2008, 2009, 2010, 2011, 2012 Free Software Foundation, Inc.
+d254 22
+@
+
+
+1.10
+log
+@	* descriptors.cc (set_close_on_exec): New function.
+	(Descriptors::open): Use set_close_on_exec.
+	* output.cc (S_ISLNK): Define if not defined.
+@
+text
+@d3 1
+a3 1
+// Copyright 2008, 2009, 2010, 2011 Free Software Foundation, Inc.
+d48 1
+a48 1
+set_close_on_exec(int fd)
+@
+
+
+1.10.6.1
+log
+@gold/
+	* descriptors.cc (set_close_on_exec): Add ATTRIBUTE_UNUSED to the
+	parameter, which is unused in the [!F_SETFD] case.
+@
+text
+@d3 1
+a3 1
+// Copyright 2008, 2009, 2010, 2011, 2012 Free Software Foundation, Inc.
+d48 1
+a48 1
+set_close_on_exec(int fd ATTRIBUTE_UNUSED)
+@
+
+
+1.9
+log
+@	* descriptors.cc (Descriptors::open): Report correct name in error
+	message.
+@
+text
+@d3 1
+a3 1
+// Copyright 2008, 2009 Free Software Foundation, Inc.
+d37 5
+d47 6
+a52 3
+// O_CLOEXEC is only available on newer systems.
+#ifndef O_CLOEXEC
+#define O_CLOEXEC 0
+d54 1
+d145 1
+a145 1
+	    fcntl(new_descriptor, F_SETFD, FD_CLOEXEC);
+@
+
+
+1.8
+log
+@	* descriptor.cc: Include <cstdio> and "binary-io.h".
+	(Descriptors::open): Open the files in binary mode always.
+	* script.cc (Lex::get_token): Treat \r as whitespace.
+@
+text
+@d116 1
+a116 2
+		gold_error(_("file %s was removed during the link"),
+			   this->open_descriptors_[descriptor].name);
+@
+
+
+1.7
+log
+@2009-03-23  Ian Lance Taylor  <iant@@google.com>
+
+	* gold-threads.h (class Initialize_lock): Define.
+	* gold-threads.cc (class Initialize_lock_once): Define.
+	(initialize_lock_control): New static variable.
+	(initialize_lock_pointer): New static variable.
+	(initialize_lock_once): New static function.
+	(Initialize_lock::Initialize_lock): Define.
+	(Initialize_lock::initialize): Define.
+	* target-select.h: Include "gold-threads.h".
+	(class Target_selector): Add lock_ and initialize_lock_ fields.
+	Don't define instantiate_target, just declare it.
+	* target-select.cc (Target_selector::Target_selector): Initialize
+	new fields.
+	(Target_selector::instantiate_target): Define.
+	* descriptors.h: Include "gold-threads.h".
+	(class Descriptors): Add initialize_lock_ field.
+	* descriptors.cc (Descriptors::Descriptors): Initialize new
+	field.
+	(Descriptors::open): Use initialize_lock_ field
+	* errors.h (class Errors): Add initialize_lock_ field.
+	* errors.cc (Errors::Errors): Initialize new field.
+	(Errors::initialize_lock): Use initialize_lock_ field.
+	* powerpc.cc (class Target_selector_powerpc): Remove
+	instantiated_target_ field.  In do_recognize call
+	instantiate_target rather than do_instantiate_target.  In
+	do_instantiate_target just allocate a new target.
+	* sparc.cc (class Target_selector_sparc): Likewise.
+@
+text
+@d26 1
+d35 1
+d103 3
+@
+
+
+1.7.4.1
+log
+@Merge elfcpp and gold from trunk.
+@
+text
+@a25 1
+#include <cstdio>
+a33 1
+#include "binary-io.h"
+a100 3
+      // Always open the file as a binary file.
+      flags |= O_BINARY;
+
+@
+
+
+1.6
+log
+@	* descriptors.cc (Descriptors::open): Check that the options are
+	valid before using them.
+@
+text
+@d54 2
+a55 2
+  : lock_(NULL), open_descriptors_(), stack_top_(-1), current_(0),
+    limit_(8192 - 16)
+d69 3
+a71 7
+  if (this->lock_ == NULL)
+    {
+      if (parameters->options_valid())
+	this->lock_ = new Lock();
+      else
+	gold_assert(descriptor < 0);
+    }
+@
+
+
+1.5
+log
+@	* descriptors.cc: Include "options.h".
+	(FD_CLOEXEC, O_CLOEXEC): Define if not defined.
+	(Descriptors::open): Always use O_CLOEXEC when opening a new
+	descriptor.  If we have a plugin, and O_CLOEXEC was not defined,
+	then set FD_CLOEXEC.
+@
+text
+@d133 3
+a135 1
+	  if (O_CLOEXEC == 0 && parameters->options().has_plugins())
+@
+
+
+1.4
+log
+@	PR 5990
+	* descriptors.h (Open_descriptor): Add is_on_stack field.
+	* descriptors.cc (Descriptors::open): If the descriptor is on the
+	top of the stack, remove it.  Initialize is_on_stack field.
+	(Descriptors::release): Only add pod to stack if it is not on the
+	stack already.
+	(Descriptors::close_some_descriptor): Clear stack_next and
+	is_on_stack fields.
+@
+text
+@d31 1
+d35 10
+d101 4
+d127 26
+a152 5
+	  Hold_optional_lock hl(this->lock_);
+
+	  if (static_cast<size_t>(new_descriptor)
+	      >= this->open_descriptors_.size())
+	    this->open_descriptors_.resize(new_descriptor + 64);
+d154 2
+a155 12
+	  Open_descriptor* pod = &this->open_descriptors_[new_descriptor];
+	  pod->name = name;
+	  pod->stack_next = -1;
+	  pod->inuse = true;
+	  pod->is_write = (flags & O_ACCMODE) != O_RDONLY;
+	  pod->is_on_stack = false;
+
+	  ++this->current_;
+	  if (this->current_ >= this->limit_)
+	    this->close_some_descriptor();
+
+	  return new_descriptor;
+@
+
+
+1.3
+log
+@	* archive.cc (Archive::get_elf_object_for_member): Remove call
+	to File_read::claim_for_plugin.
+	* descriptors.cc (Descriptors::open): Remove reference to
+	is_claimed.
+	(Descriptors::claim_for_plugin): Remove.
+	* descriptors.h (Descriptors::claim_for_plugin): Remove.
+	(Descriptors::is_claimed): Remove.
+	(claim_descriptor_for_plugin): Remove.
+	* fileread.cc (File_read::claim_for_plugin): Remove.
+	* fileread.h (File_read::claim_for_plugin): Remove.
+	(File_read::descriptor): Reopen descriptor if necessary.
+	* plugin.cc  (Plugin::load): Add two new APIs to transfer vector.
+	(Plugin_manager::all_symbols_read): Add task parameter. Change
+	all callers.
+	(Plugin_manager::get_input_file): New function.
+	(Plugin_manager::release_input_file): New function.
+	(Pluginobj::Pluginobj): Add filesize parameter and initialize
+	corresponding data member.
+	(Sized_pluginobj::Sized_pluginobj): Add filesize parameter
+	and pass to base constructor. Change all callers.
+	(get_input_file, release_input_file): New functions.
+	(make_sized_plugin_object): Add filesize parameter. Change all callers.
+	* plugin.h (Plugin_manager::Plugin_manager): Initialize task_ member.
+	(Plugin_manager::all_symbols_read): Add task parameter.
+	(Plugin_manager::get_input_file): New function.
+	(Plugin_manager::release_input_file): New function.
+	(Plugin_manager::task_): New data member.
+	(Pluginobj::Pluginobj): Add filesize parameter.
+	(Pluginobj::filename): New function.
+	(Pluginobj::descriptor): New function.
+	(Pluginobj::filesize): New function.
+	(Pluginobj::filesize_): New data member.
+	(Sized_pluginobj::Sized_pluginobj): Add filesize parameter.
+	* readsyms.cc (Read_symbols::do_read_symbols): Remove call to
+	File_read::claim_for_plugin; use Object::unlock to unlock the file.
+
+	* testsuite/Makefile.am (plugin_test_4): New test case for plugins
+	with archive libraries.
+	* testsuite/Makefile.in: Regenerate.
+	* testsuite/plugin_test.c (struct sym_info): New type.
+	(get_input_file, release_input_file): New static variables.
+	(onload): Capture new transfer vector entries.
+	(claim_file_hook): Stop reading at end of file according to filesize.
+	Factor out parsing of readelf output into separate function.
+	(all_symbols_read_hook): Exercise get_input_file and release_input_file
+	APIs and get the source file name from the symbol table.  Convert
+	source file name to corresponding object file name.  Print info
+	message when adding new input files.
+	(parse_readelf_line): New function.
+	* testsuite/plugin_test_1.sh: Add checks for new info messages.
+	* testsuite/plugin_test_2.sh: Likewise.
+	* testsuite/plugin_test_3.sh: Likewise.
+	* testsuite/plugin_test_4.sh: New test case.
+@
+text
+@d78 6
+d123 1
+d168 1
+a168 1
+      if (!pod->is_write)
+d172 1
+d204 2
+@
+
+
+1.2
+log
+@Add plugin functionality for link-time optimization (LTO).
+
+include/:
+	* plugin-api.h: New file.
+
+gold/:
+	* configure.ac (plugins): Add --enable-plugins option.
+	* configure: Regenerate.
+	* config.in: Regenerate.
+	* Makefile.am (LIBDL): New variable.
+	(CCFILES): Add plugin.cc.
+	(HFILES): Add plugin.h.
+	(ldadd_var): Add LIBDL.
+	* Makefile.in: Regenerate.
+
+	* archive.cc: Include "plugin.h".
+	(Archive::setup): Don't preread archive symbols when using a plugin.
+	(Archive::get_file_and_offset): Add memsize parameter.  Change callers.
+	(Archive::get_elf_object_for_member): Call plugin hooks for claiming
+	files.
+	(Archive::include_member): Add symbols from plugin objects.
+	* archive.h (Archive::get_file_and_offset): Add memsize parameter.
+	* descriptors.cc (Descriptors::open): Check for file descriptors
+	abandoned by plugins.
+	(Descriptors::claim_for_plugin): New function.
+	* descriptors.h (Descriptors::claim_for_plugin): New function.
+	(Open_descriptor::is_claimed): New field.
+	(claim_descriptor_for_plugin): New function.
+	* fileread.cc (File_read::claim_for_plugin): New function.
+	* fileread.h (File_read::claim_for_plugin): New function.
+	(File_read::descriptor): New function.
+	* gold.cc: Include "plugin.h".
+	(queue_initial_tasks): Add task to call plugin hooks for generating
+	new object files.
+	* main.cc: Include "plugin.h".
+	(main): Load plugin libraries.
+	* object.h (Pluginobj): Declare.
+	(Object::pluginobj): New function.
+	(Object::do_pluginobj): New function.
+	(Object::set_target): New function.
+	* options.cc: Include "plugin.h".
+	(General_options::parse_plugin): New function.
+	(General_options::General_options): Initialize plugins_ field.
+	(General_options::add_plugin): New function.
+	* options.h (Plugin_manager): Declare.
+	(General_options): Add --plugin option.
+	(General_options::has_plugins): New function.
+	(General_options::plugins): New function.
+	(General_options::add_plugin): New function.
+	(General_options::plugins_): New field.
+	* plugin.cc: New file.
+	* plugin.h: New file.
+	* readsyms.cc: Include "plugin.h".
+	(Read_symbols::do_read_symbols): Check for archive before checking
+	for ELF file.  Call plugin hooks to claim files.
+	* resolve.cc (Symbol_table::resolve): Record when symbol is referenced
+	from a real object file; force override when processing replacement
+	files.
+	* symtab.cc (Symbol::init_fields): Initialize in_real_elf_ field.
+	(Symbol::init_base_object): Likewise.
+	(Symbol::init_base_output_data): Likewise.
+	(Symbol::init_base_output_segment): Likewise.
+	(Symbol::init_base_constant): Likewise.
+	(Symbol::init_base_undefined): Likewise.
+	(Symbol::output_section): Assert that object is not a plugin.
+	(Symbol_table::add_from_pluginobj): New function.
+	(Symbol_table::sized_finalize_symbol): Treat symbols from plugins as
+	undefined.
+	(Symbol_table::sized_write_globals): Likewise.
+	(Symbol_table::add_from_pluginobj): Instantiate template.
+	* symtab.h (Sized_pluginobj): Declare.
+	(Symbol::in_real_elf): New function.
+	(Symbol::set_in_real_elf): New function.
+	(Symbol::in_real_elf_): New field.
+	(Symbol_table::add_from_pluginobj): New function.
+
+	* testsuite/Makefile.am (AM_CFLAGS): New variable.
+	(LIBDL): New variable.
+	(LDADD): Add LIBDL.
+	(check_PROGRAMS): Add plugin_test_1 and plugin_test_2.
+	(check_SCRIPTS): Add plugin_test_1.sh and plugin_test_2.sh.
+	(check_DATA): Add plugin_test_1.err and plugin_test_2.err.
+	(MOSTLYCLEANFILES): Likewise.
+	* testsuite/Makefile.in: Regenerate.
+	* testsuite/plugin_test.c: New file.
+	* testsuite/plugin_test_1.sh: New file.
+	* testsuite/plugin_test_2.sh: New file.
+@
+text
+@d3 1
+a3 1
+// Copyright 2008 Free Software Foundation, Inc.
+d118 1
+a118 3
+          if (!pod->is_claimed)
+	    ++this->current_;
+          pod->is_claimed = false;
+a168 18
+// Claim the file descriptor DESCRIPTOR for a plugin.  This effectively
+// removes the descriptor from the pool of linker-managed descriptors,
+// as the plugin will assume responsibility for closing it.
+// The IS_CLAIMED flag allows us to recognize when a file descriptor
+// has been reused after being closed by the plugin.
+
+void
+Descriptors::claim_for_plugin(int descriptor)
+{
+  Hold_lock hl(*this->lock_);
+
+  gold_assert(descriptor >= 0
+	      && (static_cast<size_t>(descriptor)
+		  < this->open_descriptors_.size()));
+  Open_descriptor* pod = &this->open_descriptors_[descriptor];
+  pod->is_claimed = true;
+}
+
+@
+
+
+1.1
+log
+@	PR 5990
+	* descriptors.cc: New file.
+	* descriptors.h: New file.
+	* gold-threads.h (class Hold_optional_lock): New class.
+	* fileread.cc: Include "descriptors.h".
+	(File_read::~File_read): Release descriptor rather than closing
+	it.
+	(File_read::open) [file]: Call open_descriptor rather than open.
+	Set is_descriptor_opened_.
+	(File_read::open) [memory]: Assert that descriptor is not open.
+	(File_read::reopen_descriptor): New function.
+	(File_read::release): Release descriptor.
+	(File_read::do_read): Make non-const.  Reopen descriptor.
+	(File_read::read): Make non-const.
+	(File_read::make_view): Reopen descriptor.
+	(File_read::do_readv): Likewise.
+	* fileread.h (class File_read): Add is_descriptor_opened_ field.
+	Update declarations.
+	* layout.cc: Include "descriptors.h".
+	(Layout::create_build_id): Use open_descriptor rather than open.
+	* output.cc: Include "descriptors.h".
+	(Output_file::open): Use open_descriptor rather than open.
+	* archive.cc (Archive::const_iterator): Change Archive to be
+	non-const.
+	(Archive::begin, Archive::end): Make non-const.
+	(Archive::count_members): Likewise.
+	* archive.h (class Archive): Update declarations.
+	* object.h (Object::read): Make non-const.
+	* Makefile.am (CCFILES): Add descriptors.cc.
+	(HFILES): Add descriptors.h.
+	* Makefile.in: Rebuild.
+@
+text
+@d118 3
+a120 1
+	  ++this->current_;
+d171 18
+@
+

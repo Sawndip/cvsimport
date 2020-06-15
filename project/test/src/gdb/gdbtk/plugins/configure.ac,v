@@ -1,0 +1,217 @@
+head	1.2;
+access;
+symbols
+	insight_7_6-2013-04-10-branchpoint:1.2
+	gdb_7_6-branch:1.2.0.12
+	gdb_7_5-branch:1.2.0.10
+	gdb_7_4-branch:1.2.0.8
+	gdb_7_3-branch:1.2.0.6
+	gdb_7_1-branch:1.2.0.4
+	gdb_7_0-branch:1.2.0.2
+	arc-sim-20090309:1.1
+	arc-insight_6_8-branch:1.1.0.14
+	arc-insight_6_8-branchpoint:1.1
+	insight_6_8-branch:1.1.0.12
+	insight_6_8-branchpoint:1.1
+	gdb_6_8-branch:1.1.0.10
+	insight_6_6-20070208-release:1.1
+	gdb_6_6-branch:1.1.0.8
+	gdb_6_6-2006-11-15-branchpoint:1.1
+	insight_6_5-20061003-release:1.1
+	gdb_6_5-branch:1.1.0.6
+	gdb_6_5-2006-05-14-branchpoint:1.1
+	gdb-csl-gxxpro-6_3-branch:1.1.0.4
+	gdb-csl-gxxpro-6_3-branchpoint:1.1
+	gdb_6_4-branch:1.1.0.2
+	gdb_6_4-2005-11-01-branchpoint:1.1;
+locks; strict;
+comment	@# @;
+
+
+1.2
+date	2008.08.02.22.08.32;	author kseitz;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2005.01.13.22.30.57;	author kseitz;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@        * generic/gdbtk-cmds.c: Don't include itcl.h.
+        * generic/gdbtk-hooks.c: Likewise.
+        * generic/gdbtk.c: Include tcl.h and tk.h instead of itcl.h
+        and itk.h.
+        (gdbtk_init): Rewrite to accommodate using a system-provided
+        Tcl, Tk, Itcl, Itk.
+        (gdbtk_source_start_file) [!_WIN32]: Don't call error() when
+        we fail to source the start file. Just dump the message to stderr.
+        Throw an exception indicating the failure.
+        * library/ehandler.itb (GDBEventHander::dispatch): "itcl_info" is
+        deprecated: use "itcl::find objects" instead.
+        * library/managedwin.itb (window_instance): Ditto.
+        (restart): Ditto.
+        (shutdown): Ditto.
+        (_open): Ditto.
+        (find): Ditto.
+        * library/globalpref.itb (_build_win): Don't pass config arguments
+        for libgui widgets to the constructor. Configure the widget after
+        creation.
+        * library/srcpref.itb (_build_win): Ditto.
+        * library/main.tcl: Update Tcl, Tk, Itcl, Itk, and Iwidgets (just
+        added to this loop) version requirements.
+        No need to initialize Iwidgets separately.
+        * plugins/Make-rules (TCLHDIR): Renamed to TCL_INCLUDES. Change
+        all references.
+        (TCL_BUILD_LIB_SPEC): Renamed to TCL_LIBRARY. Change all references.
+        * plugins/acinclude.m4: Include the standard tcl.m4 instead
+        of the sourceware-derived one.
+        * plugins/configure.ac: Use Tcl's standard SC_* macros instead of
+        the sourceware-derived CYG_AC_* macros.
+        Add logic to deal with using a system-supplied Tcl/Tk.
+        * plugins/configure: Regenerated.
+        * plugins/Makefile.in: Regenerated.
+@
+text
+@AC_INIT(Make-rules)
+AC_CONFIG_AUX_DIR(../../..)
+AM_INIT_AUTOMAKE(insight, 1.0)
+AM_MAINTAINER_MODE
+AC_PROG_MAKE_SET
+AC_CANONICAL_HOST
+AC_PROG_CC
+AC_OBJEXT
+AC_EXEEXT
+
+# Find Tcl, Tk, etc
+SC_PATH_TCLCONFIG
+SC_LOAD_TCLCONFIG
+SC_PATH_TKCONFIG
+SC_LOAD_TKCONFIG
+
+# Special in-tree hackery
+here=`pwd`
+cd ${srcdir}/../../..
+topdir=`pwd`
+cd ${here}
+
+if test "${TCL_SRC_DIR}" = "${topdir}/tcl"; then
+  TCL_INCLUDES="-I${TCL_SRC_DIR}/generic"
+  TCL_LIBRARY="${TCL_BUILD_LIB_SPEC}"
+else
+  TCL_INCLUDES="${TCL_INCLUDE_SPEC}"
+  TCL_LIBRARY="${TCL_LIB_SPEC}"
+fi
+
+AC_SUBST(TCL_DBGX)
+AC_SUBST(TCL_SHLIB_CFLAGS)
+AC_SUBST(TCL_SHLIB_LD)
+AC_SUBST(TCL_SHLIB_SUFFIX)
+AC_SUBST(TCL_INCLUDES)
+AC_SUBST(TCL_LIBRARY)
+
+# Make sure TCL_SHLIB_SUFFIX is set
+if test x$TCL_SHLIB_SUFFIX = x ; then
+  case "${host}" in
+    *cygwin*) TCL_SHLIB_SUFFIX=".dll" ;;
+    *) TCL_SHILB_SUFFIX=".so" ;;
+  esac
+fi
+AC_SUBST(TCL_SHLIB_SUFFIX)
+
+# Since we're not using autoconf > 2.1x, we cannot use AC_CONFIG_FILES.
+make_subdirs=""
+
+# See if -mwin32 works for cygwin
+case "${host}" in
+  *cygwin*)
+    ocflags=${CFLAGS}
+    CFLAGS="${CFLAGS} -mwin32"
+    AC_TRY_COMPILE(,,,CFLAGS="${ocflags}")
+    ;;
+  *) ;;
+esac
+
+# note toplevel plugin build directory
+plugin_builddir=`pwd`
+
+#
+# Plugins
+#
+
+# Supported hosts
+
+# Only supported/tested on linux, solaris, cygwin
+supported=yes
+case "${host}" in
+  *cygwin*) ;;
+  *solaris*) ;;
+  *linux*) ;;
+  *) supported=no ;;
+esac
+
+# Host-specific configury
+case "${host}" in
+  *cygwin*)
+    AC_CHECK_TOOL(NM, nm, nm)
+    AC_CHECK_TOOL(AS, as, as)
+    AC_CHECK_TOOL(LD, ld, ld)
+    AC_MSG_CHECKING("for libcygwin.a")
+    LIBCYGWIN_A=`$CC -print-file-name=libcygwin.a`
+    AC_MSG_RESULT($LIBCYGWIN_A)
+    AC_SUBST(LIBCYGWIN_A)
+    AC_CHECK_TOOL(DLLTOOL, dlltool)
+    ;;
+esac
+
+# Plugins supported by this configuration
+if test x${supported} = xyes; then
+  plugins="rhabout"
+  case "${target}" in
+    *cygwin*) ;;
+    *linux*) ;;
+    *i?86*)
+      plugins="${plugins} intel-pentium"
+      ;;
+  esac
+
+  for i in $plugins ; do
+    make_subdirs="${make_subdirs} $i"
+  done
+fi
+
+AC_SUBST(make_subdirs)
+AC_SUBST(plugin_builddir)
+
+AC_OUTPUT(Makefile rhabout/Makefile:rhabout/Makefile.in:Make-rules rhabout/rhabout.tcl intel-pentium/Makefile:intel-pentium/Makefile.in:Make-rules intel-pentium/intel-pentium.tcl)
+@
+
+
+1.1
+log
+@        * configure.in: Rename to ...
+        * configure.ac: ... this.
+        * configure: Regenerate with autoconf 2.59.
+        * plugins/configure.in: Rename to ...
+        * plugins/configure.ac: ... this.
+        * pluginx/configure: Regenerate with autoconf 2.59.
+@
+text
+@d12 19
+a30 6
+CYG_AC_PATH_TCLCONFIG
+CYG_AC_LOAD_TCLCONFIG
+CYG_AC_PATH_TKCONFIG
+CYG_AC_LOAD_TKCONFIG
+CYG_AC_PATH_TCLH
+CYG_AC_PATH_TKH
+d32 5
+@
+

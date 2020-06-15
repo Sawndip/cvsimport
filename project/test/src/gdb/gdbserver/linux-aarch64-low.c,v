@@ -1,0 +1,1988 @@
+head	1.6;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.3
+	gdb_7_6-2013-04-26-release:1.3
+	gdb_7_6-branch:1.3.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.3;
+locks; strict;
+comment	@ * @;
+
+
+1.6
+date	2013.09.16.14.22.19;	author willnewton;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2013.06.07.10.46.58;	author palves;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2013.05.28.10.41.17;	author palves;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2013.02.07.17.32.29;	author mshawcroft;	state Exp;
+branches
+	1.3.2.1;
+next	1.2;
+
+1.2
+date	2013.02.07.10.47.40;	author mshawcroft;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2013.02.04.18.20.05;	author mshawcroft;	state Exp;
+branches;
+next	;
+
+1.3.2.1
+date	2013.09.16.15.54.50;	author willnewton;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.6
+log
+@gdbserver, aarch64: Zero out regs in aarch64_linux_set_debug_regs.
+
+Apply the same fix that was applied to aarch64-linux-nat.c.
+
+2013-09-16  Will Newton  <will.newton@@linaro.org>
+
+	* linux-aarch64-low.c (aarch64_linux_set_debug_regs): Zero
+	out regs.
+@
+text
+@/* GNU/Linux/AArch64 specific low level interface, for the remote server for
+   GDB.
+
+   Copyright (C) 2009-2013 Free Software Foundation, Inc.
+   Contributed by ARM Ltd.
+
+   This file is part of GDB.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+#include "server.h"
+#include "linux-low.h"
+#include "elf/common.h"
+
+#include <signal.h>
+#include <sys/user.h>
+#include <sys/ptrace.h>
+#include <sys/uio.h>
+
+#include "gdb_proc_service.h"
+
+/* Defined in auto-generated files.  */
+void init_registers_aarch64 (void);
+extern const struct target_desc *tdesc_aarch64;
+
+#ifdef HAVE_SYS_REG_H
+#include <sys/reg.h>
+#endif
+
+#define AARCH64_X_REGS_NUM 31
+#define AARCH64_V_REGS_NUM 32
+#define AARCH64_X0_REGNO    0
+#define AARCH64_SP_REGNO   31
+#define AARCH64_PC_REGNO   32
+#define AARCH64_CPSR_REGNO 33
+#define AARCH64_V0_REGNO   34
+
+#define AARCH64_NUM_REGS (AARCH64_V0_REGNO + AARCH64_V_REGS_NUM)
+
+static int
+aarch64_regmap [] =
+{
+  /* These offsets correspond to GET/SETREGSET */
+  /* x0...  */
+   0*8,  1*8,  2*8,  3*8,  4*8,  5*8,  6*8,  7*8,
+   8*8,  9*8, 10*8, 11*8, 12*8, 13*8, 14*8, 15*8,
+  16*8, 17*8, 18*8, 19*8, 20*8, 21*8, 22*8, 23*8,
+  24*8, 25*8, 26*8, 27*8, 28*8,
+  29*8,
+  30*8,				/* x30 lr */
+  31*8,				/* x31 sp */
+  32*8,				/*     pc */
+  33*8,				/*     cpsr    4 bytes!*/
+
+  /* FP register offsets correspond to GET/SETFPREGSET */
+   0*16,  1*16,  2*16,  3*16,  4*16,  5*16,  6*16,  7*16,
+   8*16,  9*16, 10*16, 11*16, 12*16, 13*16, 14*16, 15*16,
+  16*16, 17*16, 18*16, 19*16, 20*16, 21*16, 22*16, 23*16,
+  24*16, 25*16, 26*16, 27*16, 28*16, 29*16, 30*16, 31*16
+};
+
+/* Here starts the macro definitions, data structures, and code for
+   the hardware breakpoint and hardware watchpoint support.  The
+   following is the abbreviations that are used frequently in the code
+   and comment:
+
+   hw - hardware
+   bp - breakpoint
+   wp - watchpoint  */
+
+/* Maximum number of hardware breakpoint and watchpoint registers.
+   Neither of these values may exceed the width of dr_changed_t
+   measured in bits.  */
+
+#define AARCH64_HBP_MAX_NUM 16
+#define AARCH64_HWP_MAX_NUM 16
+
+/* Alignment requirement in bytes of hardware breakpoint and
+   watchpoint address.  This is the requirement for the addresses that
+   can be written to the hardware breakpoint/watchpoint value
+   registers.  The kernel currently does not do any alignment on
+   addresses when receiving a writing request (via ptrace call) to
+   these debug registers, and it will reject any address that is
+   unaligned.
+   Some limited support has been provided in this gdbserver port for
+   unaligned watchpoints, so that from a gdb user point of view, an
+   unaligned watchpoint can still be set.  This is achieved by
+   minimally enlarging the watched area to meet the alignment
+   requirement, and if necessary, splitting the watchpoint over
+   several hardware watchpoint registers.  */
+
+#define AARCH64_HBP_ALIGNMENT 4
+#define AARCH64_HWP_ALIGNMENT 8
+
+/* The maximum length of a memory region that can be watched by one
+   hardware watchpoint register.  */
+
+#define AARCH64_HWP_MAX_LEN_PER_REG 8
+
+/* Each bit of a variable of this type is used to indicate whether a
+   hardware breakpoint or watchpoint setting has been changed since
+   the last updating.  Bit N corresponds to the Nth hardware
+   breakpoint or watchpoint setting which is managed in
+   aarch64_debug_reg_state.  Where N is valid between 0 and the total
+   number of the hardware breakpoint or watchpoint debug registers
+   minus 1.  When the bit N is 1, it indicates the corresponding
+   breakpoint or watchpoint setting is changed, and thus the
+   corresponding hardware debug register needs to be updated via the
+   ptrace interface.
+
+   In the per-thread arch-specific data area, we define two such
+   variables for per-thread hardware breakpoint and watchpoint
+   settings respectively.
+
+   This type is part of the mechanism which helps reduce the number of
+   ptrace calls to the kernel, i.e. avoid asking the kernel to write
+   to the debug registers with unchanged values.  */
+
+typedef unsigned long long dr_changed_t;
+
+/* Set each of the lower M bits of X to 1; assert X is wide enough.  */
+
+#define DR_MARK_ALL_CHANGED(x, m)					\
+  do									\
+    {									\
+      gdb_assert (sizeof ((x)) * 8 >= (m));				\
+      (x) = (((dr_changed_t)1 << (m)) - 1);				\
+    } while (0)
+
+#define DR_MARK_N_CHANGED(x, n)						\
+  do									\
+    {									\
+      (x) |= ((dr_changed_t)1 << (n));					\
+    } while (0)
+
+#define DR_CLEAR_CHANGED(x)						\
+  do									\
+    {									\
+      (x) = 0;								\
+    } while (0)
+
+#define DR_HAS_CHANGED(x) ((x) != 0)
+#define DR_N_HAS_CHANGED(x, n) ((x) & ((dr_changed_t)1 << (n)))
+
+/* Structure for managing the hardware breakpoint/watchpoint resources.
+   DR_ADDR_* stores the address, DR_CTRL_* stores the control register
+   content, and DR_REF_COUNT_* counts the numbers of references to the
+   corresponding bp/wp, by which way the limited hardware resources
+   are not wasted on duplicated bp/wp settings (though so far gdb has
+   done a good job by not sending duplicated bp/wp requests).  */
+
+struct aarch64_debug_reg_state
+{
+  /* hardware breakpoint */
+  CORE_ADDR dr_addr_bp[AARCH64_HBP_MAX_NUM];
+  unsigned int dr_ctrl_bp[AARCH64_HBP_MAX_NUM];
+  unsigned int dr_ref_count_bp[AARCH64_HBP_MAX_NUM];
+
+  /* hardware watchpoint */
+  CORE_ADDR dr_addr_wp[AARCH64_HWP_MAX_NUM];
+  unsigned int dr_ctrl_wp[AARCH64_HWP_MAX_NUM];
+  unsigned int dr_ref_count_wp[AARCH64_HWP_MAX_NUM];
+};
+
+/* Per-process arch-specific data we want to keep.  */
+
+struct arch_process_info
+{
+  /* Hardware breakpoint/watchpoint data.
+     The reason for them to be per-process rather than per-thread is
+     due to the lack of information in the gdbserver environment;
+     gdbserver is not told that whether a requested hardware
+     breakpoint/watchpoint is thread specific or not, so it has to set
+     each hw bp/wp for every thread in the current process.  The
+     higher level bp/wp management in gdb will resume a thread if a hw
+     bp/wp trap is not expected for it.  Since the hw bp/wp setting is
+     same for each thread, it is reasonable for the data to live here.
+     */
+  struct aarch64_debug_reg_state debug_reg_state;
+};
+
+/* Per-thread arch-specific data we want to keep.  */
+
+struct arch_lwp_info
+{
+  /* When bit N is 1, it indicates the Nth hardware breakpoint or
+     watchpoint register pair needs to be updated when the thread is
+     resumed; see aarch64_linux_prepare_to_resume.  */
+  dr_changed_t dr_changed_bp;
+  dr_changed_t dr_changed_wp;
+};
+
+/* Number of hardware breakpoints/watchpoints the target supports.
+   They are initialized with values obtained via the ptrace calls
+   with NT_ARM_HW_BREAK and NT_ARM_HW_WATCH respectively.  */
+
+static int aarch64_num_bp_regs;
+static int aarch64_num_wp_regs;
+
+/* Hardware breakpoint/watchpoint types.
+   The values map to their encodings in the bit 4 and bit 3 of the
+   hardware breakpoint/watchpoint control registers.  */
+
+enum target_point_type
+{
+  hw_execute = 0,		/* Execute HW breakpoint */
+  hw_read = 1,			/* Read    HW watchpoint */
+  hw_write = 2,			/* Common  HW watchpoint */
+  hw_access = 3,		/* Access  HW watchpoint */
+  point_type_unsupported
+};
+
+#define Z_PACKET_SW_BP '0'
+#define Z_PACKET_HW_BP '1'
+#define Z_PACKET_WRITE_WP '2'
+#define Z_PACKET_READ_WP '3'
+#define Z_PACKET_ACCESS_WP '4'
+
+/* Map the protocol breakpoint/watchpoint type TYPE to
+   enum target_point_type.  */
+
+static enum target_point_type
+Z_packet_to_point_type (char type)
+{
+  switch (type)
+    {
+    case Z_PACKET_SW_BP:
+      /* Leave the handling of the sw breakpoint with the gdb client.  */
+      return point_type_unsupported;
+    case Z_PACKET_HW_BP:
+      return hw_execute;
+    case Z_PACKET_WRITE_WP:
+      return hw_write;
+    case Z_PACKET_READ_WP:
+      return hw_read;
+    case Z_PACKET_ACCESS_WP:
+      return hw_access;
+    default:
+      return point_type_unsupported;
+    }
+}
+
+static int
+aarch64_cannot_store_register (int regno)
+{
+  return regno >= AARCH64_NUM_REGS;
+}
+
+static int
+aarch64_cannot_fetch_register (int regno)
+{
+  return regno >= AARCH64_NUM_REGS;
+}
+
+static void
+aarch64_fill_gregset (struct regcache *regcache, void *buf)
+{
+  struct user_pt_regs *regset = buf;
+  int i;
+
+  for (i = 0; i < AARCH64_X_REGS_NUM; i++)
+    collect_register (regcache, AARCH64_X0_REGNO + i, &regset->regs[i]);
+  collect_register (regcache, AARCH64_SP_REGNO, &regset->sp);
+  collect_register (regcache, AARCH64_PC_REGNO, &regset->pc);
+  collect_register (regcache, AARCH64_CPSR_REGNO, &regset->pstate);
+}
+
+static void
+aarch64_store_gregset (struct regcache *regcache, const void *buf)
+{
+  const struct user_pt_regs *regset = buf;
+  int i;
+
+  for (i = 0; i < AARCH64_X_REGS_NUM; i++)
+    supply_register (regcache, AARCH64_X0_REGNO + i, &regset->regs[i]);
+  supply_register (regcache, AARCH64_SP_REGNO, &regset->sp);
+  supply_register (regcache, AARCH64_PC_REGNO, &regset->pc);
+  supply_register (regcache, AARCH64_CPSR_REGNO, &regset->pstate);
+}
+
+static void
+aarch64_fill_fpregset (struct regcache *regcache, void *buf)
+{
+  struct user_fpsimd_state *regset = buf;
+  int i;
+
+  for (i = 0; i < AARCH64_V_REGS_NUM; i++)
+    collect_register (regcache, AARCH64_V0_REGNO + i, &regset->vregs[i]);
+}
+
+static void
+aarch64_store_fpregset (struct regcache *regcache, const void *buf)
+{
+  const struct user_fpsimd_state *regset = buf;
+  int i;
+
+  for (i = 0; i < AARCH64_V_REGS_NUM; i++)
+    supply_register (regcache, AARCH64_V0_REGNO + i, &regset->vregs[i]);
+}
+
+/* Debugging of hardware breakpoint/watchpoint support.  */
+extern int debug_hw_points;
+
+/* Enable miscellaneous debugging output.  The name is historical - it
+   was originally used to debug LinuxThreads support.  */
+extern int debug_threads;
+
+static CORE_ADDR
+aarch64_get_pc (struct regcache *regcache)
+{
+  unsigned long pc;
+
+  collect_register_by_name (regcache, "pc", &pc);
+  if (debug_threads)
+    fprintf (stderr, "stop pc is %08lx\n", pc);
+  return pc;
+}
+
+static void
+aarch64_set_pc (struct regcache *regcache, CORE_ADDR pc)
+{
+  unsigned long newpc = pc;
+  supply_register_by_name (regcache, "pc", &newpc);
+}
+
+/* Correct in either endianness.  */
+
+#define aarch64_breakpoint_len 4
+
+static const unsigned long aarch64_breakpoint = 0x00800011;
+
+static int
+aarch64_breakpoint_at (CORE_ADDR where)
+{
+  unsigned long insn;
+
+  (*the_target->read_memory) (where, (unsigned char *) &insn, 4);
+  if (insn == aarch64_breakpoint)
+    return 1;
+
+  return 0;
+}
+
+/* Print the values of the cached breakpoint/watchpoint registers.
+   This is enabled via the "set debug-hw-points" monitor command.  */
+
+static void
+aarch64_show_debug_reg_state (struct aarch64_debug_reg_state *state,
+			      const char *func, CORE_ADDR addr,
+			      int len, enum target_point_type type)
+{
+  int i;
+
+  fprintf (stderr, "%s", func);
+  if (addr || len)
+    fprintf (stderr, " (addr=0x%08lx, len=%d, type=%s)",
+	     (unsigned long) addr, len,
+	     type == hw_write ? "hw-write-watchpoint"
+	     : (type == hw_read ? "hw-read-watchpoint"
+		: (type == hw_access ? "hw-access-watchpoint"
+		   : (type == hw_execute ? "hw-breakpoint"
+		      : "??unknown??"))));
+  fprintf (stderr, ":\n");
+
+  fprintf (stderr, "\tBREAKPOINTs:\n");
+  for (i = 0; i < aarch64_num_bp_regs; i++)
+    fprintf (stderr, "\tBP%d: addr=0x%s, ctrl=0x%08x, ref.count=%d\n",
+	     i, paddress (state->dr_addr_bp[i]),
+	     state->dr_ctrl_bp[i], state->dr_ref_count_bp[i]);
+
+  fprintf (stderr, "\tWATCHPOINTs:\n");
+  for (i = 0; i < aarch64_num_wp_regs; i++)
+    fprintf (stderr, "\tWP%d: addr=0x%s, ctrl=0x%08x, ref.count=%d\n",
+	     i, paddress (state->dr_addr_wp[i]),
+	     state->dr_ctrl_wp[i], state->dr_ref_count_wp[i]);
+}
+
+static void
+aarch64_init_debug_reg_state (struct aarch64_debug_reg_state *state)
+{
+  int i;
+
+  for (i = 0; i < AARCH64_HBP_MAX_NUM; ++i)
+    {
+      state->dr_addr_bp[i] = 0;
+      state->dr_ctrl_bp[i] = 0;
+      state->dr_ref_count_bp[i] = 0;
+    }
+
+  for (i = 0; i < AARCH64_HWP_MAX_NUM; ++i)
+    {
+      state->dr_addr_wp[i] = 0;
+      state->dr_ctrl_wp[i] = 0;
+      state->dr_ref_count_wp[i] = 0;
+    }
+}
+
+/* ptrace expects control registers to be formatted as follows:
+
+   31                             13          5      3      1     0
+   +--------------------------------+----------+------+------+----+
+   |         RESERVED (SBZ)         |  LENGTH  | TYPE | PRIV | EN |
+   +--------------------------------+----------+------+------+----+
+
+   The TYPE field is ignored for breakpoints.  */
+
+#define DR_CONTROL_ENABLED(ctrl)	(((ctrl) & 0x1) == 1)
+#define DR_CONTROL_LENGTH(ctrl)		(((ctrl) >> 5) & 0xff)
+
+/* Utility function that returns the length in bytes of a watchpoint
+   according to the content of a hardware debug control register CTRL.
+   Note that the kernel currently only supports the following Byte
+   Address Select (BAS) values: 0x1, 0x3, 0xf and 0xff, which means
+   that for a hardware watchpoint, its valid length can only be 1
+   byte, 2 bytes, 4 bytes or 8 bytes.  */
+
+static inline unsigned int
+aarch64_watchpoint_length (unsigned int ctrl)
+{
+  switch (DR_CONTROL_LENGTH (ctrl))
+    {
+    case 0x01:
+      return 1;
+    case 0x03:
+      return 2;
+    case 0x0f:
+      return 4;
+    case 0xff:
+      return 8;
+    default:
+      return 0;
+    }
+}
+
+/* Given the hardware breakpoint or watchpoint type TYPE and its
+   length LEN, return the expected encoding for a hardware
+   breakpoint/watchpoint control register.  */
+
+static unsigned int
+aarch64_point_encode_ctrl_reg (enum target_point_type type, int len)
+{
+  unsigned int ctrl;
+
+  /* type */
+  ctrl = type << 3;
+  /* length bitmask */
+  ctrl |= ((1 << len) - 1) << 5;
+  /* enabled at el0 */
+  ctrl |= (2 << 1) | 1;
+
+  return ctrl;
+}
+
+/* Addresses to be written to the hardware breakpoint and watchpoint
+   value registers need to be aligned; the alignment is 4-byte and
+   8-type respectively.  Linux kernel rejects any non-aligned address
+   it receives from the related ptrace call.  Furthermore, the kernel
+   currently only supports the following Byte Address Select (BAS)
+   values: 0x1, 0x3, 0xf and 0xff, which means that for a hardware
+   watchpoint to be accepted by the kernel (via ptrace call), its
+   valid length can only be 1 byte, 2 bytes, 4 bytes or 8 bytes.
+   Despite these limitations, the unaligned watchpoint is supported in
+   this gdbserver port.
+
+   Return 0 for any non-compliant ADDR and/or LEN; return 1 otherwise.  */
+
+static int
+aarch64_point_is_aligned (int is_watchpoint, CORE_ADDR addr, int len)
+{
+  unsigned int alignment = is_watchpoint ? AARCH64_HWP_ALIGNMENT
+    : AARCH64_HBP_ALIGNMENT;
+
+  if (addr & (alignment - 1))
+    return 0;
+
+  if (len != 8 && len != 4 && len != 2 && len != 1)
+    return 0;
+
+  return 1;
+}
+
+/* Given the (potentially unaligned) watchpoint address in ADDR and
+   length in LEN, return the aligned address and aligned length in
+   *ALIGNED_ADDR_P and *ALIGNED_LEN_P, respectively.  The returned
+   aligned address and length will be valid to be written to the
+   hardware watchpoint value and control registers.  See the comment
+   above aarch64_point_is_aligned for the information about the
+   alignment requirement.  The given watchpoint may get truncated if
+   more than one hardware register is needed to cover the watched
+   region.  *NEXT_ADDR_P and *NEXT_LEN_P, if non-NULL, will return the
+   address and length of the remaining part of the watchpoint (which
+   can be processed by calling this routine again to generate another
+   aligned address and length pair.
+
+   Essentially, unaligned watchpoint is achieved by minimally
+   enlarging the watched area to meet the alignment requirement, and
+   if necessary, splitting the watchpoint over several hardware
+   watchpoint registers.  The trade-off is that there will be
+   false-positive hits for the read-type or the access-type hardware
+   watchpoints; for the write type, which is more commonly used, there
+   will be no such issues, as the higher-level breakpoint management
+   in gdb always examines the exact watched region for any content
+   change, and transparently resumes a thread from a watchpoint trap
+   if there is no change to the watched region.
+
+   Another limitation is that because the watched region is enlarged,
+   the watchpoint fault address returned by
+   aarch64_stopped_data_address may be outside of the original watched
+   region, especially when the triggering instruction is accessing a
+   larger region.  When the fault address is not within any known
+   range, watchpoints_triggered in gdb will get confused, as the
+   higher-level watchpoint management is only aware of original
+   watched regions, and will think that some unknown watchpoint has
+   been triggered.  In such a case, gdb may stop without displaying
+   any detailed information.
+
+   Once the kernel provides the full support for Byte Address Select
+   (BAS) in the hardware watchpoint control register, these
+   limitations can be largely relaxed with some further work.  */
+
+static void
+aarch64_align_watchpoint (CORE_ADDR addr, int len, CORE_ADDR *aligned_addr_p,
+			  int *aligned_len_p, CORE_ADDR *next_addr_p,
+			  int *next_len_p)
+{
+  int aligned_len;
+  unsigned int offset;
+  CORE_ADDR aligned_addr;
+  const unsigned int alignment = AARCH64_HWP_ALIGNMENT;
+  const unsigned int max_wp_len = AARCH64_HWP_MAX_LEN_PER_REG;
+
+  /* As assumed by the algorithm.  */
+  gdb_assert (alignment == max_wp_len);
+
+  if (len <= 0)
+    return;
+
+  /* Address to be put into the hardware watchpoint value register
+     must be aligned.  */
+  offset = addr & (alignment - 1);
+  aligned_addr = addr - offset;
+
+  gdb_assert (offset >= 0 && offset < alignment);
+  gdb_assert (aligned_addr >= 0 && aligned_addr <= addr);
+  gdb_assert ((offset + len) > 0);
+
+  if (offset + len >= max_wp_len)
+    {
+      /* Need more than one watchpoint registers; truncate it at the
+	 alignment boundary.  */
+      aligned_len = max_wp_len;
+      len -= (max_wp_len - offset);
+      addr += (max_wp_len - offset);
+      gdb_assert ((addr & (alignment - 1)) == 0);
+    }
+  else
+    {
+      /* Find the smallest valid length that is large enough to
+	 accommodate this watchpoint.  */
+      static const unsigned char
+	aligned_len_array[AARCH64_HWP_MAX_LEN_PER_REG] =
+	{ 1, 2, 4, 4, 8, 8, 8, 8 };
+
+      aligned_len = aligned_len_array[offset + len - 1];
+      addr += len;
+      len = 0;
+    }
+
+  if (aligned_addr_p != NULL)
+    *aligned_addr_p = aligned_addr;
+  if (aligned_len_p != NULL)
+    *aligned_len_p = aligned_len;
+  if (next_addr_p != NULL)
+    *next_addr_p = addr;
+  if (next_len_p != NULL)
+    *next_len_p = len;
+}
+
+/* Call ptrace to set the thread TID's hardware breakpoint/watchpoint
+   registers with data from *STATE.  */
+
+static void
+aarch64_linux_set_debug_regs (const struct aarch64_debug_reg_state *state,
+			      int tid, int watchpoint)
+{
+  int i, count;
+  struct iovec iov;
+  struct user_hwdebug_state regs;
+  const CORE_ADDR *addr;
+  const unsigned int *ctrl;
+
+  memset (&regs, 0, sizeof (regs));
+  iov.iov_base = &regs;
+  iov.iov_len = sizeof (regs);
+  count = watchpoint ? aarch64_num_wp_regs : aarch64_num_bp_regs;
+  addr = watchpoint ? state->dr_addr_wp : state->dr_addr_bp;
+  ctrl = watchpoint ? state->dr_ctrl_wp : state->dr_ctrl_bp;
+
+  for (i = 0; i < count; i++)
+    {
+      regs.dbg_regs[i].addr = addr[i];
+      regs.dbg_regs[i].ctrl = ctrl[i];
+    }
+
+  if (ptrace (PTRACE_SETREGSET, tid,
+	      watchpoint ? NT_ARM_HW_WATCH : NT_ARM_HW_BREAK,
+	      (void *) &iov))
+    error (_("Unexpected error setting hardware debug registers"));
+}
+
+struct aarch64_dr_update_callback_param
+{
+  int pid;
+  int is_watchpoint;
+  unsigned int idx;
+};
+
+/* Callback function which records the information about the change of
+   one hardware breakpoint/watchpoint setting for the thread ENTRY.
+   The information is passed in via PTR.
+   N.B.  The actual updating of hardware debug registers is not
+   carried out until the moment the thread is resumed.  */
+
+static int
+debug_reg_change_callback (struct inferior_list_entry *entry, void *ptr)
+{
+  struct lwp_info *lwp = (struct lwp_info *) entry;
+  struct aarch64_dr_update_callback_param *param_p
+    = (struct aarch64_dr_update_callback_param *) ptr;
+  int pid = param_p->pid;
+  int idx = param_p->idx;
+  int is_watchpoint = param_p->is_watchpoint;
+  struct arch_lwp_info *info = lwp->arch_private;
+  dr_changed_t *dr_changed_ptr;
+  dr_changed_t dr_changed;
+
+  if (debug_hw_points)
+    {
+      fprintf (stderr, "debug_reg_change_callback: \n\tOn entry:\n");
+      fprintf (stderr, "\tpid%d, tid: %ld, dr_changed_bp=0x%llx, "
+	       "dr_changed_wp=0x%llx\n",
+	       pid, lwpid_of (lwp), info->dr_changed_bp,
+	       info->dr_changed_wp);
+    }
+
+  dr_changed_ptr = is_watchpoint ? &info->dr_changed_wp
+    : &info->dr_changed_bp;
+  dr_changed = *dr_changed_ptr;
+
+  /* Only update the threads of this process.  */
+  if (pid_of (lwp) == pid)
+    {
+      gdb_assert (idx >= 0
+		  && (idx <= (is_watchpoint ? aarch64_num_wp_regs
+			      : aarch64_num_bp_regs)));
+
+      /* The following assertion is not right, as there can be changes
+	 that have not been made to the hardware debug registers
+	 before new changes overwrite the old ones.  This can happen,
+	 for instance, when the breakpoint/watchpoint hit one of the
+	 threads and the user enters continue; then what happens is:
+	 1) all breakpoints/watchpoints are removed for all threads;
+	 2) a single step is carried out for the thread that was hit;
+	 3) all of the points are inserted again for all threads;
+	 4) all threads are resumed.
+	 The 2nd step will only affect the one thread in which the
+	 bp/wp was hit, which means only that one thread is resumed;
+	 remember that the actual updating only happen in
+	 aarch64_linux_prepare_to_resume, so other threads remain
+	 stopped during the removal and insertion of bp/wp.  Therefore
+	 for those threads, the change of insertion of the bp/wp
+	 overwrites that of the earlier removals.  (The situation may
+	 be different when bp/wp is steppable, or in the non-stop
+	 mode.)  */
+      /* gdb_assert (DR_N_HAS_CHANGED (dr_changed, idx) == 0);  */
+
+      /* The actual update is done later just before resuming the lwp,
+         we just mark that one register pair needs updating.  */
+      DR_MARK_N_CHANGED (dr_changed, idx);
+      *dr_changed_ptr = dr_changed;
+
+      /* If the lwp isn't stopped, force it to momentarily pause, so
+         we can update its debug registers.  */
+      if (!lwp->stopped)
+	linux_stop_lwp (lwp);
+    }
+
+  if (debug_hw_points)
+    {
+      fprintf (stderr, "\tOn exit:\n\tpid%d, tid: %ld, dr_changed_bp=0x%llx, "
+	       "dr_changed_wp=0x%llx\n",
+	       pid, lwpid_of (lwp), info->dr_changed_bp, info->dr_changed_wp);
+    }
+
+  return 0;
+}
+
+/* Notify each thread that their IDXth breakpoint/watchpoint register
+   pair needs to be updated.  The message will be recorded in each
+   thread's arch-specific data area, the actual updating will be done
+   when the thread is resumed.  */
+
+void
+aarch64_notify_debug_reg_change (const struct aarch64_debug_reg_state *state,
+				 int is_watchpoint, unsigned int idx)
+{
+  struct aarch64_dr_update_callback_param param;
+
+  /* Only update the threads of this process.  */
+  param.pid = pid_of (get_thread_lwp (current_inferior));
+
+  param.is_watchpoint = is_watchpoint;
+  param.idx = idx;
+
+  find_inferior (&all_lwps, debug_reg_change_callback, (void *) &param);
+}
+
+
+/* Return the pointer to the debug register state structure in the
+   current process' arch-specific data area.  */
+
+static struct aarch64_debug_reg_state *
+aarch64_get_debug_reg_state ()
+{
+  struct process_info *proc;
+
+  proc = current_process ();
+  return &proc->private->arch_private->debug_reg_state;
+}
+
+/* Record the insertion of one breakpoint/watchpoint, as represented
+   by ADDR and CTRL, in the process' arch-specific data area *STATE.  */
+
+static int
+aarch64_dr_state_insert_one_point (struct aarch64_debug_reg_state *state,
+				   enum target_point_type type,
+				   CORE_ADDR addr, int len)
+{
+  int i, idx, num_regs, is_watchpoint;
+  unsigned int ctrl, *dr_ctrl_p, *dr_ref_count;
+  CORE_ADDR *dr_addr_p;
+
+  /* Set up state pointers.  */
+  is_watchpoint = (type != hw_execute);
+  gdb_assert (aarch64_point_is_aligned (is_watchpoint, addr, len));
+  if (is_watchpoint)
+    {
+      num_regs = aarch64_num_wp_regs;
+      dr_addr_p = state->dr_addr_wp;
+      dr_ctrl_p = state->dr_ctrl_wp;
+      dr_ref_count = state->dr_ref_count_wp;
+    }
+  else
+    {
+      num_regs = aarch64_num_bp_regs;
+      dr_addr_p = state->dr_addr_bp;
+      dr_ctrl_p = state->dr_ctrl_bp;
+      dr_ref_count = state->dr_ref_count_bp;
+    }
+
+  ctrl = aarch64_point_encode_ctrl_reg (type, len);
+
+  /* Find an existing or free register in our cache.  */
+  idx = -1;
+  for (i = 0; i < num_regs; ++i)
+    {
+      if ((dr_ctrl_p[i] & 1) == 0)
+	{
+	  gdb_assert (dr_ref_count[i] == 0);
+	  idx = i;
+	  /* no break; continue hunting for an exising one.  */
+	}
+      else if (dr_addr_p[i] == addr && dr_ctrl_p[i] == ctrl)
+	{
+	  gdb_assert (dr_ref_count[i] != 0);
+	  idx = i;
+	  break;
+	}
+    }
+
+  /* No space.  */
+  if (idx == -1)
+    return -1;
+
+  /* Update our cache.  */
+  if ((dr_ctrl_p[idx] & 1) == 0)
+    {
+      /* new entry */
+      dr_addr_p[idx] = addr;
+      dr_ctrl_p[idx] = ctrl;
+      dr_ref_count[idx] = 1;
+      /* Notify the change.  */
+      aarch64_notify_debug_reg_change (state, is_watchpoint, idx);
+    }
+  else
+    {
+      /* existing entry */
+      dr_ref_count[idx]++;
+    }
+
+  return 0;
+}
+
+/* Record the removal of one breakpoint/watchpoint, as represented by
+   ADDR and CTRL, in the process' arch-specific data area *STATE.  */
+
+static int
+aarch64_dr_state_remove_one_point (struct aarch64_debug_reg_state *state,
+				   enum target_point_type type,
+				   CORE_ADDR addr, int len)
+{
+  int i, num_regs, is_watchpoint;
+  unsigned int ctrl, *dr_ctrl_p, *dr_ref_count;
+  CORE_ADDR *dr_addr_p;
+
+  /* Set up state pointers.  */
+  is_watchpoint = (type != hw_execute);
+  gdb_assert (aarch64_point_is_aligned (is_watchpoint, addr, len));
+  if (is_watchpoint)
+    {
+      num_regs = aarch64_num_wp_regs;
+      dr_addr_p = state->dr_addr_wp;
+      dr_ctrl_p = state->dr_ctrl_wp;
+      dr_ref_count = state->dr_ref_count_wp;
+    }
+  else
+    {
+      num_regs = aarch64_num_bp_regs;
+      dr_addr_p = state->dr_addr_bp;
+      dr_ctrl_p = state->dr_ctrl_bp;
+      dr_ref_count = state->dr_ref_count_bp;
+    }
+
+  ctrl = aarch64_point_encode_ctrl_reg (type, len);
+
+  /* Find the entry that matches the ADDR and CTRL.  */
+  for (i = 0; i < num_regs; ++i)
+    if (dr_addr_p[i] == addr && dr_ctrl_p[i] == ctrl)
+      {
+	gdb_assert (dr_ref_count[i] != 0);
+	break;
+      }
+
+  /* Not found.  */
+  if (i == num_regs)
+    return -1;
+
+  /* Clear our cache.  */
+  if (--dr_ref_count[i] == 0)
+    {
+      /* Clear the enable bit.  */
+      ctrl &= ~1;
+      dr_addr_p[i] = 0;
+      dr_ctrl_p[i] = ctrl;
+      /* Notify the change.  */
+      aarch64_notify_debug_reg_change (state, is_watchpoint, i);
+    }
+
+  return 0;
+}
+
+static int
+aarch64_handle_breakpoint (enum target_point_type type, CORE_ADDR addr,
+			   int len, int is_insert)
+{
+  struct aarch64_debug_reg_state *state;
+
+  /* The hardware breakpoint on AArch64 should always be 4-byte
+     aligned.  */
+  if (!aarch64_point_is_aligned (0 /* is_watchpoint */ , addr, len))
+    return -1;
+
+  state = aarch64_get_debug_reg_state ();
+
+  if (is_insert)
+    return aarch64_dr_state_insert_one_point (state, type, addr, len);
+  else
+    return aarch64_dr_state_remove_one_point (state, type, addr, len);
+}
+
+/* This is essentially the same as aarch64_handle_breakpoint, apart
+   from that it is an aligned watchpoint to be handled.  */
+
+static int
+aarch64_handle_aligned_watchpoint (enum target_point_type type,
+				   CORE_ADDR addr, int len, int is_insert)
+{
+  struct aarch64_debug_reg_state *state;
+
+  state = aarch64_get_debug_reg_state ();
+
+  if (is_insert)
+    return aarch64_dr_state_insert_one_point (state, type, addr, len);
+  else
+    return aarch64_dr_state_remove_one_point (state, type, addr, len);
+}
+
+/* Insert/remove unaligned watchpoint by calling
+   aarch64_align_watchpoint repeatedly until the whole watched region,
+   as represented by ADDR and LEN, has been properly aligned and ready
+   to be written to one or more hardware watchpoint registers.
+   IS_INSERT indicates whether this is an insertion or a deletion.
+   Return 0 if succeed.  */
+
+static int
+aarch64_handle_unaligned_watchpoint (enum target_point_type type,
+				     CORE_ADDR addr, int len, int is_insert)
+{
+  struct aarch64_debug_reg_state *state
+    = aarch64_get_debug_reg_state ();
+
+  while (len > 0)
+    {
+      CORE_ADDR aligned_addr;
+      int aligned_len, ret;
+
+      aarch64_align_watchpoint (addr, len, &aligned_addr, &aligned_len,
+				&addr, &len);
+
+      if (is_insert)
+	ret = aarch64_dr_state_insert_one_point (state, type, aligned_addr,
+						 aligned_len);
+      else
+	ret = aarch64_dr_state_remove_one_point (state, type, aligned_addr,
+						 aligned_len);
+
+      if (debug_hw_points)
+	fprintf (stderr,
+ "handle_unaligned_watchpoint: is_insert: %d\n"
+ "                             aligned_addr: 0x%s, aligned_len: %d\n"
+ "                                next_addr: 0x%s,    next_len: %d\n",
+		 is_insert, paddress (aligned_addr), aligned_len,
+		 paddress (addr), len);
+
+      if (ret != 0)
+	return ret;
+    }
+
+  return 0;
+}
+
+static int
+aarch64_handle_watchpoint (enum target_point_type type, CORE_ADDR addr,
+			   int len, int is_insert)
+{
+  if (aarch64_point_is_aligned (1 /* is_watchpoint */ , addr, len))
+    return aarch64_handle_aligned_watchpoint (type, addr, len, is_insert);
+  else
+    return aarch64_handle_unaligned_watchpoint (type, addr, len, is_insert);
+}
+
+/* Insert a hardware breakpoint/watchpoint.
+   It actually only records the info of the to-be-inserted bp/wp;
+   the actual insertion will happen when threads are resumed.
+
+   Return 0 if succeed;
+   Return 1 if TYPE is unsupported type;
+   Return -1 if an error occurs.  */
+
+static int
+aarch64_insert_point (char type, CORE_ADDR addr, int len)
+{
+  int ret;
+  enum target_point_type targ_type;
+
+  if (debug_hw_points)
+    fprintf (stderr, "insert_point on entry (addr=0x%08lx, len=%d)\n",
+	     (unsigned long) addr, len);
+
+  /* Determine the type from the packet.  */
+  targ_type = Z_packet_to_point_type (type);
+  if (targ_type == point_type_unsupported)
+    return 1;
+
+  if (targ_type != hw_execute)
+    ret =
+      aarch64_handle_watchpoint (targ_type, addr, len, 1 /* is_insert */);
+  else
+    ret =
+      aarch64_handle_breakpoint (targ_type, addr, len, 1 /* is_insert */);
+
+  if (debug_hw_points > 1)
+    aarch64_show_debug_reg_state (aarch64_get_debug_reg_state (),
+				  "insert_point", addr, len, targ_type);
+
+  return ret;
+}
+
+/* Remove a hardware breakpoint/watchpoint.
+   It actually only records the info of the to-be-removed bp/wp,
+   the actual removal will be done when threads are resumed.
+
+   Return 0 if succeed;
+   Return 1 if TYPE is an unsupported type;
+   Return -1 if an error occurs.  */
+
+static int
+aarch64_remove_point (char type, CORE_ADDR addr, int len)
+{
+  int ret;
+  enum target_point_type targ_type;
+
+  if (debug_hw_points)
+    fprintf (stderr, "remove_point on entry (addr=0x%08lx, len=%d)\n",
+	     (unsigned long) addr, len);
+
+  /* Determine the type from the packet.  */
+  targ_type = Z_packet_to_point_type (type);
+  if (targ_type == point_type_unsupported)
+    return 1;
+
+  /* Set up state pointers.  */
+  if (targ_type != hw_execute)
+    ret =
+      aarch64_handle_watchpoint (targ_type, addr, len, 0 /* is_insert */);
+  else
+    ret =
+      aarch64_handle_breakpoint (targ_type, addr, len, 0 /* is_insert */);
+
+  if (debug_hw_points > 1)
+    aarch64_show_debug_reg_state (aarch64_get_debug_reg_state (),
+				  "remove_point", addr, len, targ_type);
+
+  return ret;
+}
+
+/* Returns the address associated with the watchpoint that hit, if
+   any; returns 0 otherwise.  */
+
+static CORE_ADDR
+aarch64_stopped_data_address (void)
+{
+  siginfo_t siginfo;
+  int pid, i;
+  struct aarch64_debug_reg_state *state;
+
+  pid = lwpid_of (get_thread_lwp (current_inferior));
+
+  /* Get the siginfo.  */
+  if (ptrace (PTRACE_GETSIGINFO, pid, NULL, &siginfo) != 0)
+    return (CORE_ADDR) 0;
+
+  /* Need to be a hardware breakpoint/watchpoint trap.  */
+  if (siginfo.si_signo != SIGTRAP
+      || (siginfo.si_code & 0xffff) != 0x0004 /* TRAP_HWBKPT */)
+    return (CORE_ADDR) 0;
+
+  /* Check if the address matches any watched address.  */
+  state = aarch64_get_debug_reg_state ();
+  for (i = aarch64_num_wp_regs - 1; i >= 0; --i)
+    {
+      const unsigned int len = aarch64_watchpoint_length (state->dr_ctrl_wp[i]);
+      const CORE_ADDR addr_trap = (CORE_ADDR) siginfo.si_addr;
+      const CORE_ADDR addr_watch = state->dr_addr_wp[i];
+      if (state->dr_ref_count_wp[i]
+	  && DR_CONTROL_ENABLED (state->dr_ctrl_wp[i])
+	  && addr_trap >= addr_watch
+	  && addr_trap < addr_watch + len)
+	return addr_trap;
+    }
+
+  return (CORE_ADDR) 0;
+}
+
+/* Returns 1 if target was stopped due to a watchpoint hit, 0
+   otherwise.  */
+
+static int
+aarch64_stopped_by_watchpoint (void)
+{
+  if (aarch64_stopped_data_address () != 0)
+    return 1;
+  else
+    return 0;
+}
+
+/* Fetch the thread-local storage pointer for libthread_db.  */
+
+ps_err_e
+ps_get_thread_area (const struct ps_prochandle *ph,
+		    lwpid_t lwpid, int idx, void **base)
+{
+  struct iovec iovec;
+  uint64_t reg;
+
+  iovec.iov_base = &reg;
+  iovec.iov_len = sizeof (reg);
+
+  if (ptrace (PTRACE_GETREGSET, lwpid, NT_ARM_TLS, &iovec) != 0)
+    return PS_ERR;
+
+  /* IDX is the bias from the thread pointer to the beginning of the
+     thread descriptor.  It has to be subtracted due to implementation
+     quirks in libthread_db.  */
+  *base = (void *) (reg - idx);
+
+  return PS_OK;
+}
+
+/* Called when a new process is created.  */
+
+static struct arch_process_info *
+aarch64_linux_new_process (void)
+{
+  struct arch_process_info *info = xcalloc (1, sizeof (*info));
+
+  aarch64_init_debug_reg_state (&info->debug_reg_state);
+
+  return info;
+}
+
+/* Called when a new thread is detected.  */
+
+static struct arch_lwp_info *
+aarch64_linux_new_thread (void)
+{
+  struct arch_lwp_info *info = xcalloc (1, sizeof (*info));
+
+  /* Mark that all the hardware breakpoint/watchpoint register pairs
+     for this thread need to be initialized (with data from
+     aarch_process_info.debug_reg_state).  */
+  DR_MARK_ALL_CHANGED (info->dr_changed_bp, aarch64_num_bp_regs);
+  DR_MARK_ALL_CHANGED (info->dr_changed_wp, aarch64_num_wp_regs);
+
+  return info;
+}
+
+/* Called when resuming a thread.
+   If the debug regs have changed, update the thread's copies.  */
+
+static void
+aarch64_linux_prepare_to_resume (struct lwp_info *lwp)
+{
+  ptid_t ptid = ptid_of (lwp);
+  struct arch_lwp_info *info = lwp->arch_private;
+
+  if (DR_HAS_CHANGED (info->dr_changed_bp)
+      || DR_HAS_CHANGED (info->dr_changed_wp))
+    {
+      int tid = ptid_get_lwp (ptid);
+      struct process_info *proc = find_process_pid (ptid_get_pid (ptid));
+      struct aarch64_debug_reg_state *state
+	= &proc->private->arch_private->debug_reg_state;
+
+      if (debug_hw_points)
+	fprintf (stderr, "prepare_to_resume thread %ld\n", lwpid_of (lwp));
+
+      /* Watchpoints.  */
+      if (DR_HAS_CHANGED (info->dr_changed_wp))
+	{
+	  aarch64_linux_set_debug_regs (state, tid, 1);
+	  DR_CLEAR_CHANGED (info->dr_changed_wp);
+	}
+
+      /* Breakpoints.  */
+      if (DR_HAS_CHANGED (info->dr_changed_bp))
+	{
+	  aarch64_linux_set_debug_regs (state, tid, 0);
+	  DR_CLEAR_CHANGED (info->dr_changed_bp);
+	}
+    }
+}
+
+/* ptrace hardware breakpoint resource info is formatted as follows:
+
+   31             24             16               8              0
+   +---------------+--------------+---------------+---------------+
+   |   RESERVED    |   RESERVED   |   DEBUG_ARCH  |  NUM_SLOTS    |
+   +---------------+--------------+---------------+---------------+  */
+
+#define AARCH64_DEBUG_NUM_SLOTS(x) ((x) & 0xff)
+#define AARCH64_DEBUG_ARCH(x) (((x) >> 8) & 0xff)
+#define AARCH64_DEBUG_ARCH_V8 0x6
+
+static void
+aarch64_arch_setup (void)
+{
+  int pid;
+  struct iovec iov;
+  struct user_hwdebug_state dreg_state;
+
+  current_process ()->tdesc = tdesc_aarch64;
+
+  pid = lwpid_of (get_thread_lwp (current_inferior));
+  iov.iov_base = &dreg_state;
+  iov.iov_len = sizeof (dreg_state);
+
+  /* Get hardware watchpoint register info.  */
+  if (ptrace (PTRACE_GETREGSET, pid, NT_ARM_HW_WATCH, &iov) == 0
+      && AARCH64_DEBUG_ARCH (dreg_state.dbg_info) == AARCH64_DEBUG_ARCH_V8)
+    {
+      aarch64_num_wp_regs = AARCH64_DEBUG_NUM_SLOTS (dreg_state.dbg_info);
+      if (aarch64_num_wp_regs > AARCH64_HWP_MAX_NUM)
+	{
+	  warning ("Unexpected number of hardware watchpoint registers reported"
+		   " by ptrace, got %d, expected %d.",
+		   aarch64_num_wp_regs, AARCH64_HWP_MAX_NUM);
+	  aarch64_num_wp_regs = AARCH64_HWP_MAX_NUM;
+	}
+    }
+  else
+    {
+      warning ("Unable to determine the number of hardware watchpoints"
+	       " available.");
+      aarch64_num_wp_regs = 0;
+    }
+
+  /* Get hardware breakpoint register info.  */
+  if (ptrace (PTRACE_GETREGSET, pid, NT_ARM_HW_BREAK, &iov) == 0
+      && AARCH64_DEBUG_ARCH (dreg_state.dbg_info) == AARCH64_DEBUG_ARCH_V8)
+    {
+      aarch64_num_bp_regs = AARCH64_DEBUG_NUM_SLOTS (dreg_state.dbg_info);
+      if (aarch64_num_bp_regs > AARCH64_HBP_MAX_NUM)
+	{
+	  warning ("Unexpected number of hardware breakpoint registers reported"
+		   " by ptrace, got %d, expected %d.",
+		   aarch64_num_bp_regs, AARCH64_HBP_MAX_NUM);
+	  aarch64_num_bp_regs = AARCH64_HBP_MAX_NUM;
+	}
+    }
+  else
+    {
+      warning ("Unable to determine the number of hardware breakpoints"
+	       " available.");
+      aarch64_num_bp_regs = 0;
+    }
+}
+
+static struct regset_info aarch64_regsets[] =
+{
+  { PTRACE_GETREGSET, PTRACE_SETREGSET, NT_PRSTATUS,
+    sizeof (struct user_pt_regs), GENERAL_REGS,
+    aarch64_fill_gregset, aarch64_store_gregset },
+  { PTRACE_GETREGSET, PTRACE_SETREGSET, NT_FPREGSET,
+    sizeof (struct user_fpsimd_state), FP_REGS,
+    aarch64_fill_fpregset, aarch64_store_fpregset
+  },
+  { 0, 0, 0, -1, -1, NULL, NULL }
+};
+
+static struct regsets_info aarch64_regsets_info =
+  {
+    aarch64_regsets, /* regsets */
+    0, /* num_regsets */
+    NULL, /* disabled_regsets */
+  };
+
+static struct usrregs_info aarch64_usrregs_info =
+  {
+    AARCH64_NUM_REGS,
+    aarch64_regmap,
+  };
+
+static struct regs_info regs_info =
+  {
+    NULL, /* regset_bitmap */
+    &aarch64_usrregs_info,
+    &aarch64_regsets_info,
+  };
+
+static const struct regs_info *
+aarch64_regs_info (void)
+{
+  return &regs_info;
+}
+
+struct linux_target_ops the_low_target =
+{
+  aarch64_arch_setup,
+  aarch64_regs_info,
+  aarch64_cannot_fetch_register,
+  aarch64_cannot_store_register,
+  NULL,
+  aarch64_get_pc,
+  aarch64_set_pc,
+  (const unsigned char *) &aarch64_breakpoint,
+  aarch64_breakpoint_len,
+  NULL,
+  0,
+  aarch64_breakpoint_at,
+  aarch64_insert_point,
+  aarch64_remove_point,
+  aarch64_stopped_by_watchpoint,
+  aarch64_stopped_data_address,
+  NULL,
+  NULL,
+  NULL,
+  aarch64_linux_new_process,
+  aarch64_linux_new_thread,
+  aarch64_linux_prepare_to_resume,
+};
+
+void
+initialize_low_arch (void)
+{
+  init_registers_aarch64 ();
+
+  initialize_regsets_info (&aarch64_regsets_info);
+}
+@
+
+
+1.5
+log
+@[GDBserver] Multi-process + multi-arch
+
+This patch makes GDBserver support multi-process + biarch.
+
+Currently, if you're debugging more than one process at once with a
+single gdbserver (in extended-remote mode), then all processes must
+have the same architecture (e.g., 64-bit vs 32-bit).  Otherwise, you
+see this:
+
+Added inferior 2
+[Switching to inferior 2 [<null>] (<noexec>)]
+Reading symbols from /home/pedro/gdb/tests/main32...done.
+Temporary breakpoint 2 at 0x4004cf: main. (2 locations)
+Starting program: /home/pedro/gdb/tests/main32
+warning: Selected architecture i386 is not compatible with reported target architecture i386:x86-64
+warning: Architecture rejected target-supplied description
+Remote 'g' packet reply is too long: 000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000090cfffff0000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000000000000000b042f7460000000000020000230000002b0000002b0000002b000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000007f03000000000000ffff0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000801f00003b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+... etc, etc ...
+
+Even though the process was running a 32-bit program, GDBserver sent
+back to GDB a register set in 64-bit layout.
+
+A patch (http://sourceware.org/ml/gdb-patches/2012-11/msg00228.html) a
+while ago made GDB track a target_gdbarch per inferior, and as
+consequence, fetch a target description per-inferior.  This patch is
+the GDBserver counterpart, that makes GDBserver keep track of each
+process'es XML target description and register layout.  So in the
+example above, GDBserver will send the correct register set in 32-bit
+layout to GDB.
+
+A new "struct target_desc" object (tdesc for short) is added, that
+holds the target description and register layout information about
+each process.  Each `struct process_info' holds a pointer to a target
+description.  The regcache also gains a pointer to a target
+description, mainly for convenience, and parallel with GDB (and
+possible future support for programs that flip processor modes).
+
+The low target's arch_setup routines are responsible for setting the
+process'es correct tdesc.  This isn't that much different to how
+things were done before, except that instead of detecting the inferior
+process'es architecture and calling the corresponding
+init_registers_FOO routine, which would change the regcache layout
+globals and recreate the threads' regcaches, the regcache.c globals
+are gone, and the init_registers_$BAR routines now each initialize a
+separate global struct target_desc object (one for each arch variant
+GDBserver supports), and so all the init_registers_$BAR routines that
+are built into GDBserver are called early at GDBserver startup time
+(similarly to how GDB handles its built-in target descriptions), and
+then the arch_setup routine is responsible for making
+process_info->tdesc point to one of these target description globals.
+The regcache module is all parameterized to get the regcache's layout
+from the tdesc object instead of the old register_bytes, etc. globals.
+
+The threads' regcaches are now created lazily.  The old scheme where
+we created each of them when we added a new thread doesn't work
+anymore, because we add the main thread/lwp before we see it stop for
+the first time, and it is only when we see the thread stop for the
+first time that we have a chance of determining the inferior's
+architecture (through the_low_target.arch_setup).  Therefore when we
+add the main thread we don't know which architecture/tdesc its
+regcache should have.
+
+This patch makes the gdb.multi/multi-arch.exp test now pass against
+(extended-remote) GDBserver.  It currently fails, without this patch.
+
+The IPA also uses the regcache, so it gains a new global struct
+target_desc pointer, which points at the description of the process it
+is loaded in.
+
+Re. the linux-low.c & friends changes.  Since the register map
+etc. may differ between processes (64-bit vs 32-bit) etc., the
+linux_target_ops num_regs, regmap and regset_bitmap data fields are no
+longer sufficient.  A new method is added in their place that returns
+a pointer to a new struct that includes all info linux-low.c needs to
+access registers of the current inferior.
+
+The patch/discussion that originally introduced
+linux-low.c:disabled_regsets mentions that the disabled_regsets set
+may be different per mode (in a biarch setup), and indeed that is
+cleared whenever we start a new (first) inferior, so that global is
+moved as well behind the new `struct regs_info'.
+
+On the x86 side:
+
+I simply replaced the i387-fp.c:num_xmm_registers global with a check
+for 64-bit or 32-bit process, which is equivalent to how the global
+was set.  This avoided coming up with some more general mechanism that
+would work for all targets that use this module (GNU/Linux, Windows,
+etc.).
+
+Tested:
+
+  GNU/Linux IA64
+  GNU/Linux MIPS64
+  GNU/Linux PowerPC (Fedora 16)
+  GNU/Linux s390x (Fedora 16)
+  GNU/Linux sparc64 (Debian)
+  GNU/Linux x86_64, -m64 and -m32 (Fedora 17)
+
+Cross built, and smoke tested:
+
+  i686-w64-mingw32, under Wine.
+  GNU/Linux TI C6x, by Yao Qi.
+
+Cross built but otherwise not tested:
+
+  aarch64-linux-gnu
+  arm-linux-gnu
+  m68k-linux
+  nios2-linux-gnu
+  sh-linux-gnu
+  spu
+  tilegx-unknown-linux-gnu
+
+Completely untested:
+
+  GNU/Linux Blackfin
+  GNU/Linux CRIS
+  GNU/Linux CRISv32
+  GNU/Linux TI Xtensa
+  GNU/Linux M32R
+  LynxOS
+  QNX NTO
+
+gdb/gdbserver/
+2013-06-07  Pedro Alves  <palves@@redhat.com>
+
+	* Makefile.in (OBS): Add tdesc.o.
+	(IPA_OBJS): Add tdesc-ipa.o.
+	(tdesc-ipa.o): New rule.
+	* ax.c (gdb_eval_agent_expr): Adjust register_size call to new
+	interface.
+	* linux-low.c (new_inferior): Delete.
+	(disabled_regsets, num_regsets): Delete.
+	(linux_add_process): Adjust to set the new per-process
+	new_inferior flag.
+	(linux_detach_one_lwp): Adjust to call regcache_invalidate_thread.
+	(linux_wait_for_lwp): Adjust.  Only call arch_setup if the event
+	was a stop.  When calling arch_setup, switch the current inferior
+	to the thread that got an event.
+	(linux_resume_one_lwp): Adjust to call regcache_invalidate_thread.
+	(regsets_fetch_inferior_registers)
+	(regsets_store_inferior_registers): New regsets_info parameter.
+	Adjust to use it.
+	(linux_register_in_regsets): New regs_info parameter.  Adjust to
+	use it.
+	(register_addr, fetch_register, store_register): New usrregs_info
+	parameter.  Adjust to use it.
+	(usr_fetch_inferior_registers, usr_store_inferior_registers): New
+	parameter regs_info.  Adjust to use it.
+	(linux_fetch_registers): Get the current inferior's regs_info, and
+	adjust to use it.
+	(linux_store_registers): Ditto.
+	[HAVE_LINUX_REGSETS] (initialize_regsets_info): New.
+	(initialize_low): Don't initialize the target_regsets here.  Call
+	initialize_low_arch.
+	* linux-low.h (target_regsets): Delete declaration.
+	(struct regsets_info): New.
+	(struct usrregs_info): New.
+	(struct regs_info): New.
+	(struct process_info_private) <new_inferior>: New field.
+	(struct linux_target_ops): Delete the num_regs, regmap, and
+	regset_bitmap fields.  New field regs_info.
+	[HAVE_LINUX_REGSETS] (initialize_regsets_info): Declare.
+	* i387-fp.c (num_xmm_registers): Delete.
+	(i387_cache_to_fsave, i387_fsave_to_cache): Adjust find_regno
+	calls to new interface.
+	(i387_cache_to_fxsave, i387_cache_to_xsave, i387_fxsave_to_cache)
+	(i387_xsave_to_cache): Adjust find_regno calls to new interface.
+	Infer the number of xmm registers from the regcache's target
+	description.
+	* i387-fp.h (num_xmm_registers): Delete.
+	* inferiors.c (add_thread): Don't install the thread's regcache
+	here.
+	* proc-service.c (gregset_info): Fetch the current inferior's
+	regs_info.  Adjust to use it.
+	* regcache.c: Include tdesc.h.
+	(register_bytes, reg_defs, num_registers)
+	(gdbserver_expedite_regs): Delete.
+	(get_thread_regcache): If the thread doesn't have a regcache yet,
+	create one, instead of aborting gdbserver.
+	(regcache_invalidate_one): Rename to ...
+	(regcache_invalidate_thread): ... this.
+	(regcache_invalidate_one): New.
+	(regcache_invalidate): Only invalidate registers of the current
+	process.
+	(init_register_cache): Add target_desc parameter, and use it.
+	(new_register_cache): Ditto.  Assert the target description has a
+	non zero registers_size.
+	(regcache_cpy): Add assertions.  Adjust.
+	(realloc_register_cache, set_register_cache): Delete.
+	(registers_to_string, registers_from_string): Adjust.
+	(find_register_by_name, find_regno, find_register_by_number)
+	(register_cache_size): Add target_desc parameter, and use it.
+	(free_register_cache_thread, free_register_cache_thread_one)
+	(regcache_release, register_cache_size): New.
+	(register_size): Add target_desc parameter, and use it.
+	(register_data, supply_register, supply_register_zeroed)
+	(supply_regblock, supply_register_by_name, collect_register)
+	(collect_register_as_string, collect_register_by_name): Adjust.
+	* regcache.h (struct target_desc): Forward declare.
+	(struct regcache) <tdesc>: New field.
+	(init_register_cache, new_register_cache): Add target_desc
+	parameter.
+	(regcache_invalidate_thread): Declare.
+	(regcache_invalidate_one): Delete declaration.
+	(regcache_release): Declare.
+	(find_register_by_number, register_cache_size, register_size)
+	(find_regno): Add target_desc parameter.
+	(gdbserver_expedite_regs, gdbserver_xmltarget): Delete
+	declarations.
+	* remote-utils.c: Include tdesc.h.
+	(outreg, prepare_resume_reply): Adjust.
+	* server.c: Include tdesc.h.
+	(gdbserver_xmltarget): Delete declaration.
+	(get_features_xml, process_serial_event): Adjust.
+	* server.h [IN_PROCESS_AGENT] (struct target_desc): Forward
+	declare.
+	(struct process_info) <tdesc>: New field.
+	(ipa_tdesc): Declare.
+	* tdesc.c: New file.
+	* tdesc.h: New file.
+	* tracepoint.c: Include tdesc.h.
+	[IN_PROCESS_AGENT] (ipa_tdesc): Define.
+	(get_context_regcache): Adjust to pass ipa_tdesc down.
+	(do_action_at_tracepoint): Adjust to get the register cache size
+	from the context regcache's description.
+	(traceframe_walk_blocks): Adjust to get the register cache size
+	from the current trace frame's description.
+	(traceframe_get_pc): Adjust to get current trace frame's
+	description and pass it down.
+	(gdb_collect): Adjust to get the register cache size from the
+	IPA's description.
+	* linux-amd64-ipa.c (tdesc_amd64_linux): Declare.
+	(gdbserver_xmltarget): Delete.
+	(initialize_low_tracepoint): Set the ipa's target description.
+	* linux-i386-ipa.c (tdesc_i386_linux): Declare.
+	(initialize_low_tracepoint): Set the ipa's target description.
+	* linux-x86-low.c: Include tdesc.h.
+	[__x86_64__] (is_64bit_tdesc): New.
+	(ps_get_thread_area, x86_get_thread_area): Use it.
+	(i386_cannot_store_register): Rename to ...
+	(x86_cannot_store_register): ... this.  Use is_64bit_tdesc.
+	(i386_cannot_fetch_register): Rename to ...
+	(x86_cannot_fetch_register): ... this.  Use is_64bit_tdesc.
+	(x86_fill_gregset, x86_store_gregset): Adjust register_size calls
+	to new interface.
+	(target_regsets): Rename to ...
+	(x86_regsets): ... this.
+	(x86_get_pc, x86_set_pc): Adjust register_size calls to new
+	interface.
+	(x86_siginfo_fixup): Use is_64bit_tdesc.
+	[__x86_64__] (tdesc_amd64_linux, tdesc_amd64_avx_linux)
+	(tdesc_x32_avx_linux, tdesc_x32_linux)
+	(tdesc_i386_linux, tdesc_i386_mmx_linux, tdesc_i386_avx_linux):
+	Declare.
+	(x86_linux_update_xmltarget): Delete.
+	(I386_LINUX_XSAVE_XCR0_OFFSET): Define.
+	(have_ptrace_getfpxregs, have_ptrace_getregset): New.
+	(AMD64_LINUX_USER64_CS): New.
+	(x86_linux_read_description): New, based on
+	x86_linux_update_xmltarget.
+	(same_process_callback): New.
+	(x86_arch_setup_process_callback): New.
+	(x86_linux_update_xmltarget): New.
+	(x86_regsets_info): New.
+	(amd64_linux_regs_info): New.
+	(i386_linux_usrregs_info): New.
+	(i386_linux_regs_info): New.
+	(x86_linux_regs_info): New.
+	(x86_arch_setup): Reimplement.
+	(x86_install_fast_tracepoint_jump_pad): Use is_64bit_tdesc.
+	(x86_emit_ops): Ditto.
+	(the_low_target): Adjust.  Install x86_linux_regs_info,
+	x86_cannot_fetch_register, and x86_cannot_store_register.
+	(initialize_low_arch): New.
+	* linux-ia64-low.c (tdesc_ia64): Declare.
+	(ia64_fetch_register): Adjust.
+	(ia64_usrregs_info, regs_info): New globals.
+	(ia64_regs_info): New function.
+	(the_low_target): Adjust.
+	(initialize_low_arch): New function.
+	* linux-sparc-low.c (tdesc_sparc64): Declare.
+	(sparc_fill_gregset_to_stack, sparc_store_gregset_from_stack):
+	Adjust.
+	(sparc_arch_setup): New function.
+	(sparc_regsets_info, sparc_usrregs_info, regs_info): New globals.
+	(the_low_target): Adjust.
+	(initialize_low_arch): New function.
+	* linux-ppc-low.c (tdesc_powerpc_32l, tdesc_powerpc_altivec32l)
+	(tdesc_powerpc_cell32l, tdesc_powerpc_vsx32l)
+	(tdesc_powerpc_isa205_32l, tdesc_powerpc_isa205_altivec32l)
+	(tdesc_powerpc_isa205_vsx32l, tdesc_powerpc_e500l)
+	(tdesc_powerpc_64l, tdesc_powerpc_altivec64l)
+	(tdesc_powerpc_cell64l, tdesc_powerpc_vsx64l)
+	(tdesc_powerpc_isa205_64l, tdesc_powerpc_isa205_altivec64l)
+	(tdesc_powerpc_isa205_vsx64l): Declare.
+	(ppc_cannot_store_register, ppc_collect_ptrace_register)
+	(ppc_supply_ptrace_register, parse_spufs_run, ppc_get_pc)
+	(ppc_set_pc, ppc_get_hwcap): Adjust.
+	(ppc_usrregs_info): Forward declare.
+	(!__powerpc64__) ppc_regmap_adjusted: New global.
+	(ppc_arch_setup): Adjust to the current process'es target
+	description.
+	(ppc_fill_vsxregset, ppc_store_vsxregset, ppc_fill_vrregset)
+	(ppc_store_vrregset, ppc_fill_evrregset, ppc_store_evrregse)
+	(ppc_store_evrregset): Adjust.
+	(target_regsets): Rename to ...
+	(ppc_regsets): ... this, and make static.
+	(ppc_usrregs_info, ppc_regsets_info, regs_info): New globals.
+	(ppc_regs_info): New function.
+	(the_low_target): Adjust.
+	(initialize_low_arch): New function.
+	* linux-s390-low.c (tdesc_s390_linux32, tdesc_s390_linux32v1)
+	(tdesc_s390_linux32v2, tdesc_s390_linux64, tdesc_s390_linux64v1)
+	(tdesc_s390_linux64v2, tdesc_s390x_linux64, tdesc_s390x_linux64v1)
+	(tdesc_s390x_linux64v2): Declare.
+	(s390_collect_ptrace_register, s390_supply_ptrace_register)
+	(s390_fill_gregset, s390_store_last_break): Adjust.
+	(target_regsets): Rename to ...
+	(s390_regsets): ... this, and make static.
+	(s390_get_pc, s390_set_pc): Adjust.
+	(s390_get_hwcap): New target_desc parameter, and use it.
+	[__s390x__] (have_hwcap_s390_high_gprs): New global.
+	(s390_arch_setup): Adjust to set the current process'es target
+	description.  Don't adjust the regmap.
+	(s390_usrregs_info, s390_regsets_info, regs_info): New globals.
+	[__s390x__] (s390_usrregs_info_3264, s390_regsets_info_3264)
+	(regs_info_3264): New globals.
+	(s390_regs_info): New function.
+	(the_low_target): Adjust.
+	(initialize_low_arch): New function.
+	* linux-mips-low.c (tdesc_mips_linux, tdesc_mips_dsp_linux)
+	(tdesc_mips64_linux, tdesc_mips64_dsp_linux): Declare.
+	[__mips64] (init_registers_mips_linux)
+	(init_registers_mips_dsp_linux): Delete defines.
+	[__mips64] (tdesc_mips_linux, tdesc_mips_dsp_linux): New defines.
+	(have_dsp): New global.
+	(mips_read_description): New, based on mips_arch_setup.
+	(mips_arch_setup): Reimplement.
+	(get_usrregs_info): New function.
+	(mips_cannot_fetch_register, mips_cannot_store_register)
+	(mips_get_pc, mips_set_pc, mips_fill_gregset, mips_store_gregset)
+	(mips_fill_fpregset, mips_store_fpregset): Adjust.
+	(target_regsets): Rename to ...
+	(mips_regsets): ... this, and make static.
+	(mips_regsets_info, mips_dsp_usrregs_info, mips_usrregs_info)
+	(dsp_regs_info, regs_info): New globals.
+	(mips_regs_info): New function.
+	(the_low_target): Adjust.
+	(initialize_low_arch): New function.
+	* linux-arm-low.c (tdesc_arm, tdesc_arm_with_iwmmxt)
+	(tdesc_arm_with_vfpv2, tdesc_arm_with_vfpv3, tdesc_arm_with_neon):
+	Declare.
+	(arm_fill_vfpregset, arm_store_vfpregset): Adjust.
+	(arm_read_description): New, with bits factored from
+	arm_arch_setup.
+	(arm_arch_setup): Reimplement.
+	(target_regsets): Rename to ...
+	(arm_regsets): ... this, and make static.
+	(arm_regsets_info, arm_usrregs_info, regs_info): New globals.
+	(arm_regs_info): New function.
+	(the_low_target): Adjust.
+	(initialize_low_arch): New function.
+	* linux-m68k-low.c (tdesc_m68k): Declare.
+	(target_regsets): Rename to ...
+	(m68k_regsets): ... this, and make static.
+	(m68k_regsets_info, m68k_usrregs_info, regs_info): New globals.
+	(m68k_regs_info): New function.
+	(m68k_arch_setup): New function.
+	(the_low_target): Adjust.
+	(initialize_low_arch): New function.
+	* linux-sh-low.c (tdesc_sharch): Declare.
+	(target_regsets): Rename to ...
+	(sh_regsets): ... this, and make static.
+	(sh_regsets_info, sh_usrregs_info, regs_info): New globals.
+	(sh_regs_info, sh_arch_setup): New functions.
+	(the_low_target): Adjust.
+	(initialize_low_arch): New function.
+	* linux-bfin-low.c (tdesc_bfin): Declare.
+	(bfin_arch_setup): New function.
+	(bfin_usrregs_info, regs_info): New globals.
+	(bfin_regs_info): New function.
+	(the_low_target): Adjust.
+	(initialize_low_arch): New function.
+	* linux-cris-low.c (tdesc_cris): Declare.
+	(cris_arch_setup): New function.
+	(cris_usrregs_info, regs_info): New globals.
+	(cris_regs_info): New function.
+	(the_low_target): Adjust.
+	(initialize_low_arch): New function.
+	* linux-cris-low.c (tdesc_crisv32): Declare.
+	(cris_arch_setup): New function.
+	(cris_regsets_info, cris_usrregs_info, regs_info): New globals.
+	(cris_regs_info): New function.
+	(the_low_target): Adjust.
+	(initialize_low_arch): New function.
+	* linux-m32r-low.c (tdesc_m32r): Declare.
+	(m32r_arch_setup): New function.
+	(m32r_usrregs_info, regs_info): New globals.
+	(m32r_regs_info): Adjust.
+	(initialize_low_arch): New function.
+	* linux-tic6x-low.c (tdesc_tic6x_c64xp_linux)
+	(tdesc_tic6x_c64x_linux, tdesc_tic6x_c62x_linux): Declare.
+	(tic6x_usrregs_info): Forward declare.
+	(tic6x_read_description): New function, based on ...
+	(tic6x_arch_setup): ... this.  Reimplement.
+	(target_regsets): Rename to ...
+	(tic6x_regsets): ... this, and make static.
+	(tic6x_regsets_info, tic6x_usrregs_info, regs_info): New globals.
+	(tic6x_regs_info): New function.
+	(the_low_target): Adjust.
+	(initialize_low_arch): New function.
+	* linux-xtensa-low.c (tdesc_xtensa): Declare.
+	(xtensa_fill_gregset, xtensa_store_gregset): Adjust.
+	(target_regsets): Rename to ...
+	(xtensa_regsets): ... this, and make static.
+	(xtensa_regsets_info, xtensa_usrregs_info, regs_info): New
+	globals.
+	(xtensa_arch_setup, xtensa_regs_info): New functions.
+	(the_low_target): Adjust.
+	(initialize_low_arch): New function.
+	* linux-nios2-low.c (tdesc_nios2_linux): Declare.
+	(nios2_arch_setup): Set the current process'es tdesc.
+	(target_regsets): Rename to ...
+	(nios2_regsets): ... this.
+	(nios2_regsets_info, nios2_usrregs_info, regs_info): New globals.
+	(nios2_regs_info): New function.
+	(the_low_target): Adjust.
+	(initialize_low_arch): New function.
+        * linux-aarch64-low.c (tdesc_aarch64): Declare.
+        (aarch64_arch_setup): Set the current process'es tdesc.
+        (target_regsets): Rename to ...
+        (aarch64_regsets): ... this.
+        (aarch64_regsets_info, aarch64_usrregs_info, regs_info): New globals.
+        (aarch64_regs_info): New function.
+        (the_low_target): Adjust.
+        (initialize_low_arch): New function.
+	* linux-tile-low.c (tdesc_tilegx, tdesc_tilegx32): Declare
+	globals.
+	(target_regsets): Rename to ...
+	(tile_regsets): ... this.
+	(tile_regsets_info, tile_usrregs_info, regs_info): New globals.
+	(tile_regs_info): New function.
+	(tile_arch_setup): Set the current process'es tdesc.
+	(the_low_target): Adjust.
+	(initialize_low_arch): New function.
+	* spu-low.c (tdesc_spu): Declare.
+	(spu_create_inferior, spu_attach): Set the new process'es tdesc.
+	* win32-arm-low.c (tdesc_arm): Declare.
+	(arm_arch_setup): New function.
+	(the_low_target): Install arm_arch_setup instead of
+	init_registers_arm.
+	* win32-i386-low.c (tdesc_i386, tdesc_amd64): Declare.
+	(init_windows_x86): Rename to ...
+	(i386_arch_setup): ... this.  Set `win32_tdesc'.
+	(the_low_target): Adjust.
+	* win32-low.c (win32_tdesc): New global.
+	(child_add_thread): Don't create the thread cache here.
+	(do_initial_child_stuff): Set the new process'es tdesc.
+	* win32-low.h (struct target_desc): Forward declare.
+	(win32_tdesc): Declare.
+	* lynx-i386-low.c (tdesc_i386): Declare global.
+	(lynx_i386_arch_setup): Set `lynx_tdesc'.
+	* lynx-low.c (lynx_tdesc): New global.
+	(lynx_add_process): Set the new process'es tdesc.
+	* lynx-low.h (struct target_desc): Forward declare.
+	(lynx_tdesc): Declare global.
+	* lynx-ppc-low.c (tdesc_powerpc_32): Declare global.
+	(lynx_ppc_arch_setup): Set `lynx_tdesc'.
+	* nto-low.c (nto_tdesc): New global.
+	(do_attach): Set the new process'es tdesc.
+	* nto-low.h (struct target_desc): Forward declare.
+	(nto_tdesc): Declare.
+	* nto-x86-low.c (tdesc_i386): Declare.
+	(nto_x86_arch_setup): Set `nto_tdesc'.
+
+gdb/
+2013-06-07  Pedro Alves  <palves@@redhat.com>
+
+	* regformats/regdat.sh: Output #include tdesc.h.  Make globals
+	static.  Output a global target description pointer.
+	(init_registers_${name}): Adjust to initialize a
+	target description structure.
+@
+text
+@d603 1
+@
+
+
+1.4
+log
+@[GDBserver][AArch64] Remove references to aarch64-without-fpu.xml.
+
+The GDBserver Aarch64 port includes the aarch64-without-fpu
+description in the build, but doesn't actually use it anywhere.  As
+Linux always requires an FPU, just remove the dead code.
+
+gdb/gdbserver/
+2013-05-28  Pedro Alves  <palves@@redhat.com>
+
+	* Makefile.in (clean): Remove reference to aarch64-without-fpu.c.
+	(aarch64-without-fpu.c): Delete rule.
+	* configure.srv (aarch64*-*-linux*): Remove references to
+	aarch64-without-fpu.o and aarch64-without-fpu.xml.
+	* linux-aarch64-low.c (init_registers_aarch64_without_fpu): Remove
+	declaration.
+@
+text
+@d35 1
+d1192 1
+a1192 1
+  init_registers_aarch64 ();
+d1239 1
+a1239 1
+struct regset_info target_regsets[] =
+d1251 26
+d1280 1
+a1280 3
+  AARCH64_NUM_REGS,
+  aarch64_regmap,
+  NULL,
+d1302 8
+@
+
+
+1.3
+log
+@2013-02-07  Marcus Shawcroft  <marcus.shawcroft@@arm.com>
+
+        * linux-aarch64-low.c (aarch64_arch_setup): Clamp
+        aarch64_num_wp_regs and aarch64_num_bp_regs to
+        AARCH64_HWP_MAX_NUM and AARCH64_HBP_MAX_NUM respectively.
+@
+text
+@a35 3
+/* Defined in auto-generated files.  */
+void init_registers_aarch64_without_fpu (void);
+
+@
+
+
+1.3.2.1
+log
+@gdbserver, aarch64: Zero out regs in aarch64_linux_set_debug_regs.
+
+Apply the same fix that was applied to aarch64-linux-nat.c.
+
+2013-09-16 Will Newton  <will.newton@@linaro.org>
+
+	* linux-aarch64-low.c (aarch64_linux_set_debug_regs): Zero
+	out regs.
+@
+text
+@a604 1
+  memset (&regs, 0, sizeof (regs));
+@
+
+
+1.2
+log
+@Switch AArch64 gdbserver ps_get_thread_area to PTRACE_GETREGSET.
+
+2013-02-06  Marcus Shawcroft  <marcus.shawcroft@@arm.com>
+
+       * linux-aarch64-low.c (ps_get_thread_area): Replace
+       PTRACE_GET_THREAD_AREA with PTRACE_GETREGSET.
+@
+text
+@d1205 7
+a1211 4
+      if (aarch64_num_wp_regs > AARCH64_HBP_MAX_NUM)
+	warning ("Unexpected number of hardware watchpoint registers reported"
+		 " by ptrace, got %d, expected %d.",
+		 aarch64_num_wp_regs, AARCH64_HBP_MAX_NUM);
+d1226 6
+a1231 3
+	warning ("Unexpected number of hardware breakpoint registers reported"
+		 " by ptrace, got %d, expected %d.",
+		 aarch64_num_bp_regs, AARCH64_HBP_MAX_NUM);
+@
+
+
+1.1
+log
+@AArch64 GDBserver support.
+
+gdb/
+        * configure.tgt (aarch64*-*-linux*): Set build_gdbserver=yes.
+
+gdb/gdbserver/
+
+        * Makefile.in (clean): Remove aarch64.c and aarch64-without-fpu.c.
+        (aarch64.c, aarch64-without-fpu.c): New targets.
+        * configure.srv (aarch64*-*-linux*): New.
+        * linux-aarch64-low.c: New file.
+@
+text
+@d1092 1
+a1092 1
+ps_get_thread_area (const struct ps_prochandle * ph,
+d1095 7
+a1101 1
+  if (ptrace (PTRACE_GET_THREAD_AREA, lwpid, NULL, base) != 0)
+d1107 1
+a1107 1
+  *base = (void *) ((char *) *base - idx);
+@
+

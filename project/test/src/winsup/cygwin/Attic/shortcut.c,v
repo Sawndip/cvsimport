@@ -1,0 +1,666 @@
+head	1.16;
+access;
+symbols
+	cygwin-1-3-12-1:1.15.0.28
+	cygwin-1-3-11-3:1.15.0.26
+	predaemon:1.15
+	cygwin_daemon_merge_HEAD:1.15
+	cygwin-1-3-10-1:1.15.0.24
+	pregp02r1:1.15.0.22
+	cygwin-1-3-9:1.15.0.20
+	cygwin-1-3-8-1:1.15.0.18
+	cygwin-1-3-7-1:1.15.0.16
+	cygnus_cvs_20020108_pre:1.15
+	pre-regex:1.15.0.14
+	cygwin-1-3-6-6:1.15.0.12
+	cygwin-1-3-6-5:1.15.0.10
+	cygwin-1-3-6-4:1.15.0.8
+	cygwin-1-3-6-3:1.15.0.6
+	cygwin-1-3-6-2:1.15.0.4
+	cygwin-1-3-6-1:1.15.0.2
+	cygwin-1-3-5-3:1.14.0.12
+	cygwin-1-3-5-2:1.14.0.10
+	cygwin-1-3-5:1.14.0.8
+	cygwin-1-3-4:1.14.0.6
+	Z-cygwin_daemon_merge-new_HEAD:1.16
+	Z-cygwin_daemon_merge_HEAD:1.16
+	cygwin_daemon:1.14.0.4
+	cygwin-1-3-3:1.14.0.2
+	cygwin-1-3-2:1.10.0.2
+	cygwin-1-3-1:1.7.0.4;
+locks; strict;
+comment	@ * @;
+
+
+1.16
+date	2002.09.04.13.11.29;	author corinna;	state dead;
+branches;
+next	1.15;
+
+1.15
+date	2001.11.28.02.36.32;	author cgf;	state Exp;
+branches;
+next	1.14;
+
+1.14
+date	2001.09.07.21.32.05;	author cgf;	state Exp;
+branches
+	1.14.4.1;
+next	1.13;
+
+1.13
+date	2001.09.06.04.41.59;	author cgf;	state Exp;
+branches;
+next	1.12;
+
+1.12
+date	2001.06.24.22.26.52;	author cgf;	state Exp;
+branches;
+next	1.11;
+
+1.11
+date	2001.05.29.08.04.55;	author corinna;	state Exp;
+branches;
+next	1.10;
+
+1.10
+date	2001.05.04.21.09.47;	author cgf;	state Exp;
+branches;
+next	1.9;
+
+1.9
+date	2001.05.04.21.02.15;	author cgf;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2001.05.04.20.39.38;	author cgf;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2001.04.22.16.19.27;	author cgf;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2001.03.10.23.37.50;	author cgf;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2001.03.02.11.41.09;	author corinna;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2001.02.25.23.14.52;	author corinna;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2001.02.25.09.19.35;	author corinna;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2001.02.22.14.51.16;	author corinna;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2001.02.22.12.56.36;	author corinna;	state Exp;
+branches;
+next	;
+
+1.14.4.1
+date	2002.01.04.03.56.10;	author rbcollins;	state Exp;
+branches;
+next	1.14.4.2;
+
+1.14.4.2
+date	2002.09.06.09.48.10;	author scottc;	state dead;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.16
+log
+@	* Makefile.in (DLL_OFILES): Drop shortcut.o.
+	* path.cc: Move all shortcut functions from shortcut.c to here.
+	(check_shortcut): Implement without using COM interface.
+	* path.h: Move definition of SHORTCUT_HDR_SIZE to here.
+	* shortcut.c: Remove.
+	* shortcut.h: Ditto.
+@
+text
+@/* shortcut.c: Read shortcuts. This part of the code must be in C because
+	       the C++ interface to COM doesn't work without -fvtable-thunk
+	       which is too dangerous to use.
+
+   Copyright 2001 Red Hat, Inc.
+
+This file is part of Cygwin.
+
+This software is a copyrighted work licensed under the terms of the
+Cygwin license.  Please consult the file "CYGWIN_LICENSE" for
+details. */
+
+#define WIN32_LEAN_AND_MEAN
+#include "winsup.h"
+#include <shlobj.h>
+#include <ctype.h>
+#include <sys/types.h>
+#include <sys/mount.h>
+#include <errno.h>
+#include "shortcut.h"
+
+/* TODO:
+   Currently duplicated from path.h. Later rearrangement of path.h
+   to allow including from plain C would be better. */
+/* This is needed to avoid including path.h which is a pure C++ header. */
+#define PATH_SYMLINK	 MOUNT_SYMLINK
+#define PATH_EXEC	 MOUNT_EXEC
+#define PATH_CYGWIN_EXEC MOUNT_CYGWIN_EXEC
+#define PATH_ALL_EXEC	 (PATH_CYGWIN_EXEC | PATH_EXEC)
+
+/* TODO: Ditto. */
+static BOOL
+has_exec_chars (const char *buf, int len)
+{
+  return len >= 2 &&
+	 ((buf[0] == '#' && buf[1] == '!') ||
+	  (buf[0] == ':' && buf[1] == '\n') ||
+	  (buf[0] == 'M' && buf[1] == 'Z'));
+}
+
+char shortcut_header[SHORTCUT_HDR_SIZE];
+BOOL shortcut_initalized;
+
+void
+create_shortcut_header (void)
+{
+  if (!shortcut_initalized)
+    {
+      shortcut_header[0] = 'L';
+      shortcut_header[4] = '\001';
+      shortcut_header[5] = '\024';
+      shortcut_header[6] = '\002';
+      shortcut_header[12] = '\300';
+      shortcut_header[19] = 'F';
+      shortcut_header[20] = '\f';
+      shortcut_header[60] = '\001';
+      shortcut_initalized = TRUE;
+    }
+}
+
+static BOOL
+cmp_shortcut_header (const char *file_header)
+{
+  create_shortcut_header ();
+  return memcmp (shortcut_header, file_header, SHORTCUT_HDR_SIZE);
+}
+
+int
+check_shortcut (const char *path, DWORD fileattr, HANDLE h,
+		char *contents, int *error, unsigned *pflags)
+{
+  HRESULT hres;
+  IShellLink *psl = NULL;
+  IPersistFile *ppf = NULL;
+  WCHAR wc_path[MAX_PATH];
+  char file_header[SHORTCUT_HDR_SIZE];
+  DWORD len = 0;
+  int res = 0;
+  DWORD got = 0;
+
+  /* Initialize COM library. */
+  CoInitialize (NULL);
+
+  /* Get a pointer to the IShellLink interface. */
+  hres = CoCreateInstance (&CLSID_ShellLink, NULL, CLSCTX_INPROC_SERVER,
+			   &IID_IShellLink, (void **)&psl);
+  if (FAILED (hres))
+    goto close_it;
+  /* Get a pointer to the IPersistFile interface. */
+  hres = psl->lpVtbl->QueryInterface (psl, &IID_IPersistFile, (void **)&ppf);
+  if (FAILED (hres))
+    goto close_it;
+  /* Load the shortcut. */
+  MultiByteToWideChar(CP_ACP, 0, path, -1, wc_path, MAX_PATH);
+  hres = ppf->lpVtbl->Load (ppf, wc_path, STGM_READ);
+  if (FAILED (hres))
+    goto close_it;
+  /* Read the files header information. This is used to check for a
+     Cygwin or U/WIN shortcut or later to check for executable files. */
+  if (!ReadFile (h, file_header, SHORTCUT_HDR_SIZE, &got, 0))
+    {
+      *error = EIO;
+      goto close_it;
+    }
+  /* Try the description (containing a POSIX path) first. */
+  if (fileattr & FILE_ATTRIBUTE_READONLY)
+    {
+      /* Check header if the shortcut is really created by Cygwin or U/WIN. */
+      if (got == SHORTCUT_HDR_SIZE && !cmp_shortcut_header (file_header))
+	{
+	  hres = psl->lpVtbl->GetDescription (psl, contents, MAX_PATH);
+	  if (FAILED (hres))
+	    goto file_not_symlink;
+	  len = strlen (contents);
+	}
+    }
+#if TREAT_NATIVE_SHORTCUTS_AS_SYMLINKS
+  /* No description or not R/O: Check the "official" path. */
+  if (len == 0)
+    {
+      char full_path[MAX_PATH];
+      WIN32_FIND_DATA wfd;
+
+      /* Convert to full path (easy way) */
+      if ((path[0] == '\\' && path[1] == '\\')
+	  || (_toupper (path[0]) >= 'A' && _toupper (path[0]) <= 'Z'
+	      && path[1] == ':'))
+	len = 0;
+      else
+	{
+	  len = GetCurrentDirectory (MAX_PATH, full_path);
+	  if (path[0] == '\\')
+	    len = 2;
+	  else if (full_path[len - 1] != '\\')
+	    strcpy (full_path + len++, "\\");
+	}
+      strcpy (full_path + len, path);
+      /* Set relative path inside of IShellLink interface. */
+      hres = psl->lpVtbl->SetRelativePath (psl, full_path, 0);
+      if (FAILED (hres))
+	goto file_not_symlink;
+      /* Get the path to the shortcut target. */
+      hres = psl->lpVtbl->GetPath (psl, contents, MAX_PATH, &wfd, 0);
+      if (FAILED(hres))
+	goto file_not_symlink;
+    }
+#endif
+  res = strlen (contents);
+  if (res) /* It's a symlink.  */
+    *pflags = PATH_SYMLINK;
+  goto close_it;
+
+file_not_symlink:
+  /* Not a symlink, see if executable.  */
+  if (!(*pflags & PATH_ALL_EXEC) && has_exec_chars (file_header, got))
+    *pflags |= PATH_EXEC;
+
+close_it:
+  /* Release the pointer to IPersistFile. */
+  if (ppf)
+    ppf->lpVtbl->Release(ppf);
+  /* Release the pointer to IShellLink. */
+  if (psl)
+    psl->lpVtbl->Release(psl);
+  /* Uninitialize COM library. */
+  CoUninitialize ();
+  CloseHandle (h);
+
+  return res;
+}
+@
+
+
+1.15
+log
+@* winsup.h: Reorganize to avoid use of experimental stuff.
+* shortcut.cc: Move winsup.h first in include order.
+@
+text
+@@
+
+
+1.14
+log
+@* cygheap.h (init_cygheap): Move heap pointers here.
+* include/sys/cygwin.h (perprocess): Remove heap pointers.
+* dcrt0.cc (__cygwin_user_data): Reflect obsolete perprocess stuff.
+(_dll_crt0): Don't initialize heap pointers.
+(cygwin_dll_init): Ditto.
+(release_upto): Use heap pointers from cygheap.
+* heap.h: Ditto.
+* fork.cc (fork_parent): Ditto.  Don't set heap pointers in ch.
+(fork_child): Remove obsolete sigproc_fixup_after_fork.
+* shared.cc (memory_init): Reorganize so that cygheap initialization is called
+prior to regular heap since regular heap uses cygheap now.
+* sigproc.cc (proc_subproc): Eliminate zombies allocation.
+(sigproc_init): Move zombies alloation here.  Don't free up array on fork, just
+reuse it.
+(sigproc_fixup_after_fork): Eliminate.
+* sigproc.h: Ditto.
+* include/cygwin/version.h: Reflect change to perprocess structure.
+@
+text
+@d14 1
+a15 1
+#include "winsup.h"
+@
+
+
+1.14.4.1
+log
+@Merged changes from HEAD
+@
+text
+@d14 1
+a15 1
+#include <shlobj.h>
+@
+
+
+1.14.4.2
+log
+@Merged changes from HEAD
+@
+text
+@@
+
+
+1.13
+log
+@Remove initialization of static or global values to zero, throughout.  This
+just needlessly grows the size of the DLL.
+* tty.cc (tty::alive): Make inuse handle non-inheriting on open, just for
+thread safety.
+@
+text
+@d2 1
+a2 1
+               the C++ interface to COM doesn't work without -fvtable-thunk
+d110 1
+a110 1
+        {
+@
+
+
+1.12
+log
+@forced commit
+@
+text
+@d42 1
+a42 1
+BOOL shortcut_initalized = FALSE;
+@
+
+
+1.11
+log
+@        * shortcut.c (check_shortcut): Treat only Cygwin shortcuts as symlinks.
+@
+text
+@@
+
+
+1.10
+log
+@oops.
+@
+text
+@a75 1
+  char full_path[MAX_PATH];
+a76 1
+  WIN32_FIND_DATA wfd;
+d117 1
+d121 3
+d147 1
+@
+
+
+1.9
+log
+@Revert much of previous erroneous checkin.  Add ChangeLog entry.
+
+* pinfo.h: Correctly set __SIGOFFSET.
+* path.cc (hash_path_name): Avoid calling library functions for simple copying
+of characters.
+* shortcut.c: Use WIN32_LEAN_AND_MEAN.
+* smallprint.c: Ditto.
+* environ.cc (getwinenv): Minor clarity fix.
+* localtime.c: No need to include windows.h
+* string.h: New file.
+@
+text
+@d13 2
+a15 1
+#include <shlobj.h>
+@
+
+
+1.8
+log
+@* exceptions.cc (ctrl_c_handler): Always send signal to process if it has no
+tty.
+@
+text
+@d13 1
+a13 1
+#define WIN32_LEAN_AND_MEAN
+a14 1
+#include "winsup.h"
+@
+
+
+1.7
+log
+@* shortcut.c (check_shortcut): Close input file handle before returning.
+* path.cc (check_sysfile): Ditto.
+(symlink_info::check): Rely on opened file handle being closed by symlink
+checking routines.  Set ext_tacked_on when .lnk is detected.
+@
+text
+@d13 2
+a15 1
+#include <shlobj.h>
+@
+
+
+1.6
+log
+@* shortcut.c (PATH_ALL_EXEC): Add parentheses to avoid a compiler warning.
+* exceptions.cc (setup_handler): Clarify debugging message.
+* sigproc.cc (proc_subproc): Remove PROC_CHILDSTOPPED test.  It is handled by
+normal PROC_CLEARWAIT case.
+(wait_sig): Eliminate "dispatched" tracking.  Remove __SIGCHILDSTOPPED test.
+Decrement counter again before jumping out of InterlockedDecrement loop so that
+subsequent InterlockedIncrement will keep the counter at the correctly
+decremented value and also detect when there are pending signals.
+* sigproc.h: Remove __SIGCHILDSTOPPED element.
+(procstuff): Remove PROC_CHILDSTOPPED element.
+@
+text
+@d101 1
+a101 1
+  if (! ReadFile (h, file_header, SHORTCUT_HDR_SIZE, &got, 0))
+d163 1
+a166 2
+
+
+@
+
+
+1.5
+log
+@        * dir.cc (readdir): Fix shortcut==symlink condition.
+        * environ.cc: Add extern decl for `allow_winsymlinks'.
+        (struct parse_thing): Add entry for `[no]winsymlinks'.
+        * path.cc (symlink): Change to be able to create both,
+        symlink==shortcut and symlink==systemfile, dependent of
+        the setting of `allow_winsymlinks'.
+        * security.cc (cygwin_logon_user): Add debug output.
+        * shortcut.c: Add defines from path.h.
+        (has_exec_chars): Copy from path.h.
+        (check_shortcut): Check for executable file condition if not a
+        shortcut.
+@
+text
+@d28 1
+a28 1
+#define PATH_ALL_EXEC	 PATH_CYGWIN_EXEC | PATH_EXEC
+@
+
+
+1.4
+log
+@        * shortcut.c: Remove #include <sys/strace.h>.
+@
+text
+@d21 3
+d25 14
+a38 1
+#define PATH_SYMLINK MOUNT_SYMLINK
+d76 1
+d80 1
+d99 7
+d109 1
+a109 10
+      /* An additional check is needed to prove if it's a shortcut
+         really created by Cygwin or U/WIN. */
+      char file_header[SHORTCUT_HDR_SIZE];
+      DWORD got;
+
+      if (! ReadFile (h, file_header, SHORTCUT_HDR_SIZE, &got, 0))
+	{
+          *error = EIO;
+	  goto close_it;
+	}
+d114 1
+a114 1
+	    goto close_it;
+d138 1
+a138 1
+	goto close_it;
+d142 1
+a142 1
+	goto close_it;
+d147 6
+@
+
+
+1.3
+log
+@        * shortcut.c: Change symlink condition.
+@
+text
+@a17 1
+#include <sys/strace.h>
+@
+
+
+1.2
+log
+@        * cygerrno.h: Revert previous patch.
+        * errno.cc: Ditto.
+        * dir.cc: Eliminate `dir_suffixes'.
+        (opendir): Remove usage of `dir_suffixes'.
+        (rmdir): Ditto.
+        * fhandler.cc (fhandler_disk_file::open): Remove usage of
+        `inner_suffixes'.
+        * path.cc: Rename `inner_suffixes' to `lnk_suffixes'.
+        (path_conv::check): Remove usage of `inner_suffixes'.
+        (symlink): Ditto.
+        (symlink_info::check): Handle checking for `.lnk' in path_conv
+        exclusively here.
+        (chdir): Remove usage of `dir_suffixes'.
+        * shortcut.c: Eliminate debug_printf lines.
+        (check_shortcut): Don't set error except on failing ReadFile.
+        * spawn.cc: Remove ".lnk" from `std_suffixes'.
+        * syscalls.cc (_unlink): Remove usage of `inner_suffixes'.
+        Remove ".lnk" from `stat_suffixes'.
+        (_rename): Add check for renaming a symlink to keep the ".lnk"
+        suffix after renaming.
+@
+text
+@d18 1
+a128 2
+  /* It's a symlink.  */
+  *pflags = PATH_SYMLINK;
+d130 2
+@
+
+
+1.1
+log
+@        * shortcut.c: New file. Provides a C interface to reading of
+        Windows shortcuts to avoid compiler flag `-fvtable-thunks'.
+        * shortcut.h: Ditto.
+        * Makefile.in: Add shortcut.o to DLL_OFILES.
+        * cygerrno.h: Provide a C interface to `geterrno_from_win_error' for
+        using in shortcut.c.
+        * errno.cc (geterrno_from_win_error): Define as extern "C".
+        * path.cc (struct symlink_info): Remove methods `check_shortcut' and
+        `check_sysfile'.
+        (shortcut_header): Move to shortcut.c.
+        (shortcut_initalized): Ditto.
+        (create_shortcut_header): Ditto.
+        (cmp_shortcut_header): Ditto.
+        (symlink_info::check_shortcut): Ditto. Reorganize as a plain C function.
+        (symlink_info::check_sysfile): Redefine as a global function using the
+        same parameter list as `check_shortcut' for clearness.
+        (symlink_info::check): Change parameter list for calls to
+        `check_shortcut' and `check_sysfile'.
+@
+text
+@a18 1
+#include "cygerrno.h"
+a23 2
+#define debug_printf(x) strcpy (contents, x)
+
+d71 1
+a71 4
+    {
+      debug_printf ("CoCreateInstance failed");
+      goto close_it;
+    }
+d75 1
+a75 4
+    {
+      debug_printf ("QueryInterface failed");
+      goto close_it;
+    }
+d80 1
+a80 4
+    {
+      debug_printf ("Load failed");
+      goto close_it;
+    }
+a90 1
+	  debug_printf ("ReadFile failed");
+d92 1
+a92 1
+	  goto close_it_dont_set_error;
+d98 1
+a98 4
+	    {
+	      debug_printf ("GetDescription failed");
+	      goto close_it;
+	    }
+d122 1
+a122 4
+	{
+	  debug_printf ("SetRelativePath failed");
+	  goto close_it;
+	}
+d126 1
+a126 4
+	{
+	  debug_printf ("GetPath failed");
+	  goto close_it;
+	}
+a132 4
+  if (FAILED (hres))
+    *error = geterrno_from_win_error (HRESULT_CODE (hres), EACCES);
+
+close_it_dont_set_error:
+@
+

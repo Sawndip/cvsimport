@@ -1,0 +1,363 @@
+head	1.3;
+access;
+symbols
+	gdb_5_3-2002-12-12-release:1.2
+	gdb_5_3-branch:1.2.0.4
+	gdb_5_3-2002-09-04-branchpoint:1.2
+	gdb_5_2_1-2002-07-23-release:1.2
+	gdb_5_2-2002-04-29-release:1.2
+	gdb_5_2-branch:1.2.0.2
+	gdb_5_2-2002-03-03-branchpoint:1.2
+	gdb_5_1_1-2002-01-24-release:1.1.1.1
+	cygnus_cvs_20020108_pre:1.2
+	gdb_5_1_0_1-2002-01-03-branch:1.1.1.1.0.8
+	gdb_5_1_0_1-2002-01-03-branchpoint:1.1.1.1
+	gdb_5_1-2001-11-21-release:1.1.1.1
+	gdb_s390-2001-09-26-branch:1.1.1.1.0.6
+	gdb_s390-2001-09-26-branchpoint:1.1.1.1
+	TIX_TCL_8_3:1.1.1.1
+	NET:1.1.1
+	gdb_5_1-2001-07-29-branch:1.1.1.1.0.4
+	gdb_5_1-2001-07-29-branchpoint:1.1.1.1
+	insight-precleanup-2001-01-01:1.1.1.1
+	gdb_5_0-2000-05-19-release:1.1.1.1
+	gdb_4_18_2-2000-05-18-release:1.1.1.1
+	gdb_4_95_1-2000-05-11-snapshot:1.1.1.1
+	gdb_4_95_0-2000-04-27-snapshot:1.1.1.1
+	gdb_5_0-2000-04-10-branch:1.1.1.1.0.2
+	gdb_5_0-2000-04-10-branchpoint:1.1.1.1
+	repo-unification-2000-02-06:1.1.1.1
+	insight-2000-02-04:1.1.1.1
+	SNAPSHOT:1.1.1;
+locks; strict;
+comment	@# @;
+expand	@o@;
+
+
+1.3
+date	2003.03.07.23.09.21;	author hunt;	state dead;
+branches;
+next	1.2;
+
+1.2
+date	2001.09.08.23.25.52;	author irox;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2000.02.07.00.19.28;	author jsm;	state Exp;
+branches
+	1.1.1.1;
+next	;
+
+1.1.1.1
+date	2000.02.07.00.19.28;	author jsm;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.3
+log
+@Remove directory.
+@
+text
+@# IconView.tcl --
+#
+#	This file implements the Icon View widget: the "icon" view mode of
+#	the MultiView widget. It implements:
+#
+#	(1) Creation of the icons in the canvas subwidget.
+#	(2) Automatic arrangement of the objects
+#
+# Copyright (c) 1996, Expert Interface Technologies
+#
+# See the file "license.terms" for information on usage and redistribution
+# of this file, and for a DISCLAIMER OF ALL WARRANTIES.
+#
+
+tixWidgetClass tixIconView {
+    -classname TixIconView
+    -superclass tixCObjView
+    -method {
+	add arrange
+    }
+    -flag {
+	-autoarrange
+    }
+    -static {
+    }
+    -configspec {
+	{-autoarrange autoArrange AutoArrange 0 tixVerifyBoolean}
+    }
+    -default {
+	{.scrollbar			auto}
+	{*borderWidth			1}
+	{*canvas.background		#c3c3c3}
+	{*canvas.highlightBackground	#d9d9d9}
+	{*canvas.relief			sunken}
+	{*canvas.takeFocus		1}
+	{*Scrollbar.background		#d9d9d9}
+	{*Scrollbar.relief		sunken}
+	{*Scrollbar.troughColor		#c3c3c3}
+	{*Scrollbar.takeFocus		0}
+	{*Scrollbar.width		15}
+    }
+    -forcecall {
+    }
+}
+
+proc tixIconView:ConstructWidget {w} {
+    upvar #0 $w data
+
+    tixChainMethod $w ConstructWidget
+}
+
+proc tixIconView:SetBindings {w} {
+    upvar #0 $w data
+
+    tixChainMethod $w SetBindings
+
+    set c $data(w:canvas)
+
+    bind $c <1>         "tixIconView:StartDrag $w %x %y"
+    bind $c <B1-Motion> "tixIconView:Drag $w %x %y"
+    bind $c <ButtonRelease-1> "tixIconView:EndDrag $w"
+}
+
+proc tixIconView:StartDrag {w x y} {
+    upvar #0 $w data
+    global lastX lastY
+
+    set c $data(w:canvas)
+    $c raise current
+
+    set lastX [$c canvasx $x]
+    set lastY [$c canvasy $y]
+}
+
+
+proc tixIconView:Drag {w x y} {
+    upvar #0 $w data
+    global lastX lastY
+
+    set c $data(w:canvas)
+    set x [$c canvasx $x]
+    set y [$c canvasy $y]
+    $c move current [expr $x-$lastX] [expr $y-$lastY]
+    set lastX $x
+    set lastY $y
+}
+
+proc tixIconView:EndDrag {w} {
+    upvar #0 $w data
+
+    tixCallMethod $w adjustscrollregion
+}
+
+#----------------------------------------------------------------------
+#
+#		option configs
+#----------------------------------------------------------------------
+proc tixIconView:add {w tag image text} {
+    upvar #0 $w data
+
+    set cmp [image create compound -window $data(w:canvas)]
+
+    $cmp add image -image $image
+    $cmp add line
+    $cmp add text -text $text
+
+    set id [$data(w:canvas) create image 0 0 -image $cmp -anchor nw]
+    $data(w:canvas) addtag $tag withtag $id
+
+    if {$data(-autoarrange)} {
+	tixWidgetDoWhenIdle tixIconView:Arrange $w 1
+    }
+}
+
+# Do it in an idle handler, so that Arrange is not called before the window
+# is properly mapped.
+#
+proc tixIconView:arrange {w} {
+    tixWidgetDoWhenIdle tixIconView:Arrange $w 1
+}
+
+
+proc tixIconView:PackOneRow {w row y maxH bd padX padY} {
+    upvar #0 $w data
+
+    set iX [expr $bd+$padX]
+    foreach i $row {
+	set box [$data(w:canvas) bbox $i]
+	set W [expr [lindex $box 2]-[lindex $box 0]+1]
+	set H [expr [lindex $box 3]-[lindex $box 1]+1]
+
+	set iY [expr $y + $maxH - $H]
+	$data(w:canvas) coords $i $iX $iY
+	incr iX [expr $W+$padX]
+    }
+}
+
+# virtual method
+#
+proc tixIconView:PlaceWindow {w} {
+    upvar #0 $w data
+
+    if {$data(-autoarrange)} {
+	tixWidgetDoWhenIdle tixIconView:Arrange $w 0
+    }
+
+    tixChainMethod $w PlaceWindow
+}
+
+proc tixIconView:Arrange {w adjust} {
+    upvar #0 $w data
+
+    set padX 2
+    set padY 2
+
+    tixIconView:ArrangeGrid $w $padX $padY
+    if {$adjust} {
+	tixCallMethod $w adjustscrollregion
+    }
+}
+
+# the items are not packed
+#
+proc tixIconView:ArrangeGrid {w padX padY} {
+    upvar #0 $w data
+
+    set maxW 0
+    set maxH 0
+    foreach item [$data(w:canvas) find all] {
+	set box [$data(w:canvas) bbox $item]
+	set itemW [expr [lindex $box 2]-[lindex $box 0]+1]
+	set itemH [expr [lindex $box 3]-[lindex $box 1]+1]
+	if {$maxW < $itemW} {
+	    set maxW $itemW
+	}
+	if {$maxH < $itemH} {
+	    set maxH $itemH
+	}
+    }
+    if {$maxW == 0 || $maxH == 0} {
+	return
+    }
+
+    set winW [tixWinWidth $data(w:canvas)]
+    set bd [expr [$data(w:canvas) cget -bd]+\
+	[$data(w:canvas) cget -highlightthickness]]
+    set cols [expr $winW / ($maxW+$padX)]
+    if {$cols < 1} {
+	set cols 1
+    }
+    set y $bd
+
+    set c 0
+    set x $bd
+    foreach item [$data(w:canvas) find all] {
+	set box [$data(w:canvas) bbox $item]
+	set itemW [expr [lindex $box 2]-[lindex $box 0]+1]
+	set itemH [expr [lindex $box 3]-[lindex $box 1]+1]
+
+	set iX [expr $x + $padX + ($maxW-$itemW)/2]
+	set iY [expr $y + $padY + ($maxH-$itemH)  ]
+
+	$data(w:canvas) coords $item $iX $iY
+	incr c
+	incr x [expr $maxW + $padY]
+	if {$c == $cols} {
+	    set c 0
+	    incr y [expr $maxH + $padY]
+	    set x $bd
+	}
+    }
+}
+
+# the items are packed
+#
+proc tixIconView:ArrangePack {w padX padY} {
+    upvar #0 $w data
+
+    set winW [tixWinWidth $data(w:canvas)]
+    set bd [expr [$data(w:canvas) cget -bd]+\
+	[$data(w:canvas) cget -highlightthickness]]
+    set y [expr $bd + $padY]
+
+    set maxH 0
+    set usedW $padX
+    set row ""
+    foreach item [$data(w:canvas) find all] {
+	set box [$data(w:canvas) bbox $item]
+	set itemW [expr [lindex $box 2]-[lindex $box 0]+1]
+	set itemH [expr [lindex $box 3]-[lindex $box 1]+1]
+
+	if {[expr $usedW + $itemW] > $winW} {
+	    if {$row == ""} {
+		# only one item in this row
+		#
+		$data(w:canvas) coords $item [expr $bd + $padX] $y
+		incr y [expr $itemH+$padY]
+		continue
+	    } else {
+		# this item is not in this row. Arrange the previous items
+		# first
+		#
+		tixIconView:PackOneRow $w $row $y $maxH $bd $padX $padY
+
+		incr y $maxH
+		set row ""
+		set maxH 0
+		set usedW $padX
+	    }
+	}
+	lappend row $item
+	if {$maxH < $itemH} {
+	    set maxH $itemH
+	}
+	incr usedW [expr $padX+$itemW]
+    }
+    if {$row != ""} {
+	tixIconView:PackOneRow $w $row $y $maxH $bd $padX $padY
+    }
+}
+
+#----------------------------------------------------------------------
+#
+#		Widget commands
+#----------------------------------------------------------------------
+
+#----------------------------------------------------------------------
+#
+#		Private Methods
+#----------------------------------------------------------------------
+
+@
+
+
+1.2
+log
+@Touched all tix files to ease next import.
+@
+text
+@@
+
+
+1.1
+log
+@Initial revision
+@
+text
+@@
+
+
+1.1.1.1
+log
+@import insight-2000-02-04 snapshot (2nd try)
+@
+text
+@@

@@ -1,0 +1,693 @@
+head	1.8;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.6
+	gdb_7_6-2013-04-26-release:1.6
+	gdb_7_6-branch:1.6.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.6
+	gdb_7_5_1-2012-11-29-release:1.5
+	gdb_7_5-2012-08-17-release:1.5
+	gdb_7_5-branch:1.5.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.5
+	gdb_7_4_1-2012-04-26-release:1.2.2.1
+	gdb_7_4-2012-01-24-release:1.2.2.1
+	gdb_7_4-branch:1.2.0.2
+	gdb_7_4-2011-12-13-branchpoint:1.2;
+locks; strict;
+comment	@# @;
+
+
+1.8
+date	2013.09.16.23.59.02;	author devans;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2013.06.27.18.51.31;	author tromey;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2013.01.01.06.33.25;	author brobecke;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2012.06.21.20.46.22;	author tromey;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2012.05.18.00.04.13;	author devans;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2012.01.04.08.17.46;	author brobecke;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2011.11.12.17.01.12;	author ratmice;	state Exp;
+branches
+	1.2.2.1;
+next	1.1;
+
+1.1
+date	2011.07.21.15.13.30;	author ratmice;	state Exp;
+branches;
+next	;
+
+1.2.2.1
+date	2012.01.06.04.44.00;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.8
+log
+@	* lib/gdb.exp (using_fission): New proc.
+	* gdb.base/info-macros.exp: Skip test if using Fission.
+@
+text
+@# Copyright 2011-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+standard_testfile .c
+
+# Fission doesn't support macros yet.  Bug 15954.
+if [using_fission] {
+    untested ${testfile}.exp
+    return -1
+}
+
+get_compiler_info
+if ![test_compiler_info gcc*] {
+  untested ${testfile}.exp
+  return -1
+}
+
+set options "debug additional_flags=-g3"
+
+if { [prepare_for_testing ${testfile}.exp ${testfile} ${srcfile} $options] } {
+    untested ${testfile}.exp
+    return -1
+}
+
+if ![runto_main] {
+    untested ${testfile}.exp
+    return -1
+}
+
+# Test various error messages.
+gdb_test "info macro -- -all" \
+	 "The symbol `-all' has no definition .*\r\nat .*$srcfile:\[0-9\]+" \
+	 "info macro -- -all"
+gdb_test "info macro  -- -all" \
+	 "The symbol `-all' has no definition .*\r\nat .*$srcfile:\[0-9\]+" \
+	 "info macro  -- -all"
+
+gdb_test "info macro -all --" \
+	 "You must follow.*with the name.*you want to see.*\[^\r\n\]*\[\r\n\]" \
+	 "info macro -all --"
+
+gdb_test "info macro -all  --" \
+	 "You must follow.*with the name.*you want to see.*\[^\r\n\]*\[\r\n\]" \
+	 "info macro -all  --"
+
+gdb_test "info macro  -all  --" \
+	 "You must follow.*with the name.*you want to see.*\[^\r\n\]*\[\r\n\]" \
+	 "info macro  -all  --"
+
+gdb_test "info macro --" \
+	 "You must follow.*with the name.*you want to see.*\[^\r\n\]*\[\r\n\]" \
+	 "info macro --"
+
+gdb_test "info macro -- " \
+	 "You must follow.*with the name.*you want to see.*\[^\r\n\]*\[\r\n\]" \
+	 "'info macro -- '"
+gdb_test "info macro  -- " \
+	 "You must follow.*with the name.*you want to see.*\[^\r\n\]*\[\r\n\]" \
+	 "'info macro  -- '"
+
+gdb_test "info macro -invalid-option" \
+	 "Unrecognized option.*Try \"help info macro\"\." \
+	 "info macro -invalid-option 1"
+
+gdb_test "info macro  -invalid-option" \
+	 "Unrecognized option.*Try \"help info macro\"\." \
+	 "info macro  -invalid-option"
+
+gdb_test "info macro -invalid-option FOO" \
+	 "Unrecognized option.*Try \"help info macro\"\." \
+	 "info macro -invalid-option FOO"
+gdb_test "info macro  -invalid-option FOO" \
+	 "Unrecognized option.*Try \"help info macro\"\." \
+	 "info macro  -invalid-option FOO"
+
+# Single macro lookups.
+gdb_test "info macro -- FOO" \
+	 ".*#define FOO \"hello\"" \
+	 "info macro -- FOO"
+
+gdb_test "info macro  -- FOO" \
+	 ".*#define FOO \"hello\"" \
+	 "info macro  -- FOO"
+
+gdb_test "info macro --  FOO" \
+	 ".*#define FOO \"hello\"" \
+	 "info macro --  FOO"
+
+gdb_test "info macro FOO" \
+	 ".*#define FOO \"hello\"" \
+	 "info macro FOO"
+
+gdb_test "info macro  FOO" \
+	 ".*#define FOO \"hello\"" \
+	 "info macro  FOO"
+
+# Multiple macro lookups.
+set test "info macro -a FOO"
+set r1 ".*#define FOO \"hello\""
+set r2 ".*#define FOO \" \""
+set r3 ".*#define FOO \"world\""
+set r4 ".*#define FOO\\(a\\) foo = a"
+set testname "$test 1"
+gdb_test "$test" "$r1$r2$r3$r4" "$testname"
+
+set test "info macro -a -- FOO"
+set testname "$test 1"
+gdb_test "$test" "$r1$r2$r3$r4" "$testname"
+
+set test "info macro -all -- FOO"
+set testname "$test 1"
+gdb_test "$test" "$r1$r2$r3$r4" "$testname"
+
+set test "info macro -a  --  FOO"
+set testname "$test"
+gdb_test "$test" "$r1$r2$r3$r4" "$testname"
+
+set test "info macro  -a  --  FOO"
+set testname "$test"
+gdb_test "$test" "$r1$r2$r3$r4" "$testname"
+
+set test "info macros"
+set r1 ".*#define FOO \"hello\""
+set r2 ".*#define ONE"
+set r3 ".*\r\n$gdb_prompt"
+set testname "$test 2"
+gdb_test_multiple "$test" $testname {
+  -re "$r1$r2$r3" {
+     pass $testname
+  }
+  -re ".*#define TWO.*\r\n$gdb_prompt" {
+     fail $testname
+  }
+  -re ".*#define THREE.*\r\n$gdb_prompt" {
+     fail $testname
+  }
+  -re ".*#define FOUR.*\r\n$gdb_prompt" {
+     fail $testname
+  }
+}
+gdb_test "next" ".*" ""
+
+set r1 ".*#define FOO \" \""
+set r2 ".*#define ONE"
+set r3 ".*#define TWO"
+set r4 ".*\r\n$gdb_prompt"
+set testname "$test 3"
+gdb_test_multiple "$test" $testname {
+  -re ".*#define THREE.*\r\n$gdb_prompt" {
+     fail $testname
+  }
+  -re ".*#define FOUR.*\r\n$gdb_prompt" {
+     fail $testname
+  }
+  -re "$r1$r2$r3$r4" {
+     pass $testname
+  }
+}
+gdb_test "next" ".*" ""
+
+# in alpabetical order...
+set r1 ".*#define FOO \"world\""
+set r2 ".*#define ONE"
+set r3 ".*#define THREE"
+set r4 ".*#define TWO"
+set r5 ".*\r\n$gdb_prompt"
+set testname "$test 4"
+gdb_test_multiple "$test" $testname {
+  -re ".*#define FOUR.*\r\n$gdb_prompt" {
+     fail $testname
+  }
+  -re "$r1$r2$r3$r4$r5" {
+     pass $testname
+  }
+}
+# same as above with a linespec.
+set test "info macros *\$pc"
+gdb_test_multiple "$test" $test {
+  -re ".*#define FOUR.*\r\n$gdb_prompt" {
+     fail $test
+  }
+  -re "$r1$r2$r3$r4$r5" {
+     pass $test
+  }
+}
+gdb_test "next" ".*" ""
+
+set r1 ".*#define FOO \" \""
+set r2 ".*#define ONE"
+set r3 ".*#define TWO."
+set r4 ".*\r\n$gdb_prompt"
+set test "info macros"
+set testname "$test 5"
+gdb_test_multiple "$test" $test {
+  -re ".*#define THREE.*\r\n$gdb_prompt" {
+     fail $testname
+  }
+  -re ".*#define FOUR.*\r\n$gdb_prompt" {
+     fail $testname
+  }
+  -re "$r1$r2$r3$r4" {
+     pass $testname
+  }
+}
+gdb_test "next" ".*" ""
+gdb_test "next" ".*" ""
+
+set r1 ".*#define DEF_MACROS"
+set r2 ".*\r\n$gdb_prompt"
+set testname "$test 6"
+gdb_test_multiple "$test" $testname {
+  -re ".*#define FOO \" \".*\r\n$gdb_prompt" {
+     fail $testname
+  }
+  -re ".*#define FOO \"hello\".*\r\n$gdb_prompt" {
+     fail $testname
+  }
+  -re ".*#define FOO \"world\".*\r\n$gdb_prompt" {
+     fail $testname
+  }
+  -re ".*#define FOO\\(a\\) foo = a.*" {
+     fail $testname
+  }
+  -re ".*#define ONE.*\r\n$gdb_prompt" {
+     fail $testname
+  }
+  -re ".*#define TWO.*\r\n$gdb_prompt" {
+     fail $testname
+  }
+  -re ".*#define THREE.*\r\n$gdb_prompt" {
+     fail $testname
+  }
+  -re ".*#define FOUR.*\r\n$gdb_prompt" {
+     fail $testname
+  }
+  -re "$r1$r2" {
+     pass $testname
+  }
+}
+
+gdb_test "next" ".*" ""
+set r1 ".*#define DEF_MACROS"
+set r2 ".*#define FOO\\(a\\) foo = a"
+set r3 ".*#define FOUR"
+set r4 ".*\r\n$gdb_prompt"
+set testname "$test 7"
+gdb_test_multiple "$test" $testname {
+  -re ".*#define FOO \" \".*\r\n$gdb_prompt" {
+     fail $testname
+  }
+  -re ".*#define FOO \"hello\".*\r\n$gdb_prompt" {
+     fail $testname
+  }
+  -re ".*#define FOO \"world\".*\r\n$gdb_prompt" {
+     fail $testname
+  }
+  -re ".*#define ONE.*\r\n$gdb_prompt" {
+     fail $testname
+  }
+  -re ".*#define TWO.*\r\n$gdb_prompt" {
+     fail $testname
+  }
+  -re ".*#define THREE.*\r\n$gdb_prompt" {
+     fail $testname
+  }
+  -re "$r1$r2$r3$r4" {
+     pass $testname
+  }
+}
+
+set test "info macros info-macros.c:42"
+
+set r1 ".*define DEF_MACROS"
+set r2 ".*define ONE"
+# info macros on the line where the #define or #include is
+# fails to find the macro defined (though it works on the next line.)
+setup_kfail "gdb/NNNN" *-*-*
+gdb_test "$test" "$r1$r2" "$test"
+@
+
+
+1.7
+log
+@test suite update - gdb.base/[h-m]
+
+Convert files gdb.base/[h-m]*.exp to use standard_output_file et al.
+
+	* hook-stop-continue.exp, hook-stop-frame.exp, huge.exp,
+	included.exp, inferior-died.exp, infnan.exp, info-fun.exp,
+	info-macros.exp, info-os.exp, info-proc.exp, info-target.exp,
+	infoline.exp, interp.exp, interrupt.exp, jit-simple.exp,
+	jit-so.exp, jump.exp, kill-after-signal.exp, label.exp, langs.exp,
+	lineinc.exp, list.exp, logical.exp, long_long.exp, longjmp.exp,
+	macscp.exp, maint.exp, memattr.exp, mips_pro.exp, miscexprs.exp,
+	morestack.exp, moribund-step.exp, multi-forks.exp: Use
+	standard_testfile, standard_output_file, prepare_for_testing,
+	clean_restart.
+@
+text
+@d18 6
+@
+
+
+1.6
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@d16 1
+a16 3
+set testfile "info-macros"
+set srcfile ${testfile}.c
+set binfile ${objdir}/${subdir}/${testfile}
+@
+
+
+1.5
+log
+@	* lib/gdb.exp (skip_altivec_tests, skip_vsx_tests)
+	(build_executable): Update.
+	(get_compiler_info): Remove 'binfile' argument.
+	* gdb.ada/arrayidx.exp: Update.
+	* gdb.ada/null_array.exp: Update.
+	* gdb.arch/altivec-abi.exp: Update.
+	* gdb.arch/altivec-regs.exp: Update.
+	* gdb.arch/amd64-byte.exp: Update.
+	* gdb.arch/amd64-dword.exp: Update.
+	* gdb.arch/amd64-word.exp: Update.
+	* gdb.arch/i386-avx.exp: Update.
+	* gdb.arch/i386-byte.exp: Update.
+	* gdb.arch/i386-sse.exp: Update.
+	* gdb.arch/i386-word.exp: Update.
+	* gdb.arch/ppc-dfp.exp: Update.
+	* gdb.arch/ppc-fp.exp: Update.
+	* gdb.arch/vsx-regs.exp: Update.
+	* gdb.base/all-bin.exp: Update.
+	* gdb.base/annota1.exp: Update.
+	* gdb.base/async.exp: Update.
+	* gdb.base/attach.exp: Update.
+	* gdb.base/break-interp.exp: Update.
+	* gdb.base/call-ar-st.exp: Update.
+	* gdb.base/call-rt-st.exp: Update.
+	* gdb.base/call-sc.exp: Update.
+	* gdb.base/callfuncs.exp: Update.
+	* gdb.base/catch-load.exp: Update.
+	* gdb.base/completion.exp: Update.
+	* gdb.base/complex.exp: Update.
+	* gdb.base/condbreak.exp: Update.
+	* gdb.base/consecutive.exp: Update.
+	* gdb.base/constvars.exp: Update.
+	* gdb.base/corefile.exp: Update.
+	* gdb.base/eval-skip.exp: Update.
+	* gdb.base/expand-psymtabs.exp: Update.
+	* gdb.base/exprs.exp: Update.
+	* gdb.base/fileio.exp: Update.
+	* gdb.base/fixsection.exp: Update.
+	* gdb.base/funcargs.exp: Update.
+	* gdb.base/gdb11530.exp: Update.
+	* gdb.base/gdb1555.exp: Update.
+	* gdb.base/gnu-ifunc.exp: Update.
+	* gdb.base/gnu_vector.exp: Update.
+	* gdb.base/info-macros.exp: Update.
+	* gdb.base/jit-simple.exp: Update.
+	* gdb.base/jit-so.exp: Update.
+	* gdb.base/jit.exp: Update.
+	* gdb.base/langs.exp: Update.
+	* gdb.base/list.exp: Update.
+	* gdb.base/logical.exp: Update.
+	* gdb.base/long_long.exp: Update.
+	* gdb.base/longjmp.exp: Update.
+	* gdb.base/macscp.exp: Update.
+	* gdb.base/mips_pro.exp: Update.
+	* gdb.base/miscexprs.exp: Update.
+	* gdb.base/morestack.exp: Update.
+	* gdb.base/nodebug.exp: Update.
+	* gdb.base/opaque.exp: Update.
+	* gdb.base/pc-fp.exp: Update.
+	* gdb.base/pending.exp: Update.
+	* gdb.base/permissions.exp: Update.
+	* gdb.base/pointers.exp: Update.
+	* gdb.base/prelink.exp: Update.
+	* gdb.base/printcmds.exp: Update.
+	* gdb.base/psymtab.exp: Update.
+	* gdb.base/ptype.exp: Update.
+	* gdb.base/relational.exp: Update.
+	* gdb.base/scope.exp: Update.
+	* gdb.base/setvar.exp: Update.
+	* gdb.base/shlib-call.exp: Update.
+	* gdb.base/shreloc.exp: Update.
+	* gdb.base/signals.exp: Update.
+	* gdb.base/sizeof.exp: Update.
+	* gdb.base/so-impl-ld.exp: Update.
+	* gdb.base/so-indr-cl.exp: Update.
+	* gdb.base/solib-disc.exp: Update.
+	* gdb.base/solib-display.exp: Update.
+	* gdb.base/solib-nodir.exp: Update.
+	* gdb.base/solib-overlap.exp: Update.
+	* gdb.base/solib-symbol.exp: Update.
+	* gdb.base/solib-weak.exp: Update.
+	* gdb.base/solib.exp: Update.
+	* gdb.base/store.exp: Update.
+	* gdb.base/structs.exp: Update.
+	* gdb.base/structs2.exp: Update.
+	* gdb.base/type-opaque.exp: Update.
+	* gdb.base/unload.exp: Update.
+	* gdb.base/varargs.exp: Update.
+	* gdb.base/volatile.exp: Update.
+	* gdb.base/watch_thread_num.exp: Update.
+	* gdb.base/watchpoint-solib.exp: Update.
+	* gdb.base/watchpoint.exp: Update.
+	* gdb.base/watchpoints.exp: Update.
+	* gdb.base/whatis.exp: Update.
+	* gdb.cell/arch.exp: Update.
+	* gdb.cell/break.exp: Update.
+	* gdb.cell/bt.exp: Update.
+	* gdb.cell/core.exp: Update.
+	* gdb.cell/data.exp: Update.
+	* gdb.cell/ea-cache.exp: Update.
+	* gdb.cell/f-regs.exp: Update.
+	* gdb.cell/fork.exp: Update.
+	* gdb.cell/gcore.exp: Update.
+	* gdb.cell/mem-access.exp: Update.
+	* gdb.cell/ptype.exp: Update.
+	* gdb.cell/registers.exp: Update.
+	* gdb.cell/sizeof.exp: Update.
+	* gdb.cell/solib-symbol.exp: Update.
+	* gdb.cell/solib.exp: Update.
+	* gdb.cp/ambiguous.exp: Update.
+	* gdb.cp/breakpoint.exp: Update.
+	* gdb.cp/bs15503.exp: Update.
+	* gdb.cp/casts.exp: Update.
+	* gdb.cp/class2.exp: Update.
+	* gdb.cp/cpexprs.exp: Update.
+	* gdb.cp/cplusfuncs.exp: Update.
+	* gdb.cp/ctti.exp: Update.
+	* gdb.cp/dispcxx.exp: Update.
+	* gdb.cp/gdb1355.exp: Update.
+	* gdb.cp/gdb2384.exp: Update.
+	* gdb.cp/gdb2495.exp: Update.
+	* gdb.cp/infcall-dlopen.exp: Update.
+	* gdb.cp/local.exp: Update.
+	* gdb.cp/m-data.exp: Update.
+	* gdb.cp/m-static.exp: Update.
+	* gdb.cp/mb-ctor.exp: Update.
+	* gdb.cp/mb-inline.exp: Update.
+	* gdb.cp/mb-templates.exp: Update.
+	* gdb.cp/member-ptr.exp: Update.
+	* gdb.cp/method.exp: Update.
+	* gdb.cp/namespace.exp: Update.
+	* gdb.cp/nextoverthrow.exp: Update.
+	* gdb.cp/nsdecl.exp: Update.
+	* gdb.cp/nsrecurs.exp: Update.
+	* gdb.cp/nsstress.exp: Update.
+	* gdb.cp/nsusing.exp: Update.
+	* gdb.cp/pr-1023.exp: Update.
+	* gdb.cp/pr-1210.exp: Update.
+	* gdb.cp/pr-574.exp: Update.
+	* gdb.cp/pr9631.exp: Update.
+	* gdb.cp/printmethod.exp: Update.
+	* gdb.cp/psmang.exp: Update.
+	* gdb.cp/re-set-overloaded.exp: Update.
+	* gdb.cp/rtti.exp: Update.
+	* gdb.cp/shadow.exp: Update.
+	* gdb.cp/templates.exp: Update.
+	* gdb.cp/try_catch.exp: Update.
+	* gdb.dwarf2/dw2-ranges.exp: Update.
+	* gdb.dwarf2/pr10770.exp: Update.
+	* gdb.fortran/library-module.exp: Update.
+	* gdb.hp/gdb.aCC/optimize.exp: Update.
+	* gdb.hp/gdb.aCC/watch-cmd.exp: Update.
+	* gdb.hp/gdb.base-hp/callfwmall.exp: Update.
+	* gdb.hp/gdb.base-hp/hwwatchbus.exp: Update.
+	* gdb.hp/gdb.base-hp/pxdb.exp: Update.
+	* gdb.hp/gdb.base-hp/sized-enum.exp: Update.
+	* gdb.hp/gdb.base-hp/so-thresh.exp: Update.
+	* gdb.hp/gdb.compat/xdb1.exp: Update.
+	* gdb.hp/gdb.compat/xdb2.exp: Update.
+	* gdb.hp/gdb.compat/xdb3.exp: Update.
+	* gdb.hp/gdb.defects/bs14602.exp: Update.
+	* gdb.hp/gdb.defects/solib-d.exp: Update.
+	* gdb.hp/gdb.objdbg/objdbg01.exp: Update.
+	* gdb.hp/gdb.objdbg/objdbg02.exp: Update.
+	* gdb.hp/gdb.objdbg/objdbg03.exp: Update.
+	* gdb.hp/gdb.objdbg/objdbg04.exp: Update.
+	* gdb.mi/gdb792.exp: Update.
+	* gdb.mi/mi-pending.exp: Update.
+	* gdb.mi/mi-solib.exp: Update.
+	* gdb.mi/mi-var-cp.exp: Update.
+	* gdb.opt/clobbered-registers-O2.exp: Update.
+	* gdb.opt/inline-bt.exp: Update.
+	* gdb.opt/inline-cmds.exp: Update.
+	* gdb.opt/inline-locals.exp: Update.
+	* gdb.python/py-events.exp: Update.
+	* gdb.python/py-finish-breakpoint.exp: Update.
+	* gdb.python/py-type.exp: Update.
+	* gdb.reverse/solib-precsave.exp: Update.
+	* gdb.reverse/solib-reverse.exp: Update.
+	* gdb.server/solib-list.exp: Update.
+	* gdb.stabs/weird.exp: Update.
+	* gdb.threads/attach-into-signal.exp: Update.
+	* gdb.threads/attach-stopped.exp: Update.
+	* gdb.threads/tls-shared.exp: Update.
+	* gdb.trace/change-loc.exp: Update.
+	* gdb.trace/strace.exp: Update.
+@
+text
+@d1 1
+a1 1
+# Copyright 2011-2012 Free Software Foundation, Inc.
+@
+
+
+1.4
+log
+@	* info-macros.exp: Pass "debug" to prepare_for_testing.
+@
+text
+@d20 1
+a20 1
+get_compiler_info ${binfile}
+@
+
+
+1.3
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d19 1
+d21 1
+a21 3
+if [test_compiler_info gcc*] {
+    lappend options additional_flags=-g3
+} else {
+d26 2
+@
+
+
+1.2
+log
+@Move info definitions command to an info macro option.
+@
+text
+@d1 1
+a1 1
+# Copyright 2011 Free Software Foundation, Inc.
+@
+
+
+1.2.2.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d1 1
+a1 1
+# Copyright 2011-2012 Free Software Foundation, Inc.
+@
+
+
+1.1
+log
+@PR macros/12999
+* macrotab.h (macro_callback_fn): Add new arguments to callback.
+* macrotab.c (foreach_macro): Ditto.
+(foreach_macro_in_scope): Ditto.
+* macrocmd.c (print_macro_callback): New function.
+(info_macro_command): Move some code to print_macro_definition.
+(print_macro_definition): New function.
+(print_one_macro): Add new arguments to callback.
+
+testsuite/
+* gdb.base/info-macros.c: New test sources.
+* gdb.base/info-macros.exp: New tests.
+
+docs/
+* gdb.texinfo (Macros): Add info definitions and info macros commands.
+Update text and cindex entries for info macro command.
+@
+text
+@d37 69
+a105 1
+set test "info definitions FOO"
+d113 15
+d154 1
+a154 1
+set testname "$test 4"
+d199 1
+a200 1
+set test "info macros"
+@
+

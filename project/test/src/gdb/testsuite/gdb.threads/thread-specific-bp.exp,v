@@ -1,0 +1,227 @@
+head	1.1;
+access;
+symbols;
+locks; strict;
+comment	@# @;
+
+
+1.1
+date	2013.09.17.19.32.47;	author palves;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.1
+log
+@PR gdb/11568 - delete thread-specific breakpoints on thread exit
+
+PR gdb/11568 is about thread-specific breakpoints being left behind
+when the corresponding thread exits.
+
+Currently:
+
+ (gdb) b start thread 2
+ Breakpoint 3 at 0x400614: file thread-specific-bp.c, line 23.
+ (gdb) b end
+ Breakpoint 4 at 0x40061f: file thread-specific-bp.c, line 29.
+ (gdb) c
+ Continuing.
+ [Thread 0x7ffff7fcb700 (LWP 14925) exited]
+ [Switching to Thread 0x7ffff7fcc740 (LWP 14921)]
+
+ Breakpoint 4, end () at thread-specific-bp.c:29
+ 29      }
+ (gdb) info threads
+   Id   Target Id         Frame
+ * 1    Thread 0x7ffff7fcc740 (LWP 14921) "thread-specific" end () at thread-specific-bp.c:29
+ (gdb) info breakpoints
+ Num     Type           Disp Enb Address            What
+ 2       breakpoint     keep y   0x0000000000400614 in start at thread-specific-bp.c:23
+         breakpoint already hit 1 time
+ 3       breakpoint     keep y   0x0000000000400614 in start at thread-specific-bp.c:23 thread 2
+         stop only in thread 2
+ 4       breakpoint     keep y   0x000000000040061f in end at thread-specific-bp.c:29
+         breakpoint already hit 1 time
+
+Note that the thread-specific breakpoint 3 stayed around, even though
+thread 2 is gone.
+
+There's no way that breakpoint can trigger again (*), so the PR argues
+that the breakpoint should just be removed, like local watchpoints.
+I'm ambivalent on this -- it could be reasonable to disable the
+breakpoint (kind of like breakpoint in shared library code when the
+DSO is unloaded), so the user could still use it as visual template
+for creating other breakpoints (copy/paste command lists, etc.), or we
+could have a way to change to which thread a breakpoint applies.  But,
+several people pushed this direction, and I don't plan on arguing...
+
+(*) - actually, there is ...  thread numbers are reset on "run", so
+the user could do "break foo thread 2", "run", and expect the
+breakpoint to hit again on the second thread.  But given gdb's thread
+numbering can't really be stable, that'd only work sufficiently well
+for thread 1, so we'd better call it unsupported.
+
+So with the patch, whenever a thread is deleted from GDB's list, GDB
+goes through the thread-specific breakpoints and deletes corresponding
+breakpoints.  Since this is user-visible, GDB prints out:
+
+  Thread-specific breakpoint 3 deleted - thread 2 is gone.
+
+And of course, we end up with:
+
+ (gdb) info breakpoints
+ Num     Type           Disp Enb Address            What
+ 2       breakpoint     keep y   0x0000000000400614 in start at thread-specific-bp.c:23
+         breakpoint already hit 1 time
+ 4       breakpoint     keep y   0x000000000040061f in end at thread-specific-bp.c:29
+         breakpoint already hit 1 time
+
+2013-09-17  Muhammad Waqas <mwaqas@@codesourcery.com>
+	    Pedro Alves  <palves@@redhat.com>
+
+	PR gdb/11568
+	* breakpoint.c (remove_threaded_breakpoints): New function.
+	(_initialize_breakpoint): Attach remove_threaded_breakpoints
+	as thread_exit observer.
+
+2013-09-17  Muhammad Waqas  <mwaqas@@codesourccery.com>
+	    Jan Kratochvil  <jan.kartochvil@@redhat.com>
+	    Pedro Alves  <palves@@redhat.com>
+
+	PR gdb/11568
+	* gdb.thread/thread-specific-bp.c: New file.
+	* gdb.thread/thread-specific-bp.exp: New file.
+@
+text
+@# Copyright (C) 2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+# Verify that a thread-specific breakpoint is deleted when the
+# corresponding thread is gone.
+
+standard_testfile
+
+if {[gdb_compile_pthreads \
+	 "${srcdir}/${subdir}/${srcfile}" \
+	 "${binfile}" executable {debug} ] != "" } {
+    return -1
+}
+
+clean_restart ${binfile}
+
+# Extract and return the thread ID of the thread stopped at function
+# FUNC.
+
+proc get_thread_id {func} {
+    global gdb_prompt
+
+    set thre -1
+    set test "get $func thread id"
+    gdb_test_multiple "info threads" $test {
+	-re "(\[0-9\]+)\[^\n\r\]*Thread\[^\n\r\]*$func.*$gdb_prompt $" {
+	    # Get the thread's id.
+	    set thre $expect_out(1,string)
+	    pass $test
+	}
+    }
+
+    return $thre
+}
+
+proc check_thread_specific_breakpoint {mode} {
+    with_test_prefix "$mode" {
+	global gdb_prompt
+
+	if ![runto_main] {
+	    untested "could not run to main"
+	    return -1
+	}
+
+	set main_thre [get_thread_id "main"]
+	if { $main_thre < 0 } {
+	    return -1
+	}
+
+	gdb_breakpoint "start"
+	gdb_continue_to_breakpoint "start"
+
+	set start_thre [get_thread_id "start"]
+	if { $start_thre < 0 } {
+	    return -1
+	}
+
+	# Set a thread-specific breakpoint at "main".  This can't ever
+	# be hit, but that's OK.
+	gdb_breakpoint "main thread $start_thre"
+	gdb_test "info break" ".*breakpoint.*thread $start_thre" "breakpoint set"
+
+	# Set breakpoint at a place only reacheable after the "start"
+	# thread exits.
+	gdb_breakpoint "end"
+
+	# Switch back to the main thread, and resume all threads.  The
+	# "start" thread exits, and the main thread reaches "end".
+	gdb_test "thread $main_thre" \
+	    "Switching to thread $main_thre.*" \
+	    "thread $main_thre selected"
+
+	if { $mode == "non-stop" } {
+	    set cmd "continue -a"
+	} else {
+	    set cmd "continue"
+	}
+	gdb_test "$cmd" \
+	    "Breakpoint .* end .* at .*" \
+	    "continue to end"
+
+	# Force GDB to update the thread list.  Otherwise, depending
+	# on target, GDB may not realize that the start thread has
+	# exited and thus not remove the thread specific breakpoint.
+	set test "thread start is gone"
+	gdb_test_multiple "info threads" $test {
+	    -re "\[0-9\]+.*start.*$gdb_prompt $" {
+		fail $test
+	    }
+	    -re "$gdb_prompt $" {
+		pass $test
+	    }
+	}
+
+	set test "thread-specific breakpoint was deleted"
+	gdb_test_multiple "info breakpoint" $test {
+	    -re "thread $start_thre\n$gdb_prompt $" {
+		fail $test
+	    }
+	    -re "$gdb_prompt $" {
+		pass $test
+	    }
+	}
+    }
+}
+
+# Test all-stop mode.
+check_thread_specific_breakpoint "all-stop"
+
+clean_restart ${binfile}
+
+# Test non-stop mode.
+gdb_test_no_output "set target-async on" "set async mode"
+gdb_test_no_output "set non-stop on" "set non-stop mode"
+check_thread_specific_breakpoint "non-stop"
+@

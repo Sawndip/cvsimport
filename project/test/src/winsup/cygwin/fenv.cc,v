@@ -1,0 +1,738 @@
+head	1.6;
+access;
+symbols
+	cygwin-1_7_35-release:1.6
+	cygwin-1_7_34-release:1.6
+	cygwin-1_7_33-release:1.6
+	cygwin-1_7_32-release:1.6
+	cygwin-1_7_31-release:1.6
+	cygwin-1_7_30-release:1.6
+	cygwin-1_7_29-release:1.6
+	cygwin-1_7_29-release-branchpoint:1.6.0.2
+	cygwin-pre-user-db:1.6
+	cygwin-1_7_28-release:1.6
+	cygwin-1_7_27-release:1.6
+	cygwin-1_7_26-release:1.6
+	cygwin-1_7_25-release:1.6
+	cygwin-1_7_24-release:1.6
+	cygwin-1_7_23-release:1.6
+	cygwin-1_7_22-release:1.6
+	cygwin-1_7_21-release:1.6
+	cygwin-1_7_20-release:1.6
+	cygwin-1_7_19-release:1.6
+	cygwin-64bit-postmerge:1.6
+	cygwin-64bit-premerge-branch:1.5.0.4
+	cygwin-64bit-premerge:1.5
+	cygwin-1_7_18-release:1.5
+	post-ptmalloc3:1.5
+	pre-ptmalloc3:1.5
+	cygwin-1_7_17-release:1.5
+	cygwin-64bit-branch:1.5.0.2
+	cygwin-1_7_16-release:1.5
+	cygwin-1_7_15-release:1.5
+	cygwin-1_7_14_2-release:1.4
+	cygwin-1_7_14-release:1.4
+	cygwin-1_7_12-release:1.4
+	cygwin-1_7_11-release:1.4
+	cygwin-1_7_10-release:1.4
+	signal-rewrite:1.4.0.2
+	pre-notty:1.4
+	cygwin-1_7_9-release:1.2
+	cv-post-1_7_9:1.1.0.2
+	cygwin-1_7_8-release:1.1;
+locks; strict;
+comment	@// @;
+
+
+1.6
+date	2013.04.23.09.44.32;	author corinna;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2012.05.02.07.42.08;	author corinna;	state Exp;
+branches
+	1.5.2.1;
+next	1.4;
+
+1.4
+date	2011.06.06.05.02.09;	author cgf;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2011.04.04.12.23.33;	author corinna;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2011.03.20.15.34.29;	author corinna;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2010.09.11.06.53.27;	author davek;	state Exp;
+branches
+	1.1.2.1;
+next	;
+
+1.5.2.1
+date	2013.03.14.12.09.51;	author corinna;	state Exp;
+branches;
+next	;
+
+1.1.2.1
+date	2011.03.20.15.37.01;	author corinna;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.6
+log
+@	* Merge in cygwin-64bit-branch.
+@
+text
+@/* fenv.cc
+
+   Copyright 2010, 2011, 2012 Red Hat, Inc.
+
+This file is part of Cygwin.
+
+This software is a copyrighted work licensed under the terms of the
+Cygwin license.  Please consult the file "CYGWIN_LICENSE" for
+details. */
+
+#include "winsup.h"
+#include "fenv.h"
+#include "errno.h"
+#include "wincap.h"
+#include <string.h>
+
+/*  Mask and shift amount for rounding bits.  */
+#define FE_CW_ROUND_MASK	(0x0c00)
+#define FE_CW_ROUND_SHIFT	(10)
+/*  Same, for SSE MXCSR.  */
+#define FE_MXCSR_ROUND_MASK	(0x6000)
+#define FE_MXCSR_ROUND_SHIFT	(13)
+
+/*  Mask and shift amount for precision bits.  */
+#define FE_CW_PREC_MASK		(0x0300)
+#define FE_CW_PREC_SHIFT	(8)
+
+/*  In x87, exception status bits and mask bits occupy
+   corresponding bit positions in the status and control
+   registers, respectively.  In SSE, they are both located
+   in the control-and-status register, with the status bits
+   corresponding to the x87 positions, and the mask bits
+   shifted by this amount to the left.  */
+#define FE_SSE_EXCEPT_MASK_SHIFT (7)
+
+/* These are writable so we can initialise them at startup.  */
+static fenv_t fe_dfl_env;
+static fenv_t fe_nomask_env;
+
+/* These pointers provide the outside world with read-only access to them.  */
+const fenv_t *_fe_dfl_env = &fe_dfl_env;
+const fenv_t *_fe_nomask_env = &fe_nomask_env;
+
+/*  Although Cygwin assumes i686 or above (hence SSE available) these
+   days, and the compiler feels free to use it (depending on compile-
+   time flags of course), we should avoid needlessly breaking any
+   purely integer mode apps (or apps compiled with -mno-sse), so we
+   only manage SSE state in this fenv module if we detect that SSE
+   instructions are available at runtime.  If we didn't do this, all
+   applications run on older machines would bomb out with an invalid
+   instruction exception right at startup; let's not be *that* WJM!  */
+static bool use_sse = false;
+
+/*  This function enables traps for each of the exceptions as indicated
+   by the parameter except. The individual exceptions are described in
+   [ ... glibc manual xref elided ...]. Only the specified exceptions are
+   enabled, the status of the other exceptions is not changed.
+    The function returns the previous enabled exceptions in case the
+   operation was successful, -1 otherwise.  */
+int
+feenableexcept (int excepts)
+{
+  unsigned short cw, old_cw;
+  unsigned int mxcsr = 0;
+
+  if (excepts & ~FE_ALL_EXCEPT)
+    return -1;
+
+  /* Get control words.  */
+  __asm__ volatile ("fnstcw %0" : "=m" (old_cw) : );
+  if (use_sse)
+    __asm__ volatile ("stmxcsr %0" : "=m" (mxcsr) : );
+
+  /* Enable exceptions by clearing mask bits.  */
+  cw = old_cw & ~excepts;
+  mxcsr &= ~(excepts << FE_SSE_EXCEPT_MASK_SHIFT);
+
+  /* Store updated control words.  */
+  __asm__ volatile ("fldcw %0" :: "m" (cw));
+  if (use_sse)
+    __asm__ volatile ("ldmxcsr %0" :: "m" (mxcsr));
+
+  /* Return old value.  We assume SSE and x87 stay in sync.  Note that
+     we are returning a mask of enabled exceptions, which is the opposite
+     of the flags in the register, which are set to disable (mask) their
+     related exceptions.  */
+  return (~old_cw) & FE_ALL_EXCEPT;
+}
+
+/*  This function disables traps for each of the exceptions as indicated
+   by the parameter except. The individual exceptions are described in
+   [ ... glibc manual xref elided ...]. Only the specified exceptions are
+   disabled, the status of the other exceptions is not changed.
+    The function returns the previous enabled exceptions in case the
+   operation was successful, -1 otherwise.  */
+int
+fedisableexcept (int excepts)
+{
+  unsigned short cw, old_cw;
+  unsigned int mxcsr = 0;
+
+  if (excepts & ~FE_ALL_EXCEPT)
+    return -1;
+
+  /* Get control words.  */
+  __asm__ volatile ("fnstcw %0" : "=m" (old_cw) : );
+  if (use_sse)
+    __asm__ volatile ("stmxcsr %0" : "=m" (mxcsr) : );
+
+  /* Disable exceptions by setting mask bits.  */
+  cw = old_cw | excepts;
+  mxcsr |= (excepts << FE_SSE_EXCEPT_MASK_SHIFT);
+
+  /* Store updated control words.  */
+  __asm__ volatile ("fldcw %0" :: "m" (cw));
+  if (use_sse)
+    __asm__ volatile ("ldmxcsr %0" :: "m" (mxcsr));
+
+  /* Return old value.  We assume SSE and x87 stay in sync.  Note that
+     we are returning a mask of enabled exceptions, which is the opposite
+     of the flags in the register, which are set to disable (mask) their
+     related exceptions.  */
+  return (~old_cw) & FE_ALL_EXCEPT;
+}
+
+/*  This function returns a bitmask of all currently enabled exceptions. It
+   returns -1 in case of failure.  */
+int
+fegetexcept (void)
+{
+  unsigned short cw;
+
+  /* Get control word.  We assume SSE and x87 stay in sync.  */
+  __asm__ volatile ("fnstcw %0" : "=m" (cw) : );
+
+  /* Exception is *dis*abled when mask bit is set.  */
+  return (~cw) & FE_ALL_EXCEPT;
+}
+
+/*  Store the floating-point environment in the variable pointed to by envp.
+   The function returns zero in case the operation was successful, a non-zero
+   value otherwise.  */
+int
+fegetenv (fenv_t *envp)
+{
+  __asm__ volatile ("fnstenv %0" : "=m" (envp->_fpu) : );
+  if (use_sse)
+    __asm__ volatile ("stmxcsr %0" : "=m" (envp->_sse_mxcsr) : );
+  return 0;
+}
+
+/*  Store the current floating-point environment in the object pointed to
+   by envp. Then clear all exception flags, and set the FPU to trap no
+   exceptions.  Not all FPUs support trapping no exceptions; if feholdexcept
+   cannot set this mode, it returns nonzero value.  If it succeeds, it
+   returns zero.  */
+int
+feholdexcept (fenv_t *envp)
+{
+  unsigned int mxcsr;
+  fegetenv (envp);
+  mxcsr = envp->_sse_mxcsr & ~FE_ALL_EXCEPT;
+  if (use_sse)
+    __asm__ volatile ("ldmxcsr %0" :: "m" (mxcsr));
+  __asm__ volatile ("fnclex");
+  fedisableexcept (FE_ALL_EXCEPT);
+  return 0;
+}
+
+/*  Set the floating-point environment to that described by envp.  The
+   function returns zero in case the operation was successful, a non-zero
+   value otherwise.  */
+int
+fesetenv (const fenv_t *envp)
+{
+  __asm__ volatile ("fldenv %0" :: "m" (envp->_fpu) );
+  if (use_sse)
+    __asm__ volatile ("ldmxcsr %0" :: "m" (envp->_sse_mxcsr));
+  return 0;
+}
+
+/*  Like fesetenv, this function sets the floating-point environment to
+   that described by envp. However, if any exceptions were flagged in the
+   status word before feupdateenv was called, they remain flagged after
+   the call.  In other words, after feupdateenv is called, the status
+   word is the bitwise OR of the previous status word and the one saved
+   in envp.  The function returns zero in case the operation was successful,
+   a non-zero value otherwise.  */
+int
+feupdateenv (const fenv_t *envp)
+{
+  fenv_t envcopy;
+  unsigned int mxcsr = 0;
+  unsigned short sw;
+
+  /* Don't want to modify *envp, but want to update environment atomically,
+     so take a copy and merge the existing exceptions into it.  */
+  memcpy (&envcopy, envp, sizeof *envp);
+  __asm__ volatile ("fnstsw %0" : "=m" (sw) : );
+  if (use_sse)
+    __asm__ volatile ("stmxcsr %0" : "=m" (mxcsr) : );
+  envcopy._fpu._fpu_sw |= (sw & FE_ALL_EXCEPT);
+  envcopy._sse_mxcsr |= (mxcsr & FE_ALL_EXCEPT);
+
+  return fesetenv (&envcopy);
+}
+
+/*  This function clears all of the supported exception flags indicated by
+   excepts.  The function returns zero in case the operation was successful,
+   a non-zero value otherwise.  */
+int
+feclearexcept (int excepts)
+{
+  fenv_t fenv;
+
+  if (excepts & ~FE_ALL_EXCEPT)
+    return EINVAL;
+
+  /* Need to save/restore whole environment to modify status word.  */
+  fegetenv (&fenv);
+
+  /* Mask undesired bits out.  */
+  fenv._fpu._fpu_sw &= ~excepts;
+  fenv._sse_mxcsr &= ~excepts;
+
+  /* Set back into FPU state.  */
+  return fesetenv (&fenv);
+}
+
+/*  This function raises the supported exceptions indicated by
+   excepts.  If more than one exception bit in excepts is set the order
+   in which the exceptions are raised is undefined except that overflow
+   (FE_OVERFLOW) or underflow (FE_UNDERFLOW) are raised before inexact
+   (FE_INEXACT). Whether for overflow or underflow the inexact exception
+   is also raised is also implementation dependent.  The function returns
+   zero in case the operation was successful, a non-zero value otherwise.  */
+int
+feraiseexcept (int excepts)
+{
+  fenv_t fenv;
+
+  if (excepts & ~FE_ALL_EXCEPT)
+    return EINVAL;
+
+  /* Need to save/restore whole environment to modify status word.  */
+  __asm__ volatile ("fnstenv %0" : "=m" (fenv) : );
+
+  /* Set desired exception bits.  */
+  fenv._fpu._fpu_sw |= excepts;
+
+  /* Set back into FPU state.  */
+  __asm__ volatile ("fldenv %0" :: "m" (fenv));
+
+  /* And trigger them - whichever are unmasked.  */
+  __asm__ volatile ("fwait");
+
+  return 0;
+}
+
+/*  Test whether the exception flags indicated by the parameter except
+   are currently set. If any of them are, a nonzero value is returned
+   which specifies which exceptions are set. Otherwise the result is zero.  */
+int
+fetestexcept (int excepts)
+{
+  unsigned short sw;
+  unsigned int mxcsr = 0;
+
+  if (excepts & ~FE_ALL_EXCEPT)
+    return EINVAL;
+
+  /* Get status registers.  */
+  __asm__ volatile ("fnstsw %0" : "=m" (sw) : );
+  if (use_sse)
+    __asm__ volatile ("stmxcsr %0" : "=m" (mxcsr) : );
+
+  /* Mask undesired bits out and return result.  */
+  return (sw | mxcsr) & excepts;
+}
+/*  This function stores in the variable pointed to by flagp an
+   implementation-defined value representing the current setting of the
+   exception flags indicated by excepts.  The function returns zero in
+   case the operation was successful, a non-zero value otherwise.  */
+int
+fegetexceptflag (fexcept_t *flagp, int excepts)
+{
+  unsigned short sw;
+  unsigned int mxcsr = 0;
+
+  if (excepts & ~FE_ALL_EXCEPT)
+    return EINVAL;
+
+  /* Get status registers.  */
+  __asm__ volatile ("fnstsw %0" : "=m" (sw) : );
+  if (use_sse)
+    __asm__ volatile ("stmxcsr %0" : "=m" (mxcsr) : );
+
+  /* Mask undesired bits out and set result struct.  */
+  flagp->_fpu_exceptions = (sw & excepts);
+  flagp->_sse_exceptions = (mxcsr & excepts);
+
+  return 0;
+}
+
+/*  This function restores the flags for the exceptions indicated by
+   excepts to the values stored in the variable pointed to by flagp.  */
+int
+fesetexceptflag (const fexcept_t *flagp, int excepts)
+{
+  fenv_t fenv;
+
+  if (excepts & ~FE_ALL_EXCEPT)
+    return EINVAL;
+
+  /* Need to save/restore whole environment to modify status word.  */
+  fegetenv (&fenv);
+
+  /* Set/Clear desired exception bits.  */
+  fenv._fpu._fpu_sw &= ~excepts;
+  fenv._fpu._fpu_sw |= (excepts & flagp->_fpu_exceptions);
+  fenv._sse_mxcsr &= ~excepts;
+  fenv._sse_mxcsr |= (excepts & flagp->_sse_exceptions);
+
+  /* Set back into FPU state.  */
+  return fesetenv (&fenv);
+}
+
+/*  Returns the currently selected rounding mode, represented by one of the
+   values of the defined rounding mode macros.  */
+int
+fegetround (void)
+{
+  unsigned short cw;
+
+  /* Get control word.  We assume SSE and x87 stay in sync.  */
+  __asm__ volatile ("fnstcw %0" : "=m" (cw) : );
+
+  return (cw & FE_CW_ROUND_MASK) >> FE_CW_ROUND_SHIFT;
+}
+
+/*  Changes the currently selected rounding mode to round. If round does
+   not correspond to one of the supported rounding modes nothing is changed.
+   fesetround returns zero if it changed the rounding mode, a nonzero value
+   if the mode is not supported.  */
+int
+fesetround (int round)
+{
+  unsigned short cw;
+  unsigned int mxcsr = 0;
+
+  /* Will succeed for any valid value of the input parameter.  */
+  if (round < FE_TONEAREST || round > FE_TOWARDZERO)
+    return EINVAL;
+
+  /* Get control words.  */
+  __asm__ volatile ("fnstcw %0" : "=m" (cw) : );
+  if (use_sse)
+    __asm__ volatile ("stmxcsr %0" : "=m" (mxcsr) : );
+
+  /* Twiddle bits.  */
+  cw &= ~FE_CW_ROUND_MASK;
+  cw |= (round << FE_CW_ROUND_SHIFT);
+  mxcsr &= ~FE_MXCSR_ROUND_MASK;
+  mxcsr |= (round << FE_MXCSR_ROUND_SHIFT);
+
+  /* Set back into FPU state.  */
+  __asm__ volatile ("fldcw %0" :: "m" (cw));
+  if (use_sse)
+    __asm__ volatile ("ldmxcsr %0" :: "m" (mxcsr));
+
+  /* Indicate success.  */
+  return 0;
+}
+
+/*  Returns the currently selected precision, represented by one of the
+   values of the defined precision macros.  */
+int
+fegetprec (void)
+{
+  unsigned short cw;
+
+  /* Get control word.  */
+  __asm__ volatile ("fnstcw %0" : "=m" (cw) : );
+
+  return (cw & FE_CW_PREC_MASK) >> FE_CW_PREC_SHIFT;
+}
+
+/*  Changes the currently selected precision to prec. If prec does not
+   correspond to one of the supported rounding modes nothing is changed.
+   fesetprec returns zero if it changed the precision, or a nonzero value
+   if the mode is not supported.  */
+int
+fesetprec (int prec)
+{
+  unsigned short cw;
+
+  /* Will succeed for any valid value of the input parameter.  */
+  if (prec < FE_SINGLEPREC || prec > FE_EXTENDEDPREC)
+    return EINVAL;
+
+  /* Get control word.  */
+  __asm__ volatile ("fnstcw %0" : "=m" (cw) : );
+
+  /* Twiddle bits.  */
+  cw &= ~FE_CW_PREC_MASK;
+  cw |= (prec << FE_CW_PREC_SHIFT);
+
+  /* Set back into FPU state.  */
+  __asm__ volatile ("fldcw %0" :: "m" (cw));
+
+  /* Indicate success.  */
+  return 0;
+}
+
+/*  Set up the FPU and SSE environment at the start of execution.  */
+void
+_feinitialise (void)
+{
+  unsigned int edx, eax, mxcsr;
+
+  /* Check for presence of SSE: invoke CPUID #1, check EDX bit 25.  */
+  eax = 1;
+  __asm__ volatile ("cpuid" : "=d" (edx), "+a" (eax) :: "%ecx", "%ebx");
+  /* If this flag isn't set we'll avoid trying to execute any SSE.  */
+  if ((edx & (1 << 25)) != 0)
+    use_sse = true;
+
+  /* Reset FPU: extended prec, all exceptions cleared and masked off.  */
+  __asm__ volatile ("fninit");
+  /* The default cw value, 0x37f, is rounding mode zero.  The MXCSR has
+     no precision control, so the only thing to do is set the exception
+     mask bits.  */
+  mxcsr = FE_ALL_EXCEPT << FE_SSE_EXCEPT_MASK_SHIFT;
+  if (use_sse)
+    __asm__ volatile ("ldmxcsr %0" :: "m" (mxcsr));
+
+  /* Setup unmasked environment.  */
+  feenableexcept (FE_ALL_EXCEPT);
+  fegetenv (&fe_nomask_env);
+
+  /* Restore default exception masking (all masked).  */
+  fedisableexcept (FE_ALL_EXCEPT);
+
+  /* Finally cache state as default environment. */
+  fegetenv (&fe_dfl_env);
+}
+
+@
+
+
+1.5
+log
+@	* fenv.cc (fesetround): Fix test for valid input parameter.
+	(fesetprec): Ditto.
+@
+text
+@d424 1
+a424 2
+  /* If this flag isn't set, or if the OS doesn't support SSE (NT4, at least
+     up to SP4) we'll avoid trying to execute any SSE.  */
+@
+
+
+1.5.2.1
+log
+@	Remove more old cruft.  Remove Windows NT4 and 2000 from comments
+	throughout, unless it still makes sense.
+	* dlfcn.cc (dlopen): Drop W2K-only code to make loaded DLL persistent.
+	* fhandler_floppy.cc (fhandler_dev_floppy::get_drive_info): Drop code
+	trying to use information from NtQueryVolumeInformationFile.
+	* fhandler_socket.cc (fhandler_socket::close): Drop code snippet
+	disabled since 2008.
+	* mount.cc (MINIMAL_WIN_NTFS_FLAGS): Add flag values set on all
+	NTFS since Windows XP.
+	(get_volume_path_names_for_volume_name): Remove.
+	(dos_drive_mappings::dos_drive_mappings): Call Win32 function
+	GetVolumePathNamesForVolumeNameW directly.
+	* path.cc (file_get_fnoi): Drop test for NT4-only return code.
+	* sched.cc: Add FIXME to global comment.  Reformat comments throughout.
+	* spawn.cc (child_info_spawn::worker): Just call official IsProcessInJob
+	function rather than to test undocumented TEB member.
+	* winlean.h: Drop Mingw32-related defines.
+	* include/limits.h (PTHREAD_KEYS_MAX): Raise value to reflect minimum
+	value available on XP and later.
+
+2013-03-13  Corinna Vinschen  <corinna@@vinschen.de>
+@
+text
+@d424 2
+a425 1
+  /* If this flag isn't set we'll avoid trying to execute any SSE.  */
+@
+
+
+1.4
+log
+@whitespace elimination
+@
+text
+@d3 1
+a3 1
+   Copyright 2010, 2011 Red Hat, Inc.
+d352 1
+a352 1
+  if (round & ~(FE_CW_ROUND_MASK >> FE_CW_PREC_SHIFT))
+d398 1
+a398 1
+  if (prec & ~(FE_CW_PREC_MASK >> FE_CW_PREC_SHIFT) || prec == FE_RESERVEDPREC)
+@
+
+
+1.3
+log
+@	Drop NT4 support.
+	* autoload.cc (DnsQuery_A): Fatal if not available.
+	(DnsRecordListFree): Ditto.
+	(DsGetDcNameW): Ditto.
+	(NetGetAnyDCName): Remove.
+	(NetGetDCName): Remove.
+	(EnumProcessModules): Fatal if not available.
+	(GetModuleFileNameExW): Ditto.
+	(GetModuleInformation): Ditto.
+	(GetProcessMemoryInfo): Ditto.
+	(QueryWorkingSet): Ditto.
+	(LsaRegisterLogonProcess): Ditto.
+	* fenv.cc (_feinitialise): Drop supports_sse condition.
+	* fhandler_disk_file.cc (path_conv::isgood_inode): Fix comment.
+	(fhandler_base::fstat_by_name): Drop has_fileid_dirinfo condition.
+	(fhandler_disk_file::opendir): Ditto.
+	* fhandler_netdrive.cc (fhandler_netdrive::readdir): Fix comment.
+	* fhandler_proc.cc (format_proc_partitions): Drop NT4-only code.
+	* fhandler_process.cc (get_process_state): Ditto.
+	* kernel32.cc (GetWindowsDirectoryW): Remove.
+	(GetWindowsDirectoryA): Remove.
+	* miscfuncs.cc (nice_to_winprio): Drop NT4-only code.
+	* mount.cc (fs_info::update): Fix comments.
+	* net.cc (get_2k_ifs): Drop NT4-only code.
+	* sec_auth.cc (get_logon_server): Ditto.
+	(lsaauth): Drop NT4-specific error handling.
+	* security.cc (alloc_sd): Set SE_DACL_PROTECTED unconditionally.
+	* select.cc (select_stuff::wait): Always use MWMO_INPUTAVAILABLE.
+	(peek_windows): Drop NT4-only condition in call to PeekMessage.
+	* syscalls.cc (gethostid): Remove NT4-only workaround.
+	* wincap.cc: Througout, drop has_dacl_protect,
+	has_broken_if_oper_status, has_process_io_counters,
+	has_terminal_services, has_extended_priority_class, has_guid_volumes,
+	has_fileid_dirinfo, has_mwmo_inputavailable and supports_sse from
+	wincaps.
+	(wincap_nt4sp4): Remove.
+	(wincap_minimal): Set to wincap_2000.
+	(wincapc::init): Rely on availability of OSVERSIONINFOEX structure.
+	Treat error from GetVersionEx as fatal.  Treat NT4 as fatal.
+	* wincap.h (struct wincaps): Drop has_dacl_protect,
+	has_broken_if_oper_status, has_process_io_counters,
+	has_terminal_services, has_extended_priority_class, has_guid_volumes,
+	has_fileid_dirinfo, has_mwmo_inputavailable and supports_sse flags
+	and methods.
+	* winlean.h (GetWindowsDirectoryW) Define as GetSystemWindowsDirectoryW.
+	(GetWindowsDirectoryA): Define as GetSystemWindowsDirectoryA.
+@
+text
+@d230 1
+a230 1
+/*  This function raises the supported exceptions indicated by 
+@
+
+
+1.2
+log
+@	* fenv.cc (_feinitialise); Don't use SSE instructions on systems not
+	supporting them.
+	* wincap.h (wincaps::supports_sse): New element.
+	* wincap.cc: Implement above element throughout.
+@
+text
+@d426 1
+a426 1
+  if ((edx & (1 << 25)) != 0 && wincap.supports_sse ())
+@
+
+
+1.1
+log
+@winsup/cygwin/ChangeLog:
+
+	* Makefile.in (DLL_OFILES): Add new fenv.o module.
+	(fenv_CFLAGS): New flags definition for fenv.o compile.
+	* autoload.cc (std_dll_init): Use fenv.h functions instead of direct
+	manipulation of x87 FPU registers.
+	* crt0.c (mainCRTStartup): Likewise.
+	* cygwin.din (feclearexcept, fegetexceptflag, feraiseexcept,
+	fesetexceptflag, fetestexcept, fegetround, fesetround, fegetenv,
+	feholdexcept, fesetenv, feupdateenv, fegetprec, fesetprec,
+	feenableexcept, fedisableexcept, fegetexcept, _feinitialise,
+	_fe_dfl_env, _fe_nomask_env): Export new functions and data items.
+	* fenv.cc: New file.
+	* posix.sgml: Update status of newly-implemented APIs.
+	* include/fenv.h: Likewise related header.
+	* include/cygwin/version.h (CYGWIN_VERSION_API_MINOR): Bump.
+@
+text
+@d3 1
+a3 1
+   Copyright 2010 Red Hat, Inc.
+d11 1
+a11 1
+#include <string.h>
+d14 2
+d424 3
+a426 2
+  /* If this flag isn't set, we'll avoid trying to execute any SSE.  */
+  if (edx & (1 << 25))
+@
+
+
+1.1.2.1
+log
+@	* fenv.cc (_feinitialise): Don't use SSE instructions on systems not
+	supporting them.
+	* wincap.h (wincaps::supports_sse): New element.
+	* wincap.cc: Implement above element throughout.
+@
+text
+@d3 1
+a3 1
+   Copyright 2010, 2011 Red Hat, Inc.
+d11 1
+a11 1
+#include "winsup.h"
+a13 2
+#include "wincap.h"
+#include <string.h>
+d422 2
+a423 3
+  /* If this flag isn't set, or if the OS doesn't support SSE (NT4, at least
+     up to SP4) we'll avoid trying to execute any SSE.  */
+  if ((edx & (1 << 25)) != 0 && wincap.supports_sse ())
+@
+
+

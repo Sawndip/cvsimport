@@ -1,0 +1,109 @@
+head	1.1;
+access;
+symbols;
+locks; strict;
+comment	@# @;
+
+
+1.1
+date	2013.04.30.12.33.52;	author wtedeschi;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.1
+log
+@Fix display of structures/bitfields in register description.
+
+Add support for displaying structures and bitfields for registers when
+executing "maint print c-tdesc". This command is also used when
+converting the xml target description file into c file.
+
+Example of the behaviour is given below reporting a snipet of the xml file
+and a snippet of the c code generated.
+
+XML file contains:
+...
+    <union id="vecint">
+      <field name="v4" type="v4int8"/>
+      <field name="v2" type="v2int16"/>
+    </union>
+
+    <struct id="struct1">
+      <field name="v4" type="v4int8"/>
+      <field name="v2" type="v2int16"/>
+    </struct>
+
+    <struct id="struct2" size="8">
+      <field name="f1" start="0" end="34"/>
+      <field name="f2" start="63" end="63"/>
+    </struct>
+...
+
+Setting this xml file as target description file and
+issuing the maintenance print c-tdesc the following output
+is obtained:
+
+  feature = tdesc_create_feature (result, "extra");
+  field_type = tdesc_named_type (feature, "int8");
+  tdesc_create_vector (feature, "v4int8", field_type, 4);
+
+  field_type = tdesc_named_type (feature, "int16");
+  tdesc_create_vector (feature, "v2int16", field_type, 2);
+
+  type = tdesc_create_union (feature, "vecint");
+  field_type = tdesc_named_type (feature, "v4int8");
+  tdesc_add_field (type, "v4", field_type);
+  field_type = tdesc_named_type (feature, "v2int16");
+  tdesc_add_field (type, "v2", field_type);
+
+C output is not supported type "struct1".
+
+This is finally the issue.
+
+2013-03-27  Walfred Tedeschi  <walfred.tedeschi@@intel.com>
+
+        * target-descriptions.c (maint_print_c_tdesc_cmd):
+        Add case to parse structures as register types and
+        bitfields.
+
+testsuite/
+
+	* gdb.xml/maint_print_struct.exp: New file.
+	* gdb.xml/maint_print_struct.xml: New file.
+
+Change-Id: I2e20b095d508319c80275e724a9452c7e2834067
+Signed-off-by: Walfred Tedeschi <walfred.tedeschi@@intel.com>
+@
+text
+@<?xml version="1.0"?>
+<!-- Copyright (C) 2010-2013 Free Software Foundation, Inc.
+
+     Copying and distribution of this file, with or without modification,
+     are permitted in any medium without royalty provided the copyright
+     notice and this notice are preserved.  -->
+
+<!DOCTYPE feature SYSTEM "gdb-target.dtd">
+<target>
+<feature name="test">
+
+  <struct id="two_fielded">
+       <field name="field1" type="data_ptr"/>
+       <field name="field2" type="data_ptr"/>
+  </struct>
+
+  <struct id="bitfield" size="8">
+    <field name="field1" start="24" end="63"/>
+    <field name="field2" start="16" end="24"/>
+  </struct>
+
+  <reg name="bad_reg1" bitsize="128" type="two_fielded"/>
+  <reg name="bad_reg2" bitsize="64"  type="bitfield"/>
+</feature>
+</target>
+
+@

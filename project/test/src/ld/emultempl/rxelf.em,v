@@ -1,0 +1,307 @@
+head	1.3;
+access;
+symbols
+	binutils-2_24-branch:1.3.0.2
+	binutils-2_24-branchpoint:1.3
+	binutils-2_21_1:1.1
+	binutils-2_23_2:1.2
+	binutils-2_23_1:1.2
+	binutils-2_23:1.2
+	binutils-2_23-branch:1.2.0.6
+	binutils-2_23-branchpoint:1.2
+	binutils-2_22_branch:1.2.0.4
+	binutils-2_22:1.2
+	binutils-2_22-branch:1.2.0.2
+	binutils-2_22-branchpoint:1.2
+	binutils-2_21:1.1
+	binutils-2_21-branch:1.1.0.2
+	binutils-2_21-branchpoint:1.1
+	binutils_latest_snapshot:1.3;
+locks; strict;
+comment	@# @;
+
+
+1.3
+date	2012.11.09.17.00.42;	author nickc;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2011.05.17.16.02.29;	author nickc;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2009.09.29.14.17.18;	author nickc;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.3
+log
+@2012-11-09  Nick Clifton  <nickc@@redhat.com>
+
+	* elf32-rx.c (describe_flags): New function.  Returns a buffer
+	containing a description of the E_FLAG_RX_... values set.
+	(rx_elf_merge_private_bfd_data): Use it.
+	(rx_elf_print_private_bfd_data): Likewise.
+	(elf32_rx_machine): Skip EF_RX_CPU_RX check.
+	(elf32_rx_special_sections): Define.
+	(elf_backend_special_sections): Define.
+
+2012-11-09  Nick Clifton  <nickc@@redhat.com>
+
+	* readelf.c (get_machine_flags): Add support for E_FLAG_RX_ABI.
+
+2012-11-09  Nick Clifton  <nickc@@redhat.com>
+
+	* config/obj-elf.c (obj_elf_change_section): Allow init array
+	sections to have the SHF_EXECINSTR attribute for the RX target.
+	* config/tc-rx.c (elf_flags): Initialise with E_FLAG_RX_ABI.
+	(enum options): Add OPTION_USES_GCC_ABI and OPTION_USES_RX_ABI.
+	(md_longopts): Add -mgcc-abi and -mrx-abi.
+	(md_parse_option): Add support for OPTION_USES_GCC_ABI and
+	OPTION_USES_RX_ABI.
+	* doc/as.texinfo (RX Options): Add mention of remaining RX
+	options.
+	* doc/c-rx.texi: Document -mgcc-abi and -mrx-abi.
+
+2012-11-09  Nick Clifton  <nickc@@redhat.com>
+
+	* rx.h (EF_RX_CPU_RX): Add comment.
+	(E_FLAG_RX_ABI): Define.
+
+2012-11-09  Nick Clifton  <nickc@@redhat.com>
+
+	* emultempl/rxelf.em (no_flag_mismatch_warnings): Initialise to
+	true.
+	(PARSE_AND_LIST_LONGOPTS): Add flag-mismatch-warnings.
+	(PARSE_AND_LIST_ARG_CASES): Add support for
+	--flag-mismatch-warnings.
+@
+text
+@# This shell script emits a C file. -*- C -*-
+#   Copyright 2009, 2011  Free Software Foundation, Inc.
+#
+# This file is part of the GNU Binutils.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+# MA 02110-1301, USA.
+#
+
+# This file is sourced from elf32.em, and defines extra rx-elf
+# specific routines.
+#
+test -z "$TARGET2_TYPE" && TARGET2_TYPE="rel"
+fragment <<EOF
+
+static bfd_boolean no_flag_mismatch_warnings = TRUE;
+static bfd_boolean ignore_lma = TRUE;
+
+/* This is a convenient point to tell BFD about target specific flags.
+   After the output has been created, but before inputs are read.  */
+static void
+rx_elf_create_output_section_statements (void)
+{
+  extern void bfd_elf32_rx_set_target_flags (bfd_boolean, bfd_boolean);
+
+  bfd_elf32_rx_set_target_flags (no_flag_mismatch_warnings, ignore_lma);
+}
+
+EOF
+
+# Define some shell vars to insert bits of code into the standard elf
+# parse_args and list_options functions.
+#
+PARSE_AND_LIST_PROLOGUE='
+#define OPTION_NO_FLAG_MISMATCH_WARNINGS	301
+#define OPTION_IGNORE_LMA			302
+#define OPTION_NO_IGNORE_LMA			303
+#define OPTION_FLAG_MISMATCH_WARNINGS		304
+'
+
+PARSE_AND_LIST_LONGOPTS='
+  { "no-flag-mismatch-warnings", no_argument, NULL, OPTION_NO_FLAG_MISMATCH_WARNINGS},
+  { "flag-mismatch-warnings", no_argument, NULL, OPTION_FLAG_MISMATCH_WARNINGS},
+  { "ignore-lma", no_argument, NULL, OPTION_IGNORE_LMA},
+  { "no-ignore-lma", no_argument, NULL, OPTION_NO_IGNORE_LMA},
+'
+
+PARSE_AND_LIST_OPTIONS='
+  fprintf (file, _("  --no-flag-mismatch-warnings Don'\''t warn about objects with incompatible\n"
+		   "                                endian or dsp settings\n"));
+  fprintf (file, _("  --flag-mismatch-warnings    Warn about objects with incompatible\n"
+		   "                                endian, dsp or ABI settings\n"));
+  fprintf (file, _("  --ignore-lma                Ignore segment LMAs [default]\n"
+                   "                                (for Renesas Tools compatibility)\n"));
+  fprintf (file, _("  --no-ignore-lma             Don'\''t ignore segment LMAs\n"));
+'
+
+PARSE_AND_LIST_ARGS_CASES='
+    case OPTION_NO_FLAG_MISMATCH_WARNINGS:
+      no_flag_mismatch_warnings = TRUE;
+      break;
+
+    case OPTION_FLAG_MISMATCH_WARNINGS:
+      no_flag_mismatch_warnings = FALSE;
+      break;
+
+    case OPTION_IGNORE_LMA:
+      ignore_lma = TRUE;
+      break;
+
+    case OPTION_NO_IGNORE_LMA:
+      ignore_lma = FALSE;
+      break;
+'
+
+LDEMUL_CREATE_OUTPUT_SECTION_STATEMENTS=rx_elf_create_output_section_statements
+@
+
+
+1.2
+log
+@	PR ld/12759
+	* emultempl/rxelf.em (ignore_lma): New variable.
+	(rx_elf_create_output_section_statements): Pass the setiing of
+	ignore_lma to bfd_elf32_rx_set_target_flags.
+	(OPTION_IGNORE_LMA): Define.
+	(OPTION_NO_IGNORE_LMA): Define.
+	(PARSE_AND_LIST_LONGOPTS): Add ignore lma.
+	(PARSE_AND_LIST_OPTIONS): Add ignore lma.
+	(PARSE_AND_LIST_ARGS_CASES): Add ignore lma.
+
+	* elf32-rx.c (ignore_lma): New variable.
+	(bfd_elf32_rx_set_target_flags): Add ignore_lma parameter.
+	(rx_modify_program_headers): Only copy the LMA into the VMA if
+	ignore_lma is true.
+@
+text
+@d28 1
+a28 1
+static bfd_boolean no_flag_mismatch_warnings = FALSE;
+d50 1
+d55 1
+d63 2
+d75 4
+@
+
+
+1.1
+log
+@bfd
+        * Makefile.am (ALL_MACHINES): Add cpu-rx.lo.
+        (ALL_MACHINES_CFILES): Add cpu-rx.c.
+        (BFD32_BACKENDS): Add elf32-rx.lo.
+        (BFD32_BACKENDS_CFILES): Add elf32-rx.c.
+        * archures.c (bfd_architecture): Add bfd_arch_rx and bfd_mach_rx.
+        Export bfd_rx_arch.
+        (bfd_archures_list): Add bfd_rx_arch.
+        * config.bfd: Add entry for rx-*-elf.
+        * configure.in: Add entries for bfd_elf32_rx_le_vec and
+        bfd_elf32_rx_be_vec.
+        * reloc.c: Add RX relocations.
+        * targets.c: Add RX target vectors.
+        * Makefile.in: Regenerate.
+        * bfd-in2.h: Regenerate.
+        * configure: Regenerate.
+        * libbfd.h: Regenerate.
+        * cpu-rx.c: New file.
+        * elf32-rx.c: New file.
+
+binutils
+        * readelf.c: Add support for RX target.
+        * MAINTAINERS: Add DJ and NickC as maintainers for RX.
+
+gas
+        * Makefile.am: Add RX target.
+        * configure.in: Likewise.
+        * configure.tgt: Likewise.
+        * read.c (do_repeat_with_expander): New function.
+        * read.h: Provide a prototype for do_repeat_with_expander.
+        * doc/Makefile.am: Add RX target documentation.
+        * doc/all.texi: Likewise.
+        * doc/as.texinfo: Likewise.
+        * Makefile.in: Regenerate.
+        * NEWS: Mention support for RX architecture.
+        * configure: Regenerate.
+        * doc/Makefile.in: Regenerate.
+        * config/rx-defs.h: New file.
+        * config/rx-parse.y: New file.
+        * config/tc-rx.h: New file.
+        * config/tc-rx.c: New file.
+        * doc/c-rx.texi: New file.
+
+gas/testsuite
+        * gas/rx: New directory.
+        * gas/rx/*: New set of test cases.
+        * gas/elf/section2.e-rx: New expected output file.
+        * gas/all/gas.exp: Add support for RX target.
+        * gas/elf/elf.exp: Likewise.
+        * gas/lns/lns.exp: Likewise.
+        * gas/macros/macros.exp: Likewise.
+
+include
+        * dis-asm.h: Add prototype for print_insn_rx.
+
+include/elf
+        * rx.h: New file.
+
+include/opcode
+        * rx.h: New file.
+
+ld
+        * Makefile.am: Add rules to build RX emulation.
+        * configure.tgt: Likewise.
+        * NEWS: Mention support for RX architecture.
+        * Makefile.in: Regenerate.
+        * emulparams/elf32rx.sh: New file.
+        * emultempl/rxelf.em: New file.
+
+opcodes
+        * Makefile.am: Add RX files.
+        * configure.in: Add support for RX target.
+        * disassemble.c: Likewise.
+        * Makefile.in: Regenerate.
+        * configure: Regenerate.
+        * opc2c.c: New file.
+        * rx-decode.c: New file.
+        * rx-decode.opc: New file.
+        * rx-dis.c: New file.
+@
+text
+@d2 1
+a2 1
+#   Copyright 2009  Free Software Foundation, Inc.
+d29 1
+d36 1
+a36 1
+  extern void bfd_elf32_rx_set_target_flags (bfd_boolean);
+d38 1
+a38 1
+  bfd_elf32_rx_set_target_flags (no_flag_mismatch_warnings);
+d48 2
+d54 2
+d59 1
+a59 1
+  fprintf (file, _("  --no-flag-mismatch-warnings Don'\''t warn about objects with incompatible"
+d61 3
+d70 8
+@
+

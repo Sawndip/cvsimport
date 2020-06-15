@@ -1,0 +1,348 @@
+head	1.5;
+access;
+symbols
+	newlib-2_2_0:1.5.0.2
+	newlib-2_1_0:1.4
+	newlib-2_0_0:1.1;
+locks; strict;
+comment	@# @;
+
+
+1.5
+date	2014.02.03.10.30.34;	author rearnsha;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2013.11.18.10.04.55;	author mshawcroft;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2013.04.19.14.24.45;	author mshawcroft;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2013.01.18.15.52.32;	author mshawcroft;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2012.09.26.20.11.54;	author jjohnstn;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.5
+log
+@	* aarch64/Makefile.in (RDIMON_SCRIPTS): Rule to build in-tree copies
+	of scripts.
+	(all): Build the in-tree copies of the scripts.
+	(clean): Also delete the in-tree copies of the scripts.
+@
+text
+@#  Copyright (c) 2012 ARM Ltd.  All rights reserved.
+#
+#  Redistribution and use in source and binary forms, with or without
+#  modification, are permitted provided that the following conditions
+#  are met:
+#  1. Redistributions of source code must retain the above copyright
+#     notice, this list of conditions and the following disclaimer.
+#  2. Redistributions in binary form must reproduce the above copyright
+#     notice, this list of conditions and the following disclaimer in the
+#     documentation and/or other materials provided with the distribution.
+#  3. The name of the company may not be used to endorse or promote
+#     products derived from this software without specific prior written
+#     permission.
+#
+#  THIS SOFTWARE IS PROVIDED BY ARM LTD ``AS IS'' AND ANY EXPRESS OR IMPLIED
+#  WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+#  MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+#  IN NO EVENT SHALL ARM LTD BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+#  SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED
+#  TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+#  PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+#  LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+#  NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+#  SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+DESTDIR =
+VPATH = @@srcdir@@ @@srcdir@@/..
+srcdir = @@srcdir@@
+objdir = .
+srcroot = $(srcdir)/../..
+objroot = $(objdir)/../..
+
+prefix = @@prefix@@
+exec_prefix = @@exec_prefix@@
+
+host_alias = @@host_alias@@
+target_alias = @@target_alias@@
+
+bindir = @@bindir@@
+libdir = @@libdir@@
+tooldir = $(exec_prefix)/$(target_alias)
+
+objtype = @@objtype@@
+
+INSTALL = @@INSTALL@@
+INSTALL_PROGRAM = @@INSTALL_PROGRAM@@
+INSTALL_DATA = @@INSTALL_DATA@@
+
+# Multilib support variables.
+# TOP is used instead of MULTI{BUILD,SRC}TOP.
+MULTISRCTOP =
+MULTIBUILDTOP =
+MULTIDIRS =
+MULTISUBDIR =
+MULTIDO = true
+MULTICLEAN = true
+
+SHELL =	/bin/sh
+
+CC = @@CC@@
+
+AS = @@AS@@
+AR = @@AR@@
+LD = @@LD@@
+RANLIB = @@RANLIB@@
+
+SUBDIRS = @@subdirs@@
+
+OBJDUMP = `if [ -f ${objroot}/../binutils/objdump ] ; \
+	then echo ${objroot}/../binutils/objdump ; \
+	else t='$(program_transform_name)'; echo objdump | sed -e $$t ; fi`
+OBJCOPY = `if [ -f ${objroot}/../binutils/objcopy ] ; \
+	then echo ${objroot}/../binutils/objcopy ; \
+	else t='$(program_transform_name)'; echo objcopy | sed -e $$t ; fi`
+
+OBJS = ftruncate.o libcfunc.o syscalls.o truncate.o _exit.o _kill.o
+CRT0		= crt0.o
+CRT0_INSTALL	= install-crt0
+
+CRT0_INSTALL	= install-crt0
+RDIMON_CRT0	= rdimon-crt0.o
+RDIMON_BSP	= librdimon.a
+RDIMON_OBJS	= $(patsubst %,rdimon-%,$(OBJS))
+RDIMON_SCRIPTS	= rdimon.specs aem-ve.specs aem-validation.specs
+RDIMON_INSTALL	= install-rdimon
+
+CFLAGS		= -g
+
+# Host specific makefile fragment comes in here.
+@@host_makefile_frag@@
+
+#
+# build a test program for each target board. Just trying to get
+# it to link is a good test, so we ignore all the errors for now.
+#
+all: ${CRT0} ${RDIMON_CRT0} ${RDIMON_BSP} ${RDIMON_SCRIPTS}
+	@@rootpre=`pwd`/; export rootpre; \
+	srcrootpre=`cd $(srcdir); pwd`/; export srcrootpre; \
+	for dir in .. ${SUBDIRS}; do \
+	  if [ x$$dir != x.. ]; then \
+	    if [ -d $$dir ]; then \
+	      (cd $$dir; $(MAKE) $(FLAGS_TO_PASS)); \
+	    else true; fi; \
+	  else true; fi; \
+	done
+
+#
+# here's where we build the test programs for each target
+#
+.PHONY: test
+test:
+
+#
+crt0.o: crt0.S
+
+rdimon-crt0.o: crt0.S
+	$(CC) $(CFLAGS_FOR_TARGET) $(CFLAGS) $(INCLUDES) -DARM_RDI_MONITOR -o $@@ -c $<
+
+#rdimon-trap.o: trap.S
+#	$(CC) $(CFLAGS_FOR_TARGET) $(CFLAGS) $(INCLUDES) -DARM_RDI_MONITOR -o $@@ -c $<
+
+rdimon-_exit.o: _exit.c
+	$(CC) $(CFLAGS_FOR_TARGET) $(CFLAGS) $(INCLUDES) -DARM_RDI_MONITOR -o $@@ -c $<
+
+rdimon-ftruncate.o: ftruncate.c
+	$(CC) $(CFLAGS_FOR_TARGET) $(CFLAGS) $(INCLUDES) -DARM_RDI_MONITOR -o $@@ -c $<
+
+rdimon-_kill.o: _kill.c
+	$(CC) $(CFLAGS_FOR_TARGET) $(CFLAGS) $(INCLUDES) -DARM_RDI_MONITOR -o $@@ -c $<
+
+rdimon-libcfunc.o: libcfunc.c
+	$(CC) $(CFLAGS_FOR_TARGET) $(CFLAGS) $(INCLUDES) -DARM_RDI_MONITOR -o $@@ -c $<
+
+rdimon-syscalls.o: syscalls.c
+	$(CC) $(CFLAGS_FOR_TARGET) $(CFLAGS) $(INCLUDES) -DARM_RDI_MONITOR -o $@@ -c $<
+
+rdimon-truncate.o: truncate.c
+	$(CC) $(CFLAGS_FOR_TARGET) $(CFLAGS) $(INCLUDES) -DARM_RDI_MONITOR -o $@@ -c $<
+
+$(RDIMON_BSP): $(RDIMON_OBJS)
+	${AR} ${ARFLAGS} $@@ $^
+	${RANLIB} $@@
+
+clean mostlyclean:
+	rm -f a.out core *.i *.o *-test *.srec *.dis *.x $(SIM_BSP) ${RDIMON_SCRIPTS}
+	@@rootpre=`pwd`/; export rootpre; \
+	srcrootpre=`cd $(srcdir); pwd`/; export srcrootpre; \
+	for dir in .. ${SUBDIRS}; do \
+	  if [ x$$dir != x.. ]; then \
+	    if [ -d $$dir ]; then \
+	      (cd $$dir; $(MAKE) $(FLAGS_TO_PASS) clean); \
+	    else true; fi; \
+	  else true; fi; \
+	done
+
+distclean maintainer-clean realclean: clean
+	rm -f Makefile config.status *~
+
+.PHONY: install info install-info clean-info
+install: ${CRT0_INSTALL} ${RDIMON_INSTALL}
+	@@rootpre=`pwd`/; export rootpre; \
+	srcrootpre=`cd $(srcdir); pwd`/; export srcrootpre; \
+	for dir in .. ${SUBDIRS}; do \
+	  if [ x$$dir != x.. ]; then \
+	    if [ -d $$dir ]; then \
+	      (cd $$dir; $(MAKE) $(FLAGS_TO_PASS) install); \
+	    else true; fi; \
+	  else true; fi; \
+	done
+
+install-crt0:
+	${INSTALL_DATA} ${CRT0} $(DESTDIR)${tooldir}/lib${MULTISUBDIR}/$$x
+
+install-rdimon:
+	set -e; for x in ${RDIMON_CRT0} ${RDIMON_BSP}; do ${INSTALL_DATA} $$x $(DESTDIR)${tooldir}/lib${MULTISUBDIR}/$$x; done
+	set -e; for x in ${RDIMON_SCRIPTS}; do ${INSTALL_DATA} ${srcdir}/${objtype}$$x $(DESTDIR)${tooldir}/lib${MULTISUBDIR}/$$x; done
+
+# Make copies of the scripts to facilitate in-tree bootstrapping.
+${RDIMON_SCRIPTS}: %: ${objtype}%
+	cp $< $@@
+
+doc:
+info:
+install-info:
+clean-info:
+
+Makefile: Makefile.in config.status @@host_makefile_frag_path@@
+	$(SHELL) config.status
+
+config.status: configure
+	$(SHELL) config.status --recheck
+@
+
+
+1.4
+log
+@[AArch64] Provide ftruncate() and truncate() stubs.
+@
+text
+@d96 1
+a96 1
+all: ${CRT0} ${RDIMON_CRT0} ${RDIMON_BSP}
+d145 1
+a145 1
+	rm -f a.out core *.i *.o *-test *.srec *.dis *.x $(SIM_BSP)
+d178 3
+@
+
+
+1.3
+log
+@[AArch64] Honour CFLAGS.
+
+2013-04-19  Yufeng Zhang  <yufeng.zhang@@arm.com>
+
+	* aarch64/Makefile.in (rdimon-crt0.o, rdimon-trap.o)
+	(rdimon-_exit.o, rdimon-_kill.o, rdimon-syscalls.o)
+	(rdimon-libcfunc.o): Add $(CFLAGS) to the compiler command line.
+	* aarch64/cpu-init/Makefile.in (${CPU_INIT_OBJS}): Add $(CFLAGS)
+	to the compiler command line.
+@
+text
+@d76 1
+a76 1
+OBJS = syscalls.o libcfunc.o _exit.o _kill.o
+d125 3
+d131 3
+d137 1
+a137 1
+rdimon-libcfunc.o: libcfunc.c
+@
+
+
+1.2
+log
+@2013-01-18  Marcus Shawcroft  <marcus.shawcroft@@arm.com>
+
+        * aarch64/Machine.in (RDIMON_SCRIPTS):
+        Add aem-ve.specs and aem-validation.specs.
+        * aarch64/elf-aem-validation.specs: New file.
+        * aarch64/elf-aem-ve.specs: New file.
+@
+text
+@d115 1
+d117 1
+a117 1
+	$(CC) $(CFLAGS_FOR_TARGET) $(INCLUDES) -DARM_RDI_MONITOR -o $@@ -c $<
+d120 1
+a120 1
+#	$(CC) $(CFLAGS_FOR_TARGET) $(INCLUDES) -DARM_RDI_MONITOR -o $@@ -c $<
+d123 1
+a123 1
+	$(CC) $(CFLAGS_FOR_TARGET) $(INCLUDES) -DARM_RDI_MONITOR -o $@@ -c $<
+d126 1
+a126 1
+	$(CC) $(CFLAGS_FOR_TARGET) $(INCLUDES) -DARM_RDI_MONITOR -o $@@ -c $<
+d129 1
+a129 1
+	$(CC) $(CFLAGS_FOR_TARGET) $(INCLUDES) -DARM_RDI_MONITOR -o $@@ -c $<
+d132 1
+a132 1
+	$(CC) $(CFLAGS_FOR_TARGET) $(INCLUDES) -DARM_RDI_MONITOR -o $@@ -c $<
+@
+
+
+1.1
+log
+@
+2012-09-26  Ian Bolton  <ian.bolton@@arm.com>
+        Jim MacArthur  <jim.macarthur@@arm.com>
+        Marcus Shawcroft  <marcus.shawcroft@@arm.com>
+        Nigel Stephens  <nigel.stephens@@arm.com>
+        Ramana Radhakrishnan  <ramana.radhakrishnan@@arm.com>
+        Richard Earnshaw  <rearnsha@@arm.com>
+        Sofiane Naci  <sofiane.naci@@arm.com>
+        Tejas Belagod  <tejas.belagod@@arm.com>
+        Yufeng Zhang  <yufeng.zhang@@arm.com>
+
+        * aarch64/Makefile.in: New file.
+        * aarch64/_exit.c: New file.
+        * aarch64/_kill.c: New file.
+        * aarch64/aclocal.m4: Generated.
+        * aarch64/configure: Generated.
+        * aarch64/configure.in: New file.
+        * aarch64/cpu-init/Makefile.in: New file.
+        * aarch64/cpu-init/rdimon-aem-el3.S: New file.
+        * aarch64/crt0.S: New file.
+        * aarch64/elf-rdimon.specs: New file.
+        * aarch64/libcfunc.c: New file.
+        * aarch64/svc.h: New file.
+        * aarch64/syscalls.c: New file.
+        * configure.in: Add AArch64.
+        * configure: Re-generated.
+@
+text
+@d84 1
+a84 1
+RDIMON_SCRIPTS	= rdimon.specs
+@
+

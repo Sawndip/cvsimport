@@ -1,0 +1,225 @@
+head	1.2;
+access;
+symbols
+	binutils-2_24-branch:1.2.0.2
+	binutils-2_24-branchpoint:1.2
+	binutils-2_23_2:1.1
+	binutils-2_23_1:1.1
+	binutils-2_23:1.1
+	binutils-2_23-branch:1.1.0.2
+	binutils-2_23-branchpoint:1.1
+	binutils_latest_snapshot:1.2;
+locks; strict;
+comment	@# @;
+
+
+1.2
+date	2013.04.06.22.22.02;	author davem;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2012.04.27.18.03.13;	author davem;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@Increase the accuracy of sparc instruction aliases.
+
+Make current with UA2011 specification.
+
+Add an F_PREFERRED opcode flag that indicates a preferred alias
+when multiple aliases for the same opcode exists.
+
+For 'lzd':
+
+	Add 'lzcnt' as primary instruction, and make 'lzd' an alias.
+
+Add 'ldtw', 'ldtwa', 'sttw', 'sttwa':
+
+	The modern opcode for for 'ldd', 'ldda', 'std', and 'stda' on
+	integer registers.  Mark the latter now as aliases.
+
+For 'flush':
+
+	Support "[address]" syntax as well as plain "address".
+
+Rework 'mov' aliases for 'wr':
+
+	Eliminate bogus three operand moves, and encode the
+	instructions properly for the "mov REG, %ASR" cases,
+	specifically we should encode the register in rs2 not rs1 as
+	per The SPARC V8 Architecture Manual.
+
+Add missing cbcond aliases:
+
+	c{w,x}bz, c{w,x}blu, c{w,x}bnz, c{w,x}bgeu
+
+Add 'd' suffix VIS logical ops:
+
+	The primary opcode for 'fzero' is now 'fzerod' (compare with
+	'fzeros'), for example.  And thus 'fzero' is now an alias.
+
+Add modern opcodes for condition code setting edge instructions:
+
+	They are now edgeN{,l}cc instead of plain edgeN{,l}.
+
+Add modern opcodes for VIS comparisons:
+
+	All VIS comparisons now start with prefix "fp", retain the
+	older variants as aliases.
+
+	The signed variants for equal and not-equal have "u" aliases
+	to show that these comparisons are equally suited for unsigned
+	compares.
+
+Update existing test cases as needed, and add several new ones.
+
+include/opcode/
+
+	* sparc.h (F_PREFERRED): Define.
+	(F_PREF_ALIAS): Define.
+
+opcodes/
+
+	* sparc-dis.c (compare_opcodes): When encountering multiple aliases
+	of an opcode, prefer the one with F_PREFERRED set.
+	* sparc-opc.c (sparc_opcodes): Add ldtw, ldtwa, sttw, sttwa,
+	lzcnt, flush with '[address]' syntax, and missing cbcond pseudo
+	ops.  Make 64-bit VIS logical ops have "d" suffix in their names,
+	mark existing mnenomics as aliases.  Add "cc" suffix to edge
+	instructions generating condition codes, mark existing mnenomics
+	as aliases.  Add "fp" prefix to VIS compare instructions, mark
+	existing mnenomics as aliases.
+
+gas/testsuite/
+
+	* gas/sparc/cbcond.s: Add tests for new opcode aliases.
+	* gas/sparc/cbcond.d: Updated.
+	* gas/sparc/hpcvis3.s: Add tests for new opcode aliases.
+	* gas/sparc/hpcvis3.d: Updated.
+	* gas/sparc/v8-movwr-imm.d: Fix expected disassembly.
+	* gas/sparc/edge.s: New test.
+	* gas/sparc/edge.d: Expected disassembly.
+	* gas/sparc/flush.s: New test.
+	* gas/sparc/flush.d: Expected disassembly.
+	* gas/sparc/ldd_std.s: New test.
+	* gas/sparc/ldd_std.d: Expected disassembly.
+	* gas/sparc/ldtw_sttw.s: New test.
+	* gas/sparc/ldtw_sttw.d: Expected disassembly.
+	* gas/sparc/sparc.exp: Run new tests.
+@
+text
+@# Test CBCOND instructions
+	.text
+	cwbe	%o1, %o2,1f
+	cwbe	%o1, 2, 1f
+	cxbe	%o2, %o3, 1f
+	cxbe	%o2, 3, 1f
+	cwble	%o3, %o4, 1f
+	cwble	%o3, 4, 1f
+	cxble	%o4, %o5, 1f
+	cxble	%o4, 5, 1f
+	cwbl	%o5, %l0, 1f
+	cwbl	%o5, 6, 1f
+	cxbl	%l0, %l1, 1f
+	cxbl	%l0, 7, 1f
+	cwbleu	%l1, %l2, 1f
+	cwbleu	%l1, 8, 1f
+	cxbleu	%l2, %l3, 1f
+	cxbleu	%l2, 9, 1f
+	cwbcs	%l3, %l4, 1f
+	cwbcs	%l3, 10, 1f
+	cxbcs	%l4, %l5, 1f
+	cxbcs	%l4, 11, 1f
+	cwbneg	%l5, %l6, 1f
+	cwbneg	%l5, 12, 1f
+	cxbneg	%l6, %l7, 1f
+	cxbneg	%l6, 13, 1f
+	cwbvs	%l7, %i0, 1f
+	cwbvs	%l7, 14, 1f
+	cxbvs	%i0, %i1, 1f
+	cxbvs	%i0, 15, 1f
+	cwbne	%i1, %i2, 1f
+	cwbne	%i1, 16, 1f
+	cxbne	%i2, %i3, 1f
+	cxbne	%i2, 17, 1f
+	cwbg	%i3, %i4, 1f
+	cwbg	%i3, 18, 1f
+	cxbg	%i4, %i5, 1f
+	cxbg	%i4, 19, 1f
+	cwbge	%i5, %o0, 1f
+	cwbge	%i5, 20, 1f
+	cxbge	%o0, %o1, 1f
+	cxbge	%o0, 21, 1f
+	cwbgu	%o1, %o2, 1f
+	cwbgu	%o1, 22, 1f
+	cxbgu	%o2, %o3, 1f
+	cxbgu	%o2, 22, 1f
+	cwbcc	%o3, %o4, 1f
+	cwbcc	%o3, 23, 1f
+	cxbcc	%o4, %o5, 1f
+	cxbcc	%o4, 24, 1f
+	cwbpos	%o5, %l0, 1f
+	cwbpos	%o5, 25, 1f
+	cxbpos	%l0, %l1, 1f
+	cxbpos	%l0, 25, 1f
+	cwbvc	%l1, %l2, 1f
+	cwbvc	%l1, 26, 1f
+	cxbvc	%l2, %l3, 1f
+	cxbvc	%l2, 27, 1f
+	cwbz	%l3, %l4, 1f
+	cwbz	%l3, 28, 1f
+	cxbz	%l4, %l5, 1f
+	cxbz	%l4, 29, 1f
+	cwblu	%l5, %l6, 1f
+	cwblu	%l5, 28, 1f
+	cxblu	%l6, %l7, 1f
+	cxblu	%l6, 29, 1f
+	cwbnz	%l7, %o0, 1f
+	cwbnz	%l7, 30, 1f
+	cxbnz	%o0, %o1, 1f
+	cxbnz	%o0, 31, 1f
+	cwbgeu	%o1, %o2, 1f
+	cwbgeu	%o1, 1, 1f
+	cxbgeu	%o2, %o3, 1f
+	cxbgeu	%o2, 2, 1f
+1:	nop
+@
+
+
+1.1
+log
+@Add support for sparc compare-and-branch instructions.
+
+opcodes/
+
+	* sparc-opc.c (CBCOND): New define.
+	(CBCOND_XCC): Likewise.
+	(cbcond): New helper macro.
+	(sparc_opcodes): Add compare-and-branch instructions.
+
+gas/
+
+	* config/tc-sparc.c (sparc_arch_table): Add HWCAP_CBCOND to
+	sparc4, v8pluse, v8plusv, v9e, and v9v.
+	(sparc_ip): Handle R_SPARC_5 of immediate constants inline in
+	order to accomodate cbcond which otherwise would require two
+	relocations to be handled in a single instruction..
+
+gas/testsuite/
+
+	* gas/sparc/cbcond.s: New file.
+	* gas/sparc/cbcond.d: New file.
+	* gas/sparc/sparc.exp: Run cbcond test.
+@
+text
+@d59 16
+@
+

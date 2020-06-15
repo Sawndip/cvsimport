@@ -1,0 +1,182 @@
+head	1.1;
+access;
+symbols
+	binutils-2_24-branch:1.1.0.8
+	binutils-2_24-branchpoint:1.1
+	binutils-2_23_2:1.1
+	binutils-2_23_1:1.1
+	binutils-2_23:1.1
+	binutils-2_23-branch:1.1.0.6
+	binutils-2_23-branchpoint:1.1
+	binutils-2_22_branch:1.1.0.4
+	binutils-2_22:1.1
+	binutils-2_22-branch:1.1.0.2
+	binutils-2_22-branchpoint:1.1
+	binutils_latest_snapshot:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.1
+date	2011.06.23.00.46.14;	author ian;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.1
+log
+@	PR gold/12910
+	* options.h (class General_options): Add --ctors-in-init-array.
+	* layout.cc (Layout::get_output_section): Treat SHT_INIT_ARRAY and
+	friends as SHT_PROGBITS for merging sections.
+	(Layout::layout): Remove special handling of .init_array and
+	friends.  Don't sort if doing relocatable link.  Sort for .ctors
+	and .dtors if ctors_in_init_array.
+	(Layout::make_output_section): Force correct section types for
+	.init_array and friends.  Don't sort if doing relocatable link,
+	Don't sort .ctors and .dtors if ctors_in_init_array.
+	(Layout::section_name_mapping): Remove .ctors. and .dtorso.
+	(Layout::output_section_name): Add relobj parameter.  Change all
+	callers.  Handle .ctors. and .dtors. in code rather than table.
+	Handle .ctors and .dtors if ctors_in_init_array.
+	(Layout::match_file_name): New function, moved from output.cc.
+	* layout.h (class Layout): Update declarations.
+	* output.cc: Include "layout.h".
+	(Input_section_sort_entry::get_priority): New function.
+	(Input_section_sort_entry::match_file_name): Just call
+	Layout::match_file_name.
+	(Output_section::Input_section_sort_init_fini_compare::operator()):
+	Handle .ctors and .dtors.  Sort by explicit priority rather than
+	by name.
+	* configure.ac: Remove CONSTRUCTOR_PRIORITY test and conditional.
+	* testsuite/initpri2.c: New test.
+	* testsuite/Makefile.am: Don't test CONSTRUCTOR_PRIORITY.
+	(check_PROGRAMS): Add initpri2.
+	(initpri2_SOURCES, initpri2_DEPENDENCIES): New variables.
+	(initpri2_LDFLAGS, initpri2_LDADD): New variables.
+	* configure, testsuite/Makefile.in: Rebuild.
+@
+text
+@/* initpri2.c -- test mixing init_array and ctor priorities.
+
+   Copyright 2011 Free Software Foundation, Inc.
+   Copied from the gcc configury, where the test was contributed by
+   H.J. Lu <hongjiu.lu@@intel.com>.
+
+   This file is part of gold.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+   MA 02110-1301, USA.  */
+
+/* This tests that the linker correctly combines .ctor and .init_array
+   sections when both have priorities.  */
+
+#include <stdlib.h>
+
+static int count;
+
+static void
+init1005 (void)
+{
+  if (count != 0)
+    abort ();
+  count = 1005;
+}
+void (*const init_array1005[]) (void)
+  __attribute__ ((section (".init_array.01005"), aligned (sizeof (void *))))
+  = { init1005 };
+static void
+fini1005 (void)
+{
+  if (count != 1005)
+    abort ();
+}
+void (*const fini_array1005[]) (void)
+  __attribute__ ((section (".fini_array.01005"), aligned (sizeof (void *))))
+  = { fini1005 };
+
+static void
+ctor1007 (void)
+{
+  if (count != 1005)
+    abort ();
+  count = 1007;
+}
+void (*const ctors1007[]) (void)
+  __attribute__ ((section (".ctors.64528"), aligned (sizeof (void *))))
+  = { ctor1007 };
+static void
+dtor1007 (void)
+{
+  if (count != 1007)
+    abort ();
+  count = 1005;
+}
+void (*const dtors1007[]) (void)
+  __attribute__ ((section (".dtors.64528"), aligned (sizeof (void *))))
+  = { dtor1007 };
+
+static void
+init65530 (void)
+{
+  if (count != 1007)
+    abort ();
+  count = 65530;
+}
+void (*const init_array65530[]) (void)
+  __attribute__ ((section (".init_array.65530"), aligned (sizeof (void *))))
+  = { init65530 };
+static void
+fini65530 (void)
+{
+  if (count != 65530)
+    abort ();
+  count = 1007;
+}
+void (*const fini_array65530[]) (void)
+  __attribute__ ((section (".fini_array.65530"), aligned (sizeof (void *))))
+  = { fini65530 };
+
+static void
+ctor65535 (void)
+{
+  if (count != 65530)
+    abort ();
+  count = 65535;
+}
+void (*const ctors65535[]) (void)
+  __attribute__ ((section (".ctors"), aligned (sizeof (void *))))
+  = { ctor65535 };
+static void
+dtor65535 (void)
+{
+  if (count != 65535)
+    abort ();
+  count = 65530;
+}
+void (*const dtors65535[]) (void)
+  __attribute__ ((section (".dtors"), aligned (sizeof (void *))))
+  = { dtor65535 };
+
+int
+main (void)
+{
+  return 0;
+}
+@

@@ -1,0 +1,259 @@
+head	1.6;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.5
+	gdb_7_6-2013-04-26-release:1.5
+	gdb_7_6-branch:1.5.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.5
+	gdb_7_5_1-2012-11-29-release:1.2
+	gdb_7_5-2012-08-17-release:1.2
+	gdb_7_5-branch:1.2.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.2
+	gdb_7_4_1-2012-04-26-release:1.1.4.1
+	gdb_7_4-2012-01-24-release:1.1.4.1
+	gdb_7_4-branch:1.1.0.4
+	gdb_7_4-2011-12-13-branchpoint:1.1
+	gdb_7_3_1-2011-09-04-release:1.1
+	gdb_7_3-2011-07-26-release:1.1
+	gdb_7_3-branch:1.1.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.6
+date	2013.05.20.20.10.03;	author tromey;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2013.01.01.06.33.01;	author brobecke;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2012.11.08.19.38.43;	author tromey;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2012.08.15.14.22.02;	author tromey;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2012.01.04.08.17.25;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2011.02.05.05.27.23;	author teawater;	state Exp;
+branches
+	1.1.4.1;
+next	;
+
+1.1.4.1
+date	2012.01.06.04.43.41;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.6
+log
+@	* python/py-threadevent.c (get_event_thread): Use
+	CPYCHECKER_RETURNS_BORROWED_REF.
+	* python/python-internal.h (CPYCHECKER_RETURNS_BORROWED_REF):
+	New define.
+	(pspace_to_pspace_object, objfile_to_objfile_object)
+	(find_thread_object): Use it.
+@
+text
+@/* Copyright (C) 2009-2013 Free Software Foundation, Inc.
+
+   This file is part of GDB.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+#include "defs.h"
+#include "py-event.h"
+
+/* thread events can either be thread specific or process wide.  If gdb is
+   running in non-stop mode then the event is thread specific, otherwise
+   it is process wide.
+   This function returns the currently stopped thread in non-stop mode and
+   Py_None otherwise.  In each case it returns a borrowed reference.  */
+
+static PyObject *get_event_thread (void)
+  CPYCHECKER_RETURNS_BORROWED_REF;
+
+static PyObject *
+get_event_thread (void)
+{
+  PyObject *thread = NULL;
+
+  if (non_stop)
+    thread = (PyObject *) find_thread_object (inferior_ptid);
+  else
+    thread = Py_None;
+
+  if (!thread)
+    {
+      PyErr_SetString (PyExc_RuntimeError, "Could not find event thread");
+      return NULL;
+    }
+
+  return thread;
+}
+
+PyObject *
+create_thread_event_object (PyTypeObject *py_type)
+{
+  PyObject *thread = NULL;
+  PyObject *thread_event_obj = NULL;
+
+  thread_event_obj = create_event_object (py_type);
+  if (!thread_event_obj)
+    goto fail;
+
+  thread = get_event_thread ();
+  if (!thread)
+    goto fail;
+
+  if (evpy_add_attribute (thread_event_obj,
+                          "inferior_thread",
+                          thread) < 0)
+    goto fail;
+
+  return thread_event_obj;
+
+  fail:
+   Py_XDECREF (thread_event_obj);
+   return NULL;
+}
+
+GDBPY_NEW_EVENT_TYPE (thread,
+                      "gdb.ThreadEvent",
+                      "ThreadEvent",
+                      "GDB thread event object",
+                      event_object_type,
+                      /*no qual*/);
+@
+
+
+1.5
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@d27 3
+@
+
+
+1.4
+log
+@	* python/py-bpevent.c: Include defs.h.
+	* python/py-continueevent.c: Include defs.h.
+	* python/py-event.c: Include defs.h.
+	* python/py-event.h: Don't include defs.h.
+	* python/py-events.h: Don't include defs.h.
+	* python/py-evts.c: Include defs.h.
+	* python/py-exitedevent.c: Include defs.h.
+	* python/py-newobjfileevent.c: Include defs.h.
+	* python/py-signalevent.c: Include defs.h.
+	* python/py-stopevent.c: Include defs.h.
+	* python/py-threadevent.c: Include defs.h.
+@
+text
+@d1 1
+a1 1
+/* Copyright (C) 2009-2012 Free Software Foundation, Inc.
+@
+
+
+1.3
+log
+@	PR python/14387:
+	* python/py-bpevent.c (create_breakpoint_event_object): Update
+	comment.
+	* python/py-event.c (evpy_add_attribute): Update comment.
+	* python/py-exitedevent.c (create_exited_event_object): Fix
+	reference counting and error handling.
+	* python/py-newobjfileevent.c (create_new_objfile_event_object):
+	Fix reference counting.
+	* python/py-signalevent.c (create_signal_event_object): Fix
+	reference counting and error handling.
+	* python/py-stopevent.c (emit_stop_event): Fix reference
+	counting.
+	* python/py-threadevent.c (get_event_thread): Return a
+	borrowed reference.
+	* python/py-type.c (convert_field): Fix reference counting.
+@
+text
+@d18 1
+@
+
+
+1.2
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d24 1
+a24 1
+   Py_None otherwise.  */
+a41 2
+  Py_INCREF (thread);
+
+@
+
+
+1.1
+log
+@Add the file that prev commit forget.
+@
+text
+@d1 1
+a1 1
+/* Copyright (C) 2009, 2010, 2011 Free Software Foundation, Inc.
+@
+
+
+1.1.4.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d1 1
+a1 1
+/* Copyright (C) 2009-2012 Free Software Foundation, Inc.
+@
+
+

@@ -1,0 +1,208 @@
+head	1.2;
+access;
+symbols
+	binutils-2_24-branch:1.2.0.8
+	binutils-2_24-branchpoint:1.2
+	binutils-2_21_1:1.1.6.1
+	binutils-2_23_2:1.2
+	binutils-2_23_1:1.2
+	binutils-2_23:1.2
+	binutils-2_23-branch:1.2.0.6
+	binutils-2_23-branchpoint:1.2
+	binutils-2_22_branch:1.2.0.4
+	binutils-2_22:1.2
+	binutils-2_22-branch:1.2.0.2
+	binutils-2_22-branchpoint:1.2
+	binutils-2_21:1.1
+	binutils-2_21-branch:1.1.0.6
+	binutils-2_21-branchpoint:1.1
+	binutils-2_20_1:1.1
+	binutils-2_20:1.1
+	binutils-2_20-branch:1.1.0.4
+	binutils-2_20-branchpoint:1.1
+	dje-cgen-play1-branch:1.1.0.2
+	dje-cgen-play1-branchpoint:1.1
+	binutils_latest_snapshot:1.2;
+locks; strict;
+comment	@# @;
+
+
+1.2
+date	2011.03.23.15.25.05;	author amodra;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2009.03.04.05.50.50;	author amodra;	state Exp;
+branches
+	1.1.6.1;
+next	;
+
+1.1.6.1
+date	2011.03.23.15.26.20;	author amodra;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@bfd/
+	* elf32-ppc.c (ppc_elf_tls_optimize): Catch more cases where
+	old-style __tls_get_addr calls without marker relocs don't match
+	their arg setup insn one for one.  If such mismatches are found
+	report the reloc and don't do any tls optimization.
+	* elf64-ppc.c (ppc64_elf_tls_optimize): Likewise.
+ld/testsuite/
+	* ld-powerpc/tlsmark.s: Delete non-optimizable section.
+	* ld-powerpc/tlsmark32.s: Likewise.
+	* ld-powerpc/tlsmark.d: Adjust to suit.
+	* ld-powerpc/tlsmark32.d: Likewise.
+	* ld-powerpc/tlsopt1.d, * ld-powerpc/tlsopt1.s: New.
+	* ld-powerpc/tlsopt2.d, * ld-powerpc/tlsopt2.s: New.
+	* ld-powerpc/tlsopt3.d, * ld-powerpc/tlsopt3.s: New.
+	* ld-powerpc/tlsopt4.d, * ld-powerpc/tlsopt4.s: New.
+	* ld-powerpc/tlsopt1_32.d, * ld-powerpc/tlsopt1_32.s: New.
+	* ld-powerpc/tlsopt2_32.d, * ld-powerpc/tlsopt2_32.s: New.
+	* ld-powerpc/tlsopt3_32.d, * ld-powerpc/tlsopt3_32.s: New.
+	* ld-powerpc/tlsopt4_32.d, * ld-powerpc/tlsopt4_32.s: New.
+	* ld-powerpc/powerpc.exp: Run new tests.
+@
+text
+@	.section ".tdata","awT",@@progbits
+x:	.int 1
+y:	.int 2
+
+	.section ".toc","aw",@@progbits
+	.p2align 3
+.LC0:
+	.quad y@@dtpmod
+	.quad y@@dtprel
+.LC1:
+	.quad y@@dtpmod
+	.quad 0
+
+	.text
+	.global _start
+_start:
+	b .L2
+
+.L1:
+	bl __tls_get_addr(x@@tlsgd)
+	nop
+	ld 4,0(3)
+	addi 3,2,x@@got@@tlsld
+	b .L3
+.L2:
+	addi 3,2,x@@got@@tlsgd
+	b .L1
+.L3:
+	bl __tls_get_addr(x@@tlsld)
+	nop
+	ld 4,x@@dtprel(3)
+
+	addi 3,2,.LC0@@toc
+	b .L5
+.L4:
+	addi 3,2,.LC1@@toc
+	b .L6
+.L5:
+	bl .__tls_get_addr(.LC0@@tlsgd)
+	nop
+	ld 5,0(3)
+	b .L4
+.L6:
+	bl .__tls_get_addr(.LC1@@tlsld)
+	nop
+	ld 5,y@@dtprel(3)
+@
+
+
+1.1
+log
+@include/elf/
+	* ppc.h (R_PPC_TLSGD, R_PPC_TLSLD): Add new relocs.
+	* ppc64.h (R_PPC64_TLSGD, R_PPC64_TLSLD): Add new relocs.
+bfd/
+	* reloc.c (BFD_RELOC_PPC_TLSGD, BFD_RELOC_PPC_TLSLD): New.
+	* section.c (struct bfd_section): Add has_tls_get_addr_call.
+	(BFD_FAKE_SECTION): Init new flag.
+	* ecoff.c (bfd_debug_section): Likewise.
+	* bfd-in2.h: Regenerate.
+	* libbfd.h: Regenerate.
+	* elf32-ppc.c (ppc_elf_howto_raw): Add R_PPC_TLSGD and R_PPC_TLSLD.
+	(ppc_elf_reloc_type_lookup): Handle new relocs.
+	(ppc_elf_check_relocs): Set has_tls_get_addr_call on finding such
+	without marker relocs.
+	(ppc_elf_tls_optimize): Allow out-of-order __tls_get_addr relocs
+	if section has no old-style calls.
+	(ppc_elf_relocate_section): Set tls_mask for non-tls relocs too.
+	Don't try to optimize new-style __tls_get_addr call when handling
+	arg setup relocs.  Instead do so for R_PPC_TLSGD and R_PPC_TLSLD
+	relocs.
+	* elf64-ppc.c (ppc64_elf_howto_raw): Add R_PPC64_TLSGD, R_PPC64_TLSLD.
+	(ppc64_elf_reloc_type_lookup): Handle new relocs.
+	(ppc64_elf_check_relocs): Set has_tls_get_addr_call on finding such
+	without marker relocs.
+	(ppc64_elf_tls_optimize): Allow out-of-order __tls_get_addr relocs
+	if section has no old-style calls.  Set toc_ref for new relocs as
+	appropriate.
+	(ppc64_elf_relocate_section): Set tls_mask for non-tls relocs too.
+	Don't try to optimize new-style __tls_get_addr call when handling
+	arg setup relocs.  Instead do so for R_PPC_TLSGD and R_PPC_TLSLD
+	relocs.
+gas/
+	* config/tc-ppc.c (ppc_elf_suffix): Error if ppc32 tls got relocs
+	have non-zero addend.
+	(md_assemble): Parse args of __tls_get_addr calls.
+	(md_apply_fix): Handle BFD_RELOC_PPC_TLSGD and BFD_RELOC_PPC_TLSLD.
+ld/testsuite/
+	* ld-powerpc/tlsmark.s, * ld-powerpc/tlsmark.d: New test.
+	* ld-powerpc/tlsmark32.s, * ld-powerpc/tlsmark32.d: New test.
+	* ld-powerpc/powerpc.exp: Run them.
+@
+text
+@a46 9
+
+
+	.section ".text.no","ax",@@progbits
+	.p2align 2
+	addi 3,2,gd@@got@@tlsgd
+	lis 29,__tls_get_addr@@ha
+	addi 29,29,__tls_get_addr@@l
+	bl __tls_get_addr
+	nop
+@
+
+
+1.1.6.1
+log
+@bfd/
+	* elf32-ppc.c (ppc_elf_tls_optimize): Catch more cases where
+	old-style __tls_get_addr calls without marker relocs don't match
+	their arg setup insn one for one.  If such mismatches are found
+	report the reloc and don't do any tls optimization.
+	* elf64-ppc.c (ppc64_elf_tls_optimize): Likewise.
+ld/testsuite/
+	* ld-powerpc/tlsmark.s: Delete non-optimizable section.
+	* ld-powerpc/tlsmark32.s: Likewise.
+	* ld-powerpc/tlsmark.d: Adjust to suit.
+	* ld-powerpc/tlsmark32.d: Likewise.
+	* ld-powerpc/tlsopt1.d, * ld-powerpc/tlsopt1.s: New.
+	* ld-powerpc/tlsopt2.d, * ld-powerpc/tlsopt2.s: New.
+	* ld-powerpc/tlsopt3.d, * ld-powerpc/tlsopt3.s: New.
+	* ld-powerpc/tlsopt4.d, * ld-powerpc/tlsopt4.s: New.
+	* ld-powerpc/tlsopt1_32.d, * ld-powerpc/tlsopt1_32.s: New.
+	* ld-powerpc/tlsopt2_32.d, * ld-powerpc/tlsopt2_32.s: New.
+	* ld-powerpc/tlsopt3_32.d, * ld-powerpc/tlsopt3_32.s: New.
+	* ld-powerpc/tlsopt4_32.d, * ld-powerpc/tlsopt4_32.s: New.
+	* ld-powerpc/powerpc.exp: Run new tests.
+@
+text
+@d47 9
+@
+
+

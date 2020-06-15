@@ -1,0 +1,131 @@
+head	1.3;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.2
+	gdb_7_6-2013-04-26-release:1.2
+	gdb_7_6-branch:1.2.0.8
+	gdb_7_6-2013-03-12-branchpoint:1.2
+	gdb_7_5_1-2012-11-29-release:1.2
+	gdb_7_5-2012-08-17-release:1.2
+	gdb_7_5-branch:1.2.0.6
+	gdb_7_5-2012-07-18-branchpoint:1.2
+	gdb_7_4_1-2012-04-26-release:1.2
+	gdb_7_4-2012-01-24-release:1.2
+	gdb_7_4-branch:1.2.0.4
+	gdb_7_4-2011-12-13-branchpoint:1.2
+	gdb_7_3_1-2011-09-04-release:1.2
+	gdb_7_3-2011-07-26-release:1.2
+	gdb_7_3-branch:1.2.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.2;
+locks; strict;
+comment	@# @;
+
+
+1.3
+date	2013.06.17.04.43.22;	author vapier;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2011.03.24.03.18.17;	author vapier;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2011.03.06.00.20.19;	author vapier;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.3
+log
+@sim: bfin: add flush/HWERR todo
+@
+text
+@need to review ASTAT write behavior
+
+how to model RETE and IVG0 bit in IPEND ...
+
+model the loop buffer ?  this means no ifetches because they're cached.
+see page 4-26 in Blackfin PRM under hardware loops.
+
+handle DSPID at 0xffe05000
+
+CEC should handle multiple exceptions at same address.  would need
+exception processing to be delayed ?  at least needs a stack for
+the CEC to pop things off.
+
+R0 = [SP++]; gets traced as R0 = [P6++];
+
+merge dv-bfin_evt with dv-bfin_cec since the EVT regs are part of the CEC
+
+fix single stepping over debug assert instructions in hardware
+
+exception in IVG5 causes double fault ?
+
+SIC int forwarding doesn't accurately reflect the hardware.  what the sim
+does is:
+	- device generates an interrupt
+	- int is sent to SIC
+	- SIC logs it into its ISR
+	- so long as SIC's IMASK allows it, bits set in ISR generate
+	  an interrupt to the CEC
+	- no way to clear the SIC's ISR
+the way the hardware works is that the device monitors the interrupt level and
+the SIC's ISR bits are basically hardwired from each peripheral.  so when the
+device has its interrupt cleared, the bit in the SIC's ISR is automatically
+cleared as well.
+perhaps the only way to model this behavior in the sim is to have each device
+set up an event callback that sends out a port event: a level of 0 means the
+int has been ACKed and the SIC can clear its ISR while a level of 1 means the
+int is being generated still.  if the device is still generating an interrupt,
+it can reschedule itself again.
+
+insns that cause an interrupt don't seem to be processed at the right time.
+for example, setup a glue device that generates an interrupt upon right.
+when the store insn is executed, the interrupt is taken right away instead
+of being scheduled *after* the insn has finished executing.  difference is
+that RETI needs to point to the *next* insn and not the store insn.
+
+tests:
+	- check AN bits with Dreg subtraction
+		R0 = R1 - R2;
+	- check astat bits with vector add/sub +|+
+	- check acc with VIT_MAX and similiar insns
+
+flush[0xffa00000] causes HWERR in sim but not on hardware ?
+
+convert to using do_hw_attach_regs ?
+@
+
+
+1.2
+log
+@sim: bfin: document SIC limitation
+
+Signed-off-by: Mike Frysinger <vapier@@gentoo.org>
+@
+text
+@d51 4
+@
+
+
+1.1
+log
+@sim: bfin: new port
+
+This can boot Das U-Boot and a Linux kernel.  It also supports Linux
+userspace FLAT and FDPIC (dynamic and static) ELFs.
+
+Signed-off-by: Mike Frysinger <vapier@@gentoo.org>
+@
+text
+@d22 23
+a44 1
+add a "file" option to the async banks to back it
+@
+

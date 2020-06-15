@@ -1,0 +1,651 @@
+head	1.11;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.8
+	gdb_7_6-2013-04-26-release:1.8
+	gdb_7_6-branch:1.8.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.8
+	gdb_7_5_1-2012-11-29-release:1.6
+	gdb_7_5-2012-08-17-release:1.6
+	gdb_7_5-branch:1.6.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.6
+	gdb_7_4_1-2012-04-26-release:1.4.4.1
+	gdb_7_4-2012-01-24-release:1.4.4.1
+	gdb_7_4-branch:1.4.0.4
+	gdb_7_4-2011-12-13-branchpoint:1.4
+	gdb_7_3_1-2011-09-04-release:1.4
+	gdb_7_3-2011-07-26-release:1.4
+	gdb_7_3-branch:1.4.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.4
+	gdb_7_2-2010-09-02-release:1.2
+	gdb_7_2-branch:1.2.0.2
+	gdb_7_2-2010-07-07-branchpoint:1.2;
+locks; strict;
+comment	@# @;
+
+
+1.11
+date	2013.05.07.17.51.42;	author palves;	state dead;
+branches;
+next	1.10;
+
+1.10
+date	2013.05.06.22.11.15;	author devans;	state Exp;
+branches;
+next	1.9;
+
+1.9
+date	2013.03.14.13.34.01;	author qiyao;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2013.01.01.06.33.24;	author brobecke;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2012.11.06.15.21.22;	author tromey;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2012.01.16.16.21.44;	author palves;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2012.01.04.08.17.45;	author brobecke;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2011.01.01.15.33.40;	author brobecke;	state Exp;
+branches
+	1.4.4.1;
+next	1.3;
+
+1.3
+date	2010.11.30.17.41.13;	author devans;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2010.05.05.18.06.57;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2010.04.17.18.53.46;	author hjl;	state Exp;
+branches;
+next	;
+
+1.4.4.1
+date	2012.01.06.04.43.59;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.11
+log
+@Merge gdb.arch/system-gcore.exp into gdb.base/gcore.exp
+
+The test case gdb.arch/system-gcore.exp is almost an identical copy of
+gdb.base/gcore.exp.  The only functional change is the additional
+comparison of the "info reg system" command output.
+
+It should be safe to perform this comparison on all architectures.
+Thus the patch removes the arch-specific version and adds "info reg
+system" to the common gcore test case instead.
+
+Tested on i686-linux and s390x-linux.
+
+gdb/testsuite/Changelog:
+2013-05-07  Andreas Arnez  <arnez@@linux.vnet.ibm.com>
+
+	* gdb.arch/system-gcore.exp: Remove.
+	* gdb.arch/gcore.c: Remove.
+	* gdb.base/gcore.exp: Add "info reg system".
+@
+text
+@# Copyright 2010-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+
+if { ![istarget i?86-*-linux*] && ![istarget x86_64-*-linux* ] } {
+    verbose "Skipping system register gcore tests."
+    return
+}
+
+set testfile "system-gcore"
+set srcfile  gcore.c
+set binfile  ${objdir}/${subdir}/${testfile}
+
+if  { [gdb_compile "${srcdir}/${subdir}/${srcfile}" "${binfile}" executable {debug}] != "" } {
+     untested system-gcore.exp
+     return -1
+}
+
+# Start with a fresh gdb.
+
+gdb_exit
+gdb_start
+gdb_reinitialize_dir $srcdir/$subdir
+gdb_load ${binfile}
+
+# Does this gdb support gcore?
+send_gdb "help gcore\n"
+gdb_expect {
+    -re "Undefined command: .gcore.*$gdb_prompt $" {
+	# gcore command not supported -- nothing to test here.
+	unsupported "gdb does not support gcore on this target"
+	return -1
+    }
+    -re "Save a core file .*$gdb_prompt $" {
+	pass "help gcore"
+    }
+    -re ".*$gdb_prompt $" {
+	fail "help gcore"
+    }
+    timeout {
+	fail "help gcore (timeout)"
+    }
+}
+
+if { ! [ runto_main ] } then {
+    untested system-gcore.exp
+    return -1
+}
+
+proc capture_command_output { command prefix } {
+    global gdb_prompt
+    global expect_out
+
+    set output_string ""
+    gdb_test_multiple "$command" "capture_command_output for $command" {
+	-re "${command}\[\r\n\]+${prefix}(.*)\[\r\n\]+$gdb_prompt $" {
+	    set output_string $expect_out(1,string)
+	}
+    }
+    return $output_string
+}
+
+gdb_test "break terminal_func" "Breakpoint .* at .*${srcfile}, line .*" \
+	"set breakpoint at terminal_func"
+
+gdb_test "continue" "Breakpoint .* terminal_func.*" \
+	"continue to terminal_func"
+
+set print_prefix ".\[0123456789\]* = "
+
+set pre_corefile_backtrace [capture_command_output "backtrace" ""]
+set pre_corefile_regs [capture_command_output "info registers" ""]
+set pre_corefile_allregs [capture_command_output "info all-reg" ""]
+set pre_corefile_sysregs [capture_command_output "info reg system" ""]
+set pre_corefile_static_array \
+	[capture_command_output "print static_array" "$print_prefix"]
+set pre_corefile_uninit_array \
+	[capture_command_output "print un_initialized_array" "$print_prefix"]
+set pre_corefile_heap_string \
+	[capture_command_output "print heap_string" "$print_prefix"]
+set pre_corefile_local_array \
+	[capture_command_output "print array_func::local_array" "$print_prefix"]
+set pre_corefile_extern_array \
+	[capture_command_output "print extern_array" "$print_prefix"]
+
+set corefile "${objdir}/${subdir}/gcore.test"
+set core_supported [gdb_gcore_cmd $corefile "save a corefile"]
+
+if {!$core_supported} {
+  return -1
+}
+
+# Now restart gdb and load the corefile.
+gdb_exit
+gdb_start
+gdb_reinitialize_dir $srcdir/$subdir
+gdb_load ${binfile}
+
+set core_reloaded [gdb_core_cmd $corefile "re-load generated corefile"]
+if { $core_reloaded == -1 } {
+    # No use proceeding from here.
+    return
+}
+
+gdb_test_sequence "where" "where in corefile" {
+    "\[\r\n\]+#0 .* terminal_func \\(\\) at "
+    "\[\r\n\]+#1 .* array_func \\(\\) at "
+    "\[\r\n\]+#2 .* factorial_func \\(value=1\\) at "
+    "\[\r\n\]+#3 .* factorial_func \\(value=2\\) at "
+    "\[\r\n\]+#4 .* factorial_func \\(value=3\\) at "
+    "\[\r\n\]+#5 .* factorial_func \\(value=4\\) at "
+    "\[\r\n\]+#6 .* factorial_func \\(value=5\\) at "
+    "\[\r\n\]+#7 .* factorial_func \\(value=6\\) at "
+    "\[\r\n\]+#8 .* main \\(.*\\) at "
+}
+
+set post_corefile_regs [capture_command_output "info registers" ""]
+if ![string compare $pre_corefile_regs $post_corefile_regs] then {
+    pass "corefile restored general registers"
+} else {
+    fail "corefile restored general registers"
+}
+
+set post_corefile_allregs [capture_command_output "info all-reg" ""]
+if ![string compare $pre_corefile_allregs $post_corefile_allregs] then {
+    pass "corefile restored all registers"
+} else {
+    fail "corefile restored all registers"
+}
+
+set post_corefile_sysregs [capture_command_output "info reg system" ""]
+if ![string compare $pre_corefile_sysregs $post_corefile_sysregs] then {
+    pass "corefile restored system registers"
+} else {
+    fail "corefile restored system registers"
+}
+
+set post_corefile_extern_array \
+	[capture_command_output "print extern_array" "$print_prefix"]
+if ![string compare $pre_corefile_extern_array $post_corefile_extern_array]  {
+    pass "corefile restored extern array"
+} else {
+    fail "corefile restored extern array"
+}
+
+set post_corefile_static_array \
+	[capture_command_output "print static_array" "$print_prefix"]
+if ![string compare $pre_corefile_static_array $post_corefile_static_array]  {
+    pass "corefile restored static array"
+} else {
+    fail "corefile restored static array"
+}
+
+set post_corefile_uninit_array \
+	[capture_command_output "print un_initialized_array" "$print_prefix"]
+if ![string compare $pre_corefile_uninit_array $post_corefile_uninit_array]  {
+    pass "corefile restored un-initialized array"
+} else {
+    fail "corefile restored un-initialized array"
+}
+
+set post_corefile_heap_string \
+	[capture_command_output "print heap_string" "$print_prefix"]
+if ![string compare $pre_corefile_heap_string $post_corefile_heap_string]  {
+    pass "corefile restored heap array"
+} else {
+    fail "corefile restored heap array"
+}
+
+set post_corefile_local_array \
+	[capture_command_output "print array_func::local_array" "$print_prefix"]
+if ![string compare $pre_corefile_local_array $post_corefile_local_array]  {
+    pass "corefile restored stack array"
+} else {
+    fail "corefile restored stack array"
+}
+
+set post_corefile_backtrace [capture_command_output "backtrace" ""]
+if ![string compare $pre_corefile_backtrace $post_corefile_backtrace]  {
+    pass "corefile restored backtrace"
+} else {
+    fail "corefile restored backtrace"
+}
+@
+
+
+1.10
+log
+@	* lib/gdb.exp (gdb_core_cmd): New function.
+	* gdb.arch/system-gcore.exp: Use it.
+	* gdb.arch/vsx-regs.exp: Ditto.
+	* gdb.base/gcore.exp: Ditto.
+	* gdb.threads/gcore-thread.exp: Ditto.
+@
+text
+@@
+
+
+1.9
+log
+@gdb/testsuite/
+
+	* config/monitor.exp (gdb_target_cmd): Remove semicolon after
+	'return'.
+	(gdb_target_monitor, gdb_load): Likewise.
+	* config/sid.exp (gdb_load): Likewise.
+	* config/slite.exp (gdb_load): Likewise.
+	* config/vx.exp (gdb_start, spawn_vxgdb): Likewise.
+	* gdb.ada/arrayidx.exp, gdb.ada/null_array.exp: Likewise.
+	* gdb.arch/mips-octeon-bbit.exp (single_step): Likewise.
+	(single_step_until): Likewise.
+	* gdb.arch/powerpc-d128-regs.exp: Likewise.
+	* gdb.arch/system-gcore.exp: Likewise.
+	* gdb.base/bigcore.exp (extract_heap): Likewise.
+	* gdb.base/break-on-linker-gcd-function.exp: Likewise.
+	* gdb.base/call-ar-st.exp: Likewise.
+	* gdb.base/call-rt-st.exp: Likewise.
+	* gdb.base/call-sc.exp, gdb.base/call-strs.exp: Likewise.
+	* gdb.base/callfuncs.exp, gdb.base/completion.exp: Likewise.
+	* gdb.base/condbreak.exp, gdb.base/constvars.exp: Likewise.
+	* gdb.base/corefile.exp: Likewise.
+	* gdb.base/dbx.exp (gdb_file_cmd): Likewise.
+	* gdb.base/exprs.exp, gdb.base/fileio.exp: Likewise.
+	* gdb.base/fixsection.exp: Likewise.
+	* gdb.base/funcargs.exp: Likewise.
+	* gdb.base/gcore-buffer-overflow.exp: Likewise.
+	* gdb.base/gcore-relro.exp: Likewise.
+	* gdb.base/gcore.exp, gdb.base/gdb11530.exp: Likewise.
+	* gdb.base/gdb11531.exp, gdb.base/gnu-ifunc.exp: Likewise.
+	* gdb.base/info-os.exp, gdb.base/info-proc.exp: Likewise.
+	* gdb.base/interp.exp, gdb.base/langs.exp:: Likewise.
+	* gdb.base/list.exp: Likewise.
+	(set_listsize): Likewise.
+	* gdb.base/logical.exp, gdb.base/mips_pro.exp: Likewise.
+	* gdb.base/miscexprs.exp, gdb.base/nodebug.exp: Likewise.
+	* gdb.base/opaque.exp, gdb.base/pointers.exp: Likewise.
+	* gdb.base/psymtab.exp, gdb.base/ptype.exp: Likewise.
+	* gdb.base/relational.exp, gdb.base/scope.exp: Likewise.
+	* gdb.base/setvar.exp: Likewise.
+	(test_set): Likewise.
+	* gdb.base/signals.exp, gdb.base/sizeof.exp: Likewise.
+	* gdb.base/solib-overlap.exp: Likewise.
+	* gdb.base/store.exp, gdb.base/structs.exp: Likewise.
+	* gdb.base/structs2.exp, gdb.base/volatile.exp: Likewise.
+	* gdb.base/watchpoint.exp (initialize): Likewise.
+	(test_simple_watchpoint): Likewise.
+	(test_disabling_watchpoints): Likewise.
+	(test_watchpoint_triggered_in_syscall): Likewise.
+	* gdb.base/whatis.exp, gdb.cp/ambiguous.exp: Likewise.
+	* gdb.cp/casts.exp, gdb.cp/ctti.exp: Likewise.
+	* gdb.cp/namespace.exp, gdb.cp/nsdecl.exp: Likewise.
+	* gdb.cp/psmang.exp, gdb.dwarf2/dw2-ranges.exp: Likewise.
+	* gdb.hp/gdb.aCC/optimize.exp: Likewise.
+	* gdb.hp/gdb.aCC/watch-cmd.exp: Likewise.
+	* gdb.hp/gdb.base-hp/callfwmall.exp: Likewise.
+	* gdb.hp/gdb.base-hp/pxdb.exp: Likewise.
+	* gdb.hp/gdb.compat/xdb1.exp: Likewise.
+	* gdb.hp/gdb.compat/xdb2.exp: Likewise.
+	* gdb.hp/gdb.compat/xdb3.exp: Likewise.
+	* gdb.hp/gdb.defects/bs14602.exp: Likewise.
+	* gdb.hp/gdb.defects/solib-d.exp: Likewise.
+	* gdb.mi/gdb792.exp: Likewise.
+	* gdb.mi/mi-inheritance-syntax-error.exp: Likewise.
+	* gdb.mi/mi-logging.exp, gdb.mi/mi-var-cp.exp : Likewise.
+	* gdb.mi/mi-var-rtti.exp, gdb.python/py-type.exp: Likewise.
+	* gdb.threads/gcore-thread.exp: Likewise.
+	(load_core): Likewise.
+	* gdb.threads/pthreads.exp (all_threads_running): Likewise.
+	(test_startup, check_control_c): Likewise.
+	* gdb.threads/sigstep-threads.exp: Likewise.
+	* gdb.threads/thread_check.exp: Likewise.
+	* gdb.trace/backtrace.exp, gdb.trace/change-loc.exp: Likewise.
+	* gdb.trace/circ.exp (run_trace_experiment): Likewise.
+	(set_a_tracepoint, trace_buffer_normal): Likewise.
+	(gdb_trace_circular_tests): Likewise.
+	* gdb.trace/collection.exp: Likewise.
+	* gdb.trace/disconnected-tracing.exp: Likewise.
+	* gdb.trace/infotrace.exp: Likewise.
+	* gdb.trace/mi-traceframe-changed.exp: Likewise.
+	* gdb.trace/mi-tracepoint-changed.exp: Likewise.
+	* gdb.trace/mi-tsv-changed.exp (test_create_delete_modify_tsv): Likewise.
+	* gdb.trace/packetlen.exp, gdb.trace/passc-dyn.exp: Likewise.
+	* gdb.trace/pending.exp, gdb.trace/report.exp: Likewise.
+	* gdb.trace/stap-trace.exp: Likewise.
+	* gdb.trace/status-stop.exp,gdb.trace/strace.exp: Likewise.
+	* gdb.trace/tfind.exp, gdb.trace/trace-break.exp: Likewise.
+	* gdb.trace/trace-buffer-size.exp: Likewise.
+	* gdb.trace/tspeed.exp, gdb.trace/tsv.exp: Likewise.
+	* gdb.trace/unavailable.exp: Likewise.
+	* gdb.trace/while-dyn.exp: Likewise.
+	* lib/fortran.exp (set_lang_fortran): Likewise.
+	* lib/gdb.exp (default_gdb_version, gdb_start_cmd): Likewise.
+	(gdb_breakpoint, gdb_reinitialize_dir): Likewise.
+	(default_gdb_start, get_compiler_info): Likewise.
+	(gdb_compile, gdb_compile_objc, gdb_reload, gdb_init): Likewise.
+	(get_debug_format, setup_xfail_format): Likewise.
+	(rerun_to_main, gdb_skip_float_test): Likewise.
+	(build_id_debug_filename_get, get_remotetimeout): Likewise.
+	* lib/java.exp (set_lang_java): Likewise.
+	* lib/mi-support.exp (default_mi_gdb_start): Likewise.
+	(mi_gdb_reinitialize_dir, mi_gdb_target_cmd): Likewise.
+	(mi_gdb_file_cmd, mi_gdb_test): Likewise.
+	(mi_run_cmd_full, mi_expect_interrupt): Likewise.
+	* lib/objc.exp (set_lang_objc): Likewise.
+	* lib/pascal.exp (set_lang_pascal): Likewise.
+	* lib/prompt.exp (default_prompt_gdb_start): Likewise.
+	* lib/trace-support.exp (gdb_trace_setactions, gdb_tfind_test): Likewise.
+	(gdb_readexpr, gdb_gettpnum, gdb_find_recursion_test_baseline): Likewise.
+@
+text
+@d98 2
+a99 2
+set core_supported [gdb_gcore_cmd "${objdir}/${subdir}/gcore.test" \
+			"save a corefile"]
+d111 4
+a114 24
+send_gdb "core ${objdir}/${subdir}/gcore.test\n"
+gdb_expect {
+    -re ".* is not a core dump:.*$gdb_prompt $" {
+	fail "re-load generated corefile (bad file format)"
+	# No use proceeding from here.
+	return;	
+    }
+    -re ".*: No such file or directory.*$gdb_prompt $" {
+	fail "re-load generated corefile (file not found)"
+	# No use proceeding from here.
+	return;	
+    }
+    -re ".*Couldn't find .* registers in core file.*$gdb_prompt $" {
+	fail "re-load generated corefile (incomplete note section)"
+    }
+    -re "Core was generated by .*$gdb_prompt $" {
+	pass "re-load generated corefile"
+    }
+    -re ".*$gdb_prompt $" {
+	fail "re-load generated corefile"
+    }
+    timeout {
+	fail "re-load generated corefile (timeout)"
+    }
+@
+
+
+1.8
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@d44 1
+a44 1
+	return -1;
+@
+
+
+1.7
+log
+@	* gdb.threads/gcore-thread.exp: Use gdb_gcore_cmd.
+	* gdb.python/py-strfns.exp (test_strfns_core_file): Use
+	gdb_gcore_cmd.
+	* gdb.cell/gcore.exp: Use gdb_gcore_cmd.
+	* gdb.base/gcore.exp: Use gdb_gcore_cmd.
+	* gdb.base/gcore-relro.exp: Use gdb_gcore_cmd.
+	* gdb.base/gcore-buffer-overflow.exp: Use gdb_gcore_cmd.
+	* gdb.base/auxv.exp: Use gdb_gcore_cmd.
+	* gdb.arch/vsx-regs.exp: Use gdb_gcore_cmd.
+	* gdb.arch/system-gcore.exp: Use gdb_gcore_cmd.
+	* gdb.arch/pa-nullify.exp (test_core_bt): Use gdb_gcore_cmd.
+	* lib/gdb.exp (gdb_gcore_cmd): New proc.
+@
+text
+@d1 1
+a1 1
+# Copyright 2010-2012 Free Software Foundation, Inc.
+@
+
+
+1.6
+log
+@2012-01-16  Pedro Alves  <palves@@redhat.com>
+
+	Remove all calls to strace.
+@
+text
+@d98 2
+a99 17
+set escapedfilename [string_to_regexp ${objdir}/${subdir}/gcore.test]
+
+set core_supported 0
+gdb_test_multiple "gcore ${objdir}/${subdir}/gcore.test" \
+	"save a corefile" \
+{
+  -re "Saved corefile ${escapedfilename}\[\r\n\]+$gdb_prompt $" {
+    pass "save a corefile"
+    global core_supported
+    set core_supported 1
+  }
+  -re "Can't create a corefile\[\r\n\]+$gdb_prompt $" {
+    unsupported "save a corefile"
+    global core_supported
+    set core_supported 0
+  }
+}
+@
+
+
+1.5
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@a15 4
+if $tracelevel then {
+	strace $tracelevel
+}
+
+@
+
+
+1.4
+log
+@run copyright.sh for 2011.
+@
+text
+@d1 1
+a1 1
+# Copyright 2010, 2011 Free Software Foundation, Inc.
+@
+
+
+1.4.4.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d1 1
+a1 1
+# Copyright 2010-2012 Free Software Foundation, Inc.
+@
+
+
+1.3
+log
+@	* lib/gdb.exp (gdb_test_sequence): Return result of gdb_expect_list.
+	(gdb_expect_list): Fix spelling errors in comments.
+	* gdb.arch/system-gcore.exp: Use gdb_test_sequence instead of
+	send_gdb/gdb_expect_list where applicable.
+	* gdb.base/call-ar-st.exp: Ditto.
+	* gdb.base/funcargs.exp: Ditto.
+	* gdb.base/gcore.exp: Ditto.
+	* gdb.base/page.exp: Ditto.
+	* gdb.base/sigaltstack.exp: Ditto.
+	* gdb.base/siginfo.exp: Ditto.
+	* gdb.base/sigstep.exp: Ditto.
+	* gdb.base/trace-commands.exp: Ditto.
+@
+text
+@d1 1
+a1 2
+# Copyright 2010
+# Free Software Foundation, Inc.
+@
+
+
+1.2
+log
+@Do not set prms_id/bug_id anymore.
+
+2010-05-05  Joel Brobecker  <brobecker@@adacore.com>
+
+	Remove the use of prms_id and bug_id throughout the testsuite.
+@
+text
+@d157 10
+a166 11
+send_gdb "where\n"
+gdb_expect_list "where in corefile" ".*$gdb_prompt $" {
+    ".*\[\r\n\]+#0 .* terminal_func \\(\\) at "
+    ".*\[\r\n\]+#1 .* array_func \\(\\) at "
+    ".*\[\r\n\]+#2 .* factorial_func \\(value=1\\) at "
+    ".*\[\r\n\]+#3 .* factorial_func \\(value=2\\) at "
+    ".*\[\r\n\]+#4 .* factorial_func \\(value=3\\) at "
+    ".*\[\r\n\]+#5 .* factorial_func \\(value=4\\) at "
+    ".*\[\r\n\]+#6 .* factorial_func \\(value=5\\) at "
+    ".*\[\r\n\]+#7 .* factorial_func \\(value=6\\) at "
+    ".*\[\r\n\]+#8 .* main \\(.*\\) at "
+@
+
+
+1.1
+log
+@gdb/
+
+2010-04-17  H.J. Lu  <hongjiu.lu@@intel.com>
+
+	PR corefiles/11511
+	* amd64-linux-tdep.c (amd64_linux_gregset_reg_offset): Support
+	orig_rax.
+
+gdb/testsuite/
+
+2010-04-17  H.J. Lu  <hongjiu.lu@@intel.com>
+
+	PR corefiles/11511
+	* gdb.arch/system-gcore.exp: New.
+	* gdb.arch/gcore.c: Likewise.
+@
+text
+@a20 2
+set prms_id 0
+set bug_id 0
+@
+

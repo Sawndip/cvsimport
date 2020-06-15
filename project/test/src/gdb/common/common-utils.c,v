@@ -1,0 +1,432 @@
+head	1.5;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.5
+	gdb_7_6-2013-04-26-release:1.5
+	gdb_7_6-branch:1.5.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.5
+	gdb_7_5_1-2012-11-29-release:1.2
+	gdb_7_5-2012-08-17-release:1.2
+	gdb_7_5-branch:1.2.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.2
+	gdb_7_4_1-2012-04-26-release:1.1.2.1
+	gdb_7_4-2012-01-24-release:1.1.2.1
+	gdb_7_4-branch:1.1.0.2
+	gdb_7_4-2011-12-13-branchpoint:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.5
+date	2013.02.14.17.11.41;	author palves;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2013.01.01.06.32.54;	author brobecke;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2012.11.29.17.23.18;	author tromey;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2012.01.04.08.17.18;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2011.07.21.23.46.09;	author kcy;	state Exp;
+branches
+	1.1.2.1;
+next	;
+
+1.1.2.1
+date	2012.01.06.04.43.33;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.5
+log
+@Move savestring to common/common-utils.c, make gdbserver use it.
+
+This makes gdbserver share gdb's savestring, instead of baking its own.
+
+Tested on x86_64 Fedora 17.
+
+gdb/
+2013-02-14  Pedro Alves  <palves@@redhat.com>
+
+	* utils.c (savestring): Don't #undef it.  Move function to
+	common/common-utils.c.
+	* common/common-utils.c: Include gdb_string.h.
+	(savestring): Move here from utils.c.
+	* common/common-utils.h (savestring): Declare.
+
+gdb/gdbserver/
+2013-02-14  Pedro Alves  <palves@@redhat.com>
+
+	* tracepoint.c (save_string): Delete.
+	(add_tracepoint_action): Use savestring instead of save_string.
+@
+text
+@/* Shared general utility routines for GDB, the GNU debugger.
+
+   Copyright (C) 1986-2013 Free Software Foundation, Inc.
+
+   This file is part of GDB.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+#ifdef GDBSERVER
+#include "server.h"
+#else
+#include "defs.h"
+#endif
+
+#include "gdb_assert.h"
+#include "gdb_string.h"
+
+#include <stdlib.h>
+#include <stdio.h>
+
+/* The xmalloc() (libiberty.h) family of memory management routines.
+
+   These are like the ISO-C malloc() family except that they implement
+   consistent semantics and guard against typical memory management
+   problems.  */
+
+/* NOTE: These are declared using PTR to ensure consistency with
+   "libiberty.h".  xfree() is GDB local.  */
+
+PTR                            /* ARI: PTR */
+xmalloc (size_t size)
+{
+  void *val;
+
+  /* See libiberty/xmalloc.c.  This function need's to match that's
+     semantics.  It never returns NULL.  */
+  if (size == 0)
+    size = 1;
+
+  val = malloc (size);         /* ARI: malloc */
+  if (val == NULL)
+    malloc_failure (size);
+
+  return val;
+}
+
+PTR                              /* ARI: PTR */
+xrealloc (PTR ptr, size_t size)          /* ARI: PTR */
+{
+  void *val;
+
+  /* See libiberty/xmalloc.c.  This function need's to match that's
+     semantics.  It never returns NULL.  */
+  if (size == 0)
+    size = 1;
+
+  if (ptr != NULL)
+    val = realloc (ptr, size);	/* ARI: realloc */
+  else
+    val = malloc (size);	        /* ARI: malloc */
+  if (val == NULL)
+    malloc_failure (size);
+
+  return val;
+}
+
+PTR                            /* ARI: PTR */           
+xcalloc (size_t number, size_t size)
+{
+  void *mem;
+
+  /* See libiberty/xmalloc.c.  This function need's to match that's
+     semantics.  It never returns NULL.  */
+  if (number == 0 || size == 0)
+    {
+      number = 1;
+      size = 1;
+    }
+
+  mem = calloc (number, size);      /* ARI: xcalloc */
+  if (mem == NULL)
+    malloc_failure (number * size);
+
+  return mem;
+}
+
+void *
+xzalloc (size_t size)
+{
+  return xcalloc (1, size);
+}
+
+void
+xfree (void *ptr)
+{
+  if (ptr != NULL)
+    free (ptr);		/* ARI: free */
+}
+
+/* Like asprintf/vasprintf but get an internal_error if the call
+   fails. */
+
+char *
+xstrprintf (const char *format, ...)
+{
+  char *ret;
+  va_list args;
+
+  va_start (args, format);
+  ret = xstrvprintf (format, args);
+  va_end (args);
+  return ret;
+}
+
+char *
+xstrvprintf (const char *format, va_list ap)
+{
+  char *ret = NULL;
+  int status = vasprintf (&ret, format, ap);
+
+  /* NULL is returned when there was a memory allocation problem, or
+     any other error (for instance, a bad format string).  A negative
+     status (the printed length) with a non-NULL buffer should never
+     happen, but just to be sure.  */
+  if (ret == NULL || status < 0)
+    internal_error (__FILE__, __LINE__, _("vasprintf call failed"));
+  return ret;
+}
+
+int
+xsnprintf (char *str, size_t size, const char *format, ...)
+{
+  va_list args;
+  int ret;
+
+  va_start (args, format);
+  ret = vsnprintf (str, size, format, args);
+  gdb_assert (ret < size);
+  va_end (args);
+
+  return ret;
+}
+
+char *
+savestring (const char *ptr, size_t len)
+{
+  char *p = (char *) xmalloc (len + 1);
+
+  memcpy (p, ptr, len);
+  p[len] = 0;
+  return p;
+}
+@
+
+
+1.4
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@d27 1
+d154 10
+@
+
+
+1.3
+log
+@	* contrib/ari/gdb_ari.sh: Remove rules for xasprintf and
+	xvasprintf.
+	* common/common-utils.c (xasprintf, xvasprintf): Remove.
+	* common/common-utils.h (xasprintf, xvasprintf): Remove.
+@
+text
+@d3 1
+a3 1
+   Copyright (C) 1986, 1988-2012 Free Software Foundation, Inc.
+@
+
+
+1.2
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@a139 16
+void
+xasprintf (char **ret, const char *format, ...)
+{
+  va_list args;
+
+  va_start (args, format);
+  (*ret) = xstrvprintf (format, args);
+  va_end (args);
+}
+
+void
+xvasprintf (char **ret, const char *format, va_list ap)
+{
+  (*ret) = xstrvprintf (format, ap);
+}
+
+@
+
+
+1.1
+log
+@2011-07-22  Kwok Cheung Yeung  <kcy@@codesourcery.com>
+
+gdb/
+	* defs.h: Add guard against inclusion in gdbserver.
+	(struct ptid, ptid_t): Move to common/ptid.h.
+	(xfree, xzalloc, xasprintf, xvasprintf, xstrprintf, xstrvprintf,
+	xsnprintf, internal_error): Move to common/common-utils.h.
+	(nomem): Delete.
+	* gdb_assert.h: Move into common/ sub-directory.
+	* gdb_locale.h: Ditto.
+	* gdb_dirent.h: Ditto.
+	* inferior.h (minus_one_ptid, null_ptid, ptid_build, pid_to_ptid,
+	ptid_get_pid, ptid_get_lwp, ptid_get_tid, ptid_equal, ptid_is_pid):
+	Move into common/ptid.h.
+	* xml-support.c (xml_escape_text): Move into common/xml-utils.c.
+	(gdb_xml_create_parser_and_cleanup_1, xml_fetch_context_from_file):
+	Change nomem to malloc_failure.
+	* xml-support.h (xml_escape_text): Move into common/xml-utils.h.
+	* utils.c (nomem): Rename to malloc_failure.
+	(xmalloc, xzalloc, xrealloc, xcalloc, xfree, xstrprintf, xasprintf,
+	xvasprintf, xstrvprintf, xsnprintf): Move to common/common-utils.c.
+	(gdb_buildargv): Change nomem to malloc_failure.
+	* infrun.c (null_ptid, minus_one_ptid, ptid_build, pid_to_ptid,
+	ptid_get_pid, ptid_get_lwp, ptid_get_tid, ptid_equal,
+	ptid_is_pid): Move into common/ptid.c.
+	(initialize_infrun): Delete initialization of null_ptid and
+	minus_one_ptid.
+	* linux-nat.c (linux_nat_xfer_osdata): Defer to
+	linux_common_xfer_osdata.
+	* Makefile.in (SFILES): Add common/common-utils.c, common/xml-utils.c,
+	common/ptid.c and common/buffer.c.
+	(HFILES_NO_SRCDIR): Add common/common-utils.h, common/xml-utils.h,
+	common/ptid.h, common/buffer.h and common/linux-osdata.h.
+	(COMMON_OBS): Add xml-utils.o, common-utils.o, buffer.o and ptid.o.
+	(common-utils.o, xml-utils.o, ptid.o, buffer.o, linux-osdata.o): New
+	rules.
+	* common/gdb_assert.h: New.
+	* common/gdb_dirent.h: New.
+	* common/gdb_locale.h: New.
+	* common/buffer.c: New.
+	* common/buffer.h: New.
+	* common/ptid.c: New.
+	* common/ptid.h: New.
+	* common/xml-utils.c: New.
+	* common/xml-utils.h: New.
+	* common/common-utils.c: New.
+	* common/common-utils.h: New.
+	* common/linux-osdata.c: New.
+	* common/linux-osdata.h: New.
+	* config/alpha/alpha-linux.mh (NATDEPFILES): Add linux-osdata.o.
+	* config/arm/linux.mh (NATDEPFILES): Ditto.
+	* config/i386/linux.mh (NATDEPFILES): Ditto.
+	* config/i386/linux64.mh (NATDEPFILES): Ditto.
+	* config/ia64/linux.mh (NATDEPFILES): Ditto.
+	* config/m32r/linux.mh (NATDEPFILES): Ditto.
+	* config/m68k/linux.mh (NATDEPFILES): Ditto.
+	* config/mips/linux.mh (NATDEPFILES): Ditto.
+	* config/pa/linux.mh (NATDEPFILES): Ditto.
+	* config/powerpc/linux.mh (NATDEPFILES): Ditto.
+	* config/powerpc/ppc64-linux.mh (NATDEPFILES): Ditto.
+	* config/s390/s390.mh (NATDEPFILES): Ditto.
+	* config/sparc/linux.mh (NATDEPFILES): Ditto.
+	* config/sparc/linux64.mh (NATDEPFILES): Ditto.
+	* config/xtensa/linux.mh (NATDEPFILES): Ditto.
+
+gdbserver/
+	* linux-low.c (compare_ints, unique, list_threads, show_process,
+	linux_core_of_thread): Delete.
+	(linux_target_ops): Change linux_core_of_thread to
+	linux_common_core_of_thread.
+	(linux_qxfer_osdata): Defer to linux_common_xfer_osdata.
+	* utils.c (malloc_failure): Change type of argument.
+	(xmalloc, xrealloc, xcalloc, xsnprintf): Delete.
+	* Makefile.in (SFILES): Add common/common-utils.c, common/xml-utils.c,
+	common/linux-osdata.c, common/ptid.c and common/buffer.c.
+	(OBS): Add xml-utils.o, common-utils.o, ptid.o and buffer.o.
+	(IPA_OBJS): Add common-utils-ipa.o.
+	(ptid_h, linux_osdata_h): New macros.
+	(server_h): Add common/common-utils.h, common/xml-utils.h,
+	common/buffer.h, common/gdb_assert.h, common/gdb_locale.h and
+	common/ptid.h.
+	(common-utils-ipa.o, common-utils.o, xml-utils.o, linux-osdata.o,
+	ptid.o, buffer.o): New rules.
+	(linux-low.o): Add common/linux-osdata.h as a dependency.
+	* configure.srv (srv_tgtobj): Add linux-osdata.o to Linux targets.
+	* configure.ac: Add AC_HEADER_DIRENT check.
+	* config.in: Regenerate.
+	* configure: Regenerate.
+	* remote-utils.c (xml_escape_text): Delete.
+	(buffer_grow, buffer_free, buffer_init, buffer_finish,
+	buffer_xml_printf): Move to common/buffer.c.
+	* server.c (main): Remove call to initialize_inferiors.
+	* server.h (struct ptid, ptid_t, minus_one_ptid, null_ptid,
+	ptid_build, pid_to_ptid, ptid_get_pid, ptid_get_lwp, ptid_get_tid,
+	ptid_equal, ptid_is_pid, initialize_inferiors, xml_escape_text,
+	internal_error, gdb_assert, gdb_assert_fail): Delete.
+	(struct buffer, buffer_grow, buffer_free, buffer_init, buffer_finish,
+	buffer_xml_printf, buffer_grow_str, buffer_grow_str0): Move to
+	common/buffer.h.
+	* inferiors.c (null_ptid, minus_one_ptid, ptid_build, pid_to_ptid,
+	ptid_get_pid, ptid_get_lwp, ptid_get_tid, ptid_equal, ptid_is_pid,
+	initialize_inferiors): Delete.
+@
+text
+@d3 1
+a3 3
+   Copyright (C) 1986, 1988, 1989, 1990, 1991, 1992, 1993, 1994, 1995, 1996,
+   1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008,
+   2009, 2010, 2011 Free Software Foundation, Inc.
+@
+
+
+1.1.2.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d3 3
+a5 1
+   Copyright (C) 1986, 1988-2012 Free Software Foundation, Inc.
+@
+
+

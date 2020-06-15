@@ -1,0 +1,129 @@
+head	1.1;
+access;
+symbols
+	binutils-2_24-branch:1.1.0.10
+	binutils-2_24-branchpoint:1.1
+	binutils-2_21_1:1.1
+	binutils-2_23_2:1.1
+	binutils-2_23_1:1.1
+	binutils-2_23:1.1
+	binutils-2_23-branch:1.1.0.8
+	binutils-2_23-branchpoint:1.1
+	binutils-2_22_branch:1.1.0.6
+	binutils-2_22:1.1
+	binutils-2_22-branch:1.1.0.4
+	binutils-2_22-branchpoint:1.1
+	binutils-2_21:1.1
+	binutils-2_21-branch:1.1.0.2
+	binutils-2_21-branchpoint:1.1
+	binutils_latest_snapshot:1.1;
+locks; strict;
+comment	@# @;
+
+
+1.1
+date	2010.08.25.12.37.30;	author jules;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.1
+log
+@    bfd/
+    * elf32-arm.c (arm_stub_required_alignment): New.
+    (arm_build_one_stub): Use above to partition stubs.
+    (make_branch_to_a8_stub): Use arm_stub_a8_veneer_lwm not
+    arm_stub_a8_veneer_b_cond.
+
+    ld/testsuite/
+    * ld-arm/arm-elf.exp (armelftests): Add cortex-a8-fix-blx-bcond.s.
+    * ld-arm/cortex-a8-fix-blx-bcond.s: New.
+    * ld-arm/cortex-a8-fix-blx-bcond.d: New.
+@
+text
+@	.syntax unified
+	.cpu cortex-a8
+	.thumb
+	.text
+
+	@@ expansion 32 bytes
+	.macro bw1
+1:
+	add.w r0, r1, r2
+	blx.w arm_target
+	add.w r0, r1, r2
+	blx.w arm_target
+	add.w r0, r1, r2
+	blx.w arm_target
+	add.w r0, r1, r2
+	blx.w arm_target
+	.endm
+
+	@@ expansion 128 bytes
+	.macro bw2
+	bw1
+	bw1
+	bw1
+	bw1
+	.endm
+
+	@@ expansion 32 bytes
+	.macro bw3
+1:
+	add.w r0, r1, r2
+	bne.w 1b
+	add.w r0, r1, r2
+	bne.w 1b
+	add.w r0, r1, r2
+	bne.w 1b
+	add.w r0, r1, r2
+	bne.w 1b
+	.endm
+
+	@@ expansion 128 bytes
+	.macro bw4
+	bw3
+	bw3
+	bw3
+	bw3
+	.endm
+
+	.align  3
+	.global _start
+
+	.thumb
+	.thumb_func
+	.type   _start, %function
+_start:
+	nop
+
+	@@ Trigger Cortex-A8 erratum workaround with b<cond> instructions.
+	bw4
+	bw4
+
+	nop
+
+	.rept 957
+	nop.w
+	.endr
+
+	.arm
+arm_target:
+	add r3, r4, r5
+	bx lr
+
+	.thumb
+bl_insns:
+
+	nop
+
+	@@ ...and again with bl instructions.
+	bw2
+	bw2
+
+	bx      lr
+@

@@ -1,0 +1,277 @@
+head	1.3;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.3
+	gdb_7_6-2013-04-26-release:1.3
+	gdb_7_6-branch:1.3.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.3
+	gdb_7_5_1-2012-11-29-release:1.2
+	gdb_7_5-2012-08-17-release:1.2
+	gdb_7_5-branch:1.2.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.2;
+locks; strict;
+comment	@ * @;
+
+
+1.3
+date	2013.01.01.06.33.25;	author brobecke;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2012.07.03.23.17.13;	author shebs;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2012.05.11.22.24.24;	author shebs;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.3
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@/* This testcase is part of GDB, the GNU debugger.
+
+   Copyright 2011-2013 Free Software Foundation, Inc.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+#include <sys/shm.h>
+#include <sys/sem.h>
+#include <sys/msg.h>
+#include <stdio.h>
+#include <pthread.h>
+#include <arpa/inet.h>
+#include <sys/socket.h>
+
+static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+
+void *
+thread_proc (void *args)
+{
+  pthread_mutex_lock (&mutex);
+  pthread_mutex_unlock (&mutex);
+}
+
+int
+main (void)
+{
+  const int flags = IPC_CREAT | 0666;
+  key_t shmkey = 3925, semkey = 7428, msgkey = 5294;
+  int shmid, semid, msqid;
+  FILE *fd;
+  pthread_t thread;
+  struct sockaddr_in sock_addr;
+  int sock;
+  unsigned short port;
+  socklen_t size;
+  int status, try, retries = 1000;
+
+  for (try = 0; try < retries; ++try)
+    {
+      shmid = shmget (shmkey, 4096, flags | IPC_EXCL);
+      if (shmid >= 0)
+	break;
+
+      ++shmkey;
+    }
+
+  if (shmid < 0)
+    {
+      printf ("Cannot create shared-memory region after %d tries.\n", retries);
+      return 1;
+    }
+
+  for (try = 0; try < retries; ++try)
+    {
+      semid = semget (semkey, 1, flags | IPC_EXCL);
+      if (semid >= 0)
+	break;
+
+      ++semkey;
+    }
+
+  if (semid < 0)
+    {
+      printf ("Cannot create semaphore after %d tries.\n", retries);
+      return 1;
+    }
+
+  for (try = 0; try < retries; ++try)
+    {
+      msqid = msgget (msgkey, flags | IPC_EXCL);
+      if (msqid >= 0)
+	break;
+
+      ++msgkey;
+    }
+
+  if (msqid < 0)
+    {
+      printf ("Cannot create message queue after %d tries.\n", retries);
+      return 1;
+    }
+
+  fd = fopen ("/dev/null", "r");
+
+  /* Lock the mutex to prevent the new thread from finishing immediately.  */
+  pthread_mutex_lock (&mutex);
+  pthread_create (&thread, NULL, thread_proc, 0);
+ 
+  sock = socket (PF_INET, SOCK_STREAM, IPPROTO_TCP);
+  if (sock < 0)
+    {
+      printf ("Cannot create socket.\n");
+      return 1;
+    }
+ 
+  sock_addr.sin_family = AF_INET;
+  sock_addr.sin_port = 0; /* Bind to a free port.  */
+  sock_addr.sin_addr.s_addr = htonl (INADDR_ANY);
+
+  status = bind (sock, (struct sockaddr *) &sock_addr, sizeof (sock_addr));
+  if (status < 0)
+    {
+      printf ("Cannot bind socket.\n");
+      return 1;
+    }
+
+  /* Find the assigned port number of the socket.  */
+  size = sizeof (sock_addr);
+  status = getsockname (sock, (struct sockaddr *) &sock_addr, &size);
+  if (status < 0)
+    {
+      printf ("Cannot find name of socket.\n");
+      return 1;
+    }
+  port = ntohs (sock_addr.sin_port);
+
+  status = listen (sock, 1);
+  if (status < 0)
+    {
+      printf ("Cannot listen on socket.\n");
+      return 1;
+    }
+
+  /* Set breakpoint here.  */
+
+  shmctl (shmid, IPC_RMID, NULL);
+  semctl (semid, 0, IPC_RMID, NULL);
+  msgctl (msqid, IPC_RMID, NULL);
+  fclose (fd);
+  close (sock);
+
+  pthread_mutex_unlock (&mutex);
+  pthread_join (thread, NULL);
+
+  return 0;
+}
+@
+
+
+1.2
+log
+@	* gdb.base/info-os.c (main): Retry resource acquisition until an
+	available one is found.
+	* gdb.base/info-os.exp: Collect resource keys from the program
+	and use them in matching.
+@
+text
+@d3 1
+a3 1
+   Copyright 2011, 2012 Free Software Foundation, Inc.
+@
+
+
+1.1
+log
+@2012-05-11  Stan Shebs  <stan@@codesourcery.com>
+	    Kwok Cheung Yeung  <kcy@@codesourcery.com>
+
+	* NEWS: Describe new info os commands.
+	* common/linux-osdata.c (PID_T, TIME_T): Define.
+	(MAX_PID_T_STRLEN): New.
+	(linux_common_core_of_thread): Add comment.  Change to use PID_T and
+	MAX_PID_T_STRLEN.
+	(command_from_pid): Add comment.  Change to use PID_T.
+	(commandline_from_pid):  Change to use PID_T.
+	(user_from_pid): Add comment.
+	(get_process_owner): Add comment. Change to use PID_T and
+	MAX_PID_T_STRLEN.
+	(get_number_of_cpu_cores): Add comment.
+	(get_cores_used_by_process): Add comment.  Change to use PID_T and
+	MAX_PID_T_STRLEN.
+	(linux_xfer_osdata_processes): Change to use PID_T and
+	MAX_PID_T_STRLEN.
+	(compare_processes): New function.
+	(linux_xfer_osdata_processgroups): New function.
+	(linux_xfer_osdata_threads): Change to use PID_T.
+	(linux_xfer_osdata_fds): New function.
+	(format_socket_state, print_sockets): New functions.
+	(union socket_addr): New union.
+	(linux_xfer_osdata_isockets): New function.
+	(time_from_time_t, group_from_gid): New functions.
+	(linux_xfer_osdata_shm): New function.
+	(linux_xfer_osdata_sem): New function.
+	(linux_xfer_osdata_msg): New function.
+	(linux_xfer_osdata_modules): New function.
+	(osdata_table): Add new entries.
+	* common/buffer.c (buffer_xml_printf): Add support for long and
+	long long format specifiers.
+
+	* gdb.texinfo (Operating System Auxiliary Information): Document new
+	'info os' subcommands.
+
+	* gdb.base/info-os.exp: New file.
+	* gdb.base/info-os.c: New file.
+@
+text
+@d3 1
+a3 1
+   Copyright 2011 Free Software Foundation, Inc.
+d39 1
+d47 1
+a47 1
+  int status;
+d49 1
+a49 1
+  if ((shmid = shmget (3925, 4096, flags | IPC_EXCL)) < 0)
+d51 41
+a91 8
+      /* Attempt to delete the existing shared-memory region, then
+	 recreate it.  */
+      shmctl (shmget (3925, 4096, flags), IPC_RMID, NULL);
+      if ((shmid = shmget (3925, 4096, flags | IPC_EXCL)) < 0)
+	{
+	  printf ("Cannot create shared-memory region.\n");
+	  return 1;
+	}	  
+a93 2
+  semid = semget (7428, 1, flags);
+  msqid = msgget (5294, flags);
+@
+

@@ -1,0 +1,363 @@
+head	1.7;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.7
+	gdb_7_6-2013-04-26-release:1.7
+	gdb_7_6-branch:1.7.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.7
+	gdb_7_5_1-2012-11-29-release:1.5
+	gdb_7_5-2012-08-17-release:1.5
+	gdb_7_5-branch:1.5.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.5
+	gdb_7_4_1-2012-04-26-release:1.3.2.1
+	gdb_7_4-2012-01-24-release:1.3.2.1
+	gdb_7_4-branch:1.3.0.2
+	gdb_7_4-2011-12-13-branchpoint:1.3
+	gdb_7_3_1-2011-09-04-release:1.2
+	gdb_7_3-2011-07-26-release:1.2
+	gdb_7_3-branch:1.2.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.2;
+locks; strict;
+comment	@# @;
+
+
+1.7
+date	2013.01.01.06.41.26;	author brobecke;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2012.12.10.21.22.21;	author pkoning;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2012.01.16.19.44.16;	author tromey;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2012.01.04.08.27.49;	author brobecke;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2011.10.07.22.46.15;	author devans;	state Exp;
+branches
+	1.3.2.1;
+next	1.2;
+
+1.2
+date	2011.01.01.15.33.49;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2010.11.02.22.44.13;	author devans;	state Exp;
+branches;
+next	;
+
+1.3.2.1
+date	2012.01.06.04.54.27;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.7
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@# Copyright (C) 2010-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# This file is part of the GDB testsuite.  It tests python pretty
+# printers.
+
+import re
+import gdb.types
+import gdb.printing
+
+
+def lookup_function_lookup_test(val):
+    class PrintFunctionLookup(object):
+        def __init__(self, val):
+            self.val = val
+
+        def to_string(self):
+            return ("x=<" + str(self.val["x"]) +
+                    "> y=<" + str(self.val["y"]) + ">")
+
+    typename = gdb.types.get_basic_type(val.type).tag
+    # Note: typename could be None.
+    if typename == "function_lookup_test":
+        return PrintFunctionLookup(val)
+    return None
+
+
+class pp_s (object):
+    def __init__(self, val):
+        self.val = val
+
+    def to_string(self):
+        a = self.val["a"]
+        b = self.val["b"]
+        if a.address != b:
+            raise Exception("&a(%s) != b(%s)" % (str(a.address), str(b)))
+        return "a=<" + str(self.val["a"]) + "> b=<" + str(self.val["b"]) + ">"
+
+
+class pp_ss (object):
+    def __init__(self, val):
+        self.val = val
+
+    def to_string(self):
+        return "a=<" + str(self.val["a"]) + "> b=<" + str(self.val["b"]) + ">"
+
+
+def build_pretty_printer():
+    pp = gdb.printing.RegexpCollectionPrettyPrinter("pp-test")
+
+    pp.add_printer('struct s', '^struct s$', pp_s)
+    pp.add_printer('s', '^s$', pp_s)
+
+    # Use a lambda this time to exercise doing things this way.
+    pp.add_printer('struct ss', '^struct ss$', lambda val: pp_ss(val))
+    pp.add_printer('ss', '^ss$', lambda val: pp_ss(val))
+
+    pp.add_printer('enum flag_enum', '^flag_enum$',
+                   gdb.printing.FlagEnumerationPrinter('enum flag_enum'))
+
+    return pp
+
+
+gdb.printing.register_pretty_printer(gdb, lookup_function_lookup_test)
+my_pretty_printer = build_pretty_printer()
+gdb.printing.register_pretty_printer(gdb, my_pretty_printer)
+
+# Exercise the "replace" argument to register pretty_printer.
+saw_runtime_error = False
+try:
+  gdb.printing.register_pretty_printer(gdb, my_pretty_printer, replace=False)
+except RuntimeError:
+  saw_runtime_error = True
+  pass
+if not saw_runtime_error:
+  raise RuntimeError("Missing RuntimeError from register_pretty_printer")
+gdb.printing.register_pretty_printer(gdb, my_pretty_printer, replace=True)
+@
+
+
+1.6
+log
+@2012-12-10  Paul Koning  <paul_koning@@dell.com>
+
+	* gdb.base/charset.exp: Change print syntax for Python 3
+	compatibility.
+	* gdb.python/py-block.exp: Ditto.
+	* gdb.python/py-breakpoint.exp: Ditto.
+	* gdb.python/py-cmd.exp: Ditto.
+	* gdb.python/py-events.py: Ditto.
+	* gdb.python/py-finish-breakpoint.py: Ditto.
+	* gdb.python/py-finish-breakpoint2.exp: Ditto.
+	* gdb.python/py-finish-breakpoint2.py: Ditto.
+	* gdb.python/py-frame-inline.exp: Ditto.
+	* gdb.python/py-frame.exp: Ditto.
+	* gdb.python/py-infthread.exp: Ditto.
+	* gdb.python/py-objfile.exp: Ditto.
+	* gdb.python/py-parameter.exp: Ditto.
+	* gdb.python/py-progspace.exp: Ditto.
+	* gdb.python/py-prompt.exp: Ditto.
+	* gdb.python/py-symbol.exp: Ditto.
+	* gdb.python/py-symtab.exp: Ditto.
+	* gdb.python/py-template.exp: Ditto.
+	* gdb.python/py-value-cc.exp: Ditto.
+	* gdb.python/python.exp: Ditto.
+	* gdb.python/source2.py: Ditto.
+	* gdb.python/lib-types.exp: Change print syntax for Python 3
+	compatibility.
+	Use sorted() function rather than sort() method.
+	Accept either int or long values for enum values.
+	* gdb.python/py-events.exp: Use exec(open(...).read()) instead of
+	execfile for Python 3 compatibility.
+	* gdb.python/py-evsignal.exp: Ditto.
+	* gdb.python/py-evthreads.exp: Ditto.
+	* gdb.python/py-mi.exp: Ditto.
+	* gdb.python/py-pp-maint.exp: Ditto.
+	* gdb.python/py-prettyprint.exp: Ditto.
+	* gdb.python/py-finish-breakpoint.exp: Change print syntax for
+	Python 3 compatibility.
+	Skip tests for Python 2.4.
+	* gdb.python/py-inferior.exp: Change print syntax for
+	Python 3 compatibility.
+	Use byte string rather than character string in memory write test
+	if Python 3.
+	* gdb.python/py-pp-maint.py: Change class declarations to "new
+	class" syntax.
+	* gdb.python/py-prettyprint.py: Change iterator class to generator
+	function for Python 3 compatibility.
+	Make all classes "new style".
+	Fix indentation issue and stray semicolon.
+	* gdb.python/py-shared.expChange print syntax for Python 3
+	compatibility.
+	Define "long" if Python 3.
+	* gdb.python/py-type.exp: Change print syntax for Python 3
+	compatibility.
+	Accept either int or long values for enum values.
+	* gdb.python/py-value.exp: Change print syntax for Python 3
+	compatibility.
+	Skip "long" and "unicode" tests if Python 3.
+	Accept either "type" or "class" in type checks.
+	* lib/gdb.exp (gdb_py_is_py3k): New flag set if Python 3.
+	(gdb_py_is_py24): New flag set if Python 2.4 or 2.5.
+@
+text
+@d1 1
+a1 1
+# Copyright (C) 2010-2012 Free Software Foundation, Inc.
+@
+
+
+1.5
+log
+@gdb
+	PR python/13281:
+	* gdbtypes.h (TYPE_FLAG_ENUM): New macro.
+	(struct main_type) <flag_flag_enum>: New field.
+	* dwarf2read.c (process_enumeration_scope): Detect "flag" enums.
+	* NEWS: Add entries.
+	* c-valprint.c (c_val_print) <TYPE_CODE_ENUM>: Handle "flag"
+	enums.
+	* python/lib/gdb/printing.py (_EnumInstance): New class.
+	(FlagEnumerationPrinter): Likewise.
+gdb/doc
+	* gdb.texinfo (gdb.printing): Document FlagEnumerationPrinter.
+gdb/testsuite
+	* gdb.base/printcmds.c (enum flag_enum): New.
+	(three): New global.
+	* gdb.base/printcmds.exp (test_print_enums): Add test for flag
+	enum printing.
+	* gdb.python/py-pp-maint.py (build_pretty_printer): Instantiate
+	FlagEnumerationPrinter.
+	* gdb.python/py-pp-maint.exp: Add tests for FlagEnumerationPrinter.
+	* gdb.python/py-pp-maint.c (enum flag_enum): New.
+	(fval): New global.
+@
+text
+@d40 1
+a40 1
+class pp_s:
+d52 1
+a52 1
+class pp_ss:
+@
+
+
+1.4
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d70 3
+@
+
+
+1.3
+log
+@	* python/lib/gdb/printing.py (register_pretty_printer): New argument
+	`replace'.
+
+	testsuite/
+	* gdb.python/py-pp-maint.py: Add tests for `replace' arg.
+@
+text
+@d1 1
+a1 1
+# Copyright (C) 2010, 2011 Free Software Foundation, Inc.
+@
+
+
+1.3.2.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d1 1
+a1 1
+# Copyright (C) 2010-2012 Free Software Foundation, Inc.
+@
+
+
+1.2
+log
+@run copyright.sh for 2011.
+@
+text
+@d74 13
+a86 1
+gdb.printing.register_pretty_printer(gdb, build_pretty_printer())
+@
+
+
+1.1
+log
+@	New python module gdb.printing, and new commands info pretty-printer,
+	enable pretty-printer, disable pretty-printer.
+	* NEWS: Mention them.
+	* data-directory/Makefile.in (PYTHON_FILES): Add gdb/printing.py,
+	gdb/command/__init__.py, gdb/command/pretty_printers.py.
+	* python/lib/gdb/__init__.py: Install pretty-printer commands.
+	* python/lib/gdb/printing.py: New file.
+	* python/lib/gdb/command/__init__.py: New file.
+	* python/lib/gdb/command/pretty_printers.py: New file.
+
+	doc/
+	* gdb.texinfo (Pretty Printing): Expand into three sections,
+	introduction, example, and commands.
+	(Python API): Delete section Disabling Pretty-Printers, merge into
+	Selecting Pretty-Printers.
+	(Writing a Pretty-Printer): New section.  Move the pretty-printer
+	example here, and reformat to match python coding style.  Add a second
+	example using the gdb.printing module.
+	(Python modules): Add gdb.printing.
+
+	testsuite/
+	* gdb.python/py-pp-maint.c: New file.
+	* gdb.python/py-pp-maint.exp: New file.
+	* gdb.python/py-pp-maint.py: New file.
+@
+text
+@d1 1
+a1 1
+# Copyright (C) 2010 Free Software Foundation, Inc.
+@
+

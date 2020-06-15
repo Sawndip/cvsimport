@@ -1,0 +1,527 @@
+head	1.7;
+access;
+symbols
+	cygwin-1_7_17-release:1.6
+	cygwin-64bit-branch:1.6.0.2
+	cygwin-1_7_16-release:1.6
+	cygwin-1_7_15-release:1.6
+	cygwin-1_7_14_2-release:1.6
+	cygwin-1_7_14-release:1.6
+	cygwin-1_7_12-release:1.6
+	cygwin-1_7_11-release:1.6
+	cygwin-1_7_10-release:1.6
+	cygwin-1_7_9-release:1.5
+	cygwin-1_7_8-release:1.5
+	cygwin-1_7_7-release:1.5
+	cygwin-1_7_5-release:1.5
+	cygwin-1_7_4-release:1.5
+	cygwin-1_7_3-release:1.5
+	cygwin-1_7_2-release:1.5
+	cygwin-1_7_1-release:1.5
+	cv-branch-2:1.5.0.8
+	cr-0x5f1:1.5.0.6
+	cv-branch:1.5.0.4
+	cr-0x3b58:1.5.0.2
+	cr-0x9e:1.3.0.10
+	cr-0x9d:1.3.0.8
+	corinna-01:1.3
+	cr-0x9c:1.3.0.6
+	cr-0x9b:1.3.0.4
+	cr-0x99:1.3
+	Z-emcb-cygwin_daemon:1.3.0.2
+	w32api-2_2:1.3
+	mingw-runtime-2_4:1.3
+	mingw-std-ns-branch:1.2.0.6
+	mingw-runtime-2_0:1.2
+	mingwex:1.1.0.2;
+locks; strict;
+comment	@ * @;
+
+
+1.7
+date	2012.11.07.16.52.19;	author cgf;	state dead;
+branches;
+next	1.6;
+
+1.6
+date	2011.05.23.02.54.21;	author ironhead;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2005.03.24.05.58.24;	author dannysmith;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2004.06.30.04.51.17;	author dannysmith;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2003.01.26.06.38.43;	author dannysmith;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2002.06.13.10.20.44;	author dannysmith;	state Exp;
+branches
+	1.2.6.1;
+next	1.1;
+
+1.1
+date	2002.04.10.01.11.28;	author dannysmith;	state dead;
+branches
+	1.1.2.1;
+next	;
+
+1.1.2.1
+date	2002.04.10.01.11.28;	author dannysmith;	state Exp;
+branches;
+next	;
+
+1.2.6.1
+date	2003.01.26.22.37.50;	author dannysmith;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.7
+log
+@* mingw: Delete obsolete directory.
+* w32api: Ditto.
+@
+text
+@/*
+ * Workaround for limitations on win9x where a file contents are
+ * not zero'd out if you seek past the end and then write.
+ * Copied from ming local-patch to binutils/bfd/libbfd.c written by
+ * Mumit Khan  <khan@@xraylith.wisc.edu> 
+ */
+
+#include <windows.h>
+#include <stdio.h>
+#include <io.h>
+#include <stdlib.h>
+
+#define ZEROBLOCKSIZE 512
+static int __mingw_fseek_called;
+
+/* The fseek in Win9x runtime does not zero out the file if seeking past
+   the end; if you don't want random stuff from your disk included in your
+   output DLL/executable, use this version instead. On WinNT/Win2k, it
+   just calls runtime fseek().  
+   
+   CHECK/FIXME: Does this work for both text and binary modes?? */ 
+
+
+int
+__mingw_fseek (FILE *fp, long offset, int whence)
+{
+# undef fseek 
+  __mingw_fseek_called = 1;
+  return fseek (fp, offset, whence);
+}
+
+int
+__mingw_fseeko64 (FILE *fp, off64_t offset, int whence)
+{
+# undef fseeko64
+  __mingw_fseek_called = 1;
+  return fseeko64 (fp, offset, whence);
+}
+
+size_t
+__mingw_fwrite (const void *buffer, size_t size, size_t count, FILE *fp)
+{
+# undef fwrite 
+  if ((_osver & 0x8000) &&  __mingw_fseek_called)
+    {
+      ULARGE_INTEGER actual_length;
+      LARGE_INTEGER current_position = {{0LL}};
+      __mingw_fseek_called = 0;
+      fflush (fp);
+      actual_length.u.LowPart = GetFileSize ((HANDLE) _get_osfhandle (fileno (fp)), 
+					     &actual_length.u.HighPart);
+      if (actual_length.u.LowPart == 0xFFFFFFFF 
+          && GetLastError() != NO_ERROR )
+        return -1;
+      current_position.u.LowPart = SetFilePointer ((HANDLE) _get_osfhandle (fileno (fp)),
+						   current_position.u.LowPart,
+						   &current_position.u.HighPart,
+						 FILE_CURRENT);
+      if (current_position.u.LowPart == 0xFFFFFFFF 
+          && GetLastError() != NO_ERROR )
+        return -1;
+
+#ifdef DEBUG
+      printf ("__mingw_fwrite: current %I64u, actual %I64u\n", 
+	      current_position.QuadPart, actual_length.QuadPart);
+#endif /* DEBUG */
+      if (current_position.QuadPart > actual_length.QuadPart)
+	{
+	  static char __mingw_zeros[ZEROBLOCKSIZE];
+	  long long numleft;
+
+	  SetFilePointer ((HANDLE) _get_osfhandle (fileno (fp)), 
+	                  0, 0, FILE_END);
+	  numleft = current_position.QuadPart - actual_length.QuadPart;
+
+#ifdef DEBUG
+	  printf ("__mingw_fwrite: Seeking %I64d bytes past end\n", numleft);
+#endif /* DEBUG */
+	  while (numleft > 0LL)
+	    {
+	      DWORD nzeros = (numleft > ZEROBLOCKSIZE)
+	                     ? ZEROBLOCKSIZE : numleft;
+	      DWORD written;
+	      if (! WriteFile ((HANDLE) _get_osfhandle (fileno (fp)),
+	                       __mingw_zeros, nzeros, &written, NULL))
+	        {
+		  /* Best we can hope for, or at least DJ says so. */
+	          SetFilePointer ((HANDLE) _get_osfhandle (fileno (fp)), 
+	                          0, 0, FILE_BEGIN);
+		  return -1;
+		}
+	      if (written < nzeros)
+	        {
+		  /* Likewise. */
+	          SetFilePointer ((HANDLE) _get_osfhandle (fileno (fp)), 
+	                          0, 0, FILE_BEGIN);
+		  return -1;
+		}
+
+	      numleft -= written;
+	    }
+	    FlushFileBuffers ((HANDLE) _get_osfhandle (fileno (fp)));
+	}
+    }
+  return (fwrite) (buffer, size, count, fp);
+}
+@
+
+
+1.6
+log
+@2011-05-22  Antoine LECA  <antoinel@@users.sourceforge.net>
+
+        * mingwex/mingw-fseek.c: The anonymous union feature for LARGE_INTEGER is
+        not always available, go the long way and use the explicit named union
+        members, which are also declared in winnt.h.
+@
+text
+@@
+
+
+1.5
+log
+@	* include/stdio.h (__mingw_fwrite): Change return value to
+	size_t.
+	* mingwex/mingw-fseek.c (__mingw_fwrite): Likewise.
+@
+text
+@d50 3
+a52 3
+      actual_length.LowPart = GetFileSize ((HANDLE) _get_osfhandle (fileno (fp)), 
+					   &actual_length.HighPart);
+      if (actual_length.LowPart == 0xFFFFFFFF 
+d55 3
+a57 3
+      current_position.LowPart = SetFilePointer ((HANDLE) _get_osfhandle (fileno (fp)),
+                                         	 current_position.LowPart,
+					 	 &current_position.HighPart,
+d59 1
+a59 1
+      if (current_position.LowPart == 0xFFFFFFFF 
+d105 1
+a105 1
+  return fwrite (buffer, size, count, fp);
+@
+
+
+1.4
+log
+@2004-06-30  Kees Zeelenberg  <kzlg@@users.sourceforge.net>
+            Danny Smith  <dannysmith@@users.sourceforge.net>
+
+	* include/stdio.h (fopen64): Add inline function.
+	(fseeko64): Add prototype.
+	(ftello64): Add inline function.
+	* include/io.h (lseek64): Add inline function.
+	* include/sys/types (off64_t): Add typedef.
+	(fpos64_t): Add typedef.
+        * mingwex/fopen64.c: New file.
+        * mingwex/fseeko64.c: New file.
+        * mingwex/ftello64.c: New file.
+        * mingwex/lseek64.c: New file.
+	* mingwex/Makefile.in (STDIO_DISTFILES): Add fopen64.c,
+	fseeko.64.c, ftello64.c, lseek64.c.
+	(STDIO_OBJS): Add fopen64.o, fseeko.64.o, ftello64.o, lseek64.o.
+
+2004-06-30  Danny Smith  <dannysmith@@users.sourceforge.net>
+
+	* include/stdio.h (__mingw_fseeko64): Add prototype.
+	* mingwex/mingw-fseek.c (__mingw_fseeko64): Add definition.
+	(__mingw_fwrite): Handle huge files.
+@
+text
+@d40 1
+a40 1
+int
+@
+
+
+1.3
+log
+@	* mingwex/mingw-fseek.c (INLINE): Remove define.
+	(__mingw_is_win9x): Remove static inline function.
+	(_mingw_fwrite): Use _osver instead of __mingw_is_win9x.
+@
+text
+@d33 8
+d46 2
+a47 1
+      DWORD actual_length, current_position;
+d50 13
+a62 4
+      actual_length = GetFileSize ((HANDLE) _get_osfhandle (fileno (fp)), 
+                                   NULL);
+      current_position = SetFilePointer ((HANDLE) _get_osfhandle (fileno (fp)),
+                                         0, 0, FILE_CURRENT);
+d64 2
+a65 2
+      printf ("__mingw_fwrite: current %ld, actual %ld\n", 
+	      current_position, actual_length);
+d67 1
+a67 1
+      if (current_position > actual_length)
+d70 1
+a70 1
+	  long numleft;
+d74 1
+a74 1
+	  numleft = current_position - actual_length;
+d77 1
+a77 1
+	  printf ("__mingw_fwrite: Seeking %ld bytes past end\n", numleft);
+d79 1
+a79 1
+	  while (numleft > 0)
+@
+
+
+1.2
+log
+@	* include/_mingw.h: Increment version to 2.0.
+	* Makefile.in: Ditto.
+	Merge in mingwex branch.
+@
+text
+@d11 1
+a11 8
+
+#ifdef __GNUC__
+# define INLINE __inline__
+#elif defined _MSC_VER
+# define INLINE __inline
+#else 
+# define INLINE
+#endif
+a15 24
+/* FIXME: put this in startup code and make os_platform_id global?
+   Or just get _osver from msvcrt.dll and bitest (_osver & 0x8000)? */
+
+INLINE 
+static
+int
+__mingw_is_win9x (void)
+{
+  static DWORD os_platform_id =  -1 ;
+
+  if (os_platform_id == -1)
+    {
+      OSVERSIONINFO os_version_info;
+      memset (&os_version_info, 0, sizeof (OSVERSIONINFO));
+      os_version_info.dwOSVersionInfoSize = sizeof (OSVERSIONINFO);
+      GetVersionEx (&os_version_info);
+
+      os_platform_id = os_version_info.dwPlatformId;
+    }
+ 
+  /* Don't even bother to check for Win32s. */
+  return os_platform_id == VER_PLATFORM_WIN32_WINDOWS;
+}
+
+d36 1
+a36 1
+  if ( __mingw_is_win9x () &&  __mingw_fseek_called)
+@
+
+
+1.2.6.1
+log
+@	Merge from mingw trunk (changes since 2002-12-10).
+@
+text
+@d11 8
+a18 1
+#include <stdlib.h>
+d23 24
+d67 1
+a67 1
+  if ((_osver & 0x8000) &&  __mingw_fseek_called)
+@
+
+
+1.1
+log
+@file mingw-fseek.c was initially added on branch mingwex.
+@
+text
+@d1 119
+@
+
+
+1.1.2.1
+log
+@	* mingwex/mingw-fseek.c: New file, based on Mumit Khan
+	mingw-local patch to binutils.
+	Sun Nov  7 04:27:07 1999  Mumit Khan  <khan@@xraylith.wisc.edu>
+	(__mingw_fseek): New function to work around Win9x f/lseek bug.
+	(__mingw_fwrite): Likewise.
+	(__mingw_is_win9x): New helper function.
+	* include/stdio.h (__USE_MINGW_FSEEK): New define, guarding...
+	(__mingw_fseek): New prototype and define to replace fseek.
+	(__mingw_fseek): New prototype and define to replace fwrite.
+	* mingwex/Makefile.in: Add mingw-fseek.o to libmingwex.a.
+
+	* moldname-crtdll.def: Remove CR from end of line.
+	* moldname-msvcrt.def: Ditto.
+@
+text
+@a0 119
+/*
+ * Workaround for limitations on win9x where a file contents are
+ * not zero'd out if you seek past the end and then write.
+ * Copied from ming local-patch to binutils/bfd/libbfd.c written by
+ * Mumit Khan  <khan@@xraylith.wisc.edu> 
+ */
+
+#include <windows.h>
+#include <stdio.h>
+#include <io.h>
+
+#ifdef __GNUC__
+# define INLINE __inline__
+#elif defined _MSC_VER
+# define INLINE __inline
+#else 
+# define INLINE
+#endif
+
+#define ZEROBLOCKSIZE 512
+static int __mingw_fseek_called;
+
+/* FIXME: put this in startup code and make os_platform_id global?
+   Or just get _osver from msvcrt.dll and bitest (_osver & 0x8000)? */
+
+INLINE 
+static
+int
+__mingw_is_win9x (void)
+{
+  static DWORD os_platform_id =  -1 ;
+
+  if (os_platform_id == -1)
+    {
+      OSVERSIONINFO os_version_info;
+      memset (&os_version_info, 0, sizeof (OSVERSIONINFO));
+      os_version_info.dwOSVersionInfoSize = sizeof (OSVERSIONINFO);
+      GetVersionEx (&os_version_info);
+
+      os_platform_id = os_version_info.dwPlatformId;
+    }
+ 
+  /* Don't even bother to check for Win32s. */
+  return os_platform_id == VER_PLATFORM_WIN32_WINDOWS;
+}
+
+/* The fseek in Win9x runtime does not zero out the file if seeking past
+   the end; if you don't want random stuff from your disk included in your
+   output DLL/executable, use this version instead. On WinNT/Win2k, it
+   just calls runtime fseek().  
+   
+   CHECK/FIXME: Does this work for both text and binary modes?? */ 
+
+
+int
+__mingw_fseek (FILE *fp, long offset, int whence)
+{
+# undef fseek 
+  __mingw_fseek_called = 1;
+  return fseek (fp, offset, whence);
+}
+
+int
+__mingw_fwrite (const void *buffer, size_t size, size_t count, FILE *fp)
+{
+# undef fwrite 
+  if ( __mingw_is_win9x () &&  __mingw_fseek_called)
+    {
+      DWORD actual_length, current_position;
+      __mingw_fseek_called = 0;
+      fflush (fp);
+      actual_length = GetFileSize ((HANDLE) _get_osfhandle (fileno (fp)), 
+                                   NULL);
+      current_position = SetFilePointer ((HANDLE) _get_osfhandle (fileno (fp)),
+                                         0, 0, FILE_CURRENT);
+#ifdef DEBUG
+      printf ("__mingw_fwrite: current %ld, actual %ld\n", 
+	      current_position, actual_length);
+#endif /* DEBUG */
+      if (current_position > actual_length)
+	{
+	  static char __mingw_zeros[ZEROBLOCKSIZE];
+	  long numleft;
+
+	  SetFilePointer ((HANDLE) _get_osfhandle (fileno (fp)), 
+	                  0, 0, FILE_END);
+	  numleft = current_position - actual_length;
+
+#ifdef DEBUG
+	  printf ("__mingw_fwrite: Seeking %ld bytes past end\n", numleft);
+#endif /* DEBUG */
+	  while (numleft > 0)
+	    {
+	      DWORD nzeros = (numleft > ZEROBLOCKSIZE)
+	                     ? ZEROBLOCKSIZE : numleft;
+	      DWORD written;
+	      if (! WriteFile ((HANDLE) _get_osfhandle (fileno (fp)),
+	                       __mingw_zeros, nzeros, &written, NULL))
+	        {
+		  /* Best we can hope for, or at least DJ says so. */
+	          SetFilePointer ((HANDLE) _get_osfhandle (fileno (fp)), 
+	                          0, 0, FILE_BEGIN);
+		  return -1;
+		}
+	      if (written < nzeros)
+	        {
+		  /* Likewise. */
+	          SetFilePointer ((HANDLE) _get_osfhandle (fileno (fp)), 
+	                          0, 0, FILE_BEGIN);
+		  return -1;
+		}
+
+	      numleft -= written;
+	    }
+	    FlushFileBuffers ((HANDLE) _get_osfhandle (fileno (fp)));
+	}
+    }
+  return fwrite (buffer, size, count, fp);
+}
+@
+

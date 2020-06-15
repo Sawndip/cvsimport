@@ -1,0 +1,94 @@
+head	1.1;
+access;
+symbols;
+locks; strict;
+comment	@-- @;
+
+
+1.1
+date	2013.05.20.09.45.13;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.1
+log
+@[dwarf] Mark all functions as prototyped except C functions.
+
+This makes sure that the types of the arguments are taken into account
+when performing an inferior function call to a non-C (or C-like)
+function.  In particular, this makes sure that the arguments are
+appropriatly converted to the correct type.
+
+For instance, on x86_64-linux, with the following Ada code:
+
+   procedure Set_Float (F : Float) is
+   begin
+      Global_Float := F;
+   end Set_Float;
+
+The following sequence shows that Float arguments are incorrectly
+passed (Ada's Float type is the equivalent of type "float" in C):
+
+    (gdb) call set_float (2.0)
+    (gdb) print global_float
+    $1 = 0.0
+
+Putting a breakpoint inside set_float to inspect the value of
+register xmm0 gives the first hint of the problem:
+
+    (gdb) p $xmm0
+    $2 = (v4_float => (0 => 0.0, 2.0, 0.0, 0.0),
+          v2_double => (0 => 2.0, 0.0),
+    [...]
+
+It shows that the argument was passed as a double.
+
+The code responsible for doing appropriate type conversions
+for the arguments (value_arg_coerce) found that our function
+was not prototyped, and thus could not use typing information
+for the arguments. Instead, it defaulted to the value of "set
+coerce-float-to-double", which by default is true, to determine
+the argument type.
+
+This patch fixes the problem by setting the PROTOTYPE flag
+for all functions of any language except C and Objective C.
+
+gdb/ChangeLog:
+
+        * dwarf2read.c (prototyped_function_p): New function.
+        (read_subroutine_type): Use it.
+
+gdb/testsuite/ChangeLog:
+
+        * gdb.ada/float_param: New testcase.
+@
+text
+@--  Copyright 2013 Free Software Foundation, Inc.
+--
+--  This program is free software; you can redistribute it and/or modify
+--  it under the terms of the GNU General Public License as published by
+--  the Free Software Foundation; either version 3 of the License, or
+--  (at your option) any later version.
+--
+--  This program is distributed in the hope that it will be useful,
+--  but WITHOUT ANY WARRANTY; without even the implied warranty of
+--  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+--  GNU General Public License for more details.
+--
+--  You should have received a copy of the GNU General Public License
+--  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+with Pck; use Pck;
+
+procedure Foo is
+begin
+   Set_Float (1.0);  -- START
+   Set_Double (1, 1.0);
+   Set_Long_Double (1, (I => 2), 1.0);
+end Foo;
+@

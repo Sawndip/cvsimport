@@ -1,0 +1,486 @@
+head	1.6;
+access;
+symbols
+	arc-sim-20090309:1.4
+	arc-insight_6_8-branch:1.4.0.16
+	arc-insight_6_8-branchpoint:1.4
+	insight_6_8-branch:1.4.0.14
+	insight_6_8-branchpoint:1.4
+	gdb_6_8-branch:1.4.0.12
+	insight_6_6-20070208-release:1.4
+	gdb_6_6-branch:1.4.0.10
+	gdb_6_6-2006-11-15-branchpoint:1.4
+	insight_6_5-20061003-release:1.4
+	gdb_6_5-branch:1.4.0.8
+	gdb_6_5-2006-05-14-branchpoint:1.4
+	gdb_6_4-branch:1.4.0.6
+	gdb_6_4-2005-11-01-branchpoint:1.4
+	gdb_6_1-2004-04-05-release:1.4
+	gdb_6_1-branch:1.4.0.4
+	gdb_6_1-2004-03-01-gmt-branchpoint:1.4
+	gdb_6_0-2003-10-04-release:1.4
+	gdb_6_0-branch:1.4.0.2
+	gdb_6_0-2003-06-23-branchpoint:1.4
+	gdb_5_3-2002-12-12-release:1.1.1.1
+	tcltk840-20020924-branch:1.2.0.2
+	tcltk840-20020924-branchpoint:1.2
+	gdb_5_3-branch:1.1.1.1.0.4
+	gdb_5_3-2002-09-04-branchpoint:1.1.1.1
+	gdb_5_2_1-2002-07-23-release:1.1.1.1
+	gdb_5_2-2002-04-29-release:1.1.1.1
+	gdb_5_2-branch:1.1.1.1.0.2
+	gdb_5_2-2002-03-03-branchpoint:1.1.1.1
+	cygnus_cvs_20020108_pre:1.1.1.1
+	ITCL_TCL_8_3:1.1.1.1
+	NET:1.1.1;
+locks; strict;
+comment	@# @;
+expand	@o@;
+
+
+1.6
+date	2008.07.23.22.44.50;	author kseitz;	state dead;
+branches;
+next	1.5;
+
+1.5
+date	2008.07.22.20.32.44;	author kseitz;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2003.01.21.21.04.23;	author hunt;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2003.01.21.20.40.24;	author hunt;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2002.09.24.18.35.31;	author kseitz;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2001.09.09.19.49.03;	author irox;	state Exp;
+branches
+	1.1.1.1;
+next	;
+
+1.1.1.1
+date	2001.09.09.19.49.03;	author irox;	state Exp;
+branches;
+next	1.1.1.2;
+
+1.1.1.2
+date	2002.09.25.02.47.45;	author kseitz;	state dead;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.6
+log
+@        Import of Itcl 3.3.
+        * itcl/configure.in, itk/configure.in, iwidgets/configure.in:
+        Replace with configure.ac.
+        * itcl/configure, itk/configure, iwidgets/configure: Regenerate.
+        * configure.ac, Makefile.am, Makefile.in: New files.
+        * README: "New" file.
+        * aclocal.m4: Regenerate.
+        * itcl/Makefile.in (RANLIB): Replace with RANLIB_LIB so
+        that the toplevel build does not override this variable.
+        * itk/Makefile.in (RANLIB): Likewise.
+        * itcl/tclconfig/tcl.m4 (TEA_PATH_TCLCONFIG): Look for itclConfig.sh
+        in the platform-specific location (unix or win).
+        (TEA_PATH_TKCONFIG): Likewise.
+        (TEA_MAKE_LIB): Even on windows, GCC libraries must start with "lib".
+        * itk/tclconfig.m4: Copy of itcl/tcl.m4.
+        * iwidgets/tcl.m4: Remove.
+        * iwidgets/tclconfig: New directory.
+        * iwidgets/tclconfig/tcl.m4, iwidgets/tclconfig/install-sh: Copies
+        of itcl/tclconfig files.
+        * iwidgets/Makefile.in (MKINSTALLDIRS): Use mkdir -p.
+        * iwidgets/configure.ac (PACKAGE): Rename to PACKAGE_NAME.
+        Call TEA_INIT, add AC_CONFIG_AUX_DIR and AC_PROG_INSTALL.
+        Use TEA_* instead of SC_* macros.
+        Search a few more directories for the itcl and itk libraries.
+@
+text
+@# CYGNUS LOCAL
+#
+# This entire file is Cygnus local, it contains a set of cross
+# platform autoconf macros to be used by Tcl extensions.
+
+# FIXME: There seems to be a problem with variable
+# names that still need an expansion (like $foo_FILE)
+# since another eval might be needed in these macros.
+
+#--------------------------------------------------------------------
+# TCL_TOOL_PATH
+#
+#	Return a file path that the build system tool will understand.
+#	This path might be different than the path used in the
+#	Makefiles.
+#
+# Arguments:
+#	
+#	VAR
+#	PATH
+#	
+# Results:
+#
+#
+# Example:
+#
+# TCL_TOOL_PATH(TCL_CC_PATH, /usr/local/compiler)
+#
+#--------------------------------------------------------------------
+
+AC_DEFUN(TCL_TOOL_PATH, [
+  val=$2
+
+  if test "$val" = "" ; then
+    AC_MSG_ERROR([Empty value for variable $1])
+  fi
+
+  case "${host}" in
+    *windows32* | *mingw32*)
+      if test "${CYGPATH}" = ""; then
+        AC_MSG_ERROR([CYGPATH variable is not defined.])
+      elif test "${CYGPATH}" = "echo"; then
+        # No cygpath when cross compiling
+        $1=$val
+      else
+        # store literal argument text in a variable
+        val=$val
+        # Convert Cygwin to Windows path (/tmp/foo -> C:\Tmp\foo)
+        val="`${CYGPATH} $val`"
+        # Convert path like C:\Tmp\foo to C:/Tmp/foo
+        $1="`echo $val | sed -e s#\\\\\\\\#/#g`"
+      fi
+    ;;
+    *)
+      # Default to a no-op under Unix or Cygwin gcc
+      $1=$val
+    ;;
+  esac
+])
+
+# FIXME: It would simplify things if no SUFFIX had to be passed
+# into these LONGNAME macros. Using the TCL_SHARED_LIB_SUFFIX
+# and TCL_UNSHARED_LIB_SUFFIX from tclConfig.sh might do the trick!
+
+#--------------------------------------------------------------------
+# TCL_TOOL_STATIC_LIB_LONGNAME
+#
+#	Return static library name in the "long format" understood by
+#	the build tools. This might involve prepending a suffix
+#	and appending version information to the library name.
+#
+# Arguments:
+#	
+#	VAR
+#	LIBNAME
+#	SUFFIX
+#	
+# Depends on:
+#	TCL_DBGX
+#	TCL_VENDOR_PREFIX
+#
+# Example:
+#
+# TCL_TOOL_STATIC_LIB_LONGNAME(TCL_LIB, tcl, $TCL_UNSHARED_LIB_SUFFIX)
+#
+# Results:
+#
+#	TCL_LIB=libtcl83.a
+#
+#	or
+#
+#	TCL_LIB=tcl83.lib
+#
+#--------------------------------------------------------------------
+
+AC_DEFUN(TCL_TOOL_STATIC_LIB_LONGNAME, [
+  libname=$2
+  suffix=$3
+
+  case "${host}" in
+    *windows32* | *mingw32*)
+      if test "$GCC" != yes; then
+        eval "long_libname=\"${TCL_VENDOR_PREFIX}${libname}${suffix}\""
+      else
+        eval "long_libname=\"lib${TCL_VENDOR_PREFIX}${libname}${suffix}\""
+      fi
+    ;;
+    *)
+      eval "long_libname=\"lib${TCL_VENDOR_PREFIX}${libname}${suffix}\""
+    ;;
+  esac
+
+  eval "long_libname=${long_libname}"
+
+  # Trick to replace DBGX with TCL_DBGX
+  DBGX='${TCL_DBGX}'
+  eval "long_libname=${long_libname}"
+
+  $1=$long_libname
+])
+
+#--------------------------------------------------------------------
+# TCL_TOOL_SHARED_LIB_LONGNAME
+#
+#	Return the shared library name in the "long format" understood by
+#	the build tools. This might involve prepending a suffix
+#	and appending version information to the shared library name.
+#
+# Arguments:
+#	
+#	VAR
+#	LIBNAME
+#	SUFFIX
+#	
+# Depends on:
+#	TCL_DBGX
+#	TCL_VENDOR_PREFIX
+#
+# Example:
+#
+# TCL_TOOL_SHARED_LIB_LONGNAME(TCL_SHLIB, tcl, $TCL_SHARED_LIB_SUFFIX)
+#
+# Results:
+#	The above example could result in the following.
+#
+#	TCL_SHLIB=libtcl83.so
+#
+#	or
+#
+#	TCL_SHLIB=tcl83.dll
+#
+#--------------------------------------------------------------------
+
+AC_DEFUN(TCL_TOOL_SHARED_LIB_LONGNAME, [
+  libname=$2
+  suffix=$3
+
+  case "${host}" in
+    *windows32* | *mingw32* | *cygwin*)
+      eval "long_libname=\"${TCL_VENDOR_PREFIX}${libname}${suffix}\""
+    ;;
+    *)
+      eval "long_libname=\"lib${TCL_VENDOR_PREFIX}${libname}${suffix}\""
+    ;;
+  esac
+
+  eval "long_libname=${long_libname}"
+
+  # Trick to replace DBGX with TCL_DBGX
+  DBGX='${TCL_DBGX}'
+  eval "long_libname=${long_libname}"
+
+  $1=$long_libname
+])
+
+#--------------------------------------------------------------------
+# TCL_TOOL_LIB_SHORTNAME
+#
+#	Return the library name in the "short format" understood by
+#	the build tools. This might involve prepending a suffix
+#	and appending version information to the library name.
+#	The VC++ compiler does not support short library names
+#	so we just use the static import lib name in that case.
+#
+# Arguments:
+#	
+#	VAR
+#	LIBNAME
+#	VERSION
+#	
+# Depends on:
+#	TCL_LIB_VERSIONS_OK
+#	TCL_DBGX
+#	SHARED_BUILD
+#	
+#
+# Example:
+#
+# TCL_TOOL_LIB_SHORTNAME(TCL_LIB, tcl, 8.3)
+#
+# Results:
+#	The above example could result in the following.
+#
+#	TCL_LIB=-ltcl83
+#
+#	or
+#
+#	TCL_LIB=tcl83.lib
+#
+#--------------------------------------------------------------------
+
+AC_DEFUN(TCL_TOOL_LIB_SHORTNAME, [
+  libname=$2
+  version=$3
+
+  # If the . character is not allowed in lib name, remove it from version
+  if test "${TCL_LIB_VERSIONS_OK}" != "ok"; then
+        version=`echo $version | tr -d .`
+  fi
+
+  short_libname="-l${TCL_VENDOR_PREFIX}${libname}${version}\${TCL_DBGX}"
+  $1=$short_libname
+])
+
+#--------------------------------------------------------------------
+# TCL_TOOL_LIB_SPEC
+#
+#	Return the "lib spec format" understood by the build tools.
+#
+# Arguments:
+#	
+#	VAR
+#	DIR
+#	LIBARG
+#	
+# Depends on:
+#	
+#
+# Example:
+#
+# TCL_TOOL_LIB_SPEC(SPEC, /usr/lib, -ltcl)
+#
+# Results:
+#	The above example could result in the following.
+#
+#	SPEC="-L/usr/lib -ltcl83"
+#
+#--------------------------------------------------------------------
+
+AC_DEFUN(TCL_TOOL_LIB_SPEC, [
+  case "${host}" in
+    *windows32* | *mingw32*)
+      if test "$GCC" != yes; then
+        TCL_TOOL_PATH($1, "$2/$3")
+      else
+        TCL_TOOL_PATH(dirname, $2)
+        $1="-L${dirname} $3"
+      fi
+    ;;
+    *)
+      $1="-L$2 $3"
+    ;;
+  esac
+])
+
+#--------------------------------------------------------------------
+# TCL_TOOL_LIB_PATH
+#
+#	Return the "lib path format" understood by the build tools.
+#	Typically, this is the fully qualified path name of the library.
+#
+# Arguments:
+#	
+#	VAR
+#	DIR
+#	LIBARG
+#	
+# Depends on:
+#	
+#
+# Example:
+#
+# TCL_TOOL_LIB_PATH(TMP_PATH, /usr/lib, libtcl83.a)
+#
+# Results:
+#	The above example could result in the following.
+#
+#	TMP_PATH="/usr/lib/libtcl83.a"
+#
+#--------------------------------------------------------------------
+
+AC_DEFUN(TCL_TOOL_LIB_PATH, [
+  TCL_TOOL_PATH($1, "$2/$3")
+])
+@
+
+
+1.5
+log
+@touch all sources for Itcl 3.3/Iwidgets 4.0.1 upgrade
+@
+text
+@@
+
+
+1.4
+log
+@Updated to itcl 3.2.1.
+@
+text
+@@
+
+
+1.3
+log
+@touched all sources to ease next import
+@
+text
+@a215 4
+  if test "$TCL_LIB_SUFFIX" = "" ; then
+    AC_MSG_ERROR([The TCL_LIB_SUFFIX variable is not defined])
+  fi
+
+d221 1
+a221 13
+  case "${host}" in
+    *windows32* | *mingw32*)
+      if test "$GCC" != yes; then
+        eval "short_libname=\"${TCL_VENDOR_PREFIX}${libname}${version}${TCL_LIB_SUFFIX}\""
+      else
+        short_libname="-l${TCL_VENDOR_PREFIX}${libname}${version}${TCL_DBGX}"
+      fi
+    ;;
+    *)
+      short_libname="-l${TCL_VENDOR_PREFIX}${libname}${version}\${TCL_DBGX}"
+    ;;
+  esac
+
+@
+
+
+1.2
+log
+@touched all sources to ease next import
+@
+text
+@@
+
+
+1.1
+log
+@Initial revision
+@
+text
+@@
+
+
+1.1.1.1
+log
+@Itcl import for Tcl/Tk8.3 upgrade
+@
+text
+@@
+
+
+1.1.1.2
+log
+@Remove local modifications and files no longer in itcl 3.2.1
+@
+text
+@@
+

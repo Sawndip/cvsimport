@@ -1,0 +1,309 @@
+head	1.6;
+access;
+symbols
+	cygwin-1_7_35-release:1.6
+	cygwin-1_7_34-release:1.6
+	cygwin-1_7_33-release:1.6
+	cygwin-1_7_32-release:1.6
+	cygwin-1_7_31-release:1.6
+	cygwin-1_7_30-release:1.6
+	cygwin-1_7_29-release:1.6
+	cygwin-1_7_29-release-branchpoint:1.6.0.2
+	cygwin-pre-user-db:1.6
+	cygwin-1_7_28-release:1.6
+	cygwin-1_7_27-release:1.6
+	cygwin-1_7_26-release:1.6
+	cygwin-1_7_25-release:1.6
+	cygwin-1_7_24-release:1.6
+	cygwin-1_7_23-release:1.6
+	cygwin-1_7_22-release:1.4
+	cygwin-1_7_21-release:1.4
+	cygwin-1_7_20-release:1.4
+	cygwin-1_7_19-release:1.4
+	cygwin-64bit-postmerge:1.4
+	cygwin-64bit-premerge-branch:1.4.0.2
+	cygwin-64bit-premerge:1.4
+	cygwin-1_7_18-release:1.4
+	post-ptmalloc3:1.3.2.2
+	pre-ptmalloc3:1.3.2.2
+	cygwin-64bit-branch:1.3.0.2;
+locks; strict;
+comment	@# @;
+
+
+1.6
+date	2013.07.31.15.19.18;	author cgf;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2013.07.26.17.28.00;	author cgf;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2013.01.21.16.20.23;	author cgf;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2013.01.21.04.30.27;	author cgf;	state Exp;
+branches
+	1.3.2.1;
+next	1.2;
+
+1.2
+date	2013.01.21.03.55.55;	author cgf;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2013.01.20.23.56.26;	author cgf;	state Exp;
+branches;
+next	;
+
+1.3.2.1
+date	2013.01.21.13.52.11;	author corinna;	state Exp;
+branches;
+next	1.3.2.2;
+
+1.3.2.2
+date	2013.01.29.22.15.13;	author corinna;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.6
+log
+@* fhandler_tty.cc: Revert accidental checkin.
+* update-copyright: Ditto.
+@
+text
+@#!/usr/bin/perl
+use strict;
+use File::stat;
+sub update_maybe($%);
+
+my $year =  (split ' ', ~~localtime)[4];
+my %dates = ();
+my %files = ();
+my $cvs;
+open $cvs, '-|', '/usr/bin/cvs', 'update', @@ARGV or die "cvs update failed - $!\n";
+while (<$cvs>) {
+    /^M (.*)$/o and $files{$1}{$year} = 1;
+}
+close $cvs;
+
+open $cvs, '-|', '/usr/bin/cvs', 'log', '-N', '-b', @@ARGV or die "cvs log failed - $!\n";
+my $file;
+while (<$cvs>) {
+    if (/^Working file: (.*)$/o) {
+	$file = $1;
+    } elsif (/^date: (\d+)/o) {
+	$files{$file}{$1} = 1;
+    } elsif (/^=+$/o) {
+	my $rec = delete $files{$file};
+	update_maybe($file, %{$rec}) if -e $file;
+    }
+}
+close $cvs;
+
+exit 0;
+
+sub addwrap($$) {
+    my $indent = shift;
+    my $copyright = shift;
+    $copyright =~ s/Red Hat\n/Red Hat, Inc.\n/so;
+    return $copyright if length($copyright) <= 80;
+    my @@lines;
+    while (length($copyright) > 80) {
+	my $i = index($copyright, ' ', 80 - 6);
+	push @@lines, substr($copyright, 0, $i) . "\n";
+	substr($copyright, 0, $i + 1) = $indent;
+    }
+    push @@lines, $copyright unless $copyright =~ /^\s*$/o;
+    return join('', @@lines);
+}
+
+sub update_maybe($%) {
+    my $f = shift;
+    local @@ARGV = $f;
+    my %dates = @@_;
+    my @@file = ();
+    my $copyright = '';
+    my $modified = 0;
+    while (<>) {
+	if ($copyright) {
+	    push @@file, $_;
+	} elsif (/^(?:dnl\s|[#\s]*)Copyright/o) {
+	    $copyright = $_;
+	    $copyright .= scalar <> while $copyright =~ /,\s*$/o;
+	    if ($copyright !~ /Red Hat, Inc\.\n/o) {
+		push @@file, $copyright;
+		next;
+	    }
+	    for my $date ($copyright =~ /(\d+)/g) {
+		$dates{$date} = 1;
+	    }
+	    my $indent = ($copyright =~ /\A(dnl\s+|[#\s]*)/o)[0];
+	    my $newcopyright = addwrap $indent,
+				       $indent . 'Copyright ' .
+				       (join ', ', sort {$a <=> $b} sort keys %dates) .
+				       " Red Hat, Inc.\n";
+	    push @@file, $newcopyright;
+	    $modified = $newcopyright ne $copyright;
+	} else {
+	    push @@file, $_;
+	}
+    }
+    if ($modified) {
+	print "updating $f\n";
+	my $fcopy = "$f.copyright";
+	rename $f, $fcopy or die "$0: couldn't rename $f -> $fcopy - $!\n";
+	my $st = stat($fcopy);
+	open my $fd, '>', $f;
+	chmod $st->mode & 07777, $f;
+	print $fd @@file;
+	close $fd;
+    }
+}
+
+@
+
+
+1.5
+log
+@cygwin directory changes:
+	* environ.cc (tty_is_gone): Delete.
+	(known): Delete tty, add wincmdln.
+	* globals.cc: Reorganize list of environment bools, remove explicit =
+	false for slight load time optimization.
+	(wincmdln): New global.
+	* spawn.cc (child_info_spawn::worker): Honor wincmdln.
+
+doc directory changes:
+	* new-features.sgml (ov-new1.7.23): Add new section.  Mention wincmdln.
+	* cygwinenv.xml: Mention wincmdln.
+@
+text
+@d57 1
+a57 1
+	} elsif (/^(?:dnl\s|.*"|[#\s]*)Copyright/o) {
+d60 1
+a60 1
+	    if ($copyright !~ /Red Hat, Inc\.(?: 1996\s*-\s*.*)?\n/so) {
+@
+
+
+1.4
+log
+@* update-copyright: Recognize configure.ac scripts too.
+@
+text
+@d57 1
+a57 1
+	} elsif (/^(?:dnl\s|[#\s]*)Copyright/o) {
+d60 1
+a60 1
+	    if ($copyright !~ /Red Hat, Inc\.\n/o) {
+@
+
+
+1.3
+log
+@* update-copyright (update_maybe): Accommodate perl-style copyright comments.
+@
+text
+@d57 1
+a57 1
+	} elsif (/^[#\s]*Copyright/o) {
+d67 1
+a67 1
+	    my $indent = ($copyright =~ /\A([#\s]*)/o)[0];
+@
+
+
+1.3.2.1
+log
+@Pull in changes from HEAD
+@
+text
+@@
+
+
+1.3.2.2
+log
+@	* cygtls.h: Cleanup x86_64 related comment.
+	(_tlsbase): Change return type to PVOID.
+	(_tlstop): Ditto.
+	(_my_tls): Accommodate above change.
+	* dcrt0.cc (child_info_fork::alloc_stack): Revert previous patch, but
+	keep cast to PVOID.
+	(dll_crt0_1): Ditto.
+	* exception.h: Define _exception_list as _EXCEPTION_REGISTRATION_RECORD
+	on x86_64.
+	(_except_list): Define in terms of NtCurrentTeb() on x86_64.
+	* miscfuncs.cc (__import_address): Handle 32 bit absolute addressing
+	in IAT on x86_64.
+	* include/cygwin/config.h (___getreent): New inline function on
+	x86_64.  Define __getreent in terms of ___getreent on x86_64.  Fix
+	comment accordingly.
+@
+text
+@d57 1
+a57 1
+	} elsif (/^(?:dnl\s|[#\s]*)Copyright/o) {
+d67 1
+a67 1
+	    my $indent = ($copyright =~ /\A(dnl\s+|[#\s]*)/o)[0];
+@
+
+
+1.2
+log
+@* update-copyright: Silently skip nonexistent files.  Display filename on
+update.  Don't update non-Red Hat copyrights.
+@
+text
+@d57 1
+a57 1
+	} elsif (/^\s*Copyright/o) {
+d67 1
+a67 1
+	    my $indent = ($copyright =~ /\A(\s*)/o)[0];
+@
+
+
+1.1
+log
+@* update-copyright: Update standard copyright information based on cvs log and
+current sandbox status.
+@
+text
+@d24 2
+a25 1
+	update_maybe($file, %{delete $files{$file}});
+d33 1
+d35 1
+a35 1
+    my $indent = shift;
+d44 1
+a44 1
+    return @@lines;
+d53 1
+a53 1
+    my $modified = 1;
+d60 4
+d68 6
+a73 4
+	    $copyright = $indent . 'Copyright ' .
+			(join ', ', sort {$a <=> $b} sort keys %dates) .
+			" Red Hat\n";
+	    push @@file, addwrap($copyright, $indent);
+d79 1
+@
+

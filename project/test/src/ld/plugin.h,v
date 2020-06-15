@@ -1,0 +1,859 @@
+head	1.11;
+access;
+symbols
+	binutils-2_24-branch:1.11.0.2
+	binutils-2_24-branchpoint:1.11
+	binutils-2_21_1:1.2.2.3
+	binutils-2_23_2:1.10.2.1
+	binutils-2_23_1:1.10
+	binutils-2_23:1.10
+	binutils-2_23-branch:1.10.0.2
+	binutils-2_23-branchpoint:1.10
+	binutils-2_22_branch:1.9.2.1.0.2
+	binutils-2_22:1.9.2.1
+	binutils-2_22-branch:1.9.0.2
+	binutils-2_22-branchpoint:1.9
+	binutils-2_21:1.2
+	binutils-2_21-branch:1.2.0.2
+	binutils-2_21-branchpoint:1.2
+	binutils_latest_snapshot:1.11;
+locks; strict;
+comment	@ * @;
+
+
+1.11
+date	2012.12.03.14.34.05;	author hjl;	state Exp;
+branches;
+next	1.10;
+
+1.10
+date	2011.10.20.09.50.59;	author amodra;	state Exp;
+branches
+	1.10.2.1;
+next	1.9;
+
+1.9
+date	2011.04.20.00.22.08;	author amodra;	state Exp;
+branches
+	1.9.2.1;
+next	1.8;
+
+1.8
+date	2011.04.17.23.15.13;	author amodra;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2011.03.04.23.44.01;	author hjl;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2011.02.14.09.53.15;	author amodra;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2010.12.06.12.44.51;	author hjl;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2010.12.02.01.26.07;	author hjl;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2010.12.02.01.22.54;	author hjl;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2010.11.05.07.20.06;	author davek;	state Exp;
+branches
+	1.2.2.1;
+next	1.1;
+
+1.1
+date	2010.10.14.01.31.31;	author davek;	state Exp;
+branches;
+next	;
+
+1.10.2.1
+date	2013.01.21.13.48.48;	author amodra;	state Exp;
+branches;
+next	;
+
+1.9.2.1
+date	2011.10.25.03.15.08;	author amodra;	state Exp;
+branches;
+next	;
+
+1.2.2.1
+date	2011.02.01.12.25.46;	author amodra;	state Exp;
+branches;
+next	1.2.2.2;
+
+1.2.2.2
+date	2011.02.14.10.03.37;	author amodra;	state Exp;
+branches;
+next	1.2.2.3;
+
+1.2.2.3
+date	2011.04.27.07.17.43;	author amodra;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.11
+log
+@Improve plugin error handling
+
+ld/
+
+	PR ld/14904
+	* ldmain.c (main): Don't check plugin_load_plugins return.
+
+	* lexsup.c (parse_args): Don't check plugin_opt_plugin return.
+
+	* plugin.c (dlerror): New.  Defined if HAVE_DLFCN_H isn't
+	defined.
+	(plugin_opt_plugin): Change return type to void.  Stop on
+	dlopen error and report error with dlerror ().
+	(plugin_load_plugins): Change return type to void.  Stop on
+	dlsym error and report error with dlerror ().  Don't use
+	set_plugin_error.
+	(plugin_call_cleanup): Issue an error for each plugin.
+
+	* plugin.h (plugin_opt_plugin): Change return type to void.
+	(plugin_load_plugins): Likewise.
+
+ld/testsuite/
+
+	PR ld/14904
+	* ld-plugin/plugin-2.d: Update expected error message.
+	* ld-plugin/plugin-4.d: Likewise.
+@
+text
+@/* Plugin control for the GNU linker.
+   Copyright 2010, 2011 Free Software Foundation, Inc.
+
+   This file is part of the GNU Binutils.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+   MA 02110-1301, USA.  */
+
+#ifndef GLD_PLUGIN_H
+#define GLD_PLUGIN_H
+
+/* Report plugin symbols.  */
+extern bfd_boolean report_plugin_symbols;
+
+/* Set at all symbols read time, to avoid recursively offering the plugin
+   its own newly-added input files and libs to claim.  */
+extern bfd_boolean no_more_claiming;
+
+/* This is the only forward declaration we need to avoid having
+   to include the plugin-api.h header in order to use this file.  */
+struct ld_plugin_input_file;
+
+/* Handle -plugin arg: find and load plugin.  */
+extern void plugin_opt_plugin (const char *plugin);
+
+/* Accumulate option arguments for last-loaded plugin, or return
+   error if none.  */
+extern int plugin_opt_plugin_arg (const char *arg);
+
+/* Return true if any plugins are active this run.  Only valid
+   after options have been processed.  */
+extern bfd_boolean plugin_active_plugins_p (void);
+
+/* Load up and initialise all plugins after argument parsing.  */
+extern void plugin_load_plugins (void);
+
+/* Return name of plugin which caused an error in any of the above.  */
+extern const char *plugin_error_plugin (void);
+
+/* Call 'claim file' hook for all plugins.  */
+extern void plugin_maybe_claim (struct ld_plugin_input_file *,
+				lang_input_statement_type *);
+
+/* Call 'all symbols read' hook for all plugins.  */
+extern int plugin_call_all_symbols_read (void);
+
+/* Call 'cleanup' hook for all plugins at exit.  */
+extern void plugin_call_cleanup (void);
+
+/* Generate a dummy BFD to represent an IR file, for any callers of
+   plugin_call_claim_file to use as the handle in the ld_plugin_input_file
+   struct that they build to pass in.  The BFD is initially writable, so
+   that symbols can be added to it; it must be made readable after the
+   add_symbols hook has been called so that it can be read when linking.  */
+extern bfd *plugin_get_ir_dummy_bfd (const char *name, bfd *template);
+
+/* Return true if bfd is a dynamic library that should be reloaded.  */
+extern bfd_boolean plugin_should_reload (bfd *);
+
+#endif /* !def GLD_PLUGIN_H */
+@
+
+
+1.10
+log
+@	PR ld/13287
+	* plugin.c (plugin_should_reload): New function.
+	* plugin.h (plugin_should_reload): Declare.
+	* ldlang.c (open_input_bfds): Use above function.
+@
+text
+@d35 2
+a36 2
+/* Handle -plugin arg: find and load plugin, or return error.  */
+extern int plugin_opt_plugin (const char *plugin);
+d47 1
+a47 1
+extern int plugin_load_plugins (void);
+@
+
+
+1.10.2.1
+log
+@	PR 12549
+	PR 14493
+	PR 14567
+	PR 14662
+	PR 14758
+	PR 14813
+	PR 14904
+	PR 14915
+	PR 14926
+	PR 14950
+	PR 14962
+	Apply mainline patches
+@
+text
+@d35 2
+a36 2
+/* Handle -plugin arg: find and load plugin.  */
+extern void plugin_opt_plugin (const char *plugin);
+d47 1
+a47 1
+extern void plugin_load_plugins (void);
+@
+
+
+1.9
+log
+@	PR ld/12365
+bfd/
+	* elfcode.h (elf_slurp_symbol_table): Put common plugin IR symbols
+	in their own common section.
+	* elflink.c (elf_link_add_object_symbols): Likewise.
+	* linker.c (generic_link_check_archive_element): Don't lose flags
+	if common section is pre-existing.
+	(_bfd_generic_link_add_one_symbol): Likewise.
+ld/
+	* ldfile.c (ldfile_try_open_bfd): Move code creating and switching
+	to plugin IR BFD..
+	* ldmain.c (add_archive_element): ..and similar code here..
+	* plugin.c (plugin_maybe_claim): ..to here.  New function.
+	(plugin_call_claim_file): Make static.
+	(asymbol_from_plugin_symbol): Set ELF st_shndx for common syms.
+	(plugin_multiple_common): New function.
+	(plugin_call_all_symbols_read): Hook in plugin_multiple_common.
+	* plugin.h (plugin_call_claim_file): Don't declare.
+	(plugin_maybe_claim): Declare.
+@
+text
+@d69 3
+@
+
+
+1.9.2.1
+log
+@	PR ld/13287
+	2011-10-20  Alan Modra  <amodra@@gmail.com>
+	* plugin.c (plugin_should_reload): New function.
+	* plugin.h (plugin_should_reload): Declare.
+	* ldlang.c (open_input_bfds): Use above function.
+@
+text
+@a68 3
+/* Return true if bfd is a dynamic library that should be reloaded.  */
+extern bfd_boolean plugin_should_reload (bfd *);
+
+@
+
+
+1.8
+log
+@	PR ld/12365
+	PR ld/12672
+bfd/
+	* bfd.c (BFD_PLUGIN): Define.
+	(BFD_FLAGS_SAVED, BFD_FLAGS_FOR_BFD_USE_MASK): Add BFD_PLUGIN.
+	* bfd-in2.h: Regenerate.
+	* elflink.c (elf_link_output_extsym): Strip undefined plugin syms.
+	* opncls.c (bfd_make_readable): Don't lose original bfd flags.
+ld/
+	* ldfile.c (ldfile_try_open_bfd): Don't attempt any plugin action
+	when no_more_claiming.
+	* ldmain.c (add_archive_element): Likewise.
+	(multiple_definition): Remove plugin_multiple_definition call.
+	(notice): Remove plugin_notice call.
+	* ldlang.c (lang_list_insert_after, void lang_list_remove_tail): Move.
+	Delete prototype.
+	(plugin_insert): New static var.
+	(open_input_bfds): Only rescan libs after plugin insert point.
+	(lang_gc_sections): Omit plugin claimed files.
+	(lang_process): Set plugin_insert.  Only rescan when plugin adds
+	objects.
+	* plugin.h (no_more_claiming): Declare.
+	(plugin_notice, plugin_multiple_definition): Don't declare.
+	* plugin.c: Formatting.
+	(orig_notice_all, orig_allow_multiple_defs, orig_callbacks,
+	plugin_callbacks): New static vars.
+	(no_more_claiming): Make global.
+	(plugin_cached_allow_multiple_defs): Delete.
+	(plugin_get_ir_dummy_bfd): Set SEC_EXCLUDE on dummy .text section,
+	use newer bfd_make_section variant.  Make COMMON section too.
+	Error handling.  Correct setting of gp size.
+	(asymbol_from_plugin_symbol): Properly cast last arg of concat.
+	(message): Likewise for ACONCAT.
+	(asymbol_from_plugin_symbol): Use our COMMON section.
+	(get_symbols): When report_plugin_symbols, show visibility too.
+	(init_non_ironly_hash): Move.  Don't test non_ironly_hash.
+	(plugin_load_plugins): Save state of linker callbacks, set up to
+	call plugin_notice instead.  Call init_non_ironly_hash here.
+	(plugin_call_all_symbols_read): Set plugin_multiple_definition in
+	plugin callbacks.
+	(plugin_notice): Rewrite.
+	(plugin_multiple_definition): Make static, call original callback.
+ld/testsuite/
+	* ld-plugin/plugin-7.d: Adjust for plugin changes.
+	* ld-plugin/plugin-8.d: Likewise.
+	* ld-plugin/plugin.exp: Pass --verbose=2 for visibility test, and
+	compare ld output to..
+	* ld-plugin/plugin-12.d: New.
+@
+text
+@d53 2
+a54 2
+extern int plugin_call_claim_file (const struct ld_plugin_input_file *file,
+				   int *claimed);
+@
+
+
+1.7
+log
+@Report plugin symbols for --verbose=N.
+
+2011-03-04  H.J. Lu  <hongjiu.lu@@intel.com>
+
+	* ld.texinfo: Document --verbose[=NUMBER].
+
+	* lexsup.c (ld_options): Update --verbose.
+	(parse_args): Set report_plugin_symbols.
+
+	* plugin.c (report_plugin_symbols): New.
+	(get_symbols): Report plugin symbols if report_plugin_symbols
+	is TRUE.
+
+	* plugin.h (report_plugin_symbols): New.
+@
+text
+@d27 4
+a68 13
+/* Notice-symbol bfd linker callback hook.  */
+extern bfd_boolean plugin_notice (struct bfd_link_info *info,
+				  const char *name, bfd *abfd,
+				  asection *section, bfd_vma value);
+
+/* Multiple-definition bfd linker callback hook.  */
+extern bfd_boolean plugin_multiple_definition (struct bfd_link_info *info,
+					       const char *name,
+					       bfd *obfd, asection *osec,
+					       bfd_vma oval, bfd *nbfd,
+					       asection *nsec,
+					       bfd_vma nval);
+
+@
+
+
+1.6
+log
+@	* ldmain.c (remove_output): Rename to..
+	(ld_cleanup): ..this. Call bfd_cache_close_all and plugin_call_cleanup.
+	(main): Adjust.
+	* plugin.c (plugin_call_cleanup): Make global.
+	(plugin_load_plugins): Don't register plugin_call_cleanup with xatexit.
+	* plugin.h (plugin_call_cleanup): Declare.
+@
+text
+@d24 2
+@
+
+
+1.5
+log
+@Call xatexit with plugin_call_cleanup.
+
+2010-12-06  H.J. Lu  <hongjiu.lu@@intel.com>
+	    Dmitry Gorbachev  <d.g.gorbachev@@gmail.com>
+
+	PR ld/12289
+	* ldmain.c (main): Don't call plugin_call_cleanup.
+
+	* plugin.c (plugin_call_cleanup): Make it static.
+	(message): Don't call plugin_call_cleanup.
+	(plugin_load_plugins): Call xatexit with plugin_call_cleanup.
+@
+text
+@d2 1
+a2 1
+   Copyright 2010 Free Software Foundation, Inc.
+d53 3
+@
+
+
+1.4
+log
+@Break long lines.
+@
+text
+@a52 3
+/* Call 'cleanup' hook for all plugins.  */
+extern int plugin_call_cleanup (void);
+
+@
+
+
+1.3
+log
+@Re-indent plugin.h.
+
+2010-12-01  H.J. Lu  <hongjiu.lu@@intel.com>
+
+	* plugin.h: Re-indent.
+@
+text
+@d65 2
+a66 2
+				  const char *name, bfd *abfd, asection *section,
+				  bfd_vma value);
+d71 4
+a74 2
+					       bfd *obfd, asection *osec, bfd_vma oval,
+					       bfd *nbfd, asection *nsec, bfd_vma nval);
+@
+
+
+1.2
+log
+@	* plugin.h (plugin_active_plugins_p): New prototype.
+	(is_ir_dummy_bfd): Delete prototype.
+	* plugin.c: Fix formatting issues.
+	(is_ir_dummy_bfd): Make static.
+	(plugin_active_plugins_p): New function.
+	* ldfile.c (ldfile_try_open_bfd): Use it to save work if no plugins
+	are loaded.  Always close file descriptor after claim handler returns.
+	* ldmain.c (add_archive_element): Likewise.
+@
+text
+@d48 1
+a48 1
+		int *claimed);
+d65 2
+a66 2
+		const char *name, bfd *abfd, asection *section,
+		bfd_vma value);
+d70 3
+a72 3
+		const char *name,
+		bfd *obfd, asection *osec, bfd_vma oval,
+		bfd *nbfd, asection *nsec, bfd_vma nval);
+@
+
+
+1.2.2.1
+log
+@backport from mainline
+@
+text
+@d53 3
+@
+
+
+1.2.2.2
+log
+@	* ldmain.c (remove_output): Rename to..
+	(ld_cleanup): ..this. Call bfd_cache_close_all and plugin_call_cleanup.
+	(main): Adjust.
+	* plugin.c (plugin_call_cleanup): Make global.
+	(plugin_load_plugins): Don't register plugin_call_cleanup with xatexit.
+	* plugin.h (plugin_call_cleanup): Declare.
+@
+text
+@d2 1
+a2 1
+   Copyright 2010, 2011 Free Software Foundation, Inc.
+a52 3
+/* Call 'cleanup' hook for all plugins at exit.  */
+extern void plugin_call_cleanup (void);
+
+@
+
+
+1.2.2.3
+log
+@	PR ld/12696
+	PR ld/12672
+	PR ld/12507
+	PR ld/12365
+	PR 10549
+Backport fixes for these PRs.
+@
+text
+@a23 6
+/* Report plugin symbols.  */
+extern bfd_boolean report_plugin_symbols;
+
+/* Set at all symbols read time, to avoid recursively offering the plugin
+   its own newly-added input files and libs to claim.  */
+extern bfd_boolean no_more_claiming;
+d47 2
+a48 2
+extern void plugin_maybe_claim (struct ld_plugin_input_file *,
+				lang_input_statement_type *);
+d63 11
+@
+
+
+1.1
+log
+@Applied patch series for LD plugin interface (six parts).
+
+[PATCH] Add infrastructure for plugin API; functionality to follow.
+
+    include/ChangeLog:
+
+2010-10-14  Dave Korn  <dave.korn.cygwin@@gmail.com>
+
+	Apply LD plugin patch series (part 1/6).
+	* plugin-api.h (LDPT_GNU_LD_VERSION): New ld_plugin_tag enum member.
+
+    ld/ChangeLog:
+
+2010-10-14  Dave Korn  <dave.korn.cygwin@@gmail.com>
+
+	Apply LD plugin patch series (part 1/6).
+	* configure.in: Add AC_CHECKs for file io and dlfcn headers and
+	functions and AC_SEARCH for -ldl.
+	(enable_plugins): New shell variable set if above tests find dlopen
+	functionality.
+	(ENABLE_PLUGINS): Add related automake conditional.
+	* configure: Regenerate.
+	* config.in: Likewise.
+	* Makefile.am (PLUGIN_C): Declare plugin C source file, conditional
+	on ENABLE_PLUGINS being defined.
+	(PLUGIN_H): Likewise for header file.
+	(PLUGIN_OBJECT): Likewise for object file.
+	(PLUGIN_CFLAGS): Likewise -D flag required to compile plugin support.
+	(AM_CPPFLAGS): Use PLUGIN_CFLAGS.
+	(CFILES): Use PLUGIN_C.
+	(HFILES): Use PLUGIN_H.
+	(OFILES): Use PLUGIN_OBJECT.
+	(ld_new_SOURCES): Use PLUGIN_C.
+	(noinst_LTLIBRARIES)[ENABLE_PLUGINS]: Declare test plugin.
+	(libldtestplug_la_SOURCES)[ENABLE_PLUGINS]: Add automake definition
+	for test plugin.
+	(libldtestplug_la_CFLAGS)[ENABLE_PLUGINS]: Likewise.
+	(libldtestplug_la_LDFLAGS)[ENABLE_PLUGINS]: Likewise.
+	* Makefile.in: Regenerate.
+	* sysdep.h: Include stdarg.h, unistd.h and one of fcntl.h or
+	sys/file.h where available.  Include dlfcn.h when ENABLE_PLUGINS.
+	(O_RDONLY): Supply default definition likewise to bfd's sysdep.h
+	(O_WRONLY): Likewise.
+	(O_RDWR): Likewise.
+	(O_ACCMODE): Likewise.
+	(O_BINARY): Likewise.
+	(SEEK_SET): Likewise.
+	(SEEK_CUR): Likewise.
+	(SEEK_END): Likewise.
+	* ldmisc.c (vfinfo): Make non-static.  Add %p format char.
+	* ldmisc.h (vfinfo): Declare extern prototype.
+	* lexsup.c (enum option_values)[ENABLE_PLUGINS]: Add new entries for
+	OPTION_PLUGIN and OPTION_PLUGIN_OPT.
+	(ld_options[])[ENABLE_PLUGINS]: Add option data for the above two.
+	(parse_args)[ENABLE_PLUGINS]: Handle them, and load all plugins once
+	option parsing is complete.
+	* ldmain.c (main)[ENABLE_PLUGINS]: Call plugin cleanup hooks just
+	after lang_finish.
+	* plugin.c: New source file.
+	* plugin.h: Likewise new header.
+	* testplug.c: New source file.
+
+    ld/testsuite/ChangeLog:
+
+2010-10-14  Dave Korn  <dave.korn.cygwin@@gmail.com>
+
+	Apply LD plugin patch series (part 1/6).
+	* ld-bootstrap/bootstrap.exp: Skip static tests also if LD plugins
+	are enabled.
+	* lib/ld-lib.exp (proc regexp_diff): Extend verbose debug output.
+	(proc set_file_contents): Write a file with the supplied content.
+	(run_ld_link_tests): Add new 'ld' action to test linker output.
+	(proc check_plugin_api_available): Return true if linker under test
+	supports the plugin API.
+	* ld-plugin/func.c: New test source file.
+	* ld-plugin/main.c: Likewise.
+	* ld-plugin/text.c: Likewise.
+	* ld-plugin/plugin-1.d: New dump test output pattern script.
+	* ld-plugin/plugin-2.d: Likewise.
+	* ld-plugin/plugin-3.d: Likewise.
+	* ld-plugin/plugin-4.d: Likewise.
+	* ld-plugin/plugin-5.d: Likewise.
+	* ld-plugin/plugin.exp: New test control script.
+---
+[PATCH] Implement claim file and all symbols read hooks and add symbols callback.
+
+  ld/ChangeLog:
+
+2010-10-14  Dave Korn  <dave.korn.cygwin@@gmail.com>
+
+	Apply LD plugin patch series (part 2/6).
+	* ldfile.c (ldfile_try_open_bfd)[ENABLE_PLUGINS]: Don't return early
+	during compat checks if they pass, instead offer any successfully
+	opened and accepted file to the plugin claim file hooks chain.  Create
+	a dummy bfd to accept symbols added by the plugin, if the plugin
+	claims the file.
+	* ldlang.c (lang_process)[ENABLE_PLUGINS]: Call plugin all symbols
+	read hook chain before ldemul_after_open.
+	* ldlang.h (struct lang_input_statement_struct): Add new single-bit
+	'claimed' flag.
+	* plugin.c (IRONLY_SUFFIX): New macro for dummy bfd file suffix.
+	(IRONLY_SUFFIX_LEN): Length of the above string.
+	(plugin_get_ir_dummy_bfd): New function to create the dummy bfd used
+	to store symbols for ir-only files.
+	(is_ir_dummy_bfd): New function to check if a bfd is ir-only.
+	(asymbol_from_plugin_symbol): New function converts symbol formats.
+	(add_symbols): Call it to convert plugin syms to bfd syms and add
+	them to the dummy bfd.
+	* plugin.h: Add missing include guards.
+	(plugin_get_ir_dummy_bfd): Add prototype.
+	(is_ir_dummy_bfd): Likewise.
+	* testplug.c (TV_MESSAGE): New helper macro.
+	(struct claim_file): New struct.
+	(claim_file_t): New typedef.
+	(tag_names[]): Make static and const.
+	(claimfiles_list): New variable.
+	(claimfiles_tail_chain_ptr): Likewise.
+	(last_claimfile): Likewise.
+	(record_claim_file): Record a file to claim on a singly-linked list.
+	(parse_symdefstr): Parse an ASCII representation of a symbol from a
+	plugin option into the fields of a struct ld_plugin_symbol.
+	(record_claimed_file_symbol):  Use it to parse plugin option for
+	adding a symbol.
+	(parse_option): Parse claim file and add symbol options.
+	(dump_tv_tag): Use TV_MESSAGE.
+	(onload): Likewise.
+	(onclaim_file): Make static.  Use TV_MESSAGE.  Scan list of files to
+	claim and claim this file if required, adding any symbols specified.
+	(onall_symbols_read): Make static and use TV_MESSAGE.
+	(oncleanup): Likewise.
+
+  ld/testsuite/ChangeLog:
+
+2010-10-14  Dave Korn  <dave.korn.cygwin@@gmail.com>
+
+	Apply LD plugin patch series (part 2/6).
+	* ld-plugin/plugin-3.d: Enable regexes for new functionality.
+	* ld-plugin/plugin-5.d: Likewise.
+	* ld-plugin/plugin-6.d: New testcase.
+	* ld-plugin/plugin-7.d: Likewise.
+	* ld-plugin/plugin.exp: Use 'nm' on compiled test objects to determine
+	whether symbols in plugin arguments need an underscore prefix.  Add
+	new plugin-6.d and plugin-7.d testcases.
+---
+[PATCH] Implement get symbols callback.
+
+  ld/ChangeLog:
+
+2010-10-14  Dave Korn  <dave.korn.cygwin@@gmail.com>
+
+	Apply LD plugin patch series (part 3/6).
+	* ldmain.c (notice)[ENABLE_PLUGINS]: Call plugin_notice.
+	* plugin.c (non_ironly_hash): Add new bfd hash table.
+	(plugin_load_plugins): Exit early if no plugins to load.  If plugins
+	do load successfully, set notice_all flag in link info.
+	(get_symbols): Implement.
+	(plugin_load_plugins): Exit early if no plugins to load, else after
+	loading plugins successfully enable notice_all mode.
+	(init_non_ironly_hash): Lazily init non_ironly_hash table.
+	(plugin_notice): Record symbols referenced from non-IR files in the
+	non_ironly_hash.  Suppress tracing, cref generation and nocrossrefs
+	tracking for symbols from dummy IR bfds.
+	* plugin.h: Fix formatting.
+	(plugin_notice): Add prototype.
+	* testplug.c (dumpresolutions): New global var.
+	(parse_options): Accept "dumpresolutions".
+	(onall_symbols_read): Get syms and dump resolutions if it was given.
+
+  ld/testsuite/ChangeLog:
+
+2010-10-14  Dave Korn  <dave.korn.cygwin@@gmail.com>
+
+	Apply LD plugin patch series (part 3/6).
+	* ld-plugin/plugin-8.d: New testcase.
+	* ld-plugin/plugin.exp: Invoke it.
+---
+[PATCH] Implement add input file, add input lib and set extra lib path callbacks.
+
+  ld/ChangeLog:
+
+2010-10-14  Dave Korn  <dave.korn.cygwin@@gmail.com>
+
+	Apply LD plugin patch series (part 4/6).
+	* ldlang.c (lang_process)[ENABLE_PLUGINS]: Move invocation of
+	plugin_call_all_symbols_read to before setting of gc_sym_list, and
+	open any new input files that may have been added during it.
+	* ldmain.c (multiple_definition)[ENABLE_PLUGINS]: Call out to
+	plugin_multiple_definition and let it have first say over what to do
+	with the clashing definitions.
+	* plugin.c (no_more_claiming): New boolean variable.
+	(plugin_cached_allow_multiple_defs): Likewise.
+	(add_input_file): Implement.
+	(add_input_library): Likewise.
+	(set_extra_library_path): Likewise.
+	(plugin_call_claim_file): Don't do anything when no_more_claiming set.
+	(plugin_call_all_symbols_read): Set it.  Disable link info
+	"allow_multiple_definition" flag, but cache its value.
+	(plugin_multiple_definition): New function.
+	* plugin.h (plugin_multiple_definition): Add prototype.
+	* testplug.c (addfile_enum_t): New enumerated typedef.
+	(add_file_t): New struct typedef.
+	(addfiles_list): New variable.
+	(addfiles_tail_chain_ptr): Likewise.
+	(record_add_file): New function.
+	(parse_option): Parse "add:", "lib:" and "dir:" options and call it.
+	(onall_symbols_read): Iterate the list of new files, libs and dirs,
+	adding them.
+
+  ld/testsuite/ChangeLog:
+
+2010-10-14  Dave Korn  <dave.korn.cygwin@@gmail.com>
+
+	Apply LD plugin patch series (part 4/6).
+	* ld-plugin/plugin-9.d: New testcase.
+	* ld-plugin/plugin.exp: Invoke it.
+---
+[PATCH] Add ELF symbol visibility support to plugin interface.
+
+  ld/ChangeLog:
+
+2010-10-14  Dave Korn  <dave.korn.cygwin@@gmail.com>
+
+	Apply LD plugin patch series (part 5/6).
+	* plugin.c (asymbol_from_plugin_symbol): If the bfd is an ELF bfd,
+	find the elf symbol data and set the visibility in the st_other field.
+
+  ld/testsuite/ChangeLog:
+
+2010-10-14  Dave Korn  <dave.korn.cygwin@@gmail.com>
+
+	Apply LD plugin patch series (part 5/6).
+	* ld-plugin/plugin-ignore.d: New dump test control script.
+	* ld-plugin/plugin-vis-1.d: Likewise.
+	* ld-plugin/plugin.exp: Add list of ELF-only tests and run them if
+	testing on an ELF target.
+---
+[PATCH] Add archive support to plugin interface.
+
+  bfd/ChangeLog:
+
+2010-10-14  Dave Korn  <dave.korn.cygwin@@gmail.com>
+
+	Apply LD plugin patch series (part 6/6).
+	* aoutx.h (aout_link_check_ar_symbols): Take new "subsbfd" reference
+	parameter and pass it when invoking add_archive_element callback.
+	(aout_link_check_archive_element): Handle substitute bfd if it
+	was set during add_archive_element callback in the above.
+	* cofflink.c (coff_link_check_ar_symbols): Take new "subsbfd" reference
+	parameter and pass it when invoking add_archive_element callback.
+	(coff_link_check_archive_element): Handle substitute bfd if it
+	was set during add_archive_element callback in the above.
+	* ecoff.c (read_ext_syms_and_strs): New function holds symbol-reading
+	code factored-out from ecoff_link_check_archive_element.
+	(reread_ext_syms_and_strs): Clear old symbols and call it.
+	(ecoff_link_check_archive_element):  Use the above.  Handle substitute
+	BFD if one is set by add_archive_element callback.
+	(ecoff_link_add_archive_symbols): Likewise allow bfd substitution.
+	* elflink.c (elf_link_add_archive_symbols): Likewise.
+	* linker.c (generic_link_check_archive_element): Likewise.
+	* pdp11.c (aout_link_check_ar_symbols): Take new "subsbfd" reference
+	parameter and pass it when invoking add_archive_element callback.
+	(aout_link_check_archive_element): Handle substitute bfd if it was
+	set during add_archive_element callback in the above.
+	* vms-alpha.c (alpha_vms_link_add_archive_symbols): Handle substitute
+	BFD if one is set by add_archive_element callback.
+	* xcofflink.c (xcoff_link_check_dynamic_ar_symbols): Take new "subsbfd"
+	reference parameter and pass it when invoking add_archive_element
+	callback.
+	(xcoff_link_check_ar_symbols): Likewise.
+	(xcoff_link_check_archive_element): Handle bfd substitution if it was
+	set by callback in the above.
+
+  include/ChangeLog:
+
+2010-10-14  Dave Korn  <dave.korn.cygwin@@gmail.com>
+
+	Apply LD plugin patch series (part 6/6).
+	* bfdlink.h (struct_bfd_link_callbacks): Document new argument
+	to add_archive_element callback used to return a replacement bfd which
+	is to be added to the hash table in place of the original element.
+
+  ld/ChangeLog:
+
+2010-10-14  Dave Korn  <dave.korn.cygwin@@gmail.com>
+
+	Apply LD plugin patch series (part 6/6).
+	* ldlang.c (load_symbols): Handle bfd subsitution when calling the
+	add_archive_element callback.
+	* ldmain.c (add_archive_element)[ENABLE_PLUGINS]: Offer the archive
+	member to the plugins and if claimed set "subsbfd" output parameter to
+	point to the dummy IR-only BFD.
+
+  ld/testsuite/ChangeLog:
+
+2010-10-14  Dave Korn  <dave.korn.cygwin@@gmail.com>
+
+	Apply LD plugin patch series (part 6/6).
+	* ld-plugin/plugin-10.d: New dump test control script.
+	* ld-plugin/plugin-11.d: Likewise.
+	* ld-plugin/plugin.exp: Run them.
+---
+@
+text
+@d36 4
+a62 3
+/* Check if the BFD passed in is an IR dummy object file.  */
+extern bfd_boolean is_ir_dummy_bfd (const bfd *abfd);
+
+@
+

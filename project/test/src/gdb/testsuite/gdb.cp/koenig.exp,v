@@ -1,0 +1,615 @@
+head	1.10;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.10
+	gdb_7_6-2013-04-26-release:1.10
+	gdb_7_6-branch:1.10.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.10
+	gdb_7_5_1-2012-11-29-release:1.9
+	gdb_7_5-2012-08-17-release:1.9
+	gdb_7_5-branch:1.9.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.9
+	gdb_7_4_1-2012-04-26-release:1.7.2.1
+	gdb_7_4-2012-01-24-release:1.7.2.1
+	gdb_7_4-branch:1.7.0.2
+	gdb_7_4-2011-12-13-branchpoint:1.7
+	gdb_7_3_1-2011-09-04-release:1.6
+	gdb_7_3-2011-07-26-release:1.6
+	gdb_7_3-branch:1.6.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.6
+	gdb_7_2-2010-09-02-release:1.4
+	gdb_7_2-branch:1.4.0.2
+	gdb_7_2-2010-07-07-branchpoint:1.4;
+locks; strict;
+comment	@# @;
+
+
+1.10
+date	2013.01.01.06.33.27;	author brobecke;	state Exp;
+branches;
+next	1.9;
+
+1.9
+date	2012.07.10.15.18.18;	author tromey;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2012.01.04.08.17.47;	author brobecke;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2011.10.09.19.41.17;	author jkratoch;	state Exp;
+branches
+	1.7.2.1;
+next	1.6;
+
+1.6
+date	2011.01.01.15.33.43;	author brobecke;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2010.09.13.20.41.05;	author swagiaal;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2010.06.07.16.11.35;	author swagiaal;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2010.06.02.15.31.30;	author swagiaal;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2010.05.17.17.06.01;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2010.05.07.14.46.28;	author swagiaal;	state Exp;
+branches;
+next	;
+
+1.7.2.1
+date	2012.01.06.04.44.04;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.10
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@# Copyright 2008-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+standard_testfile .cc
+
+if { [prepare_for_testing ${testfile}.exp ${testfile} ${srcfile} {debug c++}] } {
+     return -1
+}
+
+############################################
+
+if ![runto_main] then {
+    perror "couldn't run to breakpoint main"
+    continue
+}
+
+# Test that koenig lookup finds correct function
+gdb_test "p first(c)" "= 11"
+
+# Change the number of parameters and position of
+# the qualifying parameter
+gdb_test "p second(0,0,c,0,0)" "= 33"
+
+# Test the name "entry" being used for `variablename@@entry' entry values.
+gdb_test "p entry (c)" " = 44"
+
+# Test that koenig lookup finds correct function
+# even if it is overloaded
+gdb_test "p first(0,c)" "= 22"
+
+# Test that koenig lookup finds correct function
+# when the argument is an expression
+gdb_test "p first(b.c)" "= 11"
+
+# test that resolutions can be made across namespaces
+gdb_test "p foo(eo)"         "= 1"
+gdb_test "p foo(eo, eo)"     "= 2"
+gdb_test "p foo(eo, eo, 1)"  "= 3"
+gdb_test "p foo(fo, eo)"     "= 4"
+gdb_test "p foo(1 ,fo, eo)"  "= 5"
+gdb_test "p foo(go, fo, eo)" "= 6"
+
+#test that gdb fails gracefully
+gdb_test "p fake(eo)" "No symbol \"fake\" in current context."
+gdb_test "p foo (fake)" "No symbol \"fake\" in current context."
+
+#test that namespaces of base classes are searched
+gdb_test "p foo(io)" "= 7"
+gdb_test "p foo(ix)" "Cannot resolve function foo to any overloaded instance"
+
+#test for other types
+gdb_test "p foo(ju)" "= 8"
+gdb_test "p foo(js)" "= 9"
+gdb_test "p foo(je)" "= 10"
+
+#test for class members
+setup_xfail "*-*-*"
+gdb_test "p foo(jab)" "= 11"
+
+gdb_test "p foo(jap)" "= 12"
+gdb_test "p foo(japp)" "= 13"
+gdb_test "p foo(jca)" "= 14"
+
+#test overload resolution
+gdb_test "p foo(ko,1)" "= 15"
+gdb_test "p foo(ko,1.0f)" "= 16"
+setup_xfail "*-*-*"
+gdb_test "p bar(ko,1)" "= -1"
+
+#test lookup of objects belonging to nested namespaces
+gdb_test "p foo(labo)" "= 17"
+
+#test koenig found function do not compete with qualified
+#names
+gdb_test "p ma.foo('a')" "= 18"
+gdb_test "p foo(ma,'a')" "= 19"
+gdb_test "p M::N::foo(ma,'a')" "= 20"
+gdb_test "p M::FAKE::foo(ma,'a')" "No type \"FAKE\" within class or namespace \"M\"."
+gdb_test "p M::N::fake(ma,'a')" "No symbol \"fake\" in namespace \"M::N\"."
+
+gdb_test "p M::bar('a')" "= 21"
+gdb_test "p M::N::bar('a')" "= 22"
+
+#test that lookup supports typedef
+gdb_test "p foo(ttoa, 'a')" "= 23"
+
+#test that lookup is not thwarted by anonymous types
+gdb_test "p foo (p_union)" \
+  "Cannot resolve function foo to any overloaded instance"
+
+# test lookup of namespace user-defined operators
+# and overload resolution:
+
+# within class
+gdb_test "p q == 5" "= 24"
+gdb_test "p q == 5.0f" "= 25"
+
+# within namespace
+gdb_test "p q != 5" "= 27"
+gdb_test "p q != 5.0f" "= 28"
+
+# across namespace and class
+gdb_test "p q + 5.0f" "= 26"
+gdb_test "p q + 5" "= 29"
+
+# some unary operators for good measure
+# Cannot resolve function operator++ to any overloaded instance
+gdb_test "p ++q" "= 30"
+
+# Test that koening lookup does not affect
+# member variable lookup.
+gdb_test "p r.rfoo()" "= 31"
+
+# Do the same from inside class R.
+gdb_breakpoint [gdb_get_line_number "marker1"]
+gdb_continue_to_breakpoint "marker1"
+
+gdb_test "p rfoo()" "= 31"
+gdb_test "p this->rfoo()" "= 31"
+@
+
+
+1.9
+log
+@	* gdb.cp/abstract-origin.exp: Use standard_testfile.
+	* gdb.cp/ambiguous.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/annota2.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/annota3.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/anon-ns.exp: Use standard_testfile.
+	* gdb.cp/anon-struct.exp: Use standard_testfile.
+	* gdb.cp/anon-union.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/arg-reference.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/bool.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/breakpoint.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/bs15503.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/call-c.exp: Use standard_testfile, clean_restart,
+	standard_output_file.
+	* gdb.cp/casts.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/class2.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/classes.exp: Use standard_testfile, prepare_for_testing.
+	(test_static_members): Update.
+	* gdb.cp/cmpd-minsyms.exp: Use standard_testfile.
+	* gdb.cp/converts.exp: Use standard_testfile.
+	* gdb.cp/cp-relocate.exp: Use standard_testfile.
+	* gdb.cp/cpcompletion.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/cpexprs.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/cplabel.exp: Use standard_testfile.
+	* gdb.cp/cplusfuncs.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/ctti.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/derivation.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/destrprint.exp: Use standard_testfile.
+	* gdb.cp/dispcxx.exp: Use standard_testfile.
+	* gdb.cp/exception.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/expand-psymtabs-cxx.exp: Use standard_testfile.
+	* gdb.cp/extern-c.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/formatted-ref.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/fpointer.exp: Use standard_testfile.
+	* gdb.cp/gdb1355.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/gdb2384.exp: Use standard_testfile, clean_restart,
+	standard_output_file.
+	* gdb.cp/gdb2495.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/hang.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/infcall-dlopen.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.cp/inherit.exp: Use standard_testfile, prepare_for_testing.
+	(do_tests): Update.
+	* gdb.cp/koenig.exp: Use standard_testfile.
+	* gdb.cp/local.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/m-data.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/m-static.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/mb-ctor.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/mb-inline.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/mb-templates.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/member-ptr.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/meth-typedefs.exp: Use standard_testfile.
+	* gdb.cp/method.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/method2.exp: Use standard_testfile.
+	* gdb.cp/minsym-fallback.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.cp/misc.exp: Use standard_testfile, prepare_for_testing.
+	(do_tests): Update.
+	* gdb.cp/namespace-enum.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/namespace-nested-import.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/namespace.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/nextoverthrow.exp: Use standard_testfile.
+	* gdb.cp/no-dmgl-verbose.exp: Use standard_testfile.
+	* gdb.cp/nsdecl.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/nsimport.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/nsnested.exp: Use standard_testfile.
+	* gdb.cp/nsnoimports.exp: Use standard_testfile.
+	* gdb.cp/nsrecurs.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/nsstress.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/nsusing.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/operator.exp: Use standard_testfile.
+	* gdb.cp/oranking.exp: Use standard_testfile.
+	* gdb.cp/overload-const.exp: Use standard_testfile.
+	* gdb.cp/overload.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/ovldbreak.exp: Use standard_testfile.
+	* gdb.cp/ovsrch.exp: Use standard_testfile.
+	* gdb.cp/paren-type.exp: Use standard_testfile.
+	* gdb.cp/pass-by-ref.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/pr-1023.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/pr-1210.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/pr-574.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/pr10687.exp: Use standard_testfile, clean_restart.
+	* gdb.cp/pr10728.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.cp/pr12028.exp: Use standard_testfile.
+	* gdb.cp/pr9067.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/pr9167.exp: Use standard_testfile.
+	* gdb.cp/pr9631.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/printmethod.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/psmang.exp: Use standard_testfile, clean_restart.
+	* gdb.cp/psymtab-parameter.exp: Use standard_testfile.
+	* gdb.cp/ptype-cv-cp.exp: Use standard_testfile.
+	* gdb.cp/re-set-overloaded.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.cp/readnow-language.exp: Use standard_testfile.
+	* gdb.cp/ref-params.exp: Use standard_testfile, build_executable.
+	(gdb_start_again): Use clean_restart.
+	* gdb.cp/ref-types.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/rtti.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/shadow.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/smartp.exp: Use standard_testfile.
+	* gdb.cp/static-method.exp: Use standard_testfile.
+	* gdb.cp/static-print-quit.exp: Use standard_testfile.
+	* gdb.cp/temargs.exp: Use standard_testfile.
+	* gdb.cp/templates.exp: Use standard_testfile,
+	prepare_for_testing.
+	(do_tests): Update.
+	* gdb.cp/try_catch.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/typedef-operator.exp: Use standard_testfile.
+	* gdb.cp/userdef.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/virtbase.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/virtfunc.exp: Use standard_testfile,
+	prepare_for_testing.
+	(do_tests): Update.
+	* gdb.cp/virtfunc2.exp: Use standard_testfile,
+	prepare_for_testing.
+@
+text
+@d1 1
+a1 1
+# Copyright 2008, 2011-2012 Free Software Foundation, Inc.
+@
+
+
+1.8
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d16 2
+a17 2
+set testfile koenig
+set srcfile ${testfile}.cc
+@
+
+
+1.7
+log
+@gdb/
+	Support @@entry in input expressions.
+	* c-exp.y (ENTRY, unknown_cpp_name): New.
+	(exp: UNKNOWN_CPP_NAME): Change to `exp: unknown_cpp_name'.
+	(unknown_cpp_name: UNKNOWN_CPP_NAME, unknown_cpp_name: ENTRY)
+	(variable: name_not_typename '@@' ENTRY, name: ENTRY)
+	(name_not_typename: ENTRY): New.
+	(yylex): Recognize ENTRY.
+	* eval.c (evaluate_subexp_standard): Support also OP_VAR_ENTRY_VALUE.
+	* expprint.c (print_subexp_standard, dump_subexp_body_standard):
+	Likewise.
+	* parse.c (operator_length_standard): Likewise.
+	* std-operator.def: New operator OP_VAR_ENTRY_VALUE.
+
+gdb/doc/
+	Support @@entry in input expressions.
+	* gdb.texinfo (Variables): Describe @@entry names suffix.
+	(Print Settings): Add anchor for `set print entry-values'.
+
+gdb/testsuite/
+	Support @@entry in input expressions.
+	* gdb.arch/amd64-entry-value.exp (entry: p i@@entry, entry: p j@@entry)
+	(entry_stack: p s1@@entry, entry_stack: p s2@@entry)
+	(entry_stack: p d9@@entry, entry_stack: p da@@entry, tailcall: p i@@entry)
+	(tailcall: p j@@entry): New tests.
+	* gdb.cp/koenig.cc (A::entry): New function.
+	(main): Call it.
+	* gdb.cp/koenig.exp (p entry (c)): New test.
+@
+text
+@d1 1
+a1 1
+# Copyright 2008, 2011 Free Software Foundation, Inc.
+@
+
+
+1.7.2.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d1 1
+a1 1
+# Copyright 2008, 2011-2012 Free Software Foundation, Inc.
+@
+
+
+1.6
+log
+@run copyright.sh for 2011.
+@
+text
+@d36 3
+@
+
+
+1.5
+log
+@Fix PR 11992: C++ 'this' scope sometimes does not work
+
+2010-09-13  Sami Wagiaalla  <swagiaal@@redhat.com>
+
+	PR symtab/11992:
+	* c-exp.y (classify_name): Check is_a_member_of_this before returning
+	UNKNOWN_CPP_NAME.
+
+2010-09-13  Sami Wagiaalla  <swagiaal@@redhat.com>
+
+	* gdb.cp/koenig.cc: created class for testing member lookup.
+	* gdb.cp/koenig.exp: Added test for member lookup.
+@
+text
+@d1 1
+a1 1
+# Copyright 2008 Free Software Foundation, Inc.
+@
+
+
+1.4
+log
+@Test and support all cpp operator types.
+
+2010-06-07  Sami Wagiaalla  <swagiaal@@redhat.com>
+
+	* value.h: Created oload_search_type enum.
+	(find_overload_match): Use oload_search_type enum.
+	* valops.c (find_overload_match): Support combined member and
+	non-member search.
+	* eval.c (evaluate_subexp_standard): Calls to
+	find_overload_match now use oload_search_type enum.
+	(oload_method_static): Verify index is a proper value.
+	* valarith.c (value_user_defined_cpp_op): Search for and handle
+	both member and non-member operators.
+	(value_user_defined_cpp_op): New function.
+	(value_user_defined_op): New function.
+	(value_x_unop): Use value_user_defined_op.
+	(value_x_binop): Ditto.
+	* cp-support.c (make_symbol_overload_list_using): Added block
+	iteration.
+	Add check for namespace aliases and imported declarations.
+
+2010-06-07  Sami Wagiaalla  <swagiaal@@redhat.com>
+
+	* gdb.cp/koenig.exp: Test for ADL operators.
+	* gdb.cp/koenig.cc: Added ADL operators.
+	* gdb.cp/operator.exp: New test.
+	* gdb.cp/operator.cc: New test.
+@
+text
+@d118 11
+@
+
+
+1.3
+log
+@Fix ADL anonymous name crash.
+
+2010-06-02  Sami Wagiaalla  <swagiaal@@redhat.com>
+
+	* cp-support.c (make_symbol_overload_list_adl_namespace): Handle
+	anonymous type case.
+
+2010-06-02  Sami Wagiaalla  <swagiaal@@redhat.com>
+
+	* gdb.cp/koenig.exp: Added new test case.
+	* gdb.cp/koenig.cc: Ditto.
+@
+text
+@a15 4
+if $tracelevel then {
+    strace $tracelevel
+}
+
+d18 2
+a19 4
+set binfile ${objdir}/${subdir}/${testfile}
+if  { [gdb_compile "${srcdir}/${subdir}/${srcfile}" "${binfile}" executable {debug c++}] != "" } {
+    untested "Couldn't compile test program"
+    return -1
+a21 7
+# Get things started.
+
+gdb_exit
+gdb_start
+gdb_reinitialize_dir $srcdir/$subdir
+gdb_load ${binfile}
+
+d99 19
+@
+
+
+1.2
+log
+@Some uses of bug_id and prms_id just reappeared - remove them.
+
+2010-05-17  Joel Brobecker  <brobecker@@adacore.com>
+
+        * gdb.base/gdb11530.exp: Delete setting of prms_id and bug_id.
+        * gdb.cp/koenig.exp: Likewise.
+
+Tested on x86_64-linux.
+@
+text
+@d67 1
+d108 4
+@
+
+
+1.1
+log
+@Add ADL support
+
+2010-05-07  Sami Wagiaalla  <swagiaal@@redhat.com>
+
+	PR C++/7943:
+	* valops.c (find_overload_match): Handle fsym == NULL case.
+	Add int no_adl argument.
+	(find_oload_champ_namespace_loop): Call make_symbol_overload_list_adl
+	when appropriate.
+	Add int no_adl argument.
+	(find_oload_champ_namespace): 	Add int no_adl argument.
+	* parse.c (operator_length_standard): Return length for OP_ADL_FUNC
+	expression.
+	* expprint.c (op_name_standard): Added string for OP_ADL_FUNC case.
+	* eval.c (evaluate_subexp_standard): Added OP_ADL_FUNC case.
+	Evaluate arguments and use them to perform ADL lookup.
+	Pass no_adl argument to find_overload_match.
+	Disable adl lookup when evaluating a fully qualified OP_FUNCALL.
+	* cp-support.h: Added prototype for
+	make_symbol_overload_list_namespace.
+	* cp-support.c (make_symbol_overload_list_namespace): New function.
+	(make_symbol_overload_list_adl_namespace): New function.
+	(make_symbol_overload_list_adl): New function.
+	(make_symbol_overload_list_using): Moved code to add function to
+	overload set to make_symbol_overload_list_namespace.
+	* c-exp.y: create UNKNOWN_CPP_NAME token.
+	Add parse rule for ADL functions.
+	(classify_name): Recognize an UNKNOWN_CPP_NAME.
+
+2010-05-07  Sami Wagiaalla  <swagiaal@@redhat.com>
+
+	* gdb.cp/koenig.exp: New test.
+	* gdb.cp/koenig.cc: New test program.
+@
+text
+@a19 3
+set prms_id 0
+set bug_id 0
+
+@
+

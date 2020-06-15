@@ -1,0 +1,565 @@
+head	1.8;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.8
+	gdb_7_6-2013-04-26-release:1.8
+	gdb_7_6-branch:1.8.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.8
+	gdb_7_5_1-2012-11-29-release:1.7
+	gdb_7_5-2012-08-17-release:1.7
+	gdb_7_5-branch:1.7.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.7
+	gdb_7_4_1-2012-04-26-release:1.5.2.1
+	gdb_7_4-2012-01-24-release:1.5.2.1
+	gdb_7_4-branch:1.5.0.2
+	gdb_7_4-2011-12-13-branchpoint:1.5
+	gdb_7_3_1-2011-09-04-release:1.4
+	gdb_7_3-2011-07-26-release:1.4
+	gdb_7_3-branch:1.4.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.4
+	gdb_7_2-2010-09-02-release:1.3
+	gdb_7_2-branch:1.3.0.2
+	gdb_7_2-2010-07-07-branchpoint:1.3
+	gdb_7_1-2010-03-18-release:1.2
+	gdb_7_1-branch:1.2.0.2
+	gdb_7_1-2010-02-18-branchpoint:1.2
+	gdb_7_0_1-2009-12-22-release:1.1
+	gdb_7_0-2009-10-06-release:1.1
+	gdb_7_0-branch:1.1.0.4
+	gdb_7_0-2009-09-16-branchpoint:1.1
+	msnyder-checkpoint-072509-branch:1.1.0.2
+	msnyder-checkpoint-072509-branchpoint:1.1;
+locks; strict;
+comment	@# @;
+
+
+1.8
+date	2013.01.01.06.41.26;	author brobecke;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2012.06.26.17.54.59;	author tromey;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2012.01.04.08.27.54;	author brobecke;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2011.11.08.08.23.48;	author qiyao;	state Exp;
+branches
+	1.5.2.1;
+next	1.4;
+
+1.4
+date	2011.01.01.15.33.49;	author brobecke;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2010.05.28.18.26.41;	author msnyder;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2010.01.01.07.32.06;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2009.06.27.18.49.20;	author msnyder;	state Exp;
+branches;
+next	;
+
+1.5.2.1
+date	2012.01.06.04.54.28;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.8
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@# Copyright 2008-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# This file is part of the GDB testsuite.  
+# This test tests the restoration of various kinds of machine state
+# to their original values by reverse execution.  We will execute
+# the program forward while it changes various types of data, and
+# then execute it backward to see if their values get restored.
+#
+# The types of machine state (data) that are tested are:
+#   register variable
+#   auto variable
+#   function static variable
+#   module static variable
+#   module global variable
+#
+# TODO:
+# various, possibly including...
+#   .bss variable, .data variable, ...
+#   shared library variable
+#   heap variable (pointer)...
+#   overlay variables...
+#   Test forward replay
+#
+
+if ![supports_reverse] {
+    return
+}
+
+standard_testfile .c ms1.c
+
+if { [prepare_for_testing $testfile.exp $testfile \
+	  [list $srcfile $srcfile2]] } {
+    return -1
+}
+
+set newline "\[\r\n\]+"
+
+set beginmain [gdb_get_line_number " begin main " $srcfile]
+set endmain   [gdb_get_line_number " end main "   $srcfile]
+
+# Test begins
+
+runto main
+
+if [supports_process_record] {
+    # Activate process record/replay
+    gdb_test_no_output "record" "Turn on process record"
+}
+
+# Proceed to end of main
+
+gdb_test "break $endmain" \
+    "Breakpoint.* file .*/$srcfile, line $endmain.*" ""
+gdb_continue_to_breakpoint "end of main" ".*/$srcfile:$endmain.*"
+
+###
+###
+###
+
+# Now run backward to each of several points where data is changed.
+#
+
+# Module global variable, reverse
+
+set breakloc [gdb_get_line_number \
+		  "module_global_state: set breakpoint here" $srcfile]
+
+gdb_test "tbreak $breakloc" ".*/$srcfile, line $breakloc.*" ""
+gdb_test "reverse-continue" ".*/$srcfile:$breakloc.*" "reverse to $breakloc"
+
+gdb_test "print aglobal" ".* = 0$newline"  "module global reverse-breakpoint"
+gdb_test "step"          ".* module global post-change .*" ""
+gdb_test "print aglobal" ".* = 1$newline"  "module global forward past bp"
+gdb_test "reverse-step"  ".*$newline$breakloc.*" ""
+gdb_test "print aglobal" ".* = 0$newline"  "module global reverse-step to bp"
+
+
+# Module static variable, reverse
+
+set breakloc [gdb_get_line_number \
+		  "module_static_state: set breakpoint here" $srcfile]
+
+gdb_test "tbreak $breakloc" ".*/$srcfile, line $breakloc.*" ""
+gdb_test "reverse-continue" ".*/$srcfile:$breakloc.*" "reverse to $breakloc"
+
+gdb_test "print astatic" ".* = 0$newline"  "module static reverse-breakpoint"
+gdb_test "step"          ".* module static post-change .*" ""
+gdb_test "print astatic" ".* = 1$newline"  "module static forward"
+gdb_test "reverse-step"  ".*$newline$breakloc.*" ""
+gdb_test "print astatic" ".* = 0$newline"  "module static reverse-step"
+
+# Function static variable, reverse
+
+set breakloc [gdb_get_line_number \
+		  "function_static_state: set breakpoint here" $srcfile]
+
+gdb_test "tbreak $breakloc" ".*/$srcfile, line $breakloc.*" ""
+gdb_test "reverse-continue" ".*/$srcfile:$breakloc.*" "reverse to $breakloc"
+
+gdb_test "print a"      ".* = 0$newline"  "function static reverse-breakpoint"
+gdb_test "step"         ".* function static post-change .*" ""
+gdb_test "print a"      ".* = 1$newline"  "function static forward"
+gdb_test "reverse-step" ".*$newline$breakloc.*" ""
+gdb_test "print a"      ".* = 0$newline"  "function static reverse-step"
+
+# Auto variable, reverse
+
+set breakloc [gdb_get_line_number \
+		  "auto_state: set breakpoint here" $srcfile]
+
+gdb_test "tbreak $breakloc" ".*/$srcfile, line $breakloc.*" ""
+gdb_test "reverse-continue" ".*/$srcfile:$breakloc.*" "reverse to $breakloc"
+
+gdb_test "print a"      ".* = 0$newline"  "auto var reverse-breakpoint"
+gdb_test "step"         ".* auto post-change .*" ""
+gdb_test "print a"      ".* = 1$newline"  "auto var forward"
+gdb_test "reverse-step" ".*$newline$breakloc.*" ""
+gdb_test "print a"      ".* = 0$newline"  "auto var reverse-step"
+
+# Register variable, reverse
+
+set breakloc [gdb_get_line_number \
+		  "register_state: set breakpoint here" $srcfile]
+
+gdb_test "tbreak $breakloc" ".*/$srcfile, line $breakloc.*" ""
+gdb_test "reverse-continue" ".*/$srcfile:$breakloc.*" "reverse to $breakloc"
+
+gdb_test "print a"      ".* = 0$newline"  "register var reverse-breakpoint"
+gdb_test "step"         ".* register post-change .*" ""
+gdb_test "print a"      ".* = 1$newline"  "register var step post-change"
+gdb_test "reverse-step" ".*$newline$breakloc.*" ""
+gdb_test "print a"      ".* = 0$newline"  "register var reverse step-to"
+
+# Proceed to beginning of main
+
+gdb_test "tbreak $beginmain" ".*/$srcfile, line $beginmain.*" ""
+gdb_test "reverse-continue"  ".*/$srcfile:$beginmain.*" "reverse to main"
+
+# Now repeat tests while replaying forward.
+
+# Register variable, forward
+
+set breakloc [gdb_get_line_number \
+		  "register_state: set breakpoint here" $srcfile]
+
+gdb_test "tbreak $breakloc" ".*/$srcfile, line $breakloc.*" ""
+gdb_test "continue"         ".*/$srcfile:$breakloc.*" "forward to $breakloc"
+
+gdb_test "print a"      ".* = 0$newline"  "register var forward-breakpoint"
+gdb_test "reverse-step" ".*hide.*" ""
+gdb_test "step"         ".*$newline$breakloc.*" ""
+gdb_test "print a"      ".* = 0$newline"  "register var forward step-to"
+gdb_test "step"         ".* register post-change .*" ""
+gdb_test "print a"      ".* = 1$newline"  "register var step post-change"
+
+# Auto variable, forward
+
+set breakloc [gdb_get_line_number \
+		  "auto_state: set breakpoint here" $srcfile]
+
+gdb_test "tbreak $breakloc" ".*/$srcfile, line $breakloc.*" ""
+gdb_test "continue"         ".*/$srcfile:$breakloc.*" "forward to $breakloc"
+
+gdb_test "print a"      ".* = 0$newline"  "auto var forward-breakpoint"
+gdb_test "reverse-step" ".*hide.*" ""
+gdb_test "step"         ".*$newline$breakloc.*" ""
+gdb_test "print a"      ".* = 0$newline"  "auto var forward step-to"
+gdb_test "step"         ".* auto post-change .*" ""
+gdb_test "print a"      ".* = 1$newline"  "auto var step post-change"
+
+# Function static variable, forward
+
+set breakloc [gdb_get_line_number \
+		  "function_static_state: set breakpoint here" $srcfile]
+
+gdb_test "tbreak $breakloc" ".*/$srcfile, line $breakloc.*" ""
+gdb_test "continue"         ".*/$srcfile:$breakloc.*" "forward to $breakloc"
+
+gdb_test "print a"      ".* = 0$newline"  "function static forward-breakpoint"
+gdb_test "reverse-step" ".*hide.*" ""
+gdb_test "step"         ".*$newline$breakloc.*" ""
+gdb_test "print a"      ".* = 0$newline"  "function static forward step-to"
+gdb_test "step"         ".* function static post-change .*" ""
+gdb_test "print a"      ".* = 1$newline"  "function static step post-change"
+
+# Module static variable, forward
+
+set breakloc [gdb_get_line_number \
+		  "module_static_state: set breakpoint here" $srcfile]
+
+gdb_test "tbreak $breakloc" ".*/$srcfile, line $breakloc.*" ""
+gdb_test "continue"         ".*/$srcfile:$breakloc.*" "forward to $breakloc"
+
+gdb_test "print astatic" ".* = 0$newline"  "module static forward-breakpoint"
+gdb_test "reverse-step"  ".*hide.*" ""
+gdb_test "step"          ".*$newline$breakloc.*" ""
+gdb_test "print astatic" ".* = 0$newline"  "module static forward step-to"
+gdb_test "step"          ".* module static post-change .*" ""
+gdb_test "print astatic" ".* = 1$newline"  "module static step post-change"
+
+# Module global variable, forward
+
+set breakloc [gdb_get_line_number \
+		  "module_global_state: set breakpoint here" $srcfile]
+
+gdb_test "tbreak $breakloc" ".*/$srcfile, line $breakloc.*" ""
+gdb_test "continue"         ".*/$srcfile:$breakloc.*" "forward to $breakloc"
+
+gdb_test "print aglobal" ".* = 0$newline"  "module global forward-breakpoint"
+gdb_test "reverse-step"  ".*hide.*" ""
+gdb_test "step"          ".*$newline$breakloc.*" ""
+gdb_test "print aglobal" ".* = 0$newline"  "module global forward step-to"
+gdb_test "step"          ".* module global post-change .*" ""
+gdb_test "print aglobal" ".* = 1$newline"  "module global step post-change"
+
+@
+
+
+1.7
+log
+@	* gdb.reverse/break-precsave.exp: Use standard_testfile.
+	* gdb.reverse/break-reverse.exp: Use standard_testfile.
+	* gdb.reverse/consecutive-precsave.exp: Use standard_testfile.
+	* gdb.reverse/consecutive-reverse.exp: Use standard_testfile.
+	* gdb.reverse/finish-precsave.exp: Use standard_testfile.
+	* gdb.reverse/finish-reverse-bkpt.exp: Use standard_testfile.
+	* gdb.reverse/finish-reverse.exp: Use standard_testfile.
+	* gdb.reverse/i386-precsave.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.reverse/i386-reverse.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.reverse/i386-sse-reverse.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.reverse/i387-env-reverse.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.reverse/i387-stack-reverse.exp: Use standard_testfile,
+	prepare_for_testing
+	* gdb.reverse/machinestate-precsave.exp: Use standard_testfile.
+	* gdb.reverse/machinestate.exp: Use standard_testfile.
+	* gdb.reverse/next-reverse-bkpt-over-sr.exp: Use standard_testfile.
+	* gdb.reverse/sigall-precsave.exp: Use standard_testfile,
+	build_executable.
+	* gdb.reverse/sigall-reverse.exp: Use standard_testfile,
+	build_executable.
+	* gdb.reverse/solib-precsave.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.reverse/solib-reverse.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.reverse/step-precsave.exp: Use standard_testfile.
+	* gdb.reverse/step-reverse.exp: Use standard_testfile.
+	* gdb.reverse/until-precsave.exp: Use standard_testfile.
+	* gdb.reverse/until-reverse.exp: Use standard_testfile.
+	* gdb.reverse/watch-precsave.exp: Use standard_testfile.
+	* gdb.reverse/watch-reverse.exp: Use standard_testfile.
+@
+text
+@d1 1
+a1 1
+# Copyright 2008-2012 Free Software Foundation, Inc.
+@
+
+
+1.6
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d42 1
+a42 3
+set testfile "machinestate"
+set srcfile  ${testfile}.c
+set srcfile1 ms1.c
+d44 2
+a45 1
+if { [prepare_for_testing $testfile.exp $testfile {machinestate.c ms1.c} ] } {
+@
+
+
+1.5
+log
+@gdb/testsuite/
+
+	* gdb.exp (supports_process_record): New.
+	(supports_reverse): New.
+	* gdb.reverse/break-precsave.exp: Call support_process_record
+	to run test conditionally.
+	* gdb.reverse/consecutive-precsave.exp: Likewise.
+	* gdb.reverse/i386-precsave.exp: Likewise.
+	* gdb.reverse/machinestate-precsave.exp: Likewise.
+	* gdb.reverse/solib-precsave.exp: Likewise.
+	* gdb.reverse/step-precsave.exp: Likewise.
+	* gdb.reverse/until-precsave.exp: Likewise.
+	* gdb.reverse/watch-precsave.exp: Likewise.
+	* gdb.reverse/break-reverse.exp: Call support_reverse  to run
+	test conditionally.
+	* gdb.reverse/consecutive-reverse.exp: Likewise.
+	* gdb.reverse/finish-precsave.exp: Likewise.
+	* gdb.reverse/finish-reverse-bkpt.exp: Likewise.
+	* gdb.reverse/finish-reverse.exp: Likewise.
+	* gdb.reverse/i386-reverse.exp: Likewise.
+	* gdb.reverse/i386-sse-reverse.exp: Likewise.
+	* gdb.reverse/machinestate.exp: Likewise.
+	* gdb.reverse/next-reverse-bkpt-over-sr.exp: Likewise.
+	* gdb.reverse/sigall-precsave.exp: Likewise.
+	* gdb.reverse/sigall-reverse.exp: Likewise.
+	* gdb.reverse/solib-reverse.exp: Likewise.
+	* gdb.reverse/step-reverse.exp: Likewise.
+	* gdb.reverse/until-reverse.exp: Likewise.
+	* gdb.reverse/watch-reverse.exp: Likewise.
+@
+text
+@d1 1
+a1 1
+# Copyright 2008, 2009, 2010, 2011 Free Software Foundation, Inc.
+@
+
+
+1.5.2.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d1 1
+a1 1
+# Copyright 2008-2012 Free Software Foundation, Inc.
+@
+
+
+1.4
+log
+@run copyright.sh for 2011.
+@
+text
+@d38 1
+a38 1
+if ![target_info exists gdb,can_reverse] {
+d59 1
+a59 1
+if [target_info exists gdb,use_precord] {
+@
+
+
+1.3
+log
+@2010-05-28  Michael Snyder  <msnyder@@msnyder-server.eng.vmware.com>
+
+	* gdb.reverse/break-precsave.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/break-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/consecutive-precsave.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/consecutive-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/finish-precsave.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/finish-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/i386-precsave.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/i386-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/i386-sse-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/i387-env-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/i387-stack-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/machinestate-precsave.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/machinestate.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/sigall-precsave.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/sigall-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/solib-precsave.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/solib-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/step-precsave.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/step-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/until-precsave.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/until-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/watch-precsave.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/watch-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+@
+text
+@d1 1
+a1 1
+# Copyright 2008, 2009, 2010 Free Software Foundation, Inc.
+@
+
+
+1.2
+log
+@Update copyright year in most headers.
+
+Automatic update by copyright.sh.
+@
+text
+@d61 1
+a61 2
+    gdb_test "record" "" "Turn on process record"
+    # FIXME: command ought to acknowledge, so we can test if it succeeded.
+@
+
+
+1.1
+log
+@2009-06-27  Michael Snyder  <msnyder@@vmware.com>
+
+	* gdb.reverse: New directory.
+	* gdb.reverse/break-reverse.c: New test.
+	* gdb.reverse/break-reverse.exp: New test.
+	* gdb.reverse/consecutive-reverse.c: New test.
+	* gdb.reverse/consecutive-reverse.exp: New test.
+	* gdb.reverse/finish-reverse.c: New test.
+	* gdb.reverse/finish-reverse.exp: New test.
+	* gdb.reverse/machinestate.c: New test.
+	* gdb.reverse/ms1.c: New test.
+	* gdb.reverse/machinestate.exp: New test.
+	* gdb.reverse/Makefile.in: New file.
+	* gdb.reverse/shr2.c: New test.
+	* gdb.reverse/solib-reverse.c: New test.
+	* gdb.reverse/solib-reverse.exp: New test.
+	* gdb.reverse/step-reverse.c: New test.
+	* gdb.reverse/step-reverse.exp: New test.
+	* gdb.reverse/until-reverse.c: New test.
+	* gdb.reverse/ur1.c: New test.
+	* gdb.reverse/until-reverse.exp: New test.
+	* gdb.reverse/watch-reverse.c: New test.
+	* gdb.reverse/watch-reverse.exp: New test.
+	* configure.ac (AC_OUTPUT): Add gdb.reverse/Makefile.
+	* configure: Regenerate.
+@
+text
+@d1 1
+a1 1
+# Copyright 2008, 2009 Free Software Foundation, Inc.
+@
+

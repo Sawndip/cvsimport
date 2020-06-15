@@ -1,0 +1,779 @@
+head	1.7;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.6
+	gdb_7_6-2013-04-26-release:1.6
+	gdb_7_6-branch:1.6.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.6
+	gdb_7_5_1-2012-11-29-release:1.5
+	gdb_7_5-2012-08-17-release:1.5
+	gdb_7_5-branch:1.5.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.5;
+locks; strict;
+comment	@# @;
+
+
+1.7
+date	2013.03.15.01.41.29;	author qiyao;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2013.01.01.06.41.27;	author brobecke;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2012.06.26.19.23.20;	author tromey;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2012.02.22.00.07.43;	author palves;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2012.02.21.22.01.09;	author palves;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2012.02.21.21.55.39;	author palves;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2012.01.24.13.46.55;	author jkratoch;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.7
+log
+@gdb/testsuite/
+	* gdb.threads/non-ldr-exc-1.exp (do_test): Fix the indent of
+	using with_test_prefix.
+	* gdb.threads/non-ldr-exc-2.exp (do_test): Likewise.
+	* gdb.threads/non-ldr-exc-3.exp (do_test): Likewise.
+	* gdb.threads/non-ldr-exc-4.exp (do_test): Likewise.
+	* gdb.threads/watchpoint-fork.exp (test): Likewise.
+	* gdb.base/break-interp.exp (test_core): Likewise.
+	(test_attach_gdb): Likewise.
+	* gdb.base/catch-load.exp (one_catch_load_test): Likewise.
+	* gdb.base/disp-step-syscall.exp (disp_step_cross_syscall):
+	Likewise.
+	* gdb.base/jit-so.exp (one_jit_test): Likewise.
+	* gdb.base/jit.exp (one_jit_test): Likewise.
+	* gdb.base/sepdebug.exp (test_different_dir): Likewise.
+	* gdb.dwarf2/dw2-dir-file-name.exp (test): Likewise.
+	* gdb.dwarf2/dw2-noloc.exp (file_symbols): Likewise.
+	* gdb.mi/mi-breakpoint-changed.exp (test_pending_resolved):
+	Likewise.
+	* gdb.mi/mi-cmd-param-changed.exp (test_command_param_changed):
+	Likewise.
+	* gdb.mi/mi-watch.exp test_watchpoint_all): Likewise.
+	* gdb.mi/pr11022.exp (test_memory_changed_observer): Likewise.
+	* gdb.trace/change-loc.exp (tracepoint_change_loc_1): Likewise.
+	(tracepoint_change_loc_2): Likewise.
+	* gdb.trace/disconnected-tracing.exp (disconnected_tracing):
+	Likewise.
+	(disconnected_tfind): Likewise.
+	* gdb.trace/mi-traceframe-changed.exp (test_tfind_tfile):
+	Likewise.
+	(test_tfind_remote): Likewise.
+	* gdb.trace/mi-tracepoint-changed.exp (test_reconnect):
+	Likewise.
+	(test_pending_resolved): Likewise.
+	* gdb.trace/mi-tsv-changed.exp (test_create_delete_modify_tsv):
+	Likewise.
+	(test_upload_tsv): Likewise.
+	* gdb.trace/pending.exp (pending_tracepoint_resolved):
+	Likewise.
+	(pending_tracepoint_works): Likewise.
+	* gdb.trace/report.exp (use_collected_data): Likewise.
+	* gdb.trace/status-stop.exp (test_tstart_tstop_tstart):
+	Likewise.
+	(test_tstart_tstart, test_buffer_full_tstart): Likewise.
+	* gdb.trace/strace.exp (strace_info_marker): Likewise.
+	(strace_trace_on_same_addr): Likewise.
+	(strace_trace_on_diff_addr): Likewise.
+	* gdb.trace/unavailable.exp (gdb_collect_args_test): Likewise.
+	(gdb_collect_locals_test): Likewise.
+	(gdb_unavailable_registers_test): Likewise.
+	(gdb_collect_globals_test): Likewise.
+@
+text
+@# Copyright 2012-2013 Free Software Foundation, Inc.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# Test case for forgotten hw-watchpoints after fork()-off of a process.
+
+set testfile watchpoint-fork
+
+if [is_remote target] {
+    kfail "remote/13584" "gdbserver does not support debugging across fork"
+    return
+}
+
+proc test {type symbol} {
+    with_test_prefix "$type" {
+	global testfile subdir srcdir gdb_prompt
+
+	set srcfile_type ${srcdir}/${subdir}/${testfile}-${type}.c
+
+	# no threads
+
+	with_test_prefix "singlethreaded" {
+	    set executable ${testfile}-${type}-st
+	    set srcfile_main ${testfile}-st.c
+	    if {[build_executable $testfile.exp $executable \
+		     [list $srcfile_main ${testfile}-${type}.c] \
+		     [list debug additional_flags=-D$symbol]] == -1} {
+		return -1
+	    }
+
+	    clean_restart $executable
+
+	    if [target_info exists gdb,no_hardware_watchpoints] {
+		# The software watchpoint functionality is in GDB an unrelated test.
+		gdb_test_no_output "set can-use-hw-watchpoints 0"
+	    }
+
+	    gdb_test "show detach-on-fork" "Whether gdb will detach the child of a fork is on\\."
+	    gdb_test_no_output "set follow-fork-mode $type"
+	    gdb_test "show follow-fork-mode" "Debugger response to a program call of fork or vfork is \"$type\"\\."
+	    # Testcase uses it for the `follow-fork-mode child' type.
+	    gdb_test "handle SIGUSR1 nostop noprint pass" "No\[ \t\]+No\[ \t\]+Yes.*"
+
+	    if ![runto_main] {
+		return
+	    }
+
+	    gdb_test "watch var" "atchpoint \[0-9\]+: var" "Set the watchpoint"
+
+	    # It is never hit but it should not be left over in the fork()ed-off child.
+	    if [skip_hw_breakpoint_tests] {
+		set hbreak "break"
+	    } else {
+		set hbreak "hbreak"
+	    }
+	    gdb_test "$hbreak marker"
+
+	    gdb_breakpoint "mark_exit"
+
+	    gdb_test "continue" \
+		"reakpoint \[0-9\]+, marker.*" "hardware breakpoints work"
+	    gdb_test "continue" \
+		"atchpoint \[0-9\]+: var.*Old value = 0.*New value = 1.*forkoff *\\(1\\).*" "watchpoints work"
+	    gdb_test "continue" \
+		"reakpoint \[0-9\]+, marker.*" "breakpoint after the first fork"
+	    gdb_test "continue" \
+		"atchpoint \[0-9\]+: var.*Old value = 1.*New value = 2.*forkoff *\\(2\\).*" "watchpoint after the first fork"
+	    gdb_test "continue" \
+		"reakpoint \[0-9\]+, marker.*" "breakpoint after the second fork"
+	    gdb_test "continue" \
+		"atchpoint \[0-9\]+: var.*Old value = 2.*New value = 3.*mark_exit \\(\\);" "watchpoint after the second fork"
+	    gdb_test "continue" "Continuing\\..*\r\nBreakpoint \[0-9\]+, mark_exit .*" "finish"
+	}
+
+	# threads
+
+	if [target_info exists gdb,no_hardware_watchpoints] {
+	    # Watchpoint hits would get detected in unexpected threads.
+	    return
+	}
+
+	with_test_prefix "multithreaded" {
+	    set executable ${testfile}-${type}-mt
+	    set srcfile_main ${srcdir}/${subdir}/${testfile}-mt.c
+	    if { [gdb_compile_pthreads "${srcfile_main} ${srcfile_type}" [standard_output_file ${executable}] executable [list debug "additional_flags=-D$symbol -DTHREAD"]] != "" } {
+		untested ${testfile}.exp
+		return
+	    }
+	    clean_restart $executable
+
+	    gdb_test_no_output "set follow-fork-mode $type"
+	    # Testcase uses it for the `follow-fork-mode child' type.
+	    gdb_test "handle SIGUSR1 nostop noprint pass" "No\[ \t\]+No\[ \t\]+Yes.*"
+
+	    if ![runto_main] {
+		return
+	    }
+
+	    gdb_test "watch var" "atchpoint \[0-9\]+: var" "Set the watchpoint"
+
+	    # It should not be left over in the fork()ed-off child.
+	    gdb_test "$hbreak marker" {reakpoint [0-9]+.*}
+
+	    gdb_breakpoint "mark_exit"
+
+	    gdb_test "continue" \
+		"reakpoint \[0-9\]+, marker.*" "hardware breakpoints work"
+	    gdb_test "continue" \
+		"atchpoint \[0-9\]+: var.*Old value = 0.*New value = 1.*validity-first.*" "singlethread watchpoints work"
+	    gdb_test "continue" \
+		"atchpoint \[0-9\]+: var.*Old value = 1.*New value = 2.*validity-thread-A.*" "multithreaded watchpoints work at A"
+	    gdb_test "continue" \
+		"atchpoint \[0-9\]+: var.*Old value = 2.*New value = 3.*validity-thread-B.*" "multithreaded watchpoints work at B"
+	    gdb_test "continue" \
+		"reakpoint \[0-9\]+, marker.*" "breakpoint (A) after the first fork"
+	    gdb_test "continue" \
+		"atchpoint \[0-9\]+: var.*Old value = 3.*New value = 4.*after-fork1-A.*" "watchpoint A after the first fork"
+	    gdb_test "continue" \
+		"atchpoint \[0-9\]+: var.*Old value = 4.*New value = 5.*after-fork1-B.*" "watchpoint B after the first fork"
+	    gdb_test "continue" \
+		"reakpoint \[0-9\]+, marker.*" "breakpoint (A) after the second fork"
+	    gdb_test "continue" \
+		"atchpoint \[0-9\]+: var.*Old value = 5.*New value = 6.*after-fork2-A.*" "watchpoint A after the second fork"
+	    gdb_test "continue" \
+		"atchpoint \[0-9\]+: var.*Old value = 6.*New value = 7.*after-fork2-B.*" "watchpoint B after the second fork"
+	    gdb_test "continue" "Continuing\\..*\r\nBreakpoint \[0-9\]+, mark_exit .*" "finish"
+	}
+    }
+}
+
+test parent FOLLOW_PARENT
+
+# Only GNU/Linux is known to support `set follow-fork-mode child'.
+if [istarget "*-*-linux*"] {
+    test child FOLLOW_CHILD
+} else {
+    untested "${testfile}: child"
+}
+@
+
+
+1.6
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@d25 59
+a83 14
+proc test {type symbol} { with_test_prefix "$type" {
+    global testfile subdir srcdir gdb_prompt
+
+    set srcfile_type ${srcdir}/${subdir}/${testfile}-${type}.c
+
+    # no threads
+
+    with_test_prefix "singlethreaded" {
+	set executable ${testfile}-${type}-st
+	set srcfile_main ${testfile}-st.c
+	if {[build_executable $testfile.exp $executable \
+		 [list $srcfile_main ${testfile}-${type}.c] \
+		 [list debug additional_flags=-D$symbol]] == -1} {
+	    return -1
+d86 1
+a86 1
+	clean_restart $executable
+d89 1
+a89 11
+	    # The software watchpoint functionality is in GDB an unrelated test.
+	    gdb_test_no_output "set can-use-hw-watchpoints 0"
+	}
+
+	gdb_test "show detach-on-fork" "Whether gdb will detach the child of a fork is on\\."
+	gdb_test_no_output "set follow-fork-mode $type"
+	gdb_test "show follow-fork-mode" "Debugger response to a program call of fork or vfork is \"$type\"\\."
+	# Testcase uses it for the `follow-fork-mode child' type.
+	gdb_test "handle SIGUSR1 nostop noprint pass" "No\[ \t\]+No\[ \t\]+Yes.*"
+
+	if ![runto_main] {
+d93 45
+a137 7
+	gdb_test "watch var" "atchpoint \[0-9\]+: var" "Set the watchpoint"
+
+	# It is never hit but it should not be left over in the fork()ed-off child.
+	if [skip_hw_breakpoint_tests] {
+	    set hbreak "break"
+	} else {
+	    set hbreak "hbreak"
+a138 17
+	gdb_test "$hbreak marker"
+
+	gdb_breakpoint "mark_exit"
+
+	gdb_test "continue" \
+	    "reakpoint \[0-9\]+, marker.*" "hardware breakpoints work"
+	gdb_test "continue" \
+	    "atchpoint \[0-9\]+: var.*Old value = 0.*New value = 1.*forkoff *\\(1\\).*" "watchpoints work"
+	gdb_test "continue" \
+	    "reakpoint \[0-9\]+, marker.*" "breakpoint after the first fork"
+	gdb_test "continue" \
+	    "atchpoint \[0-9\]+: var.*Old value = 1.*New value = 2.*forkoff *\\(2\\).*" "watchpoint after the first fork"
+	gdb_test "continue" \
+	    "reakpoint \[0-9\]+, marker.*" "breakpoint after the second fork"
+	gdb_test "continue" \
+	    "atchpoint \[0-9\]+: var.*Old value = 2.*New value = 3.*mark_exit \\(\\);" "watchpoint after the second fork"
+	gdb_test "continue" "Continuing\\..*\r\nBreakpoint \[0-9\]+, mark_exit .*" "finish"
+d140 1
+a140 55
+
+    # threads
+
+    if [target_info exists gdb,no_hardware_watchpoints] {
+	# Watchpoint hits would get detected in unexpected threads.
+	return
+    }
+
+    with_test_prefix "multithreaded" {
+	set executable ${testfile}-${type}-mt
+	set srcfile_main ${srcdir}/${subdir}/${testfile}-mt.c
+	if { [gdb_compile_pthreads "${srcfile_main} ${srcfile_type}" [standard_output_file ${executable}] executable [list debug "additional_flags=-D$symbol -DTHREAD"]] != "" } {
+	    untested ${testfile}.exp
+	    return
+	}
+	clean_restart $executable
+
+	gdb_test_no_output "set follow-fork-mode $type"
+	# Testcase uses it for the `follow-fork-mode child' type.
+	gdb_test "handle SIGUSR1 nostop noprint pass" "No\[ \t\]+No\[ \t\]+Yes.*"
+
+	if ![runto_main] {
+	    return
+	}
+
+	gdb_test "watch var" "atchpoint \[0-9\]+: var" "Set the watchpoint"
+
+	# It should not be left over in the fork()ed-off child.
+	gdb_test "$hbreak marker" {reakpoint [0-9]+.*}
+
+	gdb_breakpoint "mark_exit"
+
+	gdb_test "continue" \
+	    "reakpoint \[0-9\]+, marker.*" "hardware breakpoints work"
+	gdb_test "continue" \
+	    "atchpoint \[0-9\]+: var.*Old value = 0.*New value = 1.*validity-first.*" "singlethread watchpoints work"
+	gdb_test "continue" \
+	    "atchpoint \[0-9\]+: var.*Old value = 1.*New value = 2.*validity-thread-A.*" "multithreaded watchpoints work at A"
+	gdb_test "continue" \
+	    "atchpoint \[0-9\]+: var.*Old value = 2.*New value = 3.*validity-thread-B.*" "multithreaded watchpoints work at B"
+	gdb_test "continue" \
+	    "reakpoint \[0-9\]+, marker.*" "breakpoint (A) after the first fork"
+	gdb_test "continue" \
+	    "atchpoint \[0-9\]+: var.*Old value = 3.*New value = 4.*after-fork1-A.*" "watchpoint A after the first fork"
+	gdb_test "continue" \
+	    "atchpoint \[0-9\]+: var.*Old value = 4.*New value = 5.*after-fork1-B.*" "watchpoint B after the first fork"
+	gdb_test "continue" \
+	    "reakpoint \[0-9\]+, marker.*" "breakpoint (A) after the second fork"
+	gdb_test "continue" \
+	    "atchpoint \[0-9\]+: var.*Old value = 5.*New value = 6.*after-fork2-A.*" "watchpoint A after the second fork"
+	gdb_test "continue" \
+	    "atchpoint \[0-9\]+: var.*Old value = 6.*New value = 7.*after-fork2-B.*" "watchpoint B after the second fork"
+	gdb_test "continue" "Continuing\\..*\r\nBreakpoint \[0-9\]+, mark_exit .*" "finish"
+    }
+}}
+@
+
+
+1.5
+log
+@	* gdb.threads/watchpoint-fork.exp (test): Use
+	standard_output_file.  Don't declare objdir.
+	* gdb.threads/attach-into-signal.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.threads/attach-stopped.exp: Use standard_testfile.
+	* gdb.threads/bp_in_thread.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/corethreads.exp: Use standard_testfile.
+	* gdb.threads/execl.exp: Use standard_testfile,
+	standard_output_file, clean_restart.
+	* gdb.threads/fork-child-threads.exp: Use standard_testfile,
+	clean_restart.
+	* gdb.threads/fork-thread-pending.exp: Use standard_testfile,
+	clean_restart.
+	* gdb.threads/gcore-thread.exp: Use standard_testfile.  Remove
+	incdir.
+	* gdb.threads/hand-call-in-threads.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/ia64-sigill.exp: Use standard_testfile.
+	* gdb.threads/interrupted-hand-call.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/killed.exp: Use standard_testfile, clean_restart.
+	Remove incdir.
+	* gdb.threads/leader-exit.exp: Use standard_testfile.
+	* gdb.threads/linux-dp.exp: Use standard_testfile, clean_restart.
+	* gdb.threads/local-watch-wrong-thread.exp: Use standard_testfile,
+	clean_restart.
+	* gdb.threads/manythreads.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/multi-create.exp: Use standard_testfile,
+	clean_restart.
+	* gdb.threads/no-unwaited-for-left.exp: Use standard_testfile.
+	* gdb.threads/non-ldr-exc-1.exp: Use standard_testfile.
+	* gdb.threads/non-ldr-exc-2.exp: Use standard_testfile.
+	* gdb.threads/non-ldr-exc-3.exp: Use standard_testfile.
+	* gdb.threads/non-ldr-exc-4.exp: Use standard_testfile.
+	* gdb.threads/pending-step.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/print-threads.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/pthread_cond_wait.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/pthreads.exp: Use standard_testfile, clean_restart.
+	Remove incdir.
+	* gdb.threads/schedlock.exp: Use standard_testfile.  Remove
+	incdir.
+	* gdb.threads/sigthread.exp: Use standard_testfile,
+	clean_restart.
+	* gdb.threads/staticthreads.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/switch-threads.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/thread-execl.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/thread-find.exp: Use standard_testfile,
+	clean_restart.
+	* gdb.threads/thread-specific.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/thread-unwindonsignal.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/thread_check.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/thread_events.exp: Use standard_testfile.  Remove
+	incdir.
+	* gdb.threads/threadapply.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/threxit-hop-specific.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/tls-nodebug.exp: Use standard_testfile,
+	clean_restart.
+	* gdb.threads/tls-shared.exp: Use standard_testfile,
+	clean_restart, standard_output_file.
+	* gdb.threads/tls-var.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.threads/tls.exp: Use standard_testfile, clean_restart.
+	Remove incdir.
+	* gdb.threads/watchthreads-reorder.exp: Use standard_testfile.
+	* gdb.threads/watchthreads.exp: Use standard_testfile.  Remove
+	incdir.
+	* gdb.threads/watchthreads2.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+@
+text
+@d1 1
+a1 1
+# Copyright 2012 Free Software Foundation, Inc.
+@
+
+
+1.4
+log
+@2012-02-21  Pedro Alves  <palves@@redhat.com>
+
+	* gdb.threads/watchpoint-fork.exp (test): Use with_test_prefix.
+@
+text
+@d26 1
+a26 1
+    global testfile objdir subdir srcdir gdb_prompt
+d34 5
+a38 4
+	set srcfile_main ${srcdir}/${subdir}/${testfile}-st.c
+	if { [gdb_compile "${srcfile_main} ${srcfile_type}" ${objdir}/${subdir}/${executable} executable [list debug additional_flags=-D$symbol]] != "" } {
+	    untested ${testfile}.exp
+	    return
+d40 1
+d95 1
+a95 1
+	if { [gdb_compile_pthreads "${srcfile_main} ${srcfile_type}" ${objdir}/${subdir}/${executable} executable [list debug "additional_flags=-D$symbol -DTHREAD"]] != "" } {
+@
+
+
+1.3
+log
+@2012-02-21  Pedro Alves  <palves@@redhat.com>
+
+	* gdb.arch/altivec-abi.exp (altivec_abi_tests): Don't do
+	with_test_prefix here.
+	(top level): Do it here instead.  Remove `:' from the
+	with_test_prefix string.
+	* gdb.base/attach-pie-misread.exp: Remove the leading space the
+	the suffix `:' from the with_test_prefix prefix string.
+	* gdb.base/break-interp.exp: Ditto.
+	* gdb.base/catch-load.exp: Ditto.
+	* gdb.base/disp-step-syscall.exp: Ditto.
+	* gdb.base/jit-so.exp: Ditto.
+	* gdb.base/jit.exp: Ditto.
+	* gdb.base/sepdebug.exp: Ditto.
+	* gdb.base/solib-display.exp: Ditto.
+	* gdb.base/solib-overlap.exp: Ditto.
+	* gdb.base/watch-cond-infcall.exp: Ditto.
+	* gdb.base/watchpoint.exp: Ditto.
+	* gdb.dwarf2/dw2-noloc.exp: Ditto.
+	* gdb.mi/mi-watch.exp: Ditto.
+	* gdb.mi/mi2-watch.exp: Ditto.
+	* gdb.threads/non-ldr-exc-1.exp: Ditto.
+	* gdb.threads/non-ldr-exc-2.exp: Ditto.
+	* gdb.threads/non-ldr-exc-3.exp: Ditto.
+	* gdb.threads/non-ldr-exc-4.exp: Ditto.
+	* gdb.threads/watchpoint-fork.exp: Ditto.
+	* gdb.threads/watchthreads-reorder.exp: Ditto.
+	* gdb.trace/change-loc.exp: Ditto.
+	* gdb.trace/pending.exp: Ditto.
+	* gdb.trace/status-stop.exp: Ditto.
+	* gdb.trace/strace.exp: Ditto.
+	* gdb.trace/trace-break.exp: Ditto.
+	* gdb.trace/unavailable.exp: Ditto.
+	* lib/gdb.exp (with_test_prefix): Always prefix with space and
+	suffix with colon.  Adjust leading comments.
+@
+text
+@d26 1
+a26 1
+    global testfile objdir subdir srcdir gdb_prompt pf_prefix
+d32 49
+a80 26
+    set prefix_test $pf_prefix
+    append pf_prefix " singlethreaded:"
+
+    set executable ${testfile}-${type}-st
+    set srcfile_main ${srcdir}/${subdir}/${testfile}-st.c
+    if { [gdb_compile "${srcfile_main} ${srcfile_type}" ${objdir}/${subdir}/${executable} executable [list debug additional_flags=-D$symbol]] != "" } {
+	untested ${testfile}.exp
+	set pf_prefix $prefix_test
+	return
+    }
+    clean_restart $executable
+
+    if [target_info exists gdb,no_hardware_watchpoints] {
+	# The software watchpoint functionality is in GDB an unrelated test.
+	gdb_test_no_output "set can-use-hw-watchpoints 0"
+    }
+
+    gdb_test "show detach-on-fork" "Whether gdb will detach the child of a fork is on\\."
+    gdb_test_no_output "set follow-fork-mode $type"
+    gdb_test "show follow-fork-mode" "Debugger response to a program call of fork or vfork is \"$type\"\\."
+    # Testcase uses it for the `follow-fork-mode child' type.
+    gdb_test "handle SIGUSR1 nostop noprint pass" "No\[ \t\]+No\[ \t\]+Yes.*"
+
+    if ![runto_main] {
+	set pf_prefix $prefix_test
+	return
+a82 27
+    gdb_test "watch var" "atchpoint \[0-9\]+: var" "Set the watchpoint"
+
+    # It is never hit but it should not be left over in the fork()ed-off child.
+    if [skip_hw_breakpoint_tests] {
+	set hbreak "break"
+    } else {
+	set hbreak "hbreak"
+    }
+    gdb_test "$hbreak marker"
+
+    gdb_breakpoint "mark_exit"
+
+    gdb_test "continue" \
+	     "reakpoint \[0-9\]+, marker.*" "hardware breakpoints work"
+    gdb_test "continue" \
+	     "atchpoint \[0-9\]+: var.*Old value = 0.*New value = 1.*forkoff *\\(1\\).*" "watchpoints work"
+    gdb_test "continue" \
+	     "reakpoint \[0-9\]+, marker.*" "breakpoint after the first fork"
+    gdb_test "continue" \
+	     "atchpoint \[0-9\]+: var.*Old value = 1.*New value = 2.*forkoff *\\(2\\).*" "watchpoint after the first fork"
+    gdb_test "continue" \
+	     "reakpoint \[0-9\]+, marker.*" "breakpoint after the second fork"
+    gdb_test "continue" \
+	     "atchpoint \[0-9\]+: var.*Old value = 2.*New value = 3.*mark_exit \\(\\);" "watchpoint after the second fork"
+    gdb_test "continue" "Continuing\\..*\r\nBreakpoint \[0-9\]+, mark_exit .*" "finish"
+
+
+a86 1
+	set pf_prefix $prefix_test
+d90 45
+a134 19
+    set pf_prefix $prefix_test
+    append pf_prefix " multithreaded:"
+
+    set executable ${testfile}-${type}-mt
+    set srcfile_main ${srcdir}/${subdir}/${testfile}-mt.c
+    if { [gdb_compile_pthreads "${srcfile_main} ${srcfile_type}" ${objdir}/${subdir}/${executable} executable [list debug "additional_flags=-D$symbol -DTHREAD"]] != "" } {
+	untested ${testfile}.exp
+	set pf_prefix $prefix_test
+	return
+    }
+    clean_restart $executable
+
+    gdb_test_no_output "set follow-fork-mode $type"
+    # Testcase uses it for the `follow-fork-mode child' type.
+    gdb_test "handle SIGUSR1 nostop noprint pass" "No\[ \t\]+No\[ \t\]+Yes.*"
+
+    if ![runto_main] {
+	set pf_prefix $prefix_test
+	return
+a135 33
+
+    gdb_test "watch var" "atchpoint \[0-9\]+: var" "Set the watchpoint"
+
+    # It should not be left over in the fork()ed-off child.
+    gdb_test "$hbreak marker" {reakpoint [0-9]+.*}
+
+    gdb_breakpoint "mark_exit"
+
+    gdb_test "continue" \
+	     "reakpoint \[0-9\]+, marker.*" "hardware breakpoints work"
+    gdb_test "continue" \
+	     "atchpoint \[0-9\]+: var.*Old value = 0.*New value = 1.*validity-first.*" "singlethread watchpoints work"
+    gdb_test "continue" \
+	     "atchpoint \[0-9\]+: var.*Old value = 1.*New value = 2.*validity-thread-A.*" "multithreaded watchpoints work at A"
+    gdb_test "continue" \
+	     "atchpoint \[0-9\]+: var.*Old value = 2.*New value = 3.*validity-thread-B.*" "multithreaded watchpoints work at B"
+    gdb_test "continue" \
+	     "reakpoint \[0-9\]+, marker.*" "breakpoint (A) after the first fork"
+    gdb_test "continue" \
+	     "atchpoint \[0-9\]+: var.*Old value = 3.*New value = 4.*after-fork1-A.*" "watchpoint A after the first fork"
+    gdb_test "continue" \
+	     "atchpoint \[0-9\]+: var.*Old value = 4.*New value = 5.*after-fork1-B.*" "watchpoint B after the first fork"
+    gdb_test "continue" \
+	     "reakpoint \[0-9\]+, marker.*" "breakpoint (A) after the second fork"
+    gdb_test "continue" \
+	     "atchpoint \[0-9\]+: var.*Old value = 5.*New value = 6.*after-fork2-A.*" "watchpoint A after the second fork"
+    gdb_test "continue" \
+	     "atchpoint \[0-9\]+: var.*Old value = 6.*New value = 7.*after-fork2-B.*" "watchpoint B after the second fork"
+    gdb_test "continue" "Continuing\\..*\r\nBreakpoint \[0-9\]+, mark_exit .*" "finish"
+
+
+    # cleanup
+    set pf_prefix $prefix_test
+@
+
+
+1.2
+log
+@2012-02-21  Pedro Alves  <palves@@redhat.com>
+	    Tom Tromey  <tromey@@redhat.com>
+
+	* lib/gdb.exp: Add description of test prefixes.
+	(with_test_prefix): New procedure.
+	* gdb.arch/altivec-abi.exp: Use with_test_prefix.
+	* gdb.base/attach-pie-misread.exp: Use with_test_prefix.
+	* gdb.base/break-interp.exp: Use with_test_prefix.  Use append
+	instead of lappend to append to pf_prefix.
+	* gdb.base/catch-load.exp: Use with_test_prefix.
+	* gdb.base/disp-step-syscall.exp: Use with_test_prefix.
+	* gdb.base/jit-so.exp: Use with_test_prefix.
+	* gdb.base/jit.exp: Use with_test_prefix.
+	* gdb.base/return-nodebug.exp (do_test): Use append instead of
+	lappend to append to pf_prefix.
+	* gdb.base/sepdebug.exp: Use with_test_prefix.
+	* gdb.base/solib-display.exp: Use with_test_prefix.
+	* gdb.base/solib-overlap.exp: Use with_test_prefix.
+	* gdb.base/watch-cond-infcall.exp: Use with_test_prefix.
+	* gdb.base/watchpoint.exp: Use with_test_prefix.
+	* gdb.dwarf2/dw2-noloc.exp: Use with_test_prefix.
+	* gdb.mi/mi-watch.exp: Use with_test_prefix.
+	* gdb.mi/mi2-watch.exp: Use with_test_prefix.
+	* gdb.threads/non-ldr-exc-1.exp: Use with_test_prefix.
+	* gdb.threads/non-ldr-exc-2.exp: Use with_test_prefix.
+	* gdb.threads/non-ldr-exc-3.exp: Use with_test_prefix.
+	* gdb.threads/non-ldr-exc-4.exp: Use with_test_prefix.
+	* gdb.threads/watchpoint-fork.exp: Use with_test_prefix.  Use
+	append instead of lappend to append to pf_prefix.
+	* gdb.threads/watchthreads-reorder.exp: Use with_test_prefix.
+	* gdb.trace/change-loc.exp: Use with_test_prefix.
+	* gdb.trace/pending.exp: Use with_test_prefix.
+	* gdb.trace/status-stop.exp: Use with_test_prefix.
+	* gdb.trace/strace.exp: Use with_test_prefix.
+	* gdb.trace/trace-break.exp: Use with_test_prefix.
+	* gdb.trace/unavailable.exp: Use with_test_prefix.  Use append
+	instead of lappend to append to pf_prefix.
+@
+text
+@d25 1
+a25 1
+proc test {type symbol} { with_test_prefix " $type:" {
+@
+
+
+1.1
+log
+@gdb/
+	Fix watchpoints across inferior fork.
+	* amd64-linux-nat.c (update_debug_registers_callback): Update the
+	comment for linux_nat_iterate_watchpoint_lwps.
+	(amd64_linux_dr_set_control, amd64_linux_dr_set_addr): Use
+	linux_nat_iterate_watchpoint_lwps.
+	(amd64_linux_prepare_to_resume): New comment on Linux kernel.
+	* i386-linux-nat.c (update_debug_registers_callback): Update the
+	comment for linux_nat_iterate_watchpoint_lwps.
+	(i386_linux_dr_set_control, i386_linux_dr_set_addr): Use
+	linux_nat_iterate_watchpoint_lwps.
+	(i386_linux_prepare_to_resume): New comment on Linux kernel.
+	* i386-nat.c: Include inferior.h.
+	(dr_mirror): Remove.
+	(i386_inferior_data, struct i386_inferior_data)
+	(i386_inferior_data_get): New.
+	(i386_debug_reg_state): Use i386_inferior_data_get.
+	(i386_cleanup_dregs, i386_update_inferior_debug_regs)
+	(i386_insert_watchpoint, i386_remove_watchpoint)
+	(i386_stopped_data_address, i386_insert_hw_breakpoint)
+	(i386_remove_hw_breakpoint): New variable state, use
+	i386_debug_reg_state instead of DR_MIRROR.
+	* linux-nat.c (delete_lwp): New declaration.
+	(num_lwps): Move here from downwards.
+	(delete_lwp_cleanup): New.
+	(linux_child_follow_fork): Create new child_lp, call
+	linux_nat_new_thread and linux_nat_prepare_to_resume before calling
+	PTRACE_DETACH.
+	(num_lwps): Move upwards.
+	(linux_nat_iterate_watchpoint_lwps): New.
+	* linux-nat.h (linux_nat_iterate_watchpoint_lwps_ftype): New.
+	(linux_nat_iterate_watchpoint_lwps_ftype): New declaration.
+
+gdb/testsuite/
+	Fix watchpoints across inferior fork.
+	* gdb.threads/watchpoint-fork-child.c: New file.
+	* gdb.threads/watchpoint-fork-mt.c: New file.
+	* gdb.threads/watchpoint-fork-parent.c: New file.
+	* gdb.threads/watchpoint-fork-st.c: New file.
+	* gdb.threads/watchpoint-fork.exp: New file.
+	* gdb.threads/watchpoint-fork.h: New file.
+@
+text
+@d25 2
+a26 7
+proc test {type symbol} {
+    global testfile objdir subdir srcdir gdb_prompt
+
+    global pf_prefix
+    set prefix_test $pf_prefix
+    lappend pf_prefix "$type:"
+    set prefix_mt $pf_prefix
+a29 1
+
+d32 2
+a33 2
+    set pf_prefix $prefix_mt
+    lappend pf_prefix "singlethreaded:"
+d95 2
+a96 2
+    set pf_prefix $prefix_mt
+    lappend pf_prefix "multithreaded:"
+d148 1
+a148 1
+}
+@
+

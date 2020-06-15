@@ -1,0 +1,221 @@
+head	1.4;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.3
+	gdb_7_6-2013-04-26-release:1.3
+	gdb_7_6-branch:1.3.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.3;
+locks; strict;
+comment	@# @;
+
+
+1.4
+date	2013.08.22.13.51.08;	author tromey;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2013.01.01.06.41.26;	author brobecke;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2012.12.11.20.54.52;	author pkoning;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2012.11.12.17.41.59;	author tromey;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.4
+log
+@fix gdb.python to be parallel-safe
+
+This fixes gdb.python to be parallel-safe, mostly by changing it to
+use gdb_remote_download.
+
+Tested on x86-64 Fedora 18.
+
+	* gdb.python/py-error.exp: Use gdb_remote_download.
+	* gdb.python/py-mi.exp: Use gdb_remote_download.
+	* gdb.python/py-objfile-script.exp: Use standard_output_file.
+	* gdb.python/py-prettyprint.exp: Use gdb_remote_download.
+	(run_lang_tests): Likewise.
+	* gdb.python/py-section-script.c: Use SCRIPT_FILE rather than
+	filename.
+	* gdb.python/py-section-script.exp: Set SCRIPT_FILE when
+	compiling.  Use gdb_remote_download.  Update some tests.
+	* gdb.python/py-strfns.exp (test_strfns_core_file): Use
+	standard_output_file.
+	* gdb.python/py-typeprint.exp: Use gdb_remote_download.
+	* gdb.python/py-frame-args.exp: Use gdb_remote_download.
+	* gdb.python/py-framefilter-mi.exp: Use gdb_remote_download.
+	* gdb.python/py-framefilter.exp: Use gdb_remote_download,
+	standard_output_file.
+@
+text
+@# Copyright (C) 2012-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+if { [skip_cplus_tests] } { continue }
+
+load_lib gdb-python.exp
+load_lib cp-support.exp
+
+standard_testfile .cc
+
+if {[prepare_for_testing $testfile.exp $testfile $srcfile {debug c++}]} {
+    return -1
+}
+
+if { [skip_python_tests] } { continue }
+
+set remote_python_file [gdb_remote_download host \
+			    ${srcdir}/${subdir}/${testfile}.py]
+
+gdb_test_no_output "python exec (open ('${remote_python_file}').read ())" \
+    "python exec (open ('[file tail ${remote_python_file}]').read ())"
+
+cp_test_ptype_class s "basic test" "class" "templ<string>" {
+    { field public "T x;" }
+    { field public "templ<T> *value;" }
+} "" {} ""
+
+cp_test_ptype_class s "raw test" "class" "templ<basic_string>" {
+    { field public "basic_string x;" }
+    { field public "templ<basic_string> *value;" }
+} "" {} "/r"
+
+gdb_test_no_output "disable type-printer string"
+gdb_test "whatis bs" "basic_string" "whatis with disabled printer"
+
+gdb_test "info type-printers" "Global type printers:.*string.*disabled.*"
+
+gdb_test_no_output "enable type-printer string"
+gdb_test "whatis bs" "string" "whatis with enabled printer"
+
+gdb_test "whatis s" "templ<string>"
+
+remote_file host delete ${remote_python_file}
+@
+
+
+1.3
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@d29 2
+a30 1
+set remote_python_file [remote_download host ${srcdir}/${subdir}/${testfile}.py]
+d32 2
+a33 1
+gdb_test_no_output "python exec (open ('${remote_python_file}').read ())"
+@
+
+
+1.2
+log
+@	* gdb.python/py-prettyprint.py (_iterator): Remove exception_flag
+	exception.
+	(_iterator_except): New function.
+	(ArrayPrinter): Use _iterator function instead of local _iterator
+	class for Python 3 compatibility.
+	(NoStringContainerPrinter): Use _iterator_except instead of
+	_iterator.
+	* gdb.python/py-typeprint.exp: Use exec(open(...).read()) instead of
+	execfile for Python 3 compatibility.
+	* gdb.python/python.exp: Handle Python 2.4 exception traceback
+	format in error_prompt test.
+@
+text
+@d1 1
+a1 1
+# Copyright (C) 2012 Free Software Foundation, Inc.
+@
+
+
+1.1
+log
+@	* NEWS: Update.
+	* data-directory/Makefile.in (PYTHON_FILES): Add
+	type_printers.py.
+	* python/lib/gdb/command/type_printers.py: New file.
+	* python/lib/gdb/command/types.py (TypePrinter): New class.
+	(_get_some_type_recognizers, get_type_recognizers,
+	apply_type_recognizers, register_type_printer): New
+	functions.
+	* python/py-objfile.c (objfile_object) <type_printers>: New
+	field.
+	(objfpy_dealloc): Decref new field.
+	(objfpy_new): Set new field.
+	(objfpy_get_type_printers, objfpy_set_type_printers): New
+	functions.
+	(objfile_to_objfile_object): Set new field.
+	(objfile_getset): Add "type_printers".
+	* python/py-progspace.c (pspace_object) <type_printers>: New
+	field.
+	(pspy_dealloc): Decref new field.
+	(pspy_new): Set new field.
+	(pspy_get_type_printers, pspy_set_type_printers): New functions.
+	(pspace_to_pspace_object): Set new field.
+	(pspace_getset): Add "type_printers".
+	* python/python.c (start_type_printers, apply_type_printers,
+	free_type_printers): New functions.
+	(_initialize_python): Set gdb.type_printers.
+	* python/python.h (start_type_printers, apply_type_printers,
+	free_type_printers): Declare.
+	* typeprint.c (type_print_raw_options, default_ptype_flags):
+	Update for new fields.
+	(do_free_global_table, create_global_typedef_table,
+	find_global_typedef): New functions.
+	(find_typedef_in_hash): Use find_global_typedef.
+	(whatis_exp): Use create_global_typedef_table.  Change cleanup
+	handling.
+	* typeprint.h (struct type_print_options) <global_typedefs,
+	global_printers>: New fields.
+doc
+	* gdb.texinfo (Symbols): Document "info type-printers",
+	"enable type-printer" and "disable type-printer".
+	(Python API): Add new node to menu.
+	(Type Printing API): New node.
+	(Progspaces In Python): Document type_printers field.
+	(Objfiles In Python): Likewise.
+	(gdb.types) <get_type_recognizers, apply_type_recognizers,
+	register_type_printer, TypePrinter>: Document.
+testsuite
+	* gdb.base/completion.exp: Update for "info type-printers".
+	* gdb.python/py-typeprint.cc: New file.
+	* gdb.python/py-typeprint.exp: New file.
+	* gdb.python/py-typeprint.py: New file.
+@
+text
+@d31 1
+a31 1
+gdb_test_no_output "python execfile ('${remote_python_file}')"
+@
+

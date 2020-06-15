@@ -1,0 +1,367 @@
+head	1.4;
+access;
+symbols
+	sid-snapshot-20180601:1.4
+	sid-snapshot-20180501:1.4
+	sid-snapshot-20180401:1.4
+	sid-snapshot-20180301:1.4
+	sid-snapshot-20180201:1.4
+	sid-snapshot-20180101:1.4
+	sid-snapshot-20171201:1.4
+	sid-snapshot-20171101:1.4
+	sid-snapshot-20171001:1.4
+	sid-snapshot-20170901:1.4
+	sid-snapshot-20170801:1.4
+	sid-snapshot-20170701:1.4
+	sid-snapshot-20170601:1.4
+	sid-snapshot-20170501:1.4
+	sid-snapshot-20170401:1.4
+	sid-snapshot-20170301:1.4
+	sid-snapshot-20170201:1.4
+	sid-snapshot-20170101:1.4
+	sid-snapshot-20161201:1.4
+	sid-snapshot-20161101:1.4
+	sid-snapshot-20160901:1.4
+	sid-snapshot-20160801:1.4
+	sid-snapshot-20160701:1.4
+	sid-snapshot-20160601:1.4
+	sid-snapshot-20160501:1.4
+	sid-snapshot-20160401:1.4
+	sid-snapshot-20160301:1.4
+	sid-snapshot-20160201:1.4
+	sid-snapshot-20160101:1.4
+	sid-snapshot-20151201:1.4
+	sid-snapshot-20151101:1.4
+	sid-snapshot-20151001:1.4
+	sid-snapshot-20150901:1.4
+	sid-snapshot-20150801:1.4
+	sid-snapshot-20150701:1.4
+	sid-snapshot-20150601:1.4
+	sid-snapshot-20150501:1.4
+	sid-snapshot-20150401:1.4
+	sid-snapshot-20150301:1.4
+	sid-snapshot-20150201:1.4
+	sid-snapshot-20150101:1.4
+	sid-snapshot-20141201:1.4
+	sid-snapshot-20141101:1.4
+	sid-snapshot-20141001:1.4
+	sid-snapshot-20140901:1.4
+	sid-snapshot-20140801:1.4
+	sid-snapshot-20140701:1.4
+	sid-snapshot-20140601:1.4
+	sid-snapshot-20140501:1.4
+	sid-snapshot-20140401:1.4
+	sid-snapshot-20140301:1.4
+	sid-snapshot-20140201:1.4
+	sid-snapshot-20140101:1.4
+	sid-snapshot-20131201:1.4
+	sid-snapshot-20131101:1.4
+	sid-snapshot-20131001:1.4
+	binutils-2_24-branch:1.4.0.2
+	binutils-2_24-branchpoint:1.4
+	sid-snapshot-20130901:1.4
+	sid-snapshot-20130801:1.2
+	binutils_latest_snapshot:1.4;
+locks; strict;
+comment	@ * @;
+
+
+1.4
+date	2013.08.19.18.56.59;	author rsandifo;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2013.08.03.10.49.47;	author rsandifo;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2013.07.17.08.06.11;	author rsandifo;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2013.07.14.13.28.56;	author rsandifo;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.4
+log
+@include/opcode/
+	* mips.h (OP_OPTIONAL_REG): New mips_operand_type.
+	(mips_optional_operand_p): New function.
+
+opcodes/
+	* mips-formats.h (OPTIONAL_REG, OPTIONAL_MAPPED_REG): New macros.
+	* micromips-opc.c (decode_micromips_operand): Use OPTIONAL_REG
+	and OPTIONAL_MAPPED_REG.
+	* mips-opc.c (decode_mips_operand): Likewise.
+	* mips16-opc.c (decode_mips16_operand): Likewise.
+	* mips-dis.c (print_insn_arg): Handle OP_OPTIONAL_REG.
+
+gas/
+	* config/tc-mips.c (operand_reg_mask, match_operand): Handle
+	OP_OPTIONAL_REG.
+	(mips_ip, mips16_ip): Use mips_optional_operand_p to check
+	for optional operands.
+@
+text
+@/* mips-formats.h
+   Copyright 2013 Free Software Foundation, Inc.
+
+   This library is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3, or (at your option)
+   any later version.
+
+   It is distributed in the hope that it will be useful, but WITHOUT
+   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+   or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public
+   License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program; see the file COPYING3. If not,
+   see <http://www.gnu.org/licenses/>.  */
+
+/* For ARRAY_SIZE.  */
+#include "libiberty.h"
+
+#define INT_ADJ(SIZE, LSB, MAX_VAL, SHIFT, PRINT_HEX) \
+  { \
+    static const struct mips_int_operand op = { \
+      { OP_INT, SIZE, LSB }, MAX_VAL, 0, SHIFT, PRINT_HEX \
+    }; \
+    return &op.root; \
+  }
+
+#define UINT(SIZE, LSB) \
+  INT_ADJ(SIZE, LSB, (1 << (SIZE)) - 1, 0, FALSE)
+
+#define SINT(SIZE, LSB) \
+  INT_ADJ(SIZE, LSB, (1 << ((SIZE) - 1)) - 1, 0, FALSE)
+
+#define HINT(SIZE, LSB) \
+  INT_ADJ(SIZE, LSB, (1 << (SIZE)) - 1, 0, TRUE)
+
+#define BIT(SIZE, LSB, BIAS) \
+  { \
+    static const struct mips_int_operand op = { \
+      { OP_INT, SIZE, LSB }, (1 << (SIZE)) - 1, BIAS, 0, TRUE \
+    }; \
+    return &op.root; \
+  }
+
+#define MAPPED_INT(SIZE, LSB, MAP, PRINT_HEX) \
+  { \
+    typedef char ATTRIBUTE_UNUSED \
+      static_assert[(1 << (SIZE)) == ARRAY_SIZE (MAP)]; \
+    static const struct mips_mapped_int_operand op = { \
+      { OP_MAPPED_INT, SIZE, LSB }, MAP, PRINT_HEX \
+    }; \
+    return &op.root; \
+  }
+
+#define MSB(SIZE, LSB, BIAS, ADD_LSB, OPSIZE) \
+  { \
+    static const struct mips_msb_operand op = { \
+      { OP_MSB, SIZE, LSB }, BIAS, ADD_LSB, OPSIZE \
+    }; \
+    return &op.root; \
+  }
+
+#define REG(SIZE, LSB, BANK) \
+  { \
+    static const struct mips_reg_operand op = { \
+      { OP_REG, SIZE, LSB }, OP_REG_##BANK, 0 \
+    }; \
+    return &op.root; \
+  }
+
+#define OPTIONAL_REG(SIZE, LSB, BANK) \
+  { \
+    static const struct mips_reg_operand op = { \
+      { OP_OPTIONAL_REG, SIZE, LSB }, OP_REG_##BANK, 0 \
+    }; \
+    return &op.root; \
+  }
+
+#define MAPPED_REG(SIZE, LSB, BANK, MAP) \
+  { \
+    typedef char ATTRIBUTE_UNUSED \
+      static_assert[(1 << (SIZE)) == ARRAY_SIZE (MAP)]; \
+    static const struct mips_reg_operand op = { \
+      { OP_REG, SIZE, LSB }, OP_REG_##BANK, MAP \
+    }; \
+    return &op.root; \
+  }
+
+#define OPTIONAL_MAPPED_REG(SIZE, LSB, BANK, MAP) \
+  { \
+    typedef char ATTRIBUTE_UNUSED \
+      static_assert[(1 << (SIZE)) == ARRAY_SIZE (MAP)]; \
+    static const struct mips_reg_operand op = { \
+      { OP_OPTIONAL_REG, SIZE, LSB }, OP_REG_##BANK, MAP \
+    }; \
+    return &op.root; \
+  }
+
+#define REG_PAIR(SIZE, LSB, BANK, MAP) \
+  { \
+    typedef char ATTRIBUTE_UNUSED \
+      static_assert1[(1 << (SIZE)) == ARRAY_SIZE (MAP##1)]; \
+    typedef char ATTRIBUTE_UNUSED \
+      static_assert2[(1 << (SIZE)) == ARRAY_SIZE (MAP##2)]; \
+    static const struct mips_reg_pair_operand op = { \
+      { OP_REG_PAIR, SIZE, LSB }, OP_REG_##BANK, MAP##1, MAP##2 \
+    }; \
+    return &op.root; \
+  }
+
+#define PCREL(SIZE, LSB, IS_SIGNED, SHIFT, ALIGN_LOG2, INCLUDE_ISA_BIT, \
+              FLIP_ISA_BIT) \
+  { \
+    static const struct mips_pcrel_operand op = { \
+      { { OP_PCREL, SIZE, LSB }, \
+	(1 << ((SIZE) - (IS_SIGNED))) - 1, 0, SHIFT, TRUE }, \
+      ALIGN_LOG2, INCLUDE_ISA_BIT, FLIP_ISA_BIT \
+    }; \
+    return &op.root.root; \
+  }
+
+#define JUMP(SIZE, LSB, SHIFT) \
+  PCREL (SIZE, LSB, FALSE, SHIFT, SIZE + SHIFT, TRUE, FALSE)
+
+#define JALX(SIZE, LSB, SHIFT) \
+  PCREL (SIZE, LSB, FALSE, SHIFT, SIZE + SHIFT, TRUE, TRUE)
+
+#define BRANCH(SIZE, LSB, SHIFT) \
+  PCREL (SIZE, LSB, TRUE, SHIFT, 0, TRUE, FALSE)
+
+#define SPECIAL(SIZE, LSB, TYPE) \
+  { \
+    static const struct mips_operand op = { OP_##TYPE, SIZE, LSB }; \
+    return &op; \
+  }
+@
+
+
+1.3
+log
+@include/opcode/
+	* mips.h (mips_pcrel_operand): Inherit from mips_int_operand.
+	(mips_int_operand_min, mips_int_operand_max): New functions.
+	(mips_decode_pcrel_operand): Use mips_decode_int_operand.
+
+opcodes/
+	* mips-formats.h (PCREL): Reorder parameters and update the definition
+	to match new mips_pcrel_operand layout.
+	(JUMP, JALX, BRANCH): Update accordingly.
+	* mips16-opc.c (decode_mips16_operand): Likewise.
+
+gas/
+	* config/tc-mips.c (match_int_operand): Use mips_int_operand_min
+	and mips_int_operand_max.
+	(mips16_immed_operand, mips16_immed_operands, MIPS16_NUM_IMMED):
+	Delete.
+	(mips16_immed_operand, mips16_immed_in_range_p): New functions.
+	(mips16_immed, mips16_extended_frag): Use them.  Use mips_int_operand
+	instead of mips16_immed_operand.
+@
+text
+@d72 8
+d90 10
+@
+
+
+1.2
+log
+@opcodes/
+	* mips-formats.h (MAPPED_INT, MAPPED_REG, REG_PAIR): Add
+	ATTRIBUTE_UNUSED.
+@
+text
+@d94 1
+a94 1
+#define PCREL(SIZE, LSB, ALIGN_LOG2, SHIFT, IS_SIGNED, INCLUDE_ISA_BIT, \
+d98 3
+a100 2
+      { OP_PCREL, SIZE, LSB }, ALIGN_LOG2, SHIFT, IS_SIGNED, \
+      INCLUDE_ISA_BIT, FLIP_ISA_BIT \
+d102 1
+a102 1
+    return &op.root; \
+d106 1
+a106 1
+  PCREL (SIZE, LSB, SIZE + SHIFT, SHIFT, FALSE, TRUE, FALSE)
+d109 1
+a109 1
+  PCREL (SIZE, LSB, SIZE + SHIFT, SHIFT, FALSE, TRUE, TRUE)
+d112 1
+a112 1
+  PCREL (SIZE, LSB, 0, SHIFT, TRUE, TRUE, FALSE)
+@
+
+
+1.1
+log
+@include/opcode/
+	* mips.h (mips_operand_type, mips_reg_operand_type): New enums.
+	(mips_operand, mips_int_operand, mips_mapped_int_operand)
+	(mips_msb_operand, mips_reg_operand, mips_reg_pair_operand)
+	(mips_pcrel_operand): New structures.
+	(mips_insert_operand, mips_extract_operand, mips_signed_operand)
+	(mips_decode_int_operand, mips_decode_pcrel_operand): New functions.
+	(decode_mips_operand, decode_micromips_operand): Declare.
+
+opcodes/
+	* mips-formats.h: New file.
+	* mips-opc.c: Include mips-formats.h.
+	(reg_0_map): New static array.
+	(decode_mips_operand): New function.
+	* micromips-opc.c: Remove <stdio.h> include.  Include mips-formats.h.
+	(reg_0_map, reg_28_map, reg_29_map, reg_31_map, reg_m16_map)
+	(reg_mn_map, reg_q_map, reg_h_map1, reg_h_map2, int_b_map)
+	(int_c_map): New static arrays.
+	(decode_micromips_operand): New function.
+	* mips-dis.c (micromips_to_32_reg_b_map, micromips_to_32_reg_c_map)
+	(micromips_to_32_reg_d_map, micromips_to_32_reg_e_map)
+	(micromips_to_32_reg_f_map, micromips_to_32_reg_g_map)
+	(micromips_to_32_reg_h_map1, micromips_to_32_reg_h_map2)
+	(micromips_to_32_reg_l_map, micromips_to_32_reg_m_map)
+	(micromips_to_32_reg_n_map, micromips_to_32_reg_q_map)
+	(micromips_imm_b_map, micromips_imm_c_map): Delete.
+	(print_reg): New function.
+	(mips_print_arg_state): New structure.
+	(init_print_arg_state, print_insn_arg): New functions.
+	(print_insn_args): Change interface and use mips_operand structures.
+	Delete GET_OP_S.  Move GET_OP definition to...
+	(print_insn_mips): ...here.  Update the call to print_insn_args.
+	(print_insn_micromips): Use print_insn_args.
+
+gas/
+	* config/tc-mips.c (validate_mips_insn): Move further up file.
+	Add insn_bits and decode_operand arguments.  Use the mips_operand
+	fields to work out which bits an operand occupies.  Detect double
+	definitions.
+	(validate_micromips_insn): Move further up file.  Call into
+	validate_mips_insn.
+@
+text
+@d48 2
+a49 1
+    typedef char static_assert[(1 << (SIZE)) == ARRAY_SIZE (MAP)]; \
+d74 2
+a75 1
+    typedef char static_assert[(1 << (SIZE)) == ARRAY_SIZE (MAP)]; \
+d84 4
+a87 2
+    typedef char static_assert1[(1 << (SIZE)) == ARRAY_SIZE (MAP##1)]; \
+    typedef char static_assert2[(1 << (SIZE)) == ARRAY_SIZE (MAP##2)]; \
+@
+

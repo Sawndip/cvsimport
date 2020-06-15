@@ -1,0 +1,823 @@
+head	1.9;
+access;
+symbols
+	cygwin-1_7_35-release:1.9
+	cygwin-1_7_34-release:1.9
+	newlib-2_2_0:1.9.0.2
+	cygwin-1_7_33-release:1.9
+	cygwin-1_7_32-release:1.9
+	cygwin-1_7_31-release:1.9
+	cygwin-1_7_30-release:1.9
+	cygwin-1_7_29-release:1.9
+	cygwin-1_7_28-release:1.8
+	newlib-2_1_0:1.8
+	cygwin-1_7_27-release:1.8
+	cygwin-1_7_26-release:1.8
+	cygwin-1_7_25-release:1.7
+	cygwin-1_7_24-release:1.7
+	cygwin-1_7_23-release:1.7
+	cygwin-1_7_22-release:1.7
+	cygwin-1_7_21-release:1.7
+	cygwin-1_7_20-release:1.7
+	cygwin-1_7_19-release:1.7
+	cygwin-64bit-postmerge:1.7
+	cygwin-64bit-premerge-branch:1.7.0.4
+	cygwin-64bit-premerge:1.7
+	cygwin-1_7_18-release:1.7
+	newlib-2_0_0:1.7
+	cygwin-1_7_17-release:1.7
+	cygwin-64bit-branch:1.7.0.2
+	cygwin-1_7_16-release:1.7
+	cygwin-1_7_15-release:1.6
+	cygwin-1_7_14_2-release:1.6
+	cygwin-1_7_14-release:1.6
+	cygwin-1_7_12-release:1.6
+	cygwin-1_7_11-release:1.6
+	cygwin-1_7_10-release:1.6
+	newlib-1_20_0:1.6
+	cygwin-1_7_9-release:1.6
+	cygwin-1_7_8-release:1.6
+	newlib-1_19_0:1.5
+	cygwin-1_7_7-release:1.5
+	cygwin-1_7_5-release:1.5
+	cygwin-1_7_4-release:1.5
+	cygwin-1_7_3-release:1.5
+	cygwin-1_7_2-release:1.5
+	newlib-1_18_0:1.5
+	cygwin-1_7_1-release:1.5
+	newlib-1_17_0-arc:1.2.0.2
+	binutils-arc-20080908-branch:1.1.0.2
+	binutils-arc-20080908-branchpoint:1.1
+	newlib-1_17_0:1.2
+	newlib-1_16_0:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.9
+date	2014.02.20.13.32.34;	author corinna;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2013.10.23.10.04.43;	author corinna;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2012.05.30.08.58.42;	author corinna;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2011.01.05.17.38.42;	author jjohnstn;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2009.02.25.04.00.05;	author kevinb;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2009.02.18.21.28.41;	author jjohnstn;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2009.02.18.17.35.24;	author corinna;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2008.12.11.17.27.56;	author jjohnstn;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2007.08.02.20.23.06;	author ericb;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.9
+log
+@	* libc/stdio/open_memstream.c (internal_open_memstream_r): Initialize
+	c->pos to 0.
+@
+text
+@/* Copyright (C) 2007 Eric Blake
+ * Permission to use, copy, modify, and distribute this software
+ * is freely granted, provided that this notice is preserved.
+ */
+
+/*
+FUNCTION
+<<open_memstream>>, <<open_wmemstream>>---open a write stream around an arbitrary-length string
+
+INDEX
+	open_memstream
+INDEX
+	open_wmemstream
+
+ANSI_SYNOPSIS
+	#include <stdio.h>
+	FILE *open_memstream(char **restrict <[buf]>,
+			     size_t *restrict <[size]>);
+
+	#include <wchar.h>
+	FILE *open_wmemstream(wchar_t **restrict <[buf]>,
+			      size_t *restrict <[size]>);
+
+DESCRIPTION
+<<open_memstream>> creates a seekable, byte-oriented <<FILE>> stream that
+wraps an arbitrary-length buffer, created as if by <<malloc>>.  The current
+contents of *<[buf]> are ignored; this implementation uses *<[size]>
+as a hint of the maximum size expected, but does not fail if the hint
+was wrong.  The parameters <[buf]> and <[size]> are later stored
+through following any call to <<fflush>> or <<fclose>>, set to the
+current address and usable size of the allocated string; although
+after fflush, the pointer is only valid until another stream operation
+that results in a write.  Behavior is undefined if the user alters
+either *<[buf]> or *<[size]> prior to <<fclose>>.
+
+<<open_wmemstream>> is like <<open_memstream>> just with the associated
+stream being wide-oriented.  The size set in <[size]> in subsequent
+operations is the number of wide characters.
+
+The stream is write-only, since the user can directly read *<[buf]>
+after a flush; see <<fmemopen>> for a way to wrap a string with a
+readable stream.  The user is responsible for calling <<free>> on
+the final *<[buf]> after <<fclose>>.
+
+Any time the stream is flushed, a NUL byte is written at the current
+position (but is not counted in the buffer length), so that the string
+is always NUL-terminated after at most *<[size]> bytes (or wide characters
+in case of <<open_wmemstream>>).  However, data previously written beyond
+the current stream offset is not lost, and the NUL value written during a
+flush is restored to its previous value when seeking elsewhere in the string.
+
+RETURNS
+The return value is an open FILE pointer on success.  On error,
+<<NULL>> is returned, and <<errno>> will be set to EINVAL if <[buf]>
+or <[size]> is NULL, ENOMEM if memory could not be allocated, or
+EMFILE if too many streams are already open.
+
+PORTABILITY
+POSIX.1-2008
+
+Supporting OS subroutines required: <<sbrk>>.
+*/
+
+#include <stdio.h>
+#include <wchar.h>
+#include <errno.h>
+#include <string.h>
+#include <sys/lock.h>
+#include <stdint.h>
+#include "local.h"
+
+#ifndef __LARGE64_FILES
+# define OFF_T off_t
+#else
+# define OFF_T _off64_t
+#endif
+
+/* Describe details of an open memstream.  */
+typedef struct memstream {
+  void *storage; /* storage to free on close */
+  char **pbuf; /* pointer to the current buffer */
+  size_t *psize; /* pointer to the current size, smaller of pos or eof */
+  size_t pos; /* current position */
+  size_t eof; /* current file size */
+  size_t max; /* current malloc buffer size, always > eof */
+  union {
+    char c;
+    wchar_t w;
+  } saved; /* saved character that lived at *psize before NUL */
+  int8_t wide; /* wide-oriented (>0) or byte-oriented (<0) */
+} memstream;
+
+/* Write up to non-zero N bytes of BUF into the stream described by COOKIE,
+   returning the number of bytes written or EOF on failure.  */
+static _READ_WRITE_RETURN_TYPE
+_DEFUN(memwriter, (ptr, cookie, buf, n),
+       struct _reent *ptr _AND
+       void *cookie _AND
+       const char *buf _AND
+       _READ_WRITE_BUFSIZE_TYPE n)
+{
+  memstream *c = (memstream *) cookie;
+  char *cbuf = *c->pbuf;
+
+  /* size_t is unsigned, but off_t is signed.  Don't let stream get so
+     big that user cannot do ftello.  */
+  if (sizeof (OFF_T) == sizeof (size_t) && (ssize_t) (c->pos + n) < 0)
+    {
+      ptr->_errno = EFBIG;
+      return EOF;
+    }
+  /* Grow the buffer, if necessary.  Choose a geometric growth factor
+     to avoid quadratic realloc behavior, but use a rate less than
+     (1+sqrt(5))/2 to accomodate malloc overhead.  Overallocate, so
+     that we can add a trailing \0 without reallocating.  The new
+     allocation should thus be max(prev_size*1.5, c->pos+n+1). */
+  if (c->pos + n >= c->max)
+    {
+      size_t newsize = c->max * 3 / 2;
+      if (newsize < c->pos + n + 1)
+	newsize = c->pos + n + 1;
+      cbuf = _realloc_r (ptr, cbuf, newsize);
+      if (! cbuf)
+	return EOF; /* errno already set to ENOMEM */
+      *c->pbuf = cbuf;
+      c->max = newsize;
+    }
+  /* If we have previously done a seek beyond eof, ensure all
+     intermediate bytes are NUL.  */
+  if (c->pos > c->eof)
+    memset (cbuf + c->eof, '\0', c->pos - c->eof);
+  memcpy (cbuf + c->pos, buf, n);
+  c->pos += n;
+  /* If the user has previously written further, remember what the
+     trailing NUL is overwriting.  Otherwise, extend the stream.  */
+  if (c->pos > c->eof)
+    c->eof = c->pos;
+  else if (c->wide > 0)
+    c->saved.w = *(wchar_t *)(cbuf + c->pos);
+  else
+    c->saved.c = cbuf[c->pos];
+  cbuf[c->pos] = '\0';
+  *c->psize = (c->wide > 0) ? c->pos / sizeof (wchar_t) : c->pos;
+  return n;
+}
+
+/* Seek to position POS relative to WHENCE within stream described by
+   COOKIE; return resulting position or fail with EOF.  */
+static _fpos_t
+_DEFUN(memseeker, (ptr, cookie, pos, whence),
+       struct _reent *ptr _AND
+       void *cookie _AND
+       _fpos_t pos _AND
+       int whence)
+{
+  memstream *c = (memstream *) cookie;
+  OFF_T offset = (OFF_T) pos;
+
+  if (whence == SEEK_CUR)
+    offset += c->pos;
+  else if (whence == SEEK_END)
+    offset += c->eof;
+  if (offset < 0)
+    {
+      ptr->_errno = EINVAL;
+      offset = -1;
+    }
+  else if ((size_t) offset != offset)
+    {
+      ptr->_errno = ENOSPC;
+      offset = -1;
+    }
+#ifdef __LARGE64_FILES
+  else if ((_fpos_t) offset != offset)
+    {
+      ptr->_errno = EOVERFLOW;
+      offset = -1;
+    }
+#endif /* __LARGE64_FILES */
+  else
+    {
+      if (c->pos < c->eof)
+	{
+	  if (c->wide > 0)
+	    *(wchar_t *)((*c->pbuf) + c->pos) = c->saved.w;
+	  else
+	    (*c->pbuf)[c->pos] = c->saved.c;
+	  c->saved.w = L'\0';
+	}
+      c->pos = offset;
+      if (c->pos < c->eof)
+	{
+	  if (c->wide > 0)
+	    {
+	      c->saved.w = *(wchar_t *)((*c->pbuf) + c->pos);
+	      *(wchar_t *)((*c->pbuf) + c->pos) = L'\0';
+	      *c->psize = c->pos / sizeof (wchar_t);
+	    }
+	  else
+	    {
+	      c->saved.c = (*c->pbuf)[c->pos];
+	      (*c->pbuf)[c->pos] = '\0';
+	      *c->psize = c->pos;
+	    }
+	}
+      else if (c->wide > 0)
+	*c->psize = c->eof / sizeof (wchar_t);
+      else
+	*c->psize = c->eof;
+    }
+  return (_fpos_t) offset;
+}
+
+/* Seek to position POS relative to WHENCE within stream described by
+   COOKIE; return resulting position or fail with EOF.  */
+#ifdef __LARGE64_FILES
+static _fpos64_t
+_DEFUN(memseeker64, (ptr, cookie, pos, whence),
+       struct _reent *ptr _AND
+       void *cookie _AND
+       _fpos64_t pos _AND
+       int whence)
+{
+  _off64_t offset = (_off64_t) pos;
+  memstream *c = (memstream *) cookie;
+
+  if (whence == SEEK_CUR)
+    offset += c->pos;
+  else if (whence == SEEK_END)
+    offset += c->eof;
+  if (offset < 0)
+    {
+      ptr->_errno = EINVAL;
+      offset = -1;
+    }
+  else if ((size_t) offset != offset)
+    {
+      ptr->_errno = ENOSPC;
+      offset = -1;
+    }
+  else
+    {
+      if (c->pos < c->eof)
+	{
+	  if (c->wide > 0)
+	    *(wchar_t *)((*c->pbuf) + c->pos) = c->saved.w;
+	  else
+	    (*c->pbuf)[c->pos] = c->saved.c;
+	  c->saved.w = L'\0';
+	}
+      c->pos = offset;
+      if (c->pos < c->eof)
+	{
+	  if (c->wide > 0)
+	    {
+	      c->saved.w = *(wchar_t *)((*c->pbuf) + c->pos);
+	      *(wchar_t *)((*c->pbuf) + c->pos) = L'\0';
+	      *c->psize = c->pos / sizeof (wchar_t);
+	    }
+	  else
+	    {
+	      c->saved.c = (*c->pbuf)[c->pos];
+	      (*c->pbuf)[c->pos] = '\0';
+	      *c->psize = c->pos;
+	    }
+	}
+      else if (c->wide > 0)
+	*c->psize = c->eof / sizeof (wchar_t);
+      else
+	*c->psize = c->eof;
+    }
+  return (_fpos64_t) offset;
+}
+#endif /* __LARGE64_FILES */
+
+/* Reclaim resources used by stream described by COOKIE.  */
+static int
+_DEFUN(memcloser, (ptr, cookie),
+       struct _reent *ptr _AND
+       void *cookie)
+{
+  memstream *c = (memstream *) cookie;
+  char *buf;
+
+  /* Be nice and try to reduce any unused memory.  */
+  buf = _realloc_r (ptr, *c->pbuf,
+		    c->wide > 0 ? (*c->psize + 1) * sizeof (wchar_t)
+				: *c->psize + 1);
+  if (buf)
+    *c->pbuf = buf;
+  _free_r (ptr, c->storage);
+  return 0;
+}
+
+/* Open a memstream that tracks a dynamic buffer in BUF and SIZE.
+   Return the new stream, or fail with NULL.  */
+static FILE *
+_DEFUN(internal_open_memstream_r, (ptr, buf, size, wide),
+       struct _reent *ptr _AND
+       char **buf _AND
+       size_t *size _AND
+       int wide)
+{
+  FILE *fp;
+  memstream *c;
+
+  if (!buf || !size)
+    {
+      ptr->_errno = EINVAL;
+      return NULL;
+    }
+  if ((fp = __sfp (ptr)) == NULL)
+    return NULL;
+  if ((c = (memstream *) _malloc_r (ptr, sizeof *c)) == NULL)
+    {
+      _newlib_sfp_lock_start ();
+      fp->_flags = 0;		/* release */
+#ifndef __SINGLE_THREAD__
+      __lock_close_recursive (fp->_lock);
+#endif
+      _newlib_sfp_lock_end ();
+      return NULL;
+    }
+  /* Use *size as a hint for initial sizing, but bound the initial
+     malloc between 64 bytes (same as asprintf, to avoid frequent
+     mallocs on small strings) and 64k bytes (to avoid overusing the
+     heap if *size was garbage).  */
+  c->max = *size;
+  if (wide == 1)
+    c->max *= sizeof(wchar_t);
+  if (c->max < 64)
+    c->max = 64;
+#if (SIZE_MAX >= 64 * 1024)
+  else if (c->max > 64 * 1024)
+    c->max = 64 * 1024;
+#endif
+  *size = 0;
+  *buf = _malloc_r (ptr, c->max);
+  if (!*buf)
+    {
+      _newlib_sfp_lock_start ();
+      fp->_flags = 0;		/* release */
+#ifndef __SINGLE_THREAD__
+      __lock_close_recursive (fp->_lock);
+#endif
+      _newlib_sfp_lock_end ();
+      _free_r (ptr, c);
+      return NULL;
+    }
+  if (wide == 1)
+    **((wchar_t **)buf) = L'\0';
+  else
+    **buf = '\0';
+
+  c->storage = c;
+  c->pbuf = buf;
+  c->psize = size;
+  c->pos = 0;
+  c->eof = 0;
+  c->saved.w = L'\0';
+  c->wide = (int8_t) wide;
+
+  _newlib_flockfile_start (fp);
+  fp->_file = -1;
+  fp->_flags = __SWR;
+  fp->_cookie = c;
+  fp->_read = NULL;
+  fp->_write = memwriter;
+  fp->_seek = memseeker;
+#ifdef __LARGE64_FILES
+  fp->_seek64 = memseeker64;
+  fp->_flags |= __SL64;
+#endif
+  fp->_close = memcloser;
+  ORIENT (fp, wide);
+  _newlib_flockfile_end (fp);
+  return fp;
+}
+
+FILE *
+_DEFUN(_open_memstream_r, (ptr, buf, size),
+       struct _reent *ptr _AND
+       char **buf _AND
+       size_t *size)
+{
+  return internal_open_memstream_r (ptr, buf, size, -1);
+}
+
+FILE *
+_DEFUN(_open_wmemstream_r, (ptr, buf, size),
+       struct _reent *ptr _AND
+       wchar_t **buf _AND
+       size_t *size)
+{
+  return internal_open_memstream_r (ptr, (char **)buf, size, 1);
+}
+
+#ifndef _REENT_ONLY
+FILE *
+_DEFUN(open_memstream, (buf, size),
+       char **buf _AND
+       size_t *size)
+{
+  return _open_memstream_r (_REENT, buf, size);
+}
+
+FILE *
+_DEFUN(open_wmemstream, (buf, size),
+       wchar_t **buf _AND
+       size_t *size)
+{
+  return _open_wmemstream_r (_REENT, buf, size);
+}
+#endif /* !_REENT_ONLY */
+@
+
+
+1.8
+log
+@	* libc/include/stdio.h (funopen): Change prototype of
+	__readfn and __writefn parameter to match new definition of
+	FILE's _read and _write methods.
+	(_funopen_r): Ditto.
+	(funopen): Ditto.
+	(_funopen_r): Ditto.
+	* libc/include/sys/config.h (_READ_WRITE_BUFSIZE_TYPE) Define
+	as type int if not already defined.  Add comment to explain.
+	* libc/include/sys/reent.h: Include stddef.h.
+	(struct __sFILE): Change type of last parameter in declaration
+	of _read and _write methods to _READ_WRITE_BUFSIZE_TYPE.
+	(struct __sFILE64): Ditto.
+	* libc/stdio/local.h (__sread): Declare with last parameter set
+	to _READ_WRITE_BUFSIZE_TYPE.
+	(__seofread): Ditto.
+	(__swrite): Ditto.
+	(__swrite64): Ditto.
+	* libc/stdio/fvwrite.c (__sfvwrite_r): Change type of local
+	variables w and s to _READ_WRITE_RETURN_TYPE.
+	* libc/stdio/fflush.c (__sflush_r): Change type of local variables
+	n and t to _READ_WRITE_BUFSIZE_TYPE and _READ_WRITE_RETURN_TYPE.
+	Add local variables flags to keep _flags value.
+	* libc/stdio/fmemopen.c (fmemreader): Align to above change.
+	(fmemwriter): Ditto.
+	* libc/stdio/fopencookie.c (fcreader): Ditto.
+	(fcwriter): Ditto.
+	* libc/stdio/funopen.c (funread): Ditto.
+	(funwrite): Ditto.
+	(funreader): Ditto.
+	(funwriter): Ditto.
+	* libc/stdio/open_memstream.c (memwriter): Ditto.
+	* libc/stdio/stdio.c (__sread): Ditto.
+	(__seofread): Ditto.
+	(__swrite): Ditto.
+	* libc/stdio64/stdio64.c (__swrite64): Ditto.
+@
+text
+@d358 1
+@
+
+
+1.7
+log
+@	* libc/stdio/local.h (_newlib_flockfile_start): New macro to
+	secure stream related critical section against thread cancellation.
+	(_newlib_flockfile_exit): Ditto.
+	(_newlib_sfp_lock_end): Ditto.
+	(_newlib_sfp_lock_start): Ditto for the list of streams.
+	(_newlib_sfp_lock_exit): Ditto.
+	(_newlib_sfp_lock_end): Ditto.
+	Use aforementioned macros in place of _flockfile/_funlockfile
+	and __sfp_lock_acquire/__sfp_lock_release throughout the code.
+	* libc/stdio/fclose.c: Explicitely disable and re-enable thread
+	cancellation.  Explain why.
+	* libc/stdio/freopen.c: Ditto.
+	* libc/stdio64/freopen64.c: Ditto.
+@
+text
+@d100 1
+a100 1
+       int n)
+@
+
+
+1.6
+log
+@
+2011-01-05  Ralf Corsepius  <ralf.corsepius@@rtems.org>
+
+        * libc/stdio/open_memstream.c (internal_open_memstream_r):
+        Don't limit c->max to 64*1024 on targets with SIZE_MAX < 64*1024.
+@
+text
+@d316 1
+a316 1
+      __sfp_lock_acquire ();
+d321 1
+a321 1
+      __sfp_lock_release ();
+d341 1
+a341 1
+      __sfp_lock_acquire ();
+d346 1
+a346 1
+      __sfp_lock_release ();
+d362 1
+a362 1
+  _flockfile (fp);
+d375 1
+a375 1
+  _funlockfile (fp);
+@
+
+
+1.5
+log
+@	* libc/stdio/open_memstream.c (stdint.h): Include.
+@
+text
+@d333 1
+d336 1
+@
+
+
+1.4
+log
+@
+2009-02-18  Jeff Johnston  <jjohnstn@@redhat.com>
+
+        * libc/stdio/open_memstream.c (internal_open_memstream_r): Fix max
+        buffer size to be in wchar_t units if wide == 1 is passed in.  In
+        this case, also initialize the first character of the buffer to be
+        wide char null.
+        (_open_wmemstream_r): Cast buf to be (char **) to avoid warning.
+        * libc/stdlib/mbtowc_r.c (_mbtowc_r): Change all occurences of
+        incrementing the size_t value n to first check that n is not already
+        size_t -1.  Fix some compiler warnings.
+        * libc/stdlib/wcstod.c: Add includes for <wctype.h> and <math.h>.
+@
+text
+@d69 1
+@
+
+
+1.3
+log
+@	* libc/stdio/open_memstream.c: Add open_wmemstream to doumentation.
+	(struct memstream): Add wide element.
+	Change saved to a union to take char and wchar_t values.
+	(memwriter): Accommodate wide-oriented oeprations.
+	(memseeker): Ditto.
+	(memseeker64): Ditto.
+	(memcloser): Ditto.
+	(internal_open_memstream_r): New static function.  Take functionality
+	from former _open_memstream_r and handle additional "wide" parameter.
+	(_open_memstream_r): Just call internal_open_memstream_r with wide==-1
+	from here.
+	(_open_wmemstream_r): New function.
+	(open_wmemstream): Ditto.
+	* libc/include/wchar.h (open_wmemstream): Declare.
+	(_open_wmemstream_r): Declare.
+@
+text
+@d328 2
+d347 4
+a350 1
+  **buf = '\0';
+d382 1
+a382 1
+  internal_open_memstream_r (ptr, buf, size, -1);
+d391 1
+a391 1
+  internal_open_memstream_r (ptr, buf, size, 1);
+@
+
+
+1.2
+log
+@
+2008-12-11  Craig Howland  <howland@@LGSInnovations.com>
+
+        * libc/include/sys/lock.h:  Add void cast to avoid "statement has no
+        effect" warnings from gcc.
+        * libc/include/sys/stdio.h:  Ditto.
+        * libc/include/sys/time.h:  Correct gettimeofday() prototype.
+        * libc/stdlib/__exp10.c:  Add #include "std.h" for function prototype.
+        * libc/stdlib/__ten_mu.c:  Ditto.
+        * libc/stdlib/std.h:  Correct __exp10's ANSI prototype.
+        * libc/stdlib/ldtoa.c:  Change eiisinf definition to ANSI form.  (Are
+        already others in file without _ansi method, so did not bother.)
+        * libc/stdlib/system.c:  Use _ansi forms for function prototypes and
+        definitions.
+        * libc/time/mktime.c:  Ditto.
+        * libc/misc/__dprintf.c:  Ditto.
+        * libc/include/stdio.h:  Add function prototypes for _fgetc_r,
+        _fgetpos_r, _fsetpos_r, _freopen_r, _rewind_r, freopen64, _freopen64_r,
+        _funopen_r, and _fopencookie_r.
+        * libc/include/reent.h:  Add function prototype for _stat64_r, align
+        _execve_r prototype with POSIX definition for execve.
+        * libc/reent/execr.c:  Align function prototype with POSIX definition.
+        * libc/stdio/asniprintf.c:  Add #include "local.h".
+        * libc/stdio/vasniprintf.c:  Ditto.
+        * libc/stdio/fread.c:  Remove unused variable newcount.
+        * libc/stdio/local.h:  Add function prototype for __sccl.
+        * libc/stdio/open_memstream.c:  Remove unused variable flags.
+        * libc/stdio/vfscanf.c:  Proper prototyping for ccfn, remove prototype
+        for __sccl since now in local.h.
+        * libc/string/memcpy.c:  Add #include <string.h> (for real and for
+        traditional synopsis), remove extraneous stddef.h and limits.h.
+        * libc/syscalls/sysclose.c:  Add #include <unistd.h>.
+        * libc/syscalls/sysfork.c:  Ditto.
+        * libc/syscalls/sysgetpid.c:  Ditto.
+        * libc/syscalls/sysexecve.c:  Add #include <unistd.h>, align function
+        prototype with POSIX definition.
+        * libc/syscalls/sysfstat.c:  Add #include <sys/stat.h>.
+        * libc/syscalls/sysgettod.c:  Correct sys/times.h to sys/time.h.
+        * libc/syscalls/syskill.c:  Add #include <signal.h>.
+        * libc/syscalls/syslink.c:  Add #include <unistd.h>, fix prototype.
+        * libc/syscalls/sysunlink.c:  Ditto.
+        * libc/syscalls/sysstat.c:  Add #include <sys/stat.h>, fix prototype.
+        * libc/syscalls/syswait.c:  Add #include <sys/wait.h>, fix prototype.
+@
+text
+@d8 1
+a8 1
+<<open_memstream>>---open a write stream around an arbitrary-length string
+d12 2
+d20 4
+d25 2
+a26 2
+<<open_memstream>> creates a seekable <<FILE>> stream that wraps an
+arbitrary-length buffer, created as if by <<malloc>>.  The current
+d36 4
+d47 4
+a50 4
+is always NUL-terminated after at most *<[size]> bytes.  However, data
+previously written beyond the current stream offset is not lost, and
+the NUL byte written during a flush is restored to its previous value
+when seeking elsewhere in the string.
+d59 1
+a59 1
+This function is being added to POSIX 200x, but is not in POSIX 2001.
+d65 1
+d85 5
+a89 1
+  char saved; /* saved character that lived at *psize before NUL */
+d137 2
+d140 1
+a140 1
+    c->saved = cbuf[c->pos];
+d142 1
+a142 1
+  *c->psize = c->pos;
+d183 5
+a187 2
+	  (*c->pbuf)[c->pos] = c->saved;
+	  c->saved = '\0';
+d192 12
+a203 3
+	  c->saved = (*c->pbuf)[c->pos];
+	  (*c->pbuf)[c->pos] = '\0';
+	  *c->psize = c->pos;
+d205 2
+d244 5
+a248 2
+	  (*c->pbuf)[c->pos] = c->saved;
+	  c->saved = '\0';
+d253 12
+a264 3
+	  c->saved = (*c->pbuf)[c->pos];
+	  (*c->pbuf)[c->pos] = '\0';
+	  *c->psize = c->pos;
+d266 2
+d285 3
+a287 1
+  buf = _realloc_r (ptr, *c->pbuf, *c->psize + 1);
+d296 2
+a297 2
+FILE *
+_DEFUN(_open_memstream_r, (ptr, buf, size),
+d300 2
+a301 1
+       size_t *size)
+d351 2
+a352 1
+  c->saved = '\0';
+d366 1
+d371 18
+d397 8
+@
+
+
+1.1
+log
+@Implement fmemopen and open_memstream.
+* libc/stdio/fmemopen.c (_fmemopen_r, fmemopen): New file.
+* libc/stdio/open_memstream.c (_open_memstream_r, open_memstream):
+New file.
+* libc/stdio/fopencookie.c (fcwriter): Minor optimization.
+* libc/include/stdio.h (dprintf, vdprintf): Group all POSIX 200x
+functions together.
+(fmemopen, open_memstream): Declare new functions.
+* libc/stdio/stdio.tex: Document them.
+* libc/stdio/Makefile.am (ELIX_4_SOURCES, CHEWOUT_FILES): Add
+fmemopen and open_memstream.
+* libc/stdio/Makefile.in: Regenerate.
+@
+text
+@a256 1
+  int flags;
+@
+

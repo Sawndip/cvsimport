@@ -1,0 +1,351 @@
+head	1.7;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.5
+	gdb_7_6-2013-04-26-release:1.5
+	gdb_7_6-branch:1.5.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.5
+	gdb_7_5_1-2012-11-29-release:1.4
+	gdb_7_5-2012-08-17-release:1.4
+	gdb_7_5-branch:1.4.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.4
+	gdb_7_4_1-2012-04-26-release:1.3.4.1
+	gdb_7_4-2012-01-24-release:1.3.4.1
+	gdb_7_4-branch:1.3.0.4
+	gdb_7_4-2011-12-13-branchpoint:1.3
+	gdb_7_3_1-2011-09-04-release:1.3
+	gdb_7_3-2011-07-26-release:1.3
+	gdb_7_3-branch:1.3.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.3
+	gdb_7_2-2010-09-02-release:1.1
+	gdb_7_2-branch:1.1.0.4
+	gdb_7_2-2010-07-07-branchpoint:1.1
+	gdb_7_1-branch:1.1.0.2;
+locks; strict;
+comment	@# @;
+
+
+1.7
+date	2013.09.20.21.47.05;	author devans;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2013.06.27.18.49.03;	author tromey;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2013.01.01.06.33.25;	author brobecke;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2012.01.04.08.17.45;	author brobecke;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2011.01.19.20.26.09;	author qiyao;	state Exp;
+branches
+	1.3.4.1;
+next	1.2;
+
+1.2
+date	2011.01.01.15.33.41;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2010.03.25.20.29.30;	author jkratoch;	state Exp;
+branches
+	1.1.2.1;
+next	;
+
+1.3.4.1
+date	2012.01.06.04.44.00;	author brobecke;	state Exp;
+branches;
+next	;
+
+1.1.2.1
+date	2010.04.22.23.20.15;	author jkratoch;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.7
+log
+@	* lib/future.exp (gdb_find_objcopy, gdb_find_readelf): New procs.
+	* lib/gdb.exp (build_id_debug_filename_get): Update to use them.
+	(gdb_gnu_strip_debug): Ditto.
+	* lib/prelink-support.exp (section_get, prelink_no): Ditto.
+	* gdb.arch/altivec-abi.exp: Ditto.
+	* gdb.base/attach-pie-misread.exp: Ditto.
+	* gdb.base/comprdebug.exp: Ditto.
+	* gdb.base/dup-sect.exp: Ditto.
+	* gdb.base/gnu-debugdata.exp: Ditto.
+	* gdb.base/step-symless.exp: Ditto.
+	* gdb.dwarf2/dw2-inline-param.exp: Ditto.
+	* gdb.dwarf2/dw2-skip-prologue.exp: Ditto.
+	* gdb.dwarf2/gdb-index.exp: Ditto.
+@
+text
+@# This testcase is part of GDB, the GNU debugger.
+
+# Copyright 2010-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# Test inappropriate offseting of multiple sections with the same name.
+# When kept in object file (before final executable link) it still works.
+# When separate debug info file is not used it still works.
+# When the ELF symbol table is kept in the main binary it still works.
+# Used .S file as in .c file we would need __attriute__((section)) which is
+# a GCC extension.
+
+# This test can only be run on targets which support ELF and use gas.
+# For now pick a sampling of likely targets.
+if {![istarget *-*-linux*]
+    && ![istarget *-*-gnu*]
+    && ![istarget *-*-elf*]
+    && ![istarget arm*-*-eabi*]
+    && ![istarget arm*-*-symbianelf*]
+    && ![istarget powerpc-*-eabi*]} {
+    return 0
+}
+
+standard_testfile .S
+set srcmainfile start.c
+set executable ${testfile}
+
+if {[build_executable ${testfile}.exp $executable [list ${srcfile} ${srcmainfile}] {}] == -1} {
+    return -1
+}
+
+set test "rename section"
+set objcopy_program [gdb_find_objcopy]
+set result [catch "exec $objcopy_program --rename-section sect2=sect1 $binfile" output]
+verbose "result is $result"
+verbose "output is $output"
+if {$result != 0} {
+    fail $test
+    return
+}
+pass $test
+
+set test "split"
+if {[gdb_gnu_strip_debug $binfile] != 0} {
+    fail $test
+} else {
+    pass $test
+}
+
+# gdb_gnu_strip_debug uses only --strip-debug and keeps the ELF symbol table
+# in $binfile.
+set test "strip"
+set strip_program [transform strip]
+set result [catch "exec $strip_program $binfile" output]
+verbose "result is $result"
+verbose "output is $output"
+if {$result != 0} {
+    fail $test
+    return
+}
+pass $test
+
+clean_restart $executable
+
+gdb_test "p/d *(const char *) &var1" " = 1" "var1 after strip"
+gdb_test "p/d *(const char *) &var2" " = 2" "var2 after strip"
+@
+
+
+1.6
+log
+@test suite update - gdb.base/[cd]
+
+Convert files gdb.base/[cd]*.exp to use standard_output_file et al.
+
+	* call-ar-st.exp, call-rt-st.exp, call-sc.exp,
+	call-signal-resume.exp, call-strs.exp, callexit.exp,
+	callfuncs.exp, catch-load.exp, catch-syscall.exp, charset.exp,
+	checkpoint.exp, chng-syms.exp, code-expr.exp, code_elim.exp,
+	commands.exp, completion.exp, complex.exp, cond-expr.exp,
+	condbreak.exp, consecutive.exp, constvars.exp, corefile.exp,
+	ctxobj.exp, cursal.exp, cvexpr.exp, dbx.exp, default.exp,
+	define.exp, del.exp, detach.exp, dfp-test.exp, display.exp,
+	dmsym.exp, dump.exp, dup-sect.exp: Use standard_testfile,
+	standard_output_file, prepare_for_testing, clean_restart.
+@
+text
+@d45 1
+a45 1
+set objcopy_program [transform objcopy]
+@
+
+
+1.5
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@d36 1
+a36 2
+set testfile dup-sect
+set srcfile ${testfile}.S
+a38 1
+set binfile ${objdir}/${subdir}/${executable}
+@
+
+
+1.4
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d3 1
+a3 1
+# Copyright 2010-2012 Free Software Foundation, Inc.
+@
+
+
+1.3
+log
+@2011-01-19  Yao Qi  <yao@@codesourcery.com>
+
+	* gdb.asm/asm-source.exp: Replace ARM target triplet with a
+	canonical form.
+	Remove "xscale-*-*"
+	* gdb.xml/tdesc-regs.exp: Likewise.
+	* gdb.python/py-section-script.exp: Replace ARM target triplet
+	with canonical form.
+	Match arm*-*-symbianelf*.
+	* gdb.base/dup-sect.exp: Likewise.
+	* lib/dwarf.exp: New.
+	* gdb.dwarf2/callframecfa.exp: Check dwarf2 support by routine
+	dwarf2_support.
+	* gdb.dwarf2/dup-psym.exp: Likewise.
+	* gdb.dwarf2/dw2-ada-ffffffff.exp: Likewise.
+	* gdb.dwarf2/dw2-anonymous-func.exp: Likewise.
+	* gdb.dwarf2/dw2-bad-parameter-type.exp: Likewise.
+	* gdb.dwarf2/dw2-basic.exp: Likewise.
+	* gdb.dwarf2/dw2-compressed.exp: Likewise.
+	* gdb.dwarf2/dw2-const.exp: Likewise.
+	* gdb.dwarf2/dw2-cp-infcall-ref-static.exp: Likewise.
+	* gdb.dwarf2/dw2-cu-size.exp: Likewise.
+	* gdb.dwarf2/dw2-double-set-die-type.exp: Likewise.
+	* gdb.dwarf2/dw2-empty-namespace.exp: Likewise.
+	* gdb.dwarf2/dw2-filename.exp: Likewise.
+	* gdb.dwarf2/dw2-inheritance.exp: Likewise.
+	* gdb.dwarf2/dw2-inline-param.exp: Likewise.
+	* gdb.dwarf2/dw2-intercu.exp: Likewise.
+	* gdb.dwarf2/dw2-intermix.exp: Likewise.
+	* gdb.dwarf2/dw2-modula2-self-type.exp: Likewise.
+	* gdb.dwarf2/dw2-noloc.exp: Likewise.
+	* gdb.dwarf2/dw2-op-call.exp: Likewise.
+	* gdb.dwarf2/dw2-producer.exp: Likewise.
+	* gdb.dwarf2/dw2-ranges.exp: Likewise.
+	* gdb.dwarf2/dw2-ref-missing-frame.exp: Likewise.
+	* gdb.dwarf2/dw2-stack-boundary.exp: Likewise.
+	* gdb.dwarf2/dw2-strp.exp: Likewise.
+	* gdb.dwarf2/dw2-unresolved.exp: Likewise.
+	* gdb.dwarf2/implptr.exp: Likewise.
+	* gdb.dwarf2/mac-fileno.exp: Likewise.
+	* gdb.dwarf2/member-ptr-forwardref.exp: Likewise.
+	* gdb.dwarf2/pieces.exp: Likewise.
+	* gdb.dwarf2/pr11465.exp: Likewise.
+	* gdb.dwarf2/valop.exp: Likewise.
+	* gdb.dwarf2/watch-notconst.exp: Likewise.
+	* gdb.mi/dw2-ref-missing-frame.exp: Likewise.
+@
+text
+@d3 1
+a3 1
+# Copyright 2010, 2011 Free Software Foundation, Inc.
+@
+
+
+1.3.4.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d3 1
+a3 1
+# Copyright 2010-2012 Free Software Foundation, Inc.
+@
+
+
+1.2
+log
+@run copyright.sh for 2011.
+@
+text
+@d30 2
+a31 1
+    && ![istarget arm-*-eabi*]
+@
+
+
+1.1
+log
+@gdb/
+	* symfile.c (build_section_addr_info_from_bfd): New.
+	(build_section_addr_info_from_objfile): Base it on
+	build_section_addr_info_from_bfd.
+	(addrs_section_compar, addrs_section_sort): New.
+	(addr_info_make_relative): New variables my_cleanup, abfd_addrs,
+	addrs_sorted, abfd_addrs_sorted and addrs_to_abfd_addrs.  Build
+	addrs_to_abfd_addrs.  Use it for recalculating ADDRS.
+
+gdb/testsuite/
+	* gdb.base/dup-sect.exp, gdb.base/dup-sect.S: New.
+@
+text
+@d3 1
+a3 1
+# Copyright 2010 Free Software Foundation, Inc.
+@
+
+
+1.1.2.1
+log
+@gdb/
+	* symfile.c (addr_info_make_relative): Move sect declaration to the
+	outer block.  Initialize it to NULL.  Prefer SECT->next more than
+	bfd_get_section_by_name.
+
+gdb/testsuite/
+	* gdb.base/dup-sect.exp, gdb.base/dup-sect.S: New.
+@
+text
+@@
+

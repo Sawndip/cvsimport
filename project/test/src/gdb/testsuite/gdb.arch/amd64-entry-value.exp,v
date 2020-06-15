@@ -1,0 +1,774 @@
+head	1.10;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.9
+	gdb_7_6-2013-04-26-release:1.9
+	gdb_7_6-branch:1.9.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.9
+	gdb_7_5_1-2012-11-29-release:1.7
+	gdb_7_5-2012-08-17-release:1.7
+	gdb_7_5-branch:1.7.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.7
+	gdb_7_4_1-2012-04-26-release:1.6.2.1
+	gdb_7_4-2012-01-24-release:1.6.2.1
+	gdb_7_4-branch:1.6.0.2
+	gdb_7_4-2011-12-13-branchpoint:1.6;
+locks; strict;
+comment	@# @;
+
+
+1.10
+date	2013.08.22.13.54.14;	author tromey;	state Exp;
+branches;
+next	1.9;
+
+1.9
+date	2013.01.01.06.33.24;	author brobecke;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2012.09.21.18.53.15;	author jkratoch;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2012.01.04.08.17.44;	author brobecke;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2011.10.09.19.43.41;	author jkratoch;	state Exp;
+branches
+	1.6.2.1;
+next	1.5;
+
+1.5
+date	2011.10.09.19.41.17;	author jkratoch;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2011.10.09.19.34.19;	author jkratoch;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2011.10.09.19.29.11;	author jkratoch;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2011.10.09.19.26.44;	author jkratoch;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2011.10.09.19.21.39;	author jkratoch;	state Exp;
+branches;
+next	;
+
+1.6.2.1
+date	2012.01.06.04.43.58;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.10
+log
+@fix gdb.arch to be parallel-safe
+
+This fixes parts of gdb.arch to be parallel-safe.
+I only changed the bits I could test on this machine.
+
+I don't have access to many of the machines needed to fully switch
+gdb.arch; but I am happy to provide advice to others attempting this.
+Or, I can send an untested patch to convert it all.
+
+Tested on x86-64 Fedora 18.
+
+	* gdb.arch/amd64-byte.exp: Use standard_testfile,
+	clean_restart.
+	* gdb.arch/amd64-disp-step.exp: Use standard_testfile.
+	* gdb.arch/amd64-dword.exp: Use standard_testfile,
+	clean_restart.
+	* gdb.arch/amd64-entry-value-param.exp: Use standard_testfile.
+	* gdb.arch/amd64-entry-value.exp: Use standard_testfile.
+	* gdb.arch/amd64-prologue-xmm.exp: Use standard_testfile.
+	* gdb.arch/amd64-word.exp: Use standard_testfile,
+	clean_restart.
+	* gdb.arch/i386-avx.exp: Use standard_testfile, clean_restart.
+	* gdb.arch/i386-byte.exp: Use standard_testfile, clean_restart.
+	* gdb.arch/i386-disp-step.exp: Use standard_testfile.
+	* gdb.arch/i386-dr3-watch.exp: Use standard_testfile.
+	* gdb.arch/i386-permbkpt.exp: Use standard_testfile, clean_restart.
+	* gdb.arch/i386-signal.exp: Use standard_testfile.
+	* gdb.arch/i386-size-overlap.exp: Use standard_testfile, clean_restart.
+	* gdb.arch/i386-sse.exp: Use standard_testfile, clean_restart.
+	* gdb.arch/i386-unwind.exp: Use standard_testfile.
+	* gdb.arch/i386-word.exp: Use standard_testfile, clean_restart.
+@
+text
+@# Copyright (C) 2011-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+standard_testfile .s
+set opts {}
+
+if [info exists COMPILE] {
+    # make check RUNTESTFLAGS="gdb.arch/amd64-entry-value.exp COMPILE=1"
+    set srcfile ${testfile}.cc
+    lappend opts debug optimize=-O2
+} elseif { ![istarget x86_64-*-* ] || ![is_lp64_target] } {
+    verbose "Skipping amd64-entry-value."
+    return
+}
+
+if { [prepare_for_testing ${testfile}.exp ${testfile} ${srcfile} $opts] } {
+    return -1
+}
+
+if ![runto_main] {
+    return -1
+}
+
+gdb_breakpoint "breakhere"
+gdb_breakpoint "breakhere_locexpr"
+gdb_breakpoint "stacktest"
+gdb_breakpoint "breakhere_stacktest"
+gdb_breakpoint "different"
+gdb_breakpoint "breakhere_different"
+gdb_breakpoint "breakhere_validity"
+gdb_breakpoint "breakhere_invalid"
+gdb_breakpoint "reference"
+gdb_breakpoint "breakhere_reference"
+
+
+# Test @@entry values for register passed parameters.
+
+gdb_continue_to_breakpoint "entry: breakhere"
+
+gdb_test "bt" "^bt\r\n#0 +d *\\(i=31, i@@entry=30, j=31\\.5, j@@entry=30\\.5\\) \[^\r\n\]*\r\n#1 +0x\[0-9a-f\]+ in main .*" \
+	 "entry: bt"
+gdb_test "p i" " = 31" "entry: p i"
+gdb_test "p i@@entry" " = 30" "entry: p i@@entry"
+gdb_test "p j" { = 31\.5} "entry: p j"
+gdb_test "p j@@entry" { = 30\.5} "entry: p j@@entry"
+
+
+# Test @@entry values when parameter in function is locexpr (and not loclist).
+
+gdb_continue_to_breakpoint "entry_locexpr: breakhere_locexpr"
+gdb_test "p i" " = 30" "entry_locexpr: p i"
+gdb_test_no_output "set variable i = 0" "entry_locexpr: set variable i = 0"
+gdb_test "bt" "^bt\r\n#0 +locexpr *\\(i=0, i@@entry=30\\) \[^\r\n\]*\r\n#1 +0x\[0-9a-f\]+ in main .*" \
+	 "entry_locexpr: bt"
+
+
+# Test @@entry values for stack passed parameters.
+
+gdb_continue_to_breakpoint "entry_stack: stacktest"
+
+gdb_test "bt" "^bt\r\n#0 +stacktest *\\(r1=r1@@entry=1, r2=r2@@entry=2, \[^\r\n\]+, s1=s1@@entry=11, s2=s2@@entry=12, \[^\r\n\]+, d9=d9@@entry=11\\.5, da=da@@entry=12\\.5\\) \[^\r\n\]*\r\n#1 +0x\[0-9a-f\]+ in main .*" \
+	 "entry_stack: bt at entry"
+
+gdb_continue_to_breakpoint "entry_stack: breakhere_stacktest"
+
+gdb_test "bt" "^bt\r\n#0 +stacktest *\\(r1=r1@@entry=1, r2=r2@@entry=2, \[^\r\n\]+, s1=3, s1@@entry=11, s2=4, s2@@entry=12, \[^\r\n\]+, d9=3\\.5, d9@@entry=11\\.5, da=4\\.5, da@@entry=12\\.5\\) \[^\r\n\]*\r\n#1 +0x\[0-9a-f\]+ in main .*" \
+	 "entry_stack: bt"
+
+gdb_test "p s1" " = 3" "entry_stack: p s1"
+gdb_test "p s1@@entry" " = 11" "entry_stack: p s1@@entry"
+gdb_test "p s2" " = 4" "entry_stack: p s2"
+gdb_test "p s2@@entry" " = 12" "entry_stack: p s2@@entry"
+gdb_test "p d9" " = 3\\.5" "entry_stack: p d9"
+gdb_test "p d9@@entry" " = 11\\.5" "entry_stack: p d9@@entry"
+gdb_test "p da" " = 4\\.5" "entry_stack: p da"
+gdb_test "p da@@entry" " = 12\\.5" "entry_stack: p da@@entry"
+
+
+# Test various kinds of `set print entry-values'.
+
+gdb_continue_to_breakpoint "entry_equal: breakhere"
+
+gdb_test_no_output "set print entry-values no" "entry_equal: set print entry-values no"
+gdb_test "frame" {\(val=5\).*} "entry_equal: frame: no"
+gdb_test_no_output "set print entry-values only" "entry_equal: set print entry-values only"
+gdb_test "frame" {\(val@@entry=5\).*} "entry_equal: frame: only"
+gdb_test_no_output "set print entry-values preferred" "entry_equal: set print entry-values preferred"
+gdb_test "frame" {\(val@@entry=5\).*} "entry_equal: frame: preferred"
+gdb_test_no_output "set print entry-values if-needed" "entry_equal: set print entry-values if-needed"
+gdb_test "frame" {\(val=5\).*} "entry_equal: frame: if-needed"
+gdb_test_no_output "set print entry-values both" "entry_equal: set print entry-values both"
+gdb_test "frame" {\(val=5, val@@entry=5\).*} "entry_equal: frame: both"
+gdb_test_no_output "set print entry-values compact" "entry_equal: set print entry-values compact"
+gdb_test "frame" {\(val=val@@entry=5\).*} "entry_equal: frame: compact"
+gdb_test_no_output "set print entry-values default" "entry_equal: set print entry-values default"
+gdb_test "frame" {\(val=val@@entry=5\).*} "entry_equal: frame: default"
+
+gdb_continue_to_breakpoint "entry_different: breakhere"
+
+gdb_test_no_output "set print entry-values no" "entry_different: set print entry-values no"
+gdb_test "frame" {\(val=6\).*} "entry_different: frame: no"
+gdb_test_no_output "set print entry-values only" "entry_different: set print entry-values only"
+gdb_test "frame" {\(val@@entry=5\).*} "entry_different: frame: only"
+gdb_test_no_output "set print entry-values preferred" "entry_different: set print entry-values preferred"
+gdb_test "frame" {\(val@@entry=5\).*} "entry_different: frame: preferred"
+gdb_test_no_output "set print entry-values if-needed" "entry_different: set print entry-values if-needed"
+gdb_test "frame" {\(val=6\).*} "entry_different: frame: if-needed"
+gdb_test_no_output "set print entry-values both" "entry_different: set print entry-values both"
+gdb_test "frame" {\(val=6, val@@entry=5\).*} "entry_different: frame: both"
+gdb_test_no_output "set print entry-values compact" "entry_different: set print entry-values compact"
+gdb_test "frame" {\(val=6, val@@entry=5\).*} "entry_different: frame: compact"
+gdb_test_no_output "set print entry-values default" "entry_different: set print entry-values default"
+gdb_test "frame" {\(val=6, val@@entry=5\).*} "entry_different: frame: default"
+
+gdb_continue_to_breakpoint "entry_validity: breakhere"
+
+gdb_test_no_output "set print entry-values no" "entry_validity: set print entry-values no"
+gdb_test "frame" {\(lost=<optimized out>, born=10\).*} "entry_validity: frame: no"
+gdb_test_no_output "set print entry-values only" "entry_validity: set print entry-values only"
+gdb_test "frame" {\(lost@@entry=5, born@@entry=<optimized out>\).*} "entry_validity: frame: only"
+gdb_test_no_output "set print entry-values preferred" "entry_validity: set print entry-values preferred"
+gdb_test "frame" {\(lost@@entry=5, born=10\).*} "entry_validity: frame: preferred"
+gdb_test_no_output "set print entry-values if-needed" "entry_validity: set print entry-values if-needed"
+gdb_test "frame" {\(lost@@entry=5, born=10\).*} "entry_validity: frame: if-needed"
+gdb_test_no_output "set print entry-values both" "entry_validity: set print entry-values both"
+gdb_test "frame" {\(lost=<optimized out>, lost@@entry=5, born=10, born@@entry=<optimized out>\).*} "entry_validity: frame: both"
+gdb_test_no_output "set print entry-values compact" "entry_validity: set print entry-values compact"
+gdb_test "frame" {\(lost@@entry=5, born=10\).*} "entry_validity: frame: compact"
+gdb_test_no_output "set print entry-values default" "entry_validity: set print entry-values default"
+gdb_test "frame" {\(lost=<optimized out>, lost@@entry=5, born=10\).*} "entry_validity: frame: default"
+
+gdb_continue_to_breakpoint "entry_invalid: breakhere"
+
+gdb_test_no_output "set print entry-values no" "entry_invalid: set print entry-values no"
+gdb_test "frame" {\(inv=<optimized out>\).*} "entry_invalid: frame: no"
+gdb_test_no_output "set print entry-values only" "entry_invalid: set print entry-values only"
+gdb_test "frame" {\(inv@@entry=<optimized out>\).*} "entry_invalid: frame: only"
+gdb_test_no_output "set print entry-values preferred" "entry_invalid: set print entry-values preferred"
+gdb_test "frame" {\(inv@@entry=<optimized out>\).*} "entry_invalid: frame: preferred"
+gdb_test_no_output "set print entry-values if-needed" "entry_invalid: set print entry-values if-needed"
+gdb_test "frame" {\(inv=<optimized out>\).*} "entry_invalid: frame: if-needed"
+gdb_test_no_output "set print entry-values both" "entry_invalid: set print entry-values both"
+gdb_test "frame" {\(inv=<optimized out>, inv@@entry=<optimized out>\).*} "entry_invalid: frame: both"
+gdb_test_no_output "set print entry-values compact" "entry_invalid: set print entry-values compact"
+gdb_test "frame" {\(inv=<optimized out>\).*} "entry_invalid: frame: compact"
+gdb_test_no_output "set print entry-values default" "entry_invalid: set print entry-values default"
+gdb_test "frame" {\(inv=<optimized out>\).*} "entry_invalid: frame: default"
+
+
+# Test @@entry values for DW_AT_GNU_call_site_data_value parameters.
+
+gdb_continue_to_breakpoint "entry_reference: reference"
+
+# GCC PR debug/49980: Missing stackparam1@@entry and stackparam2@@entry.
+gdb_test "bt" "#0 +reference \\(regparam=regparam@@entry=@@0x\[0-9a-f\]+: 1, nodataparam=@@0x\[0-9a-f\]+: 2, \[^\r\n\]+, stackparam1=@@0x\[0-9a-f\]+: 11, stackparam2=@@0x\[0-9a-f\]+: 12\\) \[^\r\n\]*\r\n#1 +0x\[0-9a-f\]+ in main \\(\\) \[^\r\n\]*" \
+	 "entry_reference: bt at entry"
+
+gdb_continue_to_breakpoint "entry_reference: breakhere_reference"
+
+# GCC PR debug/49980: Missing stackparam1@@entry and stackparam2@@entry.
+gdb_test "bt" "#0 +reference \\(regparam=@@0x\[0-9a-f\]+: 21, regparam@@entry=@@0x\[0-9a-f\]+: 1, nodataparam=@@0x\[0-9a-f\]+: 22, \[^\r\n\]+, stackparam1=@@0x\[0-9a-f\]+: 31, stackparam2=@@0x\[0-9a-f\]+: 32\\) \[^\r\n\]*\r\n#1 +0x\[0-9a-f\]+ in main \\(\\) \[^\r\n\]*" \
+	 "entry_reference: bt"
+gdb_test "ptype regparam" " = int &" "entry_reference: ptype regparam"
+
+set test "entry_reference: p regparam"
+set addr ""
+gdb_test_multiple "p regparam" $test {
+    -re " = \\(int &\\) @@(0x\[0-9a-f\]+): 21\r\n$gdb_prompt $" {
+	set addr $expect_out(1,string)
+	pass $test
+    }
+}
+
+gdb_test "ptype regparam@@entry" " = int &" "entry_reference: ptype regparam@@entry"
+gdb_test "p regparam@@entry" " = \\(int &\\) @@$addr: 1" "entry_reference: p regparam@@entry"
+gdb_test "p &regparam@@entry" " = \\(int \\*\\) $addr" "entry_reference: p &regparam@@entry"
+gdb_test "p regcopy" " = 1" "entry_reference: p regcopy"
+gdb_test "p nodataparam" " = \\(int &\\) @@0x\[0-9a-f\]+: 22" "entry_reference: p nodataparam"
+gdb_test "p nodataparam@@entry" "Cannot resolve DW_AT_GNU_call_site_data_value" "entry_reference: p nodataparam@@entry"
+
+
+# Test virtual tail call frames.
+
+gdb_continue_to_breakpoint "tailcall: breakhere"
+
+gdb_test "bt" "^bt\r\n#0 +d *\\(i=71, i@@entry=70, j=73\\.5, j@@entry=72\\.5\\) \[^\r\n\]*\r\n#1 +0x\[0-9a-f\]+ in c \\(i=i@@entry=7, j=j@@entry=7\\.25\\) \[^\r\n\]*\r\n#2 +0x\[0-9a-f\]+ in b \\(i=i@@entry=5, j=j@@entry=5\\.25\\) \[^\r\n\]*\r\n#3 +0x\[0-9a-f\]+ in main \[^\r\n\]*" \
+	 "tailcall: bt"
+gdb_test "p i" " = 71" "tailcall: p i"
+gdb_test "p i@@entry" " = 70" "tailcall: p i@@entry"
+gdb_test "p j" " = 73\\.5" "tailcall: p j"
+gdb_test "p j@@entry" " = 72\\.5" "tailcall: p j@@entry"
+
+# Test $sp simulation for tail call frames.
+#gdb_test {p/x $sp} " = 0x.*"
+#gdb_test {p/x $pc} " = 0x.*"
+gdb_test_no_output {set $sp0=$sp}
+gdb_test "up" "\r\n#1 .*"
+#gdb_test {p/x $sp} " = 0x.*"
+gdb_test {p $sp0 == $sp} " = true"
+gdb_test "frame 3" "\r\n#3 .*"
+gdb_test {p $sp0 + sizeof (void *) == $sp} " = true"
+
+# Test $pc adjustment which is now right after the function end.
+# Also verify the current PC indicator "=> " is not displayed anywhere.
+gdb_test "down" "\r\n#2 .*"
+set test "disassemble"
+gdb_test_multiple $test $test {
+    -re "^$test\r\n" {
+	exp_continue
+    }
+    -re "^Dump of assembler code for function b\\(int, double\\):\r\n" {
+	exp_continue
+    }
+    -re "^   0x\[^\r\n\]*\r\n" {
+	exp_continue
+    }
+    -re "^End of assembler dump\\.\r\n$gdb_prompt $" {
+	pass $test
+    }
+}
+
+
+# Test partial-ambiguous virtual tail call frames chain.
+
+gdb_continue_to_breakpoint "ambiguous: breakhere"
+
+gdb_test "bt" "^bt\r\n#0 +d \\(i=<optimized out>, j=<optimized out>\\)\[^\r\n\]*\r\n#1 +0x\[0-9a-f\]+ in amb_z \\(i=<optimized out>\\)\[^\r\n\]*\r\n#2 +0x\[0-9a-f\]+ in amb_y \\(i=<optimized out>\\)\[^\r\n\]*\r\n#3 +0x\[0-9a-f\]+ in amb_x \\(i=<optimized out>\\)\[^\r\n\]*\r\n#4 +0x\[0-9a-f\]+ in amb_b \\(i=i@@entry=101\\)\[^\r\n\]*\r\n#5 +0x\[0-9a-f\]+ in amb_a \\(i=i@@entry=100\\)\[^\r\n\]*\r\n#6 +0x\[0-9a-f\]+ in main \\(\\)\[^\r\n\]*" \
+	 "ambiguous: bt"
+
+
+# Test self tail calls verification.
+# GDB should not print the real value as it is ambiguous.
+
+gdb_continue_to_breakpoint "self: breakhere"
+
+gdb_test "bt" "^bt\r\n#0 +d \\(i=<optimized out>, j=<optimized out>\\)\[^\r\n\]*\r\n#1 +0x\[0-9a-f\]+ in self \\(i=<optimized out>\\)\[^\r\n\]*\r\n#2 +0x\[0-9a-f\]+ in main \\(\\)\[^\r\n\]*" \
+	 "self: bt"
+
+gdb_test_no_output "set debug entry-values 1"
+gdb_test "bt" "DW_OP_GNU_entry_value resolving has found function \"self\\(int\\)\" at 0x\[0-9a-f\]+ can call itself via tail calls\r\n.*" \
+	 "self: bt debug entry-values"
+@
+
+
+1.9
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@d16 1
+a16 2
+set testfile amd64-entry-value
+set srcfile ${testfile}.s
+@
+
+
+1.8
+log
+@gdb/
+	Fix disassemble without parameters in tailcall frame.
+	* cli/cli-cmds.c (disassemble_current_function): Use
+	get_frame_address_in_block.
+
+gdb/testsuite/
+	Fix disassemble without parameters in tailcall frame.
+	* gdb.arch/amd64-entry-value.exp (down, disassemble): New tests.
+@
+text
+@d1 1
+a1 1
+# Copyright (C) 2011-2012 Free Software Foundation, Inc.
+@
+
+
+1.7
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d216 19
+@
+
+
+1.6
+log
+@gdb/
+	Display @@entry parameter values even for references.
+	* ada-valprint.c (ada_val_print_1) <TYPE_CODE_REF>: Try also
+	coerce_ref_if_computed.
+	* c-valprint.c (c_val_print) <TYPE_CODE_REF>: Likewise.
+	* dwarf2expr.c (dwarf_block_to_dwarf_reg_deref): New function.
+	(execute_stack_op) <DW_OP_GNU_entry_value>: Add -1 deref_size to the
+	existing push_dwarf_reg_entry_value call.  Add new detection calling
+	dwarf_block_to_dwarf_reg_deref.  Update the error message.
+	(ctx_no_push_dwarf_reg_entry_value): New parameter deref_size.
+	* dwarf2expr.h
+	(struct dwarf_expr_context_funcs) <push_dwarf_reg_entry_value>: Add new
+	parameter deref_size, describe it in the comment.
+	(ctx_no_push_dwarf_reg_entry_value): Add new parameter deref_size.
+	(dwarf_block_to_dwarf_reg_deref): New declaration.
+	* dwarf2loc.c (dwarf_entry_parameter_to_value): Add new parameter
+	deref_size, describe it in the function comment.  New variables
+	data_src and size, fetch the alternative block accoring to DEREF_SIZE.
+	(dwarf_expr_push_dwarf_reg_entry_value): Add new parameter deref_size,
+	describe it in the function comment.  Fetch the alternative block
+	accoring to DEREF_SIZE.
+	(entry_data_value_coerce_ref, entry_data_value_copy_closure)
+	(entry_data_value_free_closure, entry_data_value_funcs): New.
+	(value_of_dwarf_reg_entry): New variables checked_type, target_type,
+	outer_val, target_val, val and addr.  Try to fetch and create also
+	referenced value content.
+	(pieced_value_funcs): NULL value for coerce_ref.
+	(needs_dwarf_reg_entry_value): Add new parameter deref_size.
+	* f-valprint.c (f_val_print) <TYPE_CODE_REF>: Try also
+	coerce_ref_if_computed.
+	* opencl-lang.c (opencl_value_funcs): NULL value for coerce_ref.
+	* p-valprint.c (pascal_val_print) <TYPE_CODE_REF>: Likewise.
+	* stack.c (read_frame_arg): Compare also dereferenced values.
+	* value.c (value_computed_funcs): Make the parameter v const, use
+	value_lval_const for it.
+	(value_lval_const, coerce_ref_if_computed): New function.
+	(coerce_ref): New variable retval.  Call also coerce_ref_if_computed.
+	* value.h (struct lval_funcs): New field coerce_ref.
+	(value_computed_funcs): Make the parameter v const.
+	(value_lval_const, coerce_ref_if_computed): New declarations.
+
+gdb/testsuite/
+	Display @@entry parameter values even for references.
+	* gdb.arch/amd64-entry-value.cc (reference, datap, datap_input): New
+	functions.
+	(main): New variables regvar, nodatavarp, stackvar1, stackvar2.  Call
+	reference and datap_input.
+	* gdb.arch/amd64-entry-value.exp (reference, breakhere_reference): New
+	breakpoints.
+	(continue to breakpoint: entry_reference: reference)
+	(entry_reference: bt at entry)
+	(continue to breakpoint: entry_reference: breakhere_reference)
+	(entry_reference: bt, entry_reference: ptype regparam)
+	(entry_reference: p regparam, entry_reference: ptype regparam@@entry)
+	(entry_reference: p regparam@@entry, entry_reference: p &regparam@@entry)
+	(entry_reference: p regcopy, entry_reference: p nodataparam)
+	(entry_reference: p nodataparam@@entry): New tests.
+@
+text
+@d1 1
+a1 1
+# Copyright (C) 2011 Free Software Foundation, Inc.
+@
+
+
+1.6.2.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d1 1
+a1 1
+# Copyright (C) 2011-2012 Free Software Foundation, Inc.
+@
+
+
+1.5
+log
+@gdb/
+	Support @@entry in input expressions.
+	* c-exp.y (ENTRY, unknown_cpp_name): New.
+	(exp: UNKNOWN_CPP_NAME): Change to `exp: unknown_cpp_name'.
+	(unknown_cpp_name: UNKNOWN_CPP_NAME, unknown_cpp_name: ENTRY)
+	(variable: name_not_typename '@@' ENTRY, name: ENTRY)
+	(name_not_typename: ENTRY): New.
+	(yylex): Recognize ENTRY.
+	* eval.c (evaluate_subexp_standard): Support also OP_VAR_ENTRY_VALUE.
+	* expprint.c (print_subexp_standard, dump_subexp_body_standard):
+	Likewise.
+	* parse.c (operator_length_standard): Likewise.
+	* std-operator.def: New operator OP_VAR_ENTRY_VALUE.
+
+gdb/doc/
+	Support @@entry in input expressions.
+	* gdb.texinfo (Variables): Describe @@entry names suffix.
+	(Print Settings): Add anchor for `set print entry-values'.
+
+gdb/testsuite/
+	Support @@entry in input expressions.
+	* gdb.arch/amd64-entry-value.exp (entry: p i@@entry, entry: p j@@entry)
+	(entry_stack: p s1@@entry, entry_stack: p s2@@entry)
+	(entry_stack: p d9@@entry, entry_stack: p da@@entry, tailcall: p i@@entry)
+	(tailcall: p j@@entry): New tests.
+	* gdb.cp/koenig.cc (A::entry): New function.
+	(main): Call it.
+	* gdb.cp/koenig.exp (p entry (c)): New test.
+@
+text
+@d45 2
+d163 32
+@
+
+
+1.4
+log
+@gdb/
+	Display @@entry parameter values (without references).
+	* dwarf2expr.c (dwarf_block_to_fb_offset, dwarf_block_to_sp_offset):
+	New functions.
+	* dwarf2expr.h (dwarf_block_to_fb_offset, dwarf_block_to_sp_offset):
+	New declarations.
+	* dwarf2loc.c (dwarf2_find_location_expression): Support location list
+	entry record.
+	(dwarf_entry_parameter_to_value, value_of_dwarf_reg_entry)
+	(value_of_dwarf_block_entry, locexpr_read_variable_at_entry): New
+	functions.
+	(dwarf2_locexpr_funcs): Install locexpr_read_variable_at_entry.
+	(loclist_read_variable_at_entry): New function.
+	(dwarf2_loclist_funcs): Install loclist_read_variable_at_entry.
+	* dwarf2read.c (read_call_site_scope): Support also DW_OP_fbreg in
+	DW_AT_location, call dwarf_block_to_sp_offset for it.
+	* frame.h (print_entry_values_no, print_entry_values_only)
+	(print_entry_values_preferred, print_entry_values_if_needed)
+	(print_entry_values_both, print_entry_values_compact)
+	(print_entry_values_default, print_entry_values): New declarations.
+	(struct frame_arg): New field entry_kind.
+	(read_frame_arg): New parameter entryargp.
+	* mi/mi-cmd-stack.c (list_arg_or_local): New gdb_assert for
+	arg->entry_kind.  Optionally print the `@@entry' suffix.
+	(list_args_or_locals): New variable entryarg, initialize it.
+	Initialize also entry_kind of arg and entryarg.  Conditionalize
+	list_arg_or_local for arg, add list_arg_or_local for entryarg.  Call
+	xfree for entryarg.error.
+	* stack.c (print_entry_values_no, print_entry_values_only)
+	(print_entry_values_preferred, print_entry_values_if_needed)
+	(print_entry_values_both, print_entry_values_compact)
+	(print_entry_values_default, print_entry_values_choices)
+	(print_entry_values): New variables.
+	(print_frame_arg): New gdb_assert for arg->entry_kind.  Optionally
+	print the `@@entry' suffix, possibly in combination for
+	print_entry_values_compact.
+	(read_frame_arg): New parameter entryargp, new variables entryval,
+	entryval_error and val_equal.  Read in also entryargp, respect
+	print_entry_values, compare the values using val_equal, fill in also
+	argp->entry_kind (together with entryargp->entry_kind).
+	(print_frame_args): New variable entryarg, initialize it.
+	Conditionalize print_frame_arg for arg, add print_frame_arg for
+	entryarg.  Call xfree for entryarg.error.
+	(_initialize_stack): Call add_setshow_enum_cmd for `entry-values'.
+	* symtab.h (struct symbol_computed_ops): New field
+	read_variable_at_entry.
+
+gdb/doc/
+	Display @@entry parameter values (without references).
+	* gdb.texinfo (Tail Call Frames): Add anchor.  Add self tail call
+	example.
+	(Print Settings): New description of set print entry-values and show
+	print entry-values.
+
+gdb/testsuite/
+	Display @@entry parameter values (without references).
+	* gdb.arch/amd64-entry-value.cc (locexpr, stacktest, data, data2)
+	(different, validity, invalid): New functions.
+	(main): Call them.
+	* gdb.arch/amd64-entry-value.exp: New breakpoints breakhere_locexpr,
+	stacktest, breakhere_stacktest, different, breakhere_different,
+	breakhere_validity and breakhere_invalid.
+	(entry: bt): Update for @@entry.
+	(entry_locexpr: *, entry_stack: *, entry_equal: *, entry_different: *)
+	(entry_validity: *, entry_invalid: *): Many new tests.
+	* gdb.base/break.exp
+	(run until breakpoint set at small function, optimized file): Accept
+	also the @@entry suffix.
+	* gdb.mi/Makefile.in (PROGS): Add mi2-amd64-entry-value.
+	* gdb.mi/mi2-amd64-entry-value.c: New files.
+	* gdb.mi/mi2-amd64-entry-value.exp: New files.
+@
+text
+@d54 1
+d56 1
+d81 1
+d83 1
+d85 1
+d87 1
+d168 1
+d170 1
+@
+
+
+1.3
+log
+@gdb/
+	Protect entry values against self tail calls.
+	* dwarf2loc.c (VEC (CORE_ADDR), func_verify_no_selftailcall): New.
+	(dwarf_expr_dwarf_reg_entry_value): Call func_verify_no_selftailcall.
+
+gdb/testsuite/
+	Protect entry values against self tail calls.
+	* gdb.arch/amd64-entry-value.cc (self2, self): New.
+	(main): Call self.
+	* gdb.arch/amd64-entry-value.exp (self: breakhere, self: bt)
+	(set debug entry-values 1, self: bt debug entry-values): New tests.
+@
+text
+@d38 7
+d51 1
+a51 1
+gdb_test "bt" "^bt\r\n#0 +d *\\(i=31, j=31\\.5\\) \[^\r\n\]*\r\n#1 +0x\[0-9a-f\]+ in main .*" \
+d57 98
+d159 1
+a159 1
+gdb_test "bt" "^bt\r\n#0 +d *\\(i=71, j=73\\.5\\) \[^\r\n\]*\r\n#1 +0x\[0-9a-f\]+ in c \\(i=7, j=7\\.25\\) \[^\r\n\]*\r\n#2 +0x\[0-9a-f\]+ in b \\(i=5, j=5\\.25\\) \[^\r\n\]*\r\n#3 +0x\[0-9a-f\]+ in main \[^\r\n\]*" \
+d179 1
+a179 1
+gdb_test "bt" "^bt\r\n#0 +d \\(i=<optimized out>, j=<optimized out>\\)\[^\r\n\]*\r\n#1 +0x\[0-9a-f\]+ in amb_z \\(i=<optimized out>\\)\[^\r\n\]*\r\n#2 +0x\[0-9a-f\]+ in amb_y \\(i=<optimized out>\\)\[^\r\n\]*\r\n#3 +0x\[0-9a-f\]+ in amb_x \\(i=<optimized out>\\)\[^\r\n\]*\r\n#4 +0x\[0-9a-f\]+ in amb_b \\(i=101\\)\[^\r\n\]*\r\n#5 +0x\[0-9a-f\]+ in amb_a \\(i=100\\)\[^\r\n\]*\r\n#6 +0x\[0-9a-f\]+ in main \\(\\)\[^\r\n\]*" \
+@
+
+
+1.2
+log
+@gdb/
+	Recognize virtual tail call frames.
+	* Makefile.in (SFILES): Add dwarf2-frame-tailcall.c.
+	(HFILES_NO_SRCDIR): Add dwarf2-frame-tailcall.h.
+	(COMMON_OBS): Add dwarf2-frame-tailcall.o.
+	* dwarf2-frame-tailcall.c: New file.
+	* dwarf2-frame-tailcall.h: New file.
+	* dwarf2-frame.c: Include dwarf2-frame-tailcall.h.
+	(execute_cfa_program): New function comment.  Return INSN_PTR.  Reset
+	REGS.PREV only after CIE execution.
+	(struct dwarf2_frame_cache): New field tailcall_cache.
+	(dwarf2_frame_cache): New variables entry_pc, entry_cfa_sp_offset,
+	entry_cfa_sp_offset_p and instr.  Execute FDE instructions in two
+	parts, try to find entry_cfa_sp_offset.  Call
+	dwarf2_tailcall_sniffer_first.
+	(dwarf2_frame_prev_register): Call dwarf2_tailcall_prev_register_first
+	when appropriate.
+	(dwarf2_frame_dealloc_cache): New function.
+	(dwarf2_frame_sniffer): Preinitialize cache by dwarf2_frame_cache.
+	(dwarf2_frame_unwind): Install dwarf2_frame_dealloc_cache.
+	(dwarf2_signal_frame_unwind): Do not install dwarf2_frame_dealloc_cache.
+	(dwarf2_append_unwinders): Add dwarf2_tailcall_frame_unwind.
+	(dwarf2_frame_cfa): Support also dwarf2_tailcall_frame_unwind.
+	* dwarf2loc.c (func_addr_to_tail_call_list)
+	(tailcall_dump, call_sitep, VEC (call_sitep), chain_candidate)
+	(call_site_find_chain_1, call_site_find_chain): New.
+	* dwarf2loc.h (struct call_site_chain): New.
+	(call_site_find_chain): New declaration.
+	* frame.c (get_frame_address_in_block): Support also TAILCALL_FRAME.
+	* frame.h (enum frame_type): New entry TAILCALL_FRAME.
+	* python/py-frame.c (gdbpy_initialize_frames): Add TAILCALL_FRAME.
+	* stack.c (frame_info): Support also TAILCALL_FRAME.
+
+gdb/doc/
+	Recognize virtual tail call frames.
+	* gdb.texinfo (Optimized Code): Add reference to Tail Call Frames.
+	(Tail Call Frames): New node.
+	(Frames In Python): Add gdb.TAILCALL_FRAME.
+
+gdb/testsuite/
+	Recognize virtual tail call frames.
+	* gdb.arch/amd64-entry-value.cc (c, a, b, amb_z, amb_y, amb_x, amb)
+	(amb_b, amb_a): New.
+	(main): Call a and b.
+	* gdb.arch/amd64-entry-value.exp (tailcall: breakhere, tailcall: bt)
+	(tailcall: p i, tailcall: p j, set $sp0=$sp, up, p $sp0 == $sp, frame 3)
+	(p $sp0 + sizeof (void *) == $sp, ambiguous: breakhere, ambiguous: bt):
+	New tests.
+@
+text
+@d76 13
+@
+
+
+1.1
+log
+@gdb/
+	Implement basic support for DW_TAG_GNU_call_site.
+	* block.c: Include gdbtypes.h and exceptions.h.
+	(call_site_for_pc): New function.
+	* block.h (call_site_for_pc): New declaration.
+	* defs.h: Include hashtab.h.
+	(make_cleanup_htab_delete, core_addr_hash, core_addr_eq): New
+	declarations.
+	* dwarf2-frame.c (dwarf2_frame_ctx_funcs): Install
+	ctx_no_push_dwarf_reg_entry_value.
+	* dwarf2expr.c (read_uleb128, read_sleb128): Support R as NULL.
+	(dwarf_block_to_dwarf_reg): New function.
+	(execute_stack_op) <DW_OP_GNU_entry_value>: Implement it.
+	(ctx_no_push_dwarf_reg_entry_value): New function.
+	* dwarf2expr.h (struct dwarf_expr_context_funcs): New field
+	push_dwarf_reg_entry_value.
+	(ctx_no_push_dwarf_reg_entry_value, dwarf_block_to_dwarf_reg): New
+	declarations.
+	* dwarf2loc.c: Include gdbcmd.h.
+	(dwarf_expr_ctx_funcs): New forward declaration.
+	(entry_values_debug, show_entry_values_debug, call_site_to_target_addr)
+	(dwarf_expr_reg_to_entry_parameter)
+	(dwarf_expr_push_dwarf_reg_entry_value): New.
+	(dwarf_expr_ctx_funcs): Install dwarf_expr_push_dwarf_reg_entry_value.
+	(dwarf2_evaluate_loc_desc_full): Handle NO_ENTRY_VALUE_ERROR.
+	(needs_dwarf_reg_entry_value): New function.
+	(needs_frame_ctx_funcs): Install it.
+	(_initialize_dwarf2loc): New function.
+	* dwarf2loc.h (entry_values_debug): New declaration.
+	* dwarf2read.c (struct dwarf2_cu): New field call_site_htab.
+	(read_call_site_scope): New forward declaration.
+	(process_full_comp_unit): Copy call_site_htab.
+	(process_die): Support DW_TAG_GNU_call_site.
+	(read_call_site_scope): New function.
+	(dwarf2_get_pc_bounds): Support NULL HIGHPC.
+	(dwarf_tag_name): Support DW_TAG_GNU_call_site.
+	(cleanup_htab): Delete.
+	(write_psymtabs_to_index): Use make_cleanup_htab_delete instead of it.
+	* exceptions.h (enum errors): New NO_ENTRY_VALUE_ERROR.
+	* gdb-gdb.py (StructMainTypePrettyPrinter): Support
+	FIELD_LOC_KIND_DWARF_BLOCK.
+	* gdbtypes.h (enum field_loc_kind): New entry
+	FIELD_LOC_KIND_DWARF_BLOCK.
+	(struct main_type): New loc entry dwarf_block.
+	(struct call_site, FIELD_DWARF_BLOCK, SET_FIELD_DWARF_BLOCK)
+	(TYPE_FIELD_DWARF_BLOCK): New.
+	* python/py-type.c: Include dwarf2loc.h.
+	(check_types_equal): Support FIELD_LOC_KIND_DWARF_BLOCK.  New
+	internal_error call on unknown FIELD_LOC_KIND.
+	* symtab.h (struct symtab): New field call_site_htab.
+	* utils.c (do_htab_delete_cleanup, make_cleanup_htab_delete)
+	(core_addr_hash, core_addr_eq): New functions.
+
+gdb/testsuite/
+	Implement basic support for DW_TAG_GNU_call_site.
+	* gdb.arch/Makefile.in (EXECUTABLES): Add amd64-entry-value.
+	* gdb.arch/amd64-entry-value.cc: New file.
+	* gdb.arch/amd64-entry-value.exp: New file.
+@
+text
+@d48 28
+@
+

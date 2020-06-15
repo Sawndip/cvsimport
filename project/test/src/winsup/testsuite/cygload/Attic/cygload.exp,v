@@ -1,0 +1,107 @@
+head	1.3;
+access;
+symbols;
+locks; strict;
+comment	@# @;
+
+
+1.3
+date	2006.01.02.06.15.58;	author cgf;	state dead;
+branches;
+next	1.2;
+
+1.2
+date	2005.06.06.21.28.22;	author cgf;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2005.06.06.21.13.31;	author cgf;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.3
+log
+@* cygload/README: Delete.
+* cygload/cygload.cc: Move to winsup.api.  Add comments from README.
+* cygload/cygload.h: Move to winsup.api.
+* cygload/cygload.exp: Move to winsup.api.
+* Makefile.in: Remove cygload.
+* winsup.api/winsup.exp: If a .exp file is detected, run it rather than using
+standard compile.
+* winsup.api/resethand.c (main): Use printf to print status or expect thinks
+something is wrong.
+@
+text
+@source "site.exp"
+
+if { ! [isnative] } {
+    verbose "skipping cygload because it's not native \"$target_triplet\" != \"$build_triplet\""
+    return
+}
+
+proc ws_spawn {cmd args} {
+    global rv
+    verbose "running $cmd\n"
+    set rv {}
+    # First item in rv is the return code, second item is the message
+    lappend rv [catch "exec $cmd" message] $message
+    verbose send "catchCode = $rv\n"
+}
+
+ws_spawn "gcc -mno-cygwin $srcdir/$subdir/cygload.cc -o mingw-cygload.exe -lstdc++ -Wl,-e,_cygloadCRTStartup@@0"
+
+if { $rv != {0 {}} } {
+    verbose -log "$rv"
+    fail "cygload (compile)"
+} else {
+    if { $verbose } {
+        set redirect_output "./mingw-cygwin.log"
+    } else {
+        set redirect_output /dev/null
+    }
+    set windows_runtime_root [exec cygpath -m $runtime_root]
+    ws_spawn "./mingw-cygload.exe -cygwin $windows_runtime_root/cygwin0.dll > $redirect_output"
+    if { $rv != {0 {}} } {
+        verbose -log "cygload: $rv"
+        fail "cygload (execute)"
+    } else {
+        pass "cygload"
+    }
+    catch { file delete "mingw-cygload.exe" } err
+    if { $err != "" } {
+        note "error deleting mingw-cygload.exe: $err"
+    }
+}
+@
+
+
+1.2
+log
+@* cygload/cygload.exp: .cpp -> .cc.
+@
+text
+@@
+
+
+1.1
+log
+@* Makefile.in: Test cygload.
+* cygload: New directory.
+* cygload/README: New file.
+* cygload/Makefile: Ditto.
+* cygload/cygload.h: Ditto.
+* cygload/cygload.cc: Ditto.
+* cygload/cygload.exp: Ditto.
+@
+text
+@d17 1
+a17 1
+ws_spawn "gcc -mno-cygwin $srcdir/$subdir/cygload.cpp -o mingw-cygload.exe -lstdc++ -Wl,-e,_cygloadCRTStartup@@0"
+@
+

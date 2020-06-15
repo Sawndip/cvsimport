@@ -1,0 +1,256 @@
+head	1.3;
+access;
+symbols
+	cygwin-1_7_35-release:1.3
+	cygwin-1_7_34-release:1.3
+	cygwin-1_7_33-release:1.3
+	cygwin-1_7_32-release:1.3
+	cygwin-1_7_31-release:1.3
+	cygwin-1_7_30-release:1.3
+	cygwin-1_7_29-release:1.3
+	cygwin-1_7_29-release-branchpoint:1.3.0.2
+	cygwin-pre-user-db:1.3
+	cygwin-1_7_28-release:1.3
+	cygwin-1_7_27-release:1.3
+	cygwin-1_7_26-release:1.3
+	cygwin-1_7_25-release:1.3
+	cygwin-1_7_24-release:1.3
+	cygwin-1_7_23-release:1.3
+	cygwin-1_7_22-release:1.3
+	cygwin-1_7_21-release:1.3
+	cygwin-1_7_20-release:1.3
+	cygwin-1_7_19-release:1.3
+	cygwin-64bit-postmerge:1.2
+	cygwin-64bit-premerge-branch:1.2.0.8
+	cygwin-64bit-premerge:1.2
+	cygwin-1_7_18-release:1.2
+	post-ptmalloc3:1.2
+	pre-ptmalloc3:1.2
+	cygwin-1_7_17-release:1.2
+	cygwin-64bit-branch:1.2.0.6
+	cygwin-1_7_16-release:1.2
+	cygwin-1_7_15-release:1.2
+	cygwin-1_7_14_2-release:1.2
+	cygwin-1_7_14-release:1.2
+	cygwin-1_7_12-release:1.2
+	cygwin-1_7_11-release:1.2
+	cygwin-1_7_10-release:1.2
+	signal-rewrite:1.2.0.4
+	pre-notty:1.2
+	cygwin-1_7_9-release:1.2
+	cv-post-1_7_9:1.2.0.2
+	cygwin-1_7_8-release:1.2
+	cygwin-1_7_7-release:1.2
+	cygwin-1_7_5-release:1.2
+	cygwin-1_7_4-release:1.2
+	cygwin-1_7_3-release:1.2
+	cygwin-1_7_2-release:1.2;
+locks; strict;
+comment	@ * @;
+
+
+1.3
+date	2013.05.22.16.55.55;	author corinna;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2010.03.15.21.29.15;	author cgf;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2010.03.13.19.34.35;	author cgf;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.3
+log
+@	* spinlock.h (ULONG): Replace LONG operator with ULONG to accommodate
+	the fact that CURR_SHARED_MAGIC and USER_SHARED_MAGIC are unsigned
+	values.
+	* shared.cc (shared_info::initialize): Drop explicit cast here.
+@
+text
+@/* spinlock.h: Header file for cygwin time-sensitive synchronization primitive.
+
+   Copyright 2010 Red Hat, Inc.
+
+This file is part of Cygwin.
+
+This software is a copyrighted work licensed under the terms of the
+Cygwin license.  Please consult the file "CYGWIN_LICENSE" for
+details. */
+
+#ifndef _SPINLOCK_H
+#define _SPINLOCK_H
+
+#include "ntdll.h"
+
+#define SPINLOCK_WAIT (15000LL * 10000LL)
+
+class spinlock
+{
+  LONG *locker;
+  LONG val;
+  LONG setto;
+  void done (LONG what)
+  {
+    if (locker)
+      {
+	InterlockedExchange (locker, what);
+	locker = NULL;
+      }
+  }
+  long long time ()
+  {
+    LARGE_INTEGER t;
+    if (NtQuerySystemTime (&t) == STATUS_SUCCESS)
+      return get_ll (t);
+    return 0LL;
+  }
+public:
+  spinlock (LONG& locktest, LONG wanted_val = 1, LONGLONG timeout = SPINLOCK_WAIT):
+    locker (&locktest), setto (wanted_val)
+  {
+    /* Quick test to see if we're already initialized */
+    if ((val = locktest) == wanted_val)
+      locker = NULL;
+    /* Slightly less quick test to see if we are the first cygwin process */
+    else if ((val = InterlockedExchange (locker, -1)) == 0)
+      /* We're armed and dangerous */;
+    else if (val == wanted_val)
+      done (val);	/* This was initialized while we weren't looking */
+    else
+      {
+	long long then = time ();
+	/* Loop waiting for some other process to set locktest to something
+	   other than -1, indicating that initialization has finished.  Or,
+	   wait a default of 15 seconds for that to happen and, if it doesn't
+	   just grab the lock ourselves. */
+	while ((val = InterlockedExchange (locker, -1)) == -1
+	       && (time () - then) < timeout)
+	  yield ();
+	/* Reset the lock back to wanted_value under the assumption that is
+	   what caused the above loop to kick out.  */
+	if (val == -1)
+	  val = 0;	/* Timed out.  We'll initialize things ourselves. */
+	else
+	  done (val);	/* Put back whatever was there before, assuming that
+			   it is actually wanted_val. */
+      }
+  }
+  ~spinlock () {done (setto);}
+  operator ULONG () const {return (ULONG) val;}
+  /* FIXME: This should be handled in a more general fashion, probably by
+     establishing a linked list of spinlocks which are freed on process exit. */
+  void multiple_cygwin_problem (const char *w, unsigned m, unsigned v)
+  {
+    done (val);
+    ::multiple_cygwin_problem (w, m, v);
+  }
+};
+
+#endif /*_SPINLOCK_H*/
+@
+
+
+1.2
+log
+@* shared_info.h (user_info): Add dll_crt0_1 as a friend.
+(user_info::version): Make LONG to accommodate spinlock use.
+(user_info::create): New static function renamed from user_info_create.
+(user_info::initialize): New private function renamed from
+user_info_initialize.
+(SHARED_VERSION): Delete.
+(SHARED_VERSION_MAGIC): Ditto.
+(USER_VERSION_MAGIC): Ditto.
+(SHARED_INFO_CB): Ditto.
+(USER_VERSION): Ditto.
+(USER_VERSION_MAGIC): Ditto.
+(CURR_SHARED_MAGIC): Update.
+(CURR_USER_MAGIC): Ditto.
+(shared_info::version): Make LONG to accommodate spinlock use.
+(shared_info::create): New static function mirroring user_info::create.
+(dll_crt0_1): Accommodate change to user_info::initialize.
+* spinlock.h (spinlock::setto): New variable member.
+(spinlock::done): New function.
+(spinlock::spinlock): Generalize to allow arbitrary values and timeouts.  Call
+done() when lock is not needed.
+* ntdll.h: Make multiple-inclusion safe.
+(NtQuerySystemTime): Declare.
+* shared.cc (installation_root_inited): Rename from shared_mem_inited.
+(init_installation_root): Make inline.  Use a spinlock to ensure that this is
+initialized only once per session.
+(user_info::initialize): Rename from user_shared_initialize.  Protect with
+spinlock on sversion and remove other spinlock-like things.  Remove reference
+to user_shared since it is now implicit.  Refer to spinlock version of
+multiple_cygwin_problem to ensure that any spinlock is released.
+(user_info::create): Rename from user_shared_create.  Accommodate change from
+user_shared_initialize to user_info::initialize.
+(shared_info::create): New inline function.
+(shared_info::initialize): Protect with spinlock on sversion.  Move heap_init
+back under specific control of shared_info spinlock.  Remove reference to
+SHARED_INFO_CB and just use sizeof(*this).
+(memory_init): Move all locking into respective functions where it is needed.
+Accommodate name changes.  Remove call to heap_init().
+* syscalls.cc (seteuid32): Accommodate name change to user_info::create().
+* mount.cc (mount_info::create_root_entry): Report on errors from add_item
+since they should be nonexistent.
+(mount_info::init): Don't initialize nmounts.  It should already be zero.  Give
+more verbose error when root_idx < 0.  Implicitly use this pointer rather than
+explicitly referencing mount_table->.
+(mount_info::add_item): Minor whitespace fix.
+@
+text
+@d70 1
+a70 1
+  operator LONG () const {return val;}
+@
+
+
+1.1
+log
+@* spinlock.h: New file.
+(spinlock): New class.
+* shared.cc: Include spinlock.h.
+(memory_init): Use new spinlock methods rather than roll-your-own.  Time out
+after ten seconds if shared_mem_inited is not initialized.
+* sync.h: Update copyright.  Remove vanity attribution.
+* sigproc.cc (sigproc_terminate): Avoid attempts to kill the signal thread
+while we're still initializing or suffer a deadlock.
+@
+text
+@d14 3
+a16 1
+#include "hires.h"
+d22 16
+d39 2
+a40 2
+  spinlock (LONG& locktest, LONGLONG timeout):
+    locker (&locktest)
+d42 9
+a50 4
+    if ((val = locktest) == 1)
+      return;
+    LONGLONG then = gtod.msecs ();
+    for (;;)
+d52 15
+a66 4
+	if ((val = InterlockedExchange (locker, -1)) != -1
+	    || (gtod.msecs () - then) >= timeout)
+	  break;
+	yield ();
+d69 1
+a69 1
+  ~spinlock () {InterlockedExchange (locker, 1);}
+d71 7
+a80 1
+
+@
+

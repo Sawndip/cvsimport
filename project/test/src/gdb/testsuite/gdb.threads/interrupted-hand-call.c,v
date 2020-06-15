@@ -1,0 +1,354 @@
+head	1.5;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.5
+	gdb_7_6-2013-04-26-release:1.5
+	gdb_7_6-branch:1.5.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.5
+	gdb_7_5_1-2012-11-29-release:1.4
+	gdb_7_5-2012-08-17-release:1.4
+	gdb_7_5-branch:1.4.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.4
+	gdb_7_4_1-2012-04-26-release:1.3.4.1
+	gdb_7_4-2012-01-24-release:1.3.4.1
+	gdb_7_4-branch:1.3.0.4
+	gdb_7_4-2011-12-13-branchpoint:1.3
+	gdb_7_3_1-2011-09-04-release:1.3
+	gdb_7_3-2011-07-26-release:1.3
+	gdb_7_3-branch:1.3.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.3
+	gdb_7_2-2010-09-02-release:1.2
+	gdb_7_2-branch:1.2.0.4
+	gdb_7_2-2010-07-07-branchpoint:1.2
+	gdb_7_1-2010-03-18-release:1.2
+	gdb_7_1-branch:1.2.0.2
+	gdb_7_1-2010-02-18-branchpoint:1.2
+	gdb_7_0_1-2009-12-22-release:1.1
+	gdb_7_0-2009-10-06-release:1.1
+	gdb_7_0-branch:1.1.0.4
+	gdb_7_0-2009-09-16-branchpoint:1.1
+	msnyder-checkpoint-072509-branch:1.1.0.2
+	msnyder-checkpoint-072509-branchpoint:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.5
+date	2013.01.01.06.41.27;	author brobecke;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2012.01.04.08.27.55;	author brobecke;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2011.01.01.15.33.50;	author brobecke;	state Exp;
+branches
+	1.3.4.1;
+next	1.2;
+
+1.2
+date	2010.01.01.07.32.06;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2009.01.19.19.05.01;	author devans;	state Exp;
+branches;
+next	;
+
+1.3.4.1
+date	2012.01.06.04.54.29;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.5
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@/* Test case for hand function calls interrupted by a signal in another thread.
+
+   Copyright 2008-2013 Free Software Foundation, Inc.
+
+   This file is part of GDB.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+#include <pthread.h>
+#include <signal.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
+#include <unistd.h>
+
+#ifndef NR_THREADS
+#define NR_THREADS 4
+#endif
+
+pthread_t threads[NR_THREADS];
+
+/* Number of threads currently running.  */
+int thread_count;
+
+pthread_mutex_t thread_count_mutex;
+
+pthread_cond_t thread_count_condvar;
+
+sig_atomic_t sigabrt_received;
+
+void
+incr_thread_count (void)
+{
+  pthread_mutex_lock (&thread_count_mutex);
+  ++thread_count;
+  if (thread_count == NR_THREADS)
+    pthread_cond_signal (&thread_count_condvar);
+  pthread_mutex_unlock (&thread_count_mutex);
+}
+
+void
+cond_wait (pthread_cond_t *cond, pthread_mutex_t *mut)
+{
+  pthread_mutex_lock (mut);
+  pthread_cond_wait (cond, mut);
+  pthread_mutex_unlock (mut);
+}
+
+void
+noreturn (void)
+{
+  pthread_mutex_t mut;
+  pthread_cond_t cond;
+
+  pthread_mutex_init (&mut, NULL);
+  pthread_cond_init (&cond, NULL);
+
+  /* Wait for a condition that will never be signaled, so we effectively
+     block the thread here.  */
+  cond_wait (&cond, &mut);
+}
+
+void *
+thread_entry (void *unused)
+{
+  incr_thread_count ();
+  noreturn ();
+}
+
+void
+sigabrt_handler (int signo)
+{
+  sigabrt_received = 1;
+}
+
+/* Helper to test a hand-call being "interrupted" by a signal on another
+   thread.  */
+
+void
+hand_call_with_signal (void)
+{
+  const struct timespec ts = { 0, 10000000 }; /* 0.01 sec */
+
+  sigabrt_received = 0;
+  pthread_kill (threads[0], SIGABRT);
+  while (! sigabrt_received)
+    nanosleep (&ts, NULL);
+}
+
+/* Wait until all threads are running.  */
+
+void
+wait_all_threads_running (void)
+{
+  pthread_mutex_lock (&thread_count_mutex);
+  if (thread_count == NR_THREADS)
+    {
+      pthread_mutex_unlock (&thread_count_mutex);
+      return;
+    }
+  pthread_cond_wait (&thread_count_condvar, &thread_count_mutex);
+  if (thread_count == NR_THREADS)
+    {
+      pthread_mutex_unlock (&thread_count_mutex);
+      return;
+    }
+  pthread_mutex_unlock (&thread_count_mutex);
+  printf ("failed waiting for all threads to start\n");
+  abort ();
+}
+
+/* Called when all threads are running.
+   Easy place for a breakpoint.  */
+
+void
+all_threads_running (void)
+{
+}
+
+int
+main (void)
+{
+  int i;
+
+  signal (SIGABRT, sigabrt_handler);
+
+  pthread_mutex_init (&thread_count_mutex, NULL);
+  pthread_cond_init (&thread_count_condvar, NULL);
+
+  for (i = 0; i < NR_THREADS; ++i)
+    pthread_create (&threads[i], NULL, thread_entry, NULL);
+
+  wait_all_threads_running ();
+  all_threads_running ();
+
+  return 0;
+}
+
+@
+
+
+1.4
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d3 1
+a3 1
+   Copyright 2008, 2010-2012 Free Software Foundation, Inc.
+@
+
+
+1.3
+log
+@run copyright.sh for 2011.
+@
+text
+@d3 1
+a3 1
+   Copyright 2008, 2010, 2011 Free Software Foundation, Inc.
+@
+
+
+1.3.4.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d3 1
+a3 1
+   Copyright 2008, 2010-2012 Free Software Foundation, Inc.
+@
+
+
+1.2
+log
+@Update copyright year in most headers.
+
+Automatic update by copyright.sh.
+@
+text
+@d3 1
+a3 1
+   Copyright 2008, 2010 Free Software Foundation, Inc.
+@
+
+
+1.1
+log
+@	* dummy-frame.c (dummy_frame): Replace regcache member with
+	caller_state.
+	(dummy_frame_push): Replace caller_regcache arg with caller_state.
+	All callers updated.
+	(remove_dummy_frame,pop_dummy_frame,lookup_dummy_frame): New fns.
+	(dummy_frame_pop): Rewrite.  Verify requested frame is in the
+	dummy frame stack.  Restore program state.
+	(cleanup_dummy_frames): Rewrite.
+	(dummy_frame_sniffer): Update.  Make static.
+	* dummy-frame.h (regcache,frame_info): Delete forward decls.
+	(inferior_thread_state): New forward decl.
+	(dummy_frame_push): Update prototype.
+	* frame.c (frame_pop): dummy_frame_pop now does all the work for
+	DUMMY_FRAMEs.
+	* infcall.c (breakpoint_auto_delete_contents): Delete.
+	(get_function_name,run_inferior_call): New fns.
+	(call_function_by_hand): Simplify by moving some code to
+	get_function_name, run_inferior_call.  Inferior function call wrapped
+	in TRY_CATCH so there's less need for cleanups and all exits from
+	proceed are handled similarily.  Detect program exit.
+	Detect program stopping in a different thread.
+	Make error messages more consistent.
+	* inferior.h (inferior_thread_state): Declare (opaque type).
+	(save_inferior_thread_state,restore_inferior_thread_state,
+	make_cleanup_restore_inferior_thread_state,
+	discard_inferior_thread_state, get_inferior_thread_state_regcache):
+	Declare.
+	(save_inferior_status): Update prototype.
+	* infrun.c: (normal_stop): When stopped for the completion of an
+	inferior function call, verify the expected stack frame kind.
+	(inferior_thread_state): New struct.
+	(save_inferior_thread_state,restore_inferior_thread_state,
+	do_restore_inferior_thread_state_cleanup,
+	make_cleanup_restore_inferior_thread_state,
+	discard_inferior_thread_state,
+	get_inferior_thread_state_regcache): New functions.
+	(inferior_status): Move stop_signal, stop_pc, registers to
+	inferior_thread_state.  Remove restore_stack_info.
+	(save_inferior_status): Remove arg restore_stack_info.
+	All callers updated.  Remove saving of state now saved by
+	save_inferior_thread_state.
+	(restore_inferior_status): Remove restoration of state now done by
+	restore_inferior_thread_state.
+	(discard_inferior_status): Remove freeing of registers, now done by
+	discard_inferior_thread_state.
+
+	* gdb.base/break.exp: Update expected gdb output.
+	* gdb.base/sepdebug.exp: Ditto.
+	* gdb.mi/mi-syn-frame.exp: Ditto.
+	* gdb.mi/mi2-syn-frame.exp: Ditto.
+
+	* gdb.base/call-signal-resume.exp: New file.
+	* gdb.base/call-signals.c: New file.
+	* gdb.base/unwindonsignal.exp: New file.
+	* gdb.base/unwindonsignal.c: New file.
+	* gdb.threads/interrupted-hand-call.exp: New file.
+	* gdb.threads/interrupted-hand-call.c: New file.
+	* gdb.threads/thread-unwindonsignal.exp: New file.
+@
+text
+@d3 1
+a3 1
+   Copyright 2008 Free Software Foundation, Inc.
+@
+

@@ -1,0 +1,192 @@
+head	1.2;
+access;
+symbols;
+locks; strict;
+comment	@# @;
+
+
+1.2
+date	2013.08.29.10.06.18;	author pmuldoon;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2013.05.10.10.26.02;	author pmuldoon;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@2013-08-29  Phil Muldoon  <pmuldoon@@redhat.com>
+
+	* python/py-framefilter.c (py_print_frame): Remove usage of
+	PyString_AsString.  Use python_string_to_host_string instead.
+	Refactor function to work with a string as a new allocation
+	instead of a pointer.
+	(py_print_frame): Ditto.
+	* python/lib/gdb/frames.py (return_list): Cain iterators together
+	instead of adding them as a list.
+	(_sort_list): Call return_list, and remove duplicate code.
+	(execute_frame_filters): Convert iterator to a list with list().
+	* python/lib/gdb/command/frame_filters.py
+	(SetFrameFilterPriority._set_filter_priority): Convert priority
+	attribute to an integer.
+	* python/lib/gdb/FrameIterator.py (FrameIterator.next): Define
+	wrapper function __next__.
+	* python/lib/gdb/FrameDecorator.py: If basestring not defined,
+	define as "str".
+
+2013-08-29  Phil Muldoon  <pmuldoon@@redhat.com>
+
+	* gdb.python/py-framefilter.py (FrameFilter.filter): Check
+	itertools for imap attribute.  Otherwise use map().
+	(ElidingIterator): Define wrapper function __next__.
+	* gdb.python/py-framefilter-mi.exp: Do not use execfile,
+	use exec (open (read ())) instead.
+	* gdb.python/py-framefilter.exp: Ditto.
+	* gdb.python/py-arch.exp: Update print based test to Python 3.x
+	compliance.
+	* gdb.python/py-frame.exp: Ditto.
+	* gdb.python/py-type.exp: Ditto.
+@
+text
+@# Copyright (C) 2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+import gdb
+import itertools
+
+class FrameIterator(object):
+    """A gdb.Frame iterator.  Iterates over gdb.Frames or objects that
+    conform to that interface."""
+
+    def __init__(self, frame_obj):
+        """Initialize a FrameIterator.
+
+        Arguments:
+            frame_obj the starting frame."""
+
+        super(FrameIterator, self).__init__()
+        self.frame = frame_obj
+
+    def __iter__(self):
+        return self
+
+    def next(self):
+        """next implementation.
+
+        Returns:
+            The next oldest frame."""
+
+        result = self.frame
+        if result is None:
+            raise StopIteration
+        self.frame = result.older()
+        return result
+
+    # Python 3.x requires __next__(self) while Python 2.x requires
+    # next(self).  Define next(self), and for Python 3.x create this
+    # wrapper.
+    def __next__(self):
+        return self.next()
+@
+
+
+1.1
+log
+@2013-05-10  Phil Muldoon  <pmuldoon@@redhat.com>
+
+	* stack.c (backtrace_command_1): Add "no-filters", and Python frame
+	filter logic.
+	(backtrace_command): Add "no-filters" option parsing.
+	(_initialize_stack): Alter help to reflect "no-filters" option.
+	* Makefile.in (SUBDIR_PYTHON_OBS): Add py-framefilter.o
+	(SUBDIR_PYTHON_SRCS): Add py-framefilter.c
+	(py-frame.o): Add target
+	* data-directory/Makefile.in (PYTHON_DIR): Add Python frame
+	filter files.
+	* python/python.h: Add new frame filter constants, and flag enum.
+	(apply_frame_filter): Add definition.
+	* python/python.c (apply_frame_filter): New non-Python
+	enabled function.
+	* python/py-utils.c (py_xdecref): New function.
+	(make_cleanup_py_xdecref): Ditto.
+	* python/py-objfile.c: Declare frame_filters dictionary.
+	(objfpy_dealloc): Add frame_filters dealloc.
+	(objfpy_new): Initialize frame_filters attribute.
+	(objfile_to_objfile_object): Ditto.
+	(objfpy_get_frame_filters): New function.
+	(objfpy_set_frame_filters): New function.
+	* python/py-progspace.c: Declare frame_filters dictionary.
+	(pspy_dealloc): Add frame_filters dealloc.
+	(pspy_new): Initialize frame_filters attribute.
+	(pspacee_to_pspace_object): Ditto.
+	(pspy_get_frame_filters): New function.
+	(pspy_set_frame_filters): New function.
+	* python/py-framefilter.c: New file.
+	* python/lib/gdb/command/frame_filters.py: New file.
+	* python/lib/gdb/frames.py: New file.
+	* python/lib/gdb/__init__.py: Initialize global frame_filters
+	dictionary
+	* python/lib/gdb/FrameDecorator.py: New file.
+	* python/lib/gdb/FrameIterator.py: New file.
+	* mi/mi-cmds.c (mi_cmds): Add frame filters command.
+	* mi/mi-cmds.h: Declare.
+	* mi/mi-cmd-stack.c (mi_cmd_stack_list_frames): Add
+	--no-frame-filter logic, and Python frame filter logic.
+	(stack_enable_frame_filters): New function.
+	(parse_no_frame_option): Ditto.
+	(mi_cmd_stack_list_frames): Add --no-frame-filter and Python frame
+	filter logic.
+	(mi_cmd_stack_list_locals): Ditto.
+	(mi_cmd_stack_list_args): Ditto.
+	(mi_cmd_stack_list_variables): Ditto.
+	* NEWS: Add frame filter note.
+
+2013-05-10  Phil Muldoon  <pmuldoon@@redhat.com>
+
+	* gdb.python/py-framefilter.py: New File.
+	* gdb.python/py-framefilter-mi.exp: Ditto.
+	* gdb.python/py-framefilter.c: Ditto.
+	* gdb.python/py-framefilter-mi.exp: Ditto.
+	* gdb.python/py-framefilter-mi.c: Ditto,
+	* gdb.python/py-framefilter-gdb.py.in: Ditto.
+
+2013-05-10 Phil Muldoon  <pmuldoon@@redhat.com>
+
+	* gdb.texinfo (Backtrace): Add "no-filter" argument.
+	(Python API): Add Frame	Filters API, Frame Wrapper API,
+	Writing a Frame Filter/Wrapper,	Managing Management of Frame
+	Filters chapter entries.
+	(Frame Filters API): New Node.
+	(Frame Wrapper API): New Node.
+	(Writing a Frame Filter): New Node.
+	(Managing Frame Filters): New Node.
+	(Progspaces In Python): Add note about frame_filters attribute.
+	(Objfiles in Python): Ditto.
+	(GDB/MI Stack Manipulation): Add -enable-frame-filters command,
+	@@anchors and --no-frame-filters option to -stack-list-variables,
+	-stack-list-frames, -stack-list-locals and -stack-list-arguments
+	commands.
+@
+text
+@d46 6
+@
+

@@ -1,0 +1,396 @@
+head	1.4;
+access;
+symbols
+	binutils-2_24-branch:1.4.0.2
+	binutils-2_24-branchpoint:1.4
+	binutils-2_23_2:1.1.2.1
+	binutils-2_23_1:1.1.2.1
+	binutils-2_23:1.1.2.1
+	binutils-2_23-branch:1.1.0.2
+	binutils_latest_snapshot:1.4;
+locks; strict;
+comment	@# @;
+
+
+1.4
+date	2013.07.27.22.28.29;	author macro;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2013.07.27.22.21.11;	author macro;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2013.02.19.01.10.04;	author macro;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2012.08.05.22.45.20;	author macro;	state Exp;
+branches
+	1.1.2.1;
+next	;
+
+1.1.2.1
+date	2012.09.04.14.38.04;	author gingold;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.4
+log
+@	* ld-vax-elf/export-class-call.dd: New test.
+	* ld-vax-elf/export-class-call.rd: New test.
+	* ld-vax-elf/export-class-call.xd: New test.
+	* ld-vax-elf/export-class-data.dd: New test.
+	* ld-vax-elf/export-class-data.rd: New test.
+	* ld-vax-elf/export-class-data.xd: New test.
+	* ld-vax-elf/export-class.ld: New test linker script.
+	* ld-vax-elf/export-class-call.s: New test source.
+	* ld-vax-elf/export-class-data.s: New test source.
+	* ld-vax-elf/export-class-def.s: New test source.
+	* ld-vax-elf/vax-elf.exp: Run the new tests.
+	* ld-vax-elf/vax-export-class.rd: New test.
+	* ld-vax-elf/vax-export-class.xd: New test.
+	* ld-vax-elf/export-class.exp: New test script.
+@
+text
+@# Expect script for VAX ELF linker tests
+#   Copyright 2012 Free Software Foundation, Inc.
+#
+# This file is part of the GNU Binutils.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+# MA 02110-1301, USA.
+#
+
+if { ![istarget vax-*-*] || ![is_elf_format] } {
+    return
+}
+
+run_ld_link_tests [list \
+    [list "PLT test (shared library)" \
+	  "-shared -T plt-local-lib.ld" "" \
+	  "-k" \
+	  { plt-local-lib.s } \
+	  { { objdump -d plt-local-lib.dd } } \
+	  "plt-local-lib.so"] \
+    [list "PLT test (object 1)" \
+	  "-r" "" \
+	  "-k" \
+	  { plt-local-hidden-pic.s } \
+	  {} \
+	  "plt-local-hidden-pic-r.o"] \
+    [list "PLT test (object 2)" \
+	  "-r" "" \
+	  "-k" \
+	  { plt-local-rehidden-pic.s } \
+	  {} \
+	  "plt-local-rehidden-pic-r.o"] \
+    [list "PLT test (executable)" \
+	  "-T plt-local.ld tmpdir/plt-local-hidden-pic-r.o tmpdir/plt-local-rehidden-pic-r.o tmpdir/plt-local-lib.so" "" \
+	  "" \
+	  { plt-local.s } \
+	  { { objdump -d plt-local.dd } } \
+	  "plt-local"]]
+
+# Global offset table tests.  Make sure hidden symbols do not get GOT
+# assignments.
+run_ld_link_tests [list \
+    [list "GOT test (auxiliary shared library)" \
+	  "-shared" "" \
+	  "-k" \
+	  { got-local-aux.s } \
+	  {} \
+	  "got-local-aux.so"] \
+    [list "GOT test (object 1)" \
+	  "-r" "" \
+	  "-k" \
+	  { got-local-ref.s } \
+	  {} \
+	  "got-local-ref-r.o"] \
+    [list "GOT test (object 2)" \
+	  "-r" "" \
+	  "-k" \
+	  { got-local-def.s } \
+	  {} \
+	  "got-local-def-r.o"] \
+    [list "GOT test (executable)" \
+	  "-e 0 tmpdir/got-local-aux.so tmpdir/got-local-ref-r.o tmpdir/got-local-def-r.o" "" \
+	  "" \
+	  {} \
+	  { { readelf "-x .got" got-local-exe.xd } } \
+	  "got-local-exe"] \
+    [list "GOT test (shared library)" \
+	  "-shared tmpdir/got-local-aux.so tmpdir/got-local-ref-r.o tmpdir/got-local-def-r.o" "" \
+	  "" \
+	  {} \
+	  { { readelf "-x .got" got-local-lib.xd } } \
+	  "got-local-lib.so"]]
+
+# Export class relocation tests.
+run_ld_link_tests [list \
+    [list \
+	"VAX export class call relocation test" \
+	"-shared -Ttext 0x12340000 -T export-class.ld" "" \
+	"-k" \
+	[list export-class-call.s export-class-def.s] \
+	[list \
+	    [list objdump -d export-class-call.dd] \
+	    [list readelf -r export-class-call.rd] \
+	    [list readelf "-x .got" export-class-call.xd]] \
+	"export-class-call.so"] \
+    [list \
+	"VAX export class data relocation test" \
+	"-shared -Ttext 0x12340000 -T export-class.ld" "" \
+	"-k" \
+	[list export-class-data.s export-class-def.s] \
+	[list \
+	    [list objdump -d export-class-data.dd] \
+	    [list readelf -r export-class-data.rd] \
+	    [list readelf "-x .got" export-class-data.xd]] \
+	"export-class-data.so"]]
+@
+
+
+1.3
+log
+@	bfd/
+	* elf32-vax.c (elf_vax_check_relocs) <R_VAX_GOT32, R_VAX_PLT32>:
+	Don't check symbol visibility here.  Remove a check already
+	asserted for.
+	(elf_vax_instantiate_got_entries): Use SYMBOL_REFERENCES_LOCAL
+	instead of individual checks.
+	(elf_vax_relocate_section) <R_VAX_GOT32, R_VAX_PLT32>: Only
+	check the offset to decide if produce a GOT or PLT entry.
+	Remove redundant assertions.  Remove code to produce GOT entries
+	for local symbols.  Remove a duplicate comment and add a comment
+	on GOT relocations.
+	(elf_vax_finish_dynamic_symbol): Remove code to produce RELATIVE
+	dynamic relocs.
+
+	ld/testsuite/
+	* ld-vax-elf/got-local-exe.xd: New test.
+	* ld-vax-elf/got-local-lib.xd: New test.
+	* ld-vax-elf/got-local-aux.s: New test source.
+	* ld-vax-elf/got-local-def.s: New test source.
+	* ld-vax-elf/got-local-ref.s: New test source.
+	* ld-vax-elf/vax-elf.exp: Run the new tests.
+@
+text
+@d85 23
+@
+
+
+1.2
+log
+@	* lib/ld-lib.exp (run_ld_link_tests): Add another argument, pass
+	its contents to ar_simple_create and ld_simple_link after
+	objfiles.
+	* ld-aarch64/aarch64-elf.exp: Adjust accordingly.
+	* ld-alpha/alpha.exp: Likewise.
+	* ld-arm/arm-elf.exp: Likewise.
+	* ld-arm/export-class.exp: Likewise.
+	* ld-elf/comm-data.exp: Likewise.
+	* ld-elf/eh-group.exp: Likewise.
+	* ld-elf/elf.exp: Likewise.
+	* ld-elf/export-class.exp: Likewise.
+	* ld-elfvers/vers.exp: Likewise.
+	* ld-frv/tls.exp: Likewise.
+	* ld-i386/export-class.exp: Likewise.
+	* ld-i386/i386.exp: Likewise.
+	* ld-ia64/ia64.exp: Likewise.
+	* ld-libs/libs.exp: Likewise.
+	* ld-m68k/m68k.exp: Likewise.
+	* ld-metag/metag.exp: Likewise.
+	* ld-mips-elf/comm-data.exp: Likewise.
+	* ld-mips-elf/export-class.exp: Likewise.
+	* ld-mips-elf/mips-elf.exp: Likewise.
+	* ld-mn10300/mn10300.exp: Likewise.
+	* ld-pe/pe-compile.exp: Likewise.
+	* ld-pe/pe.exp: Likewise.
+	* ld-plugin/plugin.exp: Likewise.
+	* ld-powerpc/aix52.exp: Likewise.
+	* ld-powerpc/export-class.exp: Likewise.
+	* ld-powerpc/powerpc.exp: Likewise.
+	* ld-s390/s390.exp: Likewise.
+	* ld-sh/sh-vxworks.exp: Likewise.
+	* ld-sh/sh64/sh64.exp: Likewise.
+	* ld-sparc/sparc.exp: Likewise.
+	* ld-tic6x/tic6x.exp: Likewise.
+	* ld-tilegx/tilegx.exp: Likewise.
+	* ld-tilepro/tilepro.exp: Likewise.
+	* ld-undefined/entry.exp: Likewise.
+	* ld-vax-elf/vax-elf.exp: Likewise.
+	* ld-x86-64/dwarfreloc.exp: Likewise.
+	* ld-x86-64/export-class.exp: Likewise.
+	* ld-x86-64/x86-64.exp: Likewise.
+	* ld-xc16x/xc16x.exp: Likewise.
+	* ld-xstormy16/xstormy16.exp: Likewise.
+	* ld-xtensa/xtensa.exp: Likewise.
+@
+text
+@d51 34
+@
+
+
+1.1
+log
+@	bfd/
+	* elf32-vax.c (elf_vax_adjust_dynamic_symbol): Don't allocate
+	PLT slots for local symbols.
+
+	ld/testsuite/
+	* ld-vax-elf: New directory.
+	* ld-vax-elf/plt-local-lib.dd: New test.
+	* ld-vax-elf/plt-local-lib.ld: New test linker script.
+	* ld-vax-elf/plt-local-lib.s: New test source.
+	* ld-vax-elf/plt-local.dd: New test.
+	* ld-vax-elf/plt-local.ld: New test linker script.
+	* ld-vax-elf/plt-local.s: New test source.
+	* ld-vax-elf/plt-local-hidden-pic.s: New test source.
+	* ld-vax-elf/plt-local-rehidden-pic.s: New test source.
+	* ld-vax-elf/vax-elf.exp: New test script.
+@
+text
+@d28 1
+a28 1
+	  "-shared -T plt-local-lib.ld" \
+d34 1
+a34 1
+	  "-r" \
+d40 1
+a40 1
+	  "-r" \
+d46 1
+a46 1
+	  "-T plt-local.ld tmpdir/plt-local-hidden-pic-r.o tmpdir/plt-local-rehidden-pic-r.o tmpdir/plt-local-lib.so" \
+@
+
+
+1.1.2.1
+log
+@bfd/
+2012-08-09  Maciej W. Rozycki  <macro@@codesourcery.com>
+
+	* elfxx-mips.c (LA25_LUI_MICROMIPS_1, LA25_LUI_MICROMIPS_2):
+	Remove macros, folding them into...
+	(LA25_LUI_MICROMIPS): ... this new macro.
+	(LA25_J_MICROMIPS_1, LA25_J_MICROMIPS_2): Likewise into...
+	(LA25_J_MICROMIPS): ... this new macro.
+	(LA25_ADDIU_MICROMIPS_1, LA25_ADDIU_MICROMIPS_2): Likewise
+	into...
+	(LA25_ADDIU_MICROMIPS): ... this new macro.
+	(bfd_put_micromips_32, bfd_get_micromips_32): New functions.
+	(mips_elf_create_la25_stub): Use them.
+	(check_br32_dslot, check_br32, check_relocated_bzc): Likewise.
+	(_bfd_mips_elf_relax_section): Likewise.
+
+gas/
+	* config/tc-mips.c (NO_ISA_COP, COP_INSN): Remove macros.
+	(is_opcode_valid): Remove coprocessor instruction exclusions.
+	Replace OPCODE_IS_MEMBER with opcode_is_member.
+	(is_opcode_valid_16): Replace OPCODE_IS_MEMBER with
+	opcode_is_member.
+	(macro): Remove coprocessor instruction exclusions.
+
+gas/
+	* gas/mips/mips.exp: Set has_newabi for all Linux targets.
+	* gas/mips/cfi-n64-1.d: Adjust for targets that do not infer the
+	ISA from the ABI.
+	* gas/mips/elf-rel-got-n32.d: Likewise.
+	* gas/mips/elf-rel-got-n64.d: Likewise.
+	* gas/mips/elf-rel-xgot-n32.d: Likewise.
+	* gas/mips/elf-rel-xgot-n64.d: Likewise.
+	* gas/mips/elf-rel18.d: Likewise.
+	* gas/mips/elf-rel28-n32.d: Likewise.
+	* gas/mips/elf-rel28-n64.d: Likewise.
+	* gas/mips/jal-newabi.d: Likewise.
+	* gas/mips/ldstla-n64-shared.d: Likewise.
+	* gas/mips/ldstla-n64-sym32.d: Likewise.
+	* gas/mips/ldstla-n64.d: Likewise.
+	* gas/mips/macro-warn-1-n32.d: Likewise.
+	* gas/mips/macro-warn-2-n32.d: Likewise.
+	* gas/mips/n32-consec.d: Likewise.
+
+include/
+2012-08-13  Richard Sandiford  <rdsandiford@@googlemail.com>
+            Maciej W. Rozycki  <macro@@codesourcery.com>
+
+	* mips.h (mips_opcode): Add the exclusions field.
+	(OPCODE_IS_MEMBER): Remove macro.
+	(cpu_is_member): New inline function.
+	(opcode_is_member): Likewise.
+
+ld/
+	* emulparams/elf32bmip.sh: Make _gp hidden.
+	* emulparams/elf32bmipn32-defs.sh: Likewise.
+	* emulparams/elf32mipswindiss.sh: Likewise.
+	* scripttempl/mips.sc: Likewise.
+
+ld/
+2012-08-28  Maciej W. Rozycki  <macro@@codesourcery.com>
+
+	* ld-elf/export-class.sd: New test.
+	* ld-elf/export-class.vd: New test.
+	* ld-elf/export-class-def.s: New test source.
+	* ld-elf/export-class-dep.s: New test source.
+	* ld-elf/export-class-lib.s: New test source.
+	* ld-elf/export-class-ref.s: New test source.
+	* ld-elf/export-class-lib.ver: New test version script.
+	* ld-elf/export-class.exp: New test script.
+	* ld-arm/arm-export-class.rd: New test.
+	* ld-arm/arm-export-class.xd: New test.
+	* ld-arm/export-class.exp: New test script.
+	* ld-i386/i386-export-class.rd: New test.
+	* ld-i386/i386-export-class.xd: New test.
+	* ld-i386/export-class.exp: New test script.
+	* ld-mips-elf/mips-32-export-class.rd: New test.
+	* ld-mips-elf/mips-32-export-class.xd: New test.
+	* ld-mips-elf/mips-64-export-class.rd: New test.
+	* ld-mips-elf/mips-64-export-class.xd: New test.
+	* ld-mips-elf/export-class.exp: New test script.
+	* ld-powerpc/powerpc-32-export-class.rd: New test.
+	* ld-powerpc/powerpc-32-export-class.xd: New test.
+	* ld-powerpc/powerpc-64-export-class.rd: New test.
+	* ld-powerpc/powerpc-64-export-class.xd: New test.
+	* ld-powerpc/export-class.exp: New test script.
+	* ld-x86-64/x86-64-64-export-class.rd: New test.
+	* ld-x86-64/x86-64-x32-export-class.rd: New test.
+	* ld-x86-64/export-class.exp: New test script.
+
+opcodes/
+2012-08-14  Maciej W. Rozycki  <macro@@codesourcery.com>
+
+	* mips-dis.c (print_insn_args): Add GET_OP and GET_OP_S local
+	macros, use local variables for info struct member accesses,
+	update the type of the variable used to hold the instruction
+	word.
+	(print_insn_mips, print_mips16_insn_arg): Likewise.
+	(print_insn_mips16): Add GET_OP and GET_OP_S local macros, use
+	local variables for info struct member accesses.
+	(print_insn_micromips): Add GET_OP_S local macro.
+	(_print_insn_mips): Update the type of the variable used to hold
+	the instruction word.
+@
+text
+@@
+

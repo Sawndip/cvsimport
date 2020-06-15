@@ -1,0 +1,606 @@
+head	1.11;
+access;
+symbols
+	cygwin-1_7_35-release:1.11
+	cygwin-1_7_34-release:1.10
+	cygwin-1_7_33-release:1.10
+	cygwin-1_7_32-release:1.10
+	cygwin-1_7_31-release:1.10
+	cygwin-1_7_30-release:1.10
+	cygwin-1_7_29-release:1.10
+	cygwin-1_7_29-release-branchpoint:1.10.0.4
+	cygwin-pre-user-db:1.10
+	cygwin-1_7_28-release:1.10
+	cygwin-1_7_27-release:1.10
+	cygwin-1_7_26-release:1.10
+	cygwin-1_7_25-release:1.10
+	cygwin-1_7_24-release:1.10
+	cygwin-1_7_23-release:1.10
+	cygwin-1_7_22-release:1.10
+	cygwin-1_7_21-release:1.10
+	cygwin-1_7_20-release:1.10
+	cygwin-1_7_19-release:1.10
+	cygwin-64bit-postmerge:1.10
+	cygwin-64bit-premerge-branch:1.10.0.2
+	cygwin-64bit-premerge:1.10
+	cygwin-1_7_18-release:1.10
+	post-ptmalloc3:1.7.2.2
+	pre-ptmalloc3:1.7.2.2
+	cygwin-1_7_17-release:1.8
+	cygwin-64bit-branch:1.7.0.2
+	cygwin-1_7_16-release:1.6;
+locks; strict;
+comment	@ * @;
+
+
+1.11
+date	2015.02.23.13.56.01;	author corinna;	state Exp;
+branches;
+next	1.10;
+
+1.10
+date	2013.04.09.01.01.19;	author cgf;	state Exp;
+branches;
+next	1.9;
+
+1.9
+date	2013.01.21.04.34.50;	author cgf;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2012.08.15.19.07.41;	author cgf;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2012.07.21.22.58.19;	author cgf;	state Exp;
+branches
+	1.7.2.1;
+next	1.6;
+
+1.6
+date	2012.06.27.21.42.11;	author cgf;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2012.06.25.05.00.39;	author cgf;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2012.06.19.00.52.59;	author cgf;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2012.06.19.00.38.01;	author cgf;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2012.06.19.00.31.14;	author cgf;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2012.06.17.20.50.23;	author cgf;	state Exp;
+branches;
+next	;
+
+1.7.2.1
+date	2012.08.16.09.41.45;	author corinna;	state Exp;
+branches;
+next	1.7.2.2;
+
+1.7.2.2
+date	2013.01.21.13.52.04;	author corinna;	state Exp;
+branches;
+next	1.7.2.3;
+
+1.7.2.3
+date	2013.04.11.12.13.01;	author corinna;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.11
+log
+@	* cygwait.h (enum cw_wait_mask): Add cw_sig_restart.  Add comments
+	to explain the meaning of the possible values.
+	* cygwait.cc (is_cw_sig_restart): Define.
+	(is_cw_sig_handle): Check for cw_sig_restart as well.
+	(cygwait): Restart always if cw_sig_restart is set.
+	* thread.cc (pthread::join): Call cygwait with cw_sig_restart flag
+	to avoid having to handle signals at all.
+@
+text
+@/* cygwait.h
+
+   Copyright 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013,
+   2015 Red Hat, Inc.
+
+   This file is part of Cygwin.
+
+   This software is a copyrighted work licensed under the terms of the
+   Cygwin license.  Please consult the file "CYGWIN_LICENSE" for
+   details.  */
+
+#pragma once
+
+#define WAIT_CANCELED   (WAIT_OBJECT_0 + 2)
+#define WAIT_SIGNALED  (WAIT_OBJECT_0 + 1)
+
+enum cw_wait_mask
+{
+  cw_cancel =		0x0001,	/* Cancellation point.  Return to caller. */
+  cw_cancel_self =	0x0002,	/* Cancellation point.  Cancel self. */
+  cw_sig =		0x0004,	/* Handle signals. */
+  cw_sig_eintr =	0x0008,	/* Caller handles signals. */
+  cw_sig_cont =		0x0010,	/* Caller handles SIGCONT. */
+  cw_sig_restart =	0x0020	/* Restart even if SA_RESTART isn't set. */
+};
+
+extern LARGE_INTEGER cw_nowait_storage;
+#define cw_nowait (&cw_nowait_storage)
+#define cw_infinite ((PLARGE_INTEGER) NULL)
+
+const unsigned cw_std_mask = cw_cancel | cw_cancel_self | cw_sig;
+
+DWORD __reg3 cygwait (HANDLE, PLARGE_INTEGER timeout,
+		       unsigned = cw_std_mask);
+
+extern inline DWORD __attribute__ ((always_inline))
+cygwait (HANDLE h, DWORD howlong, unsigned mask)
+{
+  LARGE_INTEGER li_howlong;
+  PLARGE_INTEGER pli_howlong;
+  if (howlong == INFINITE)
+    pli_howlong = NULL;
+  else
+    {
+      li_howlong.QuadPart = -(10000ULL * howlong);
+      pli_howlong = &li_howlong;
+    }
+  return cygwait (h, pli_howlong, mask);
+}
+
+static inline DWORD __attribute__ ((always_inline))
+cygwait (HANDLE h, DWORD howlong = INFINITE)
+{
+  return cygwait (h, howlong, cw_cancel | cw_sig);
+}
+
+static inline DWORD __attribute__ ((always_inline))
+cygwait (DWORD howlong)
+{
+  return cygwait (NULL, howlong);
+}
+@
+
+
+1.10
+log
+@* cygtls.h (_cygtls::reset_signal_arrived): Actually reset the signal_arrived
+event.
+(_cygtls::handle_SIGCONT): Declare ew function.
+* cygwait.cc (is_cw_sig_handle): Delete.
+(is_cw_sig_cont): New convenience define.
+(cygwait): Clear signal if is_cw_sig_cont and we got a SIGCONT.
+* cygwait.h (cw_wait_mask): Add cw_sig_cont.
+* exceptions.cc (sig_handle_tty_stop): Tighten "incyg" region.  Use cw_sig_cont
+param for cygwait.  Don't zero signal here outside of lock.
+(sigpacket::setup_handler): Don't check for in_forkee since we will now never
+get here in that state.
+(_cygtls::handle_SIGCONT): Define new function.
+(sigpacket::process): Call handle_SIGCONT early to deal with SIGCONT.  Nuke
+continue_now handling.  Allow SIGKILL to kill a suspended process.  Delete a
+couple of now-unneeded labels.
+(_cygtls::call_signal_handler): Reorganize setting of incyg within lock.
+* sigproc.cc (pending_signals): Simplify.
+(pending_signals::clear): New method.
+(_cygtls::remove_wq): Reorganize to always close wq.thread_ev if it exists to
+avoid handle leaks.
+(sig_clear): Simplify by just calling sigq.clear().
+(sig_dispatch_pending): Always call sigq.pending even in signal thread to force
+another loop in wait_sig.
+(sig_send): Remove a "goto out" just before out: label.
+(pending_signals::add): Simplify.
+(pending_signals::del): Delete.
+(pending_signals::next): Delete.
+(wait_sig): Define variable q to be the start of the signal queue.  Just
+iterate through sigq queue, deleting processed or zeroed signals.  Only set
+clearwait when the current signal is SIGCHLD.
+* sigproc.h: Add a comment about an unused enum.
+@
+text
+@d3 2
+a4 2
+   Copyright 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013
+   Red Hat, Inc.
+d19 6
+a24 5
+  cw_cancel =		0x0001,
+  cw_cancel_self =	0x0002,
+  cw_sig =		0x0004,
+  cw_sig_eintr =	0x0008,
+  cw_sig_cont =		0x0010
+@
+
+
+1.9
+log
+@Throughout, change __attribute__ ((regparm (N))) to just __regN.  Throughout,
+(mainly in fhandler*) start fixing gcc 4.7.2 mismatch between regparm
+definitions and declarations.
+* gendef: Define some functions to take @@ declaration to accommodate _regN
+defines which use __stdcall.
+* gentls_offsets: Define __regN macros as empty.
+* autoload.cc (wsock_init): Remove unneeded regparm attribute.
+* winsup.h (__reg1): Define.
+(__reg2): Define.
+(__reg3): Define.
+* advapi32.cc (DuplicateTokenEx): Coerce some initializers to avoid warnings
+from gcc 4.7.2.
+* exceptions.cc (status_info): Declare struct to use NTSTATUS.
+(cygwin_exception::dump_exception): Coerce e->ExceptionCode to NTSTATUS.
+* fhandler_clipboard.cc (cygnativeformat): Redefine as UINT to avoid gcc 4.7.2
+warnings.
+(fhandler_dev_clipboard::read): Ditto.
+@
+text
+@d3 1
+a3 1
+   Copyright 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012
+d22 2
+a23 1
+  cw_sig_eintr =	0x0008
+@
+
+
+1.8
+log
+@Rename cancelable_wait -> cygwait throughout.
+* DevNotes: Add entry cgf-000015.
+* cygwait.h (cygwait): Don't allow an optional PLARGE_INTERGER argument.
+@
+text
+@d31 2
+a32 3
+DWORD cygwait (HANDLE, PLARGE_INTEGER timeout,
+		       unsigned = cw_std_mask)
+  __attribute__ ((regparm (3)));
+@
+
+
+1.7
+log
+@* DevNotes: Add entry cgf-000013.
+* cygserver_ipc.h (ipc_set_proc_info): Use _cygtls::ipc_set_proc_info to set
+per-thread signal arrived value.
+* cygthread.cc (cygthread::detach): Use per-thread signal_arrived via
+set_thread_waiting.
+* fork.cc (_cygtls::fixup_after_fork): Clear signal_arrived.
+(_cygtls::remove): Close any signal_arrived handle when thread exists.
+(_cygtls::find_tls): Remove unneeded function.
+* cygtls.h: Update copyright.
+(class _cygtls): Reorganize to help avoid rebuilding newlib when structure
+changes.
+(_cygtls::event): Delete.
+(_cygtls::threadkill): Ditto.
+(_cygtls::signal_waiting): Declare new bool.
+(_cygtls::find_tls): Delete declaration.
+(_cygtls::set_threadkill): Ditto.
+(_cygtls::reset_threadkill): Ditto.
+(_cygtls::set_signal_arrived): Declare new function.
+(class set_thread_waiting): Declare new class.
+* cygwait.cc (cw_nowait_storage): Define.
+(cygwait): Set per-thread signal_arrived via set_thread_waiting.  Don't
+special-case _main_tls.
+* cygwait.h (cw_nowait): Define.
+(cw_infinite): Ditto.
+(cygwait): Redefine pathological wait-only case.
+* dcrt0.cc (dll_crt0_0): Remove call to now-defunct events_init().
+(dll_crt0_1): Remove call to now-defunct create_signal_arrived().
+* exceptions.cc: Reflect set_signal_mask() argument reordering throughout.
+Remove signal mask synchronization throughout.
+(events_init): Delete definition.
+(mask_sync): Delete now-unneeded mask synchronization.
+(set_signal_mask): Reverse order of arguments to "standard" to, from layout.
+Rename "newmask" argument to "setmask".  Remove debugging.
+(sig_handle_tty_stop): Use cancelable_wait rather than WFMO.
+(_cygtls::interrupt_setup): Don't treat "threadkill" events specially.
+Conditionally set signal_arrived depending on whether the thread has created it
+or not.
+(sigpacket::process): Reorganize to reflect thread-specific sending of signals
+which is more in line with the way it was actually supposed to work.
+* fhandler_socket.cc (get_inet_addr): Use cancelable_wait rather than
+IsEventSignalled to avoid potential race.
+(fhandler_socket::wait_for_events): Set signal_arrived event using
+set_thread_waiting().
+(fhandler_socket::close): Use cygwait for the case of just waiting 10 ms for a
+signal.
+* fhandler_tape.cc (fhandler_dev_tape::_lock): Use cancelable_wait rather than
+WFMO.  Redo switch/case tests accordingly.
+* fhandler_termios.cc (fhandler_termios::bg_check): Use cygwait for case of
+just waiting 0 ms for a potential signal.
+* fhandler_tty.cc (fhandler_pty_master::process_slave_output): Use
+cancelable_wait rather than WFSO.
+* fhandler_windows.cc (fhandler_windows::read): Set per-thread signal_arrived
+via set_thread_waiting().
+* flock.cc (lf_setlock): Ditto.
+* select.cc (pselect): Ditto.  Set per-thread signal_arrived using
+set_thread_waiting().
+* gendef: Don't special case handling of _cygtls::sig for threads.
+* gentls_offsets: Use #pragma once in tlsoffsets.h.
+* ntdll.h: Use #pragma once.
+* poll.cc: Reflect set_signal_mask() argument reordering.
+* posix_ipc.cc (ipc_mutex_lock): Use cancelable_wait rather than WFMO.
+(ipc_cond_timedwait): Set perl-thread signal arrived using
+set_thread_waiting().
+* security.h: Use #pragma once.
+* signal.cc (abort): Reflect set_signal_mask() argument reordering.
+(clock_nanosleep): Ditto.  Change call to cancelable_wait to properly specify
+handling of cancel and interrupt.
+(sigwaitinfo): Remove handling of per-thread event in favor of per-thread
+signal_arrived.  Use cancelable_wait rather than WFSO.
+* sigproc.cc (signal_arrived): Delete definition.
+(create_signal_arrived): Ditto.
+* sigproc.h (signal_arrived): Delete declaration.
+(set_signal_mask): Avoid defining as a "C" function.  Don't conditionally
+declare.
+(create_signal_arrived): Delete declaration.
+* syscalls.cc (rename): Use cygwait() rather than WFSO.
+* thread.h (fast_mutex::lock): Use cw_infinite rather than LARGE_NULL.
+* wait.cc (wait4): Ditto.
+* thread.cc (pthread_mutex::lock): Ditto.
+(pthread::join): Ditto.
+(semaphore::_wait): Ditto.
+(pthread_kill): Remove set_threadkill() accommodation.
+* tlsoffsets.h: Regenerate.
+@
+text
+@d31 1
+a31 1
+DWORD cancelable_wait (HANDLE, PLARGE_INTEGER timeout = NULL,
+d36 1
+a36 1
+cancelable_wait (HANDLE h, DWORD howlong, unsigned mask)
+d47 1
+a47 1
+  return cancelable_wait (h, pli_howlong, mask);
+d53 1
+a53 1
+  return cancelable_wait (h, howlong, cw_cancel | cw_sig);
+@
+
+
+1.7.2.1
+log
+@Pull in changes from HEAD
+@
+text
+@d31 1
+a31 1
+DWORD cygwait (HANDLE, PLARGE_INTEGER timeout,
+d36 1
+a36 1
+cygwait (HANDLE h, DWORD howlong, unsigned mask)
+d47 1
+a47 1
+  return cygwait (h, pli_howlong, mask);
+d53 1
+a53 1
+  return cygwait (h, howlong, cw_cancel | cw_sig);
+@
+
+
+1.7.2.2
+log
+@Pull in changes from HEAD
+@
+text
+@d31 3
+a33 2
+DWORD __reg3 cygwait (HANDLE, PLARGE_INTEGER timeout,
+		       unsigned = cw_std_mask);
+@
+
+
+1.7.2.3
+log
+@Pull in changes from HEAD
+@
+text
+@d3 1
+a3 1
+   Copyright 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013
+d22 1
+a22 2
+  cw_sig_eintr =	0x0008,
+  cw_sig_cont =		0x0010
+@
+
+
+1.6
+log
+@* cygwait.h (cancelable_wait): Make extern to avoid always including.
+* select.cc (allocfd_set): Try to make a little more efficient.
+(cygwin_select): Break into two functions to avoid what seems to be a strange
+compiler problem with alloca and sel constructor.
+(select): New function.  Always honor return from call_signal_handler.
+(select_stuff::wait): Always honor return from call_signal_handler.
+* select.h (select_stuff::select_stuff): Use NULL to initialize pointers rather
+than 0.
+@
+text
+@d25 4
+a28 1
+#define LARGE_NULL ((PLARGE_INTEGER) NULL)
+d59 1
+a59 1
+  return cancelable_wait (NULL, howlong, cw_cancel | cw_sig_eintr);
+@
+
+
+1.5
+log
+@* cygwait.h (cancelable_wait): Need to force time to negative to indicate
+relative time.
+@
+text
+@d32 1
+a32 1
+static inline DWORD __attribute__ ((always_inline))
+d35 1
+a36 1
+  LARGE_INTEGER li_howlong;
+@
+
+
+1.4
+log
+@* cygwait.h (LARGE_NULL): Define.
+(cancelable_wait): Define variant which accepts DWORD time argument.
+(cygwait): Use cancelable_wait with DWORD argument.
+(cygwait): Use cancelable_wait with DWORD argument and cw_sig_eintr for
+timeout-only case.
+* exceptions.cc (handle_sigsuspend): Use LARGE_NULL as second argument to
+distinguish between cancelable_wait variants.
+* thread.cc (pthread_mutex::lock): Ditto.
+(pthread::join): Ditto.
+(semaphore::_timedwait): Ditto.
+* thread.h (fast_mutex::lock): Ditto.
+* wait.cc (wait4): Ditto.
+@
+text
+@d41 1
+a41 1
+      li_howlong.QuadPart = 10000ULL * howlong;
+@
+
+
+1.3
+log
+@Revert errneous checkin.
+Check in actual change associated with ChangeLog.
+@
+text
+@d25 1
+d33 1
+a33 1
+cygwait (HANDLE h, DWORD howlong = INFINITE)
+d44 7
+a50 1
+  return cancelable_wait (h, pli_howlong, cw_cancel | cw_sig);
+d56 1
+a56 1
+  return cygwait ((HANDLE) NULL, howlong);
+@
+
+
+1.2
+log
+@* cygwait.cc (cancelable_wait): Mimic old cygwait behavior more closely wrt
+handling of call_signal_handler.
+* cygwait.h (WAIT_CANCELED): Move here and redefine.
+(WAIT_SIGNALED): Ditto.
+* thread.h (WAIT_CANCELED): Delete.
+(WAIT_SIGNALED): Ditto.
+@
+text
+@d14 3
+a24 2
+extern TIMER_BASIC_INFORMATION cw_nowait;
+
+d32 1
+a32 1
+cancelable_wait (HANDLE h, DWORD howlong, unsigned mask)
+d43 1
+a43 8
+
+  return cancelable_wait (h, pi_howlong, mask);
+}
+
+static inline DWORD __attribute__ ((always_inline))
+cygwait (HANDLE h, DWORD howlong = INFINITE)
+{
+  return cancelable_wait (h, howlong, cw_cancel | cw_sig_eintr);
+a50 26
+
+class set_thread_waiting
+{
+  void doit (bool setit, DWORD& here)
+  {
+    if (setit)
+      {
+	if (_my_tls.signal_arrived == NULL)
+	  _my_tls.signal_arrived = CreateEvent (&sec_none_nih, false, false, NULL);
+	here = _my_tls.signal_arrived;
+	_my_tls.waiting = true;
+      }
+  }
+public:
+  set_thread_waiting (bool setit, DWORD& here) { doit (setit, here); }
+  set_thread_waiting (DWORD& here) { doit (true, here); }
+
+  ~set_thread_waiting ()
+  {
+    if (_my_tls.waiting)
+      {
+	_my_tls.waiting = false;
+	ResetEvent (_my_tls.signal_arrived);
+      }
+  }
+};
+@
+
+
+1.1
+log
+@Add '#include "cygwait.h"' throughout, where appropriate.
+* DevNotes: Add entry cgf-000012.
+* Makefile.in (DLL_OFILES): Add cygwait.o.
+* sigproc.h: Remove cygwait definitions.
+* cygwait.h: New file.  Define/declare Cygwin waitfor functions.
+* cygwait.cc: Ditto.
+* exceptions.cc: Include cygwait.h.
+(handle_sigsuspend): Accommodate change in cancelable_wait arguments.
+(sigpacket::process): Display thread tls in debugging output.
+* fhandler.cc (fhandler_base_overlapped::wait_overlapped): Use symbolic names
+for signal and cancel return.
+* fhandler_console.cc (fhandler_console::read): Ditto.
+(fhandler_dev_dsp::Audio_out::waitforspace): Ditto.
+fhandler_dev_dsp::Audio_in::waitfordata): Ditto.
+* fhandler_fifo.cc (fhandler_fifo::wait): Ditto.
+* fhandler_serial.cc (fhandler_serial::raw_read): Ditto.
+* fhandler_tty.cc (fhandler_pty_slave::read): Ditto.
+* select.cc (cygwin_select): Ditto.
+* wait.cc (wait4): Ditto.
+* thread.cc (cancelable_wait): Move definition to cygwait.h.
+(pthread_cond::wait): Accommodate change in cancelable_wait arguments.
+(pthread_mutex::lock): Ditto.
+(pthread_spinlock::lock): Ditto.
+(pthread::join): Ditto.
+(pthread::thread_init_wrapper): Display tls in debugging output.
+(semaphore::_timedwait): Ditto.
+* thread.h (cw_sig_wait): Move to cygwait.h.
+(cw_cancel_action): Delete.
+(cancelable_wait): Move declaration to cygwait.h.
+@
+text
+@d22 2
+d31 1
+a31 1
+cygwait (HANDLE h, DWORD howlong = INFINITE)
+d42 8
+a49 1
+  return cancelable_wait (h, pli_howlong, cw_cancel | cw_sig_eintr);
+d57 26
+@
+

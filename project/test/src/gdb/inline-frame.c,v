@@ -1,0 +1,1240 @@
+head	1.15;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.15
+	gdb_7_6-2013-04-26-release:1.15
+	gdb_7_6-branch:1.15.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.15
+	gdb_7_5_1-2012-11-29-release:1.13
+	gdb_7_5-2012-08-17-release:1.13
+	gdb_7_5-branch:1.13.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.13
+	gdb_7_4_1-2012-04-26-release:1.11.2.1
+	gdb_7_4-2012-01-24-release:1.11.2.1
+	gdb_7_4-branch:1.11.0.2
+	gdb_7_4-2011-12-13-branchpoint:1.11
+	gdb_7_3_1-2011-09-04-release:1.10
+	gdb_7_3-2011-07-26-release:1.10
+	gdb_7_3-branch:1.10.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.10
+	gdb_7_2-2010-09-02-release:1.6
+	gdb_7_2-branch:1.6.0.2
+	gdb_7_2-2010-07-07-branchpoint:1.6
+	gdb_7_1-2010-03-18-release:1.5
+	gdb_7_1-branch:1.5.0.2
+	gdb_7_1-2010-02-18-branchpoint:1.5
+	gdb_7_0_1-2009-12-22-release:1.2
+	gdb_7_0-2009-10-06-release:1.2
+	gdb_7_0-branch:1.2.0.2
+	gdb_7_0-2009-09-16-branchpoint:1.2
+	msnyder-checkpoint-072509-branch:1.1.0.2
+	msnyder-checkpoint-072509-branchpoint:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.15
+date	2013.01.01.06.32.46;	author brobecke;	state Exp;
+branches;
+next	1.14;
+
+1.14
+date	2012.09.17.07.03.14;	author jkratoch;	state Exp;
+branches;
+next	1.13;
+
+1.13
+date	2012.03.01.21.08.37;	author palves;	state Exp;
+branches;
+next	1.12;
+
+1.12
+date	2012.01.04.08.17.05;	author brobecke;	state Exp;
+branches;
+next	1.11;
+
+1.11
+date	2011.07.05.04.34.56;	author bauermann;	state Exp;
+branches
+	1.11.2.1;
+next	1.10;
+
+1.10
+date	2011.03.18.18.52.30;	author palves;	state Exp;
+branches;
+next	1.9;
+
+1.9
+date	2011.01.05.22.22.49;	author msnyder;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2011.01.01.15.33.09;	author brobecke;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2010.08.11.13.24.32;	author jkratoch;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2010.05.14.21.25.51;	author msnyder;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2010.01.01.07.31.36;	author brobecke;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2009.11.13.23.00.17;	author drow;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2009.11.11.20.05.33;	author msnyder;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2009.09.13.16.28.28;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2009.06.28.00.20.22;	author drow;	state Exp;
+branches;
+next	;
+
+1.11.2.1
+date	2012.01.06.04.43.17;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.15
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@/* Inline frame unwinder for GDB.
+
+   Copyright (C) 2008-2013 Free Software Foundation, Inc.
+
+   This file is part of GDB.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+#include "defs.h"
+#include "inline-frame.h"
+#include "addrmap.h"
+#include "block.h"
+#include "frame-unwind.h"
+#include "inferior.h"
+#include "regcache.h"
+#include "symtab.h"
+#include "vec.h"
+
+#include "gdb_assert.h"
+
+/* We need to save a few variables for every thread stopped at the
+   virtual call site of an inlined function.  If there was always a
+   "struct thread_info", we could hang it off that; in the mean time,
+   keep our own list.  */
+struct inline_state
+{
+  /* The thread this data relates to.  It should be a currently
+     stopped thread; we assume thread IDs never change while the
+     thread is stopped.  */
+  ptid_t ptid;
+
+  /* The number of inlined functions we are skipping.  Each of these
+     functions can be stepped in to.  */
+  int skipped_frames;
+
+  /* Only valid if SKIPPED_FRAMES is non-zero.  This is the PC used
+     when calculating SKIPPED_FRAMES; used to check whether we have
+     moved to a new location by user request.  If so, we invalidate
+     any skipped frames.  */
+  CORE_ADDR saved_pc;
+
+  /* Only valid if SKIPPED_FRAMES is non-zero.  This is the symbol
+     of the outermost skipped inline function.  It's used to find the
+     call site of the current frame.  */
+  struct symbol *skipped_symbol;
+};
+
+typedef struct inline_state inline_state_s;
+DEF_VEC_O(inline_state_s);
+
+static VEC(inline_state_s) *inline_states;
+
+/* Locate saved inlined frame state for PTID, if it exists
+   and is valid.  */
+
+static struct inline_state *
+find_inline_frame_state (ptid_t ptid)
+{
+  struct inline_state *state;
+  int ix;
+
+  for (ix = 0; VEC_iterate (inline_state_s, inline_states, ix, state); ix++)
+    {
+      if (ptid_equal (state->ptid, ptid))
+	{
+	  struct regcache *regcache = get_thread_regcache (ptid);
+	  CORE_ADDR current_pc = regcache_read_pc (regcache);
+
+	  if (current_pc != state->saved_pc)
+	    {
+	      /* PC has changed - this context is invalid.  Use the
+		 default behavior.  */
+	      VEC_unordered_remove (inline_state_s, inline_states, ix);
+	      return NULL;
+	    }
+	  else
+	    return state;
+	}
+    }
+
+  return NULL;
+}
+
+/* Allocate saved inlined frame state for PTID.  */
+
+static struct inline_state *
+allocate_inline_frame_state (ptid_t ptid)
+{
+  struct inline_state *state;
+
+  state = VEC_safe_push (inline_state_s, inline_states, NULL);
+  memset (state, 0, sizeof (*state));
+  state->ptid = ptid;
+
+  return state;
+}
+
+/* Forget about any hidden inlined functions in PTID, which is new or
+   about to be resumed.  PTID may be minus_one_ptid (all processes)
+   or a PID (all threads in this process).  */
+
+void
+clear_inline_frame_state (ptid_t ptid)
+{
+  struct inline_state *state;
+  int ix;
+
+  if (ptid_equal (ptid, minus_one_ptid))
+    {
+      VEC_free (inline_state_s, inline_states);
+      return;
+    }
+
+  if (ptid_is_pid (ptid))
+    {
+      VEC (inline_state_s) *new_states = NULL;
+      int pid = ptid_get_pid (ptid);
+
+      for (ix = 0;
+	   VEC_iterate (inline_state_s, inline_states, ix, state);
+	   ix++)
+	if (pid != ptid_get_pid (state->ptid))
+	  VEC_safe_push (inline_state_s, new_states, state);
+      VEC_free (inline_state_s, inline_states);
+      inline_states = new_states;
+      return;
+    }
+
+  for (ix = 0; VEC_iterate (inline_state_s, inline_states, ix, state); ix++)
+    if (ptid_equal (state->ptid, ptid))
+      {
+	VEC_unordered_remove (inline_state_s, inline_states, ix);
+	return;
+      }
+}
+
+static void
+inline_frame_this_id (struct frame_info *this_frame,
+		      void **this_cache,
+		      struct frame_id *this_id)
+{
+  struct symbol *func;
+
+  /* In order to have a stable frame ID for a given inline function,
+     we must get the stack / special addresses from the underlying
+     real frame's this_id method.  So we must call get_prev_frame.
+     Because we are inlined into some function, there must be previous
+     frames, so this is safe - as long as we're careful not to
+     create any cycles.  */
+  *this_id = get_frame_id (get_prev_frame (this_frame));
+
+  /* We need a valid frame ID, so we need to be based on a valid
+     frame.  FSF submission NOTE: this would be a good assertion to
+     apply to all frames, all the time.  That would fix the ambiguity
+     of null_frame_id (between "no/any frame" and "the outermost
+     frame").  This will take work.  */
+  gdb_assert (frame_id_p (*this_id));
+
+  /* For now, require we don't match outer_frame_id either (see
+     comment above).  */
+  gdb_assert (!frame_id_eq (*this_id, outer_frame_id));
+
+  /* Future work NOTE: Alexandre Oliva applied a patch to GCC 4.3
+     which generates DW_AT_entry_pc for inlined functions when
+     possible.  If this attribute is available, we should use it
+     in the frame ID (and eventually, to set breakpoints).  */
+  func = get_frame_function (this_frame);
+  gdb_assert (func != NULL);
+  (*this_id).code_addr = BLOCK_START (SYMBOL_BLOCK_VALUE (func));
+  (*this_id).artificial_depth++;
+}
+
+static struct value *
+inline_frame_prev_register (struct frame_info *this_frame, void **this_cache,
+			    int regnum)
+{
+  /* Use get_frame_register_value instead of
+     frame_unwind_got_register, to avoid requiring this frame's ID.
+     This frame's ID depends on the previous frame's ID (unusual), and
+     the previous frame's ID depends on this frame's unwound
+     registers.  If unwinding registers from this frame called
+     get_frame_id, there would be a loop.
+
+     Do not copy this code into any other unwinder!  Inlined functions
+     are special; other unwinders must not have a dependency on the
+     previous frame's ID, and therefore can and should use
+     frame_unwind_got_register instead.  */
+  return get_frame_register_value (this_frame, regnum);
+}
+
+/* Check whether we are at an inlining site that does not already
+   have an associated frame.  */
+
+static int
+inline_frame_sniffer (const struct frame_unwind *self,
+		      struct frame_info *this_frame,
+		      void **this_cache)
+{
+  CORE_ADDR this_pc;
+  struct block *frame_block, *cur_block;
+  int depth;
+  struct frame_info *next_frame;
+  struct inline_state *state = find_inline_frame_state (inferior_ptid);
+
+  this_pc = get_frame_address_in_block (this_frame);
+  frame_block = block_for_pc (this_pc);
+  if (frame_block == NULL)
+    return 0;
+
+  /* Calculate DEPTH, the number of inlined functions at this
+     location.  */
+  depth = 0;
+  cur_block = frame_block;
+  while (BLOCK_SUPERBLOCK (cur_block))
+    {
+      if (block_inlined_p (cur_block))
+	depth++;
+
+      cur_block = BLOCK_SUPERBLOCK (cur_block);
+    }
+
+  /* Check how many inlined functions already have frames.  */
+  for (next_frame = get_next_frame (this_frame);
+       next_frame && get_frame_type (next_frame) == INLINE_FRAME;
+       next_frame = get_next_frame (next_frame))
+    {
+      gdb_assert (depth > 0);
+      depth--;
+    }
+
+  /* If this is the topmost frame, or all frames above us are inlined,
+     then check whether we were requested to skip some frames (so they
+     can be stepped into later).  */
+  if (state != NULL && state->skipped_frames > 0 && next_frame == NULL)
+    {
+      gdb_assert (depth >= state->skipped_frames);
+      depth -= state->skipped_frames;
+    }
+
+  /* If all the inlined functions here already have frames, then pass
+     to the normal unwinder for this PC.  */
+  if (depth == 0)
+    return 0;
+
+  /* If the next frame is an inlined function, but not the outermost, then
+     we are the next outer.  If it is not an inlined function, then we
+     are the innermost inlined function of a different real frame.  */
+  return 1;
+}
+
+const struct frame_unwind inline_frame_unwind = {
+  INLINE_FRAME,
+  default_frame_unwind_stop_reason,
+  inline_frame_this_id,
+  inline_frame_prev_register,
+  NULL,
+  inline_frame_sniffer
+};
+
+/* Return non-zero if BLOCK, an inlined function block containing PC,
+   has a group of contiguous instructions starting at PC (but not
+   before it).  */
+
+static int
+block_starting_point_at (CORE_ADDR pc, struct block *block)
+{
+  struct blockvector *bv;
+  struct block *new_block;
+
+  bv = blockvector_for_pc (pc, NULL);
+  if (BLOCKVECTOR_MAP (bv) == NULL)
+    return 0;
+
+  new_block = addrmap_find (BLOCKVECTOR_MAP (bv), pc - 1);
+  if (new_block == NULL)
+    return 1;
+
+  if (new_block == block || contained_in (new_block, block))
+    return 0;
+
+  /* The immediately preceding address belongs to a different block,
+     which is not a child of this one.  Treat this as an entrance into
+     BLOCK.  */
+  return 1;
+}
+
+/* Skip all inlined functions whose call sites are at the current PC.
+   Frames for the hidden functions will not appear in the backtrace until the
+   user steps into them.  */
+
+void
+skip_inline_frames (ptid_t ptid)
+{
+  CORE_ADDR this_pc;
+  struct block *frame_block, *cur_block;
+  struct symbol *last_sym = NULL;
+  int skip_count = 0;
+  struct inline_state *state;
+
+  /* This function is called right after reinitializing the frame
+     cache.  We try not to do more unwinding than absolutely
+     necessary, for performance.  */
+  this_pc = get_frame_pc (get_current_frame ());
+  frame_block = block_for_pc (this_pc);
+
+  if (frame_block != NULL)
+    {
+      cur_block = frame_block;
+      while (BLOCK_SUPERBLOCK (cur_block))
+	{
+	  if (block_inlined_p (cur_block))
+	    {
+	      /* See comments in inline_frame_this_id about this use
+		 of BLOCK_START.  */
+	      if (BLOCK_START (cur_block) == this_pc
+		  || block_starting_point_at (this_pc, cur_block))
+		{
+		  skip_count++;
+		  last_sym = BLOCK_FUNCTION (cur_block);
+		}
+	      else
+		break;
+	    }
+	  cur_block = BLOCK_SUPERBLOCK (cur_block);
+	}
+    }
+
+  gdb_assert (find_inline_frame_state (ptid) == NULL);
+  state = allocate_inline_frame_state (ptid);
+  state->skipped_frames = skip_count;
+  state->saved_pc = this_pc;
+  state->skipped_symbol = last_sym;
+
+  if (skip_count != 0)
+    reinit_frame_cache ();
+}
+
+/* Step into an inlined function by unhiding it.  */
+
+void
+step_into_inline_frame (ptid_t ptid)
+{
+  struct inline_state *state = find_inline_frame_state (ptid);
+
+  gdb_assert (state != NULL && state->skipped_frames > 0);
+  state->skipped_frames--;
+  reinit_frame_cache ();
+}
+
+/* Return the number of hidden functions inlined into the current
+   frame.  */
+
+int
+inline_skipped_frames (ptid_t ptid)
+{
+  struct inline_state *state = find_inline_frame_state (ptid);
+
+  if (state == NULL)
+    return 0;
+  else
+    return state->skipped_frames;
+}
+
+/* If one or more inlined functions are hidden, return the symbol for
+   the function inlined into the current frame.  */
+
+struct symbol *
+inline_skipped_symbol (ptid_t ptid)
+{
+  struct inline_state *state = find_inline_frame_state (ptid);
+
+  gdb_assert (state != NULL);
+  return state->skipped_symbol;
+}
+
+/* Return the number of functions inlined into THIS_FRAME.  Some of
+   the callees may not have associated frames (see
+   skip_inline_frames).  */
+
+int
+frame_inlined_callees (struct frame_info *this_frame)
+{
+  struct frame_info *next_frame;
+  int inline_count = 0;
+
+  /* First count how many inlined functions at this PC have frames
+     above FRAME (are inlined into FRAME).  */
+  for (next_frame = get_next_frame (this_frame);
+       next_frame && get_frame_type (next_frame) == INLINE_FRAME;
+       next_frame = get_next_frame (next_frame))
+    inline_count++;
+
+  /* Simulate some most-inner inlined frames which were suppressed, so
+     they can be stepped into later.  If we are unwinding already
+     outer frames from some non-inlined frame this does not apply.  */
+  if (next_frame == NULL)
+    inline_count += inline_skipped_frames (inferior_ptid);
+
+  return inline_count;
+}
+@
+
+
+1.14
+log
+@gdb/
+	Code cleanup - rename 'inline' depth to 'artificial' depth.
+	* breakpoint.c (set_momentary_breakpoint): Rename at a caller to
+	frame_id_artificial_p, extend the comment.
+	* dwarf2-frame-tailcall.c (tailcall_frame_this_id): Rename at a user.
+	* frame.c (fprint_frame_id): Rename at a user, change debug output
+	text to "artificial=".
+	(skip_inlined_frames): Rename to ...
+	(skip_artificial_frames): ... here.  Extend the comment.
+	(get_stack_frame_id, frame_unwind_caller_id): Rename at a caller.
+	(frame_id_inlined_p): Rename to ...
+	(frame_id_artificial_p): ... here.  Rename at a user.
+	(frame_id_eq, frame_id_inner, frame_unwind_caller_pc)
+	(frame_unwind_caller_pc_if_available, frame_unwind_caller_arch): Rename
+	at a user.
+	* frame.h (struct frame_id): Rename inline_depth to artificial_depth.
+	Extend the comment.
+	(frame_id_inlined_p): Rename to ...
+	(frame_id_artificial_p): ... here.
+	* inline-frame.c (inline_frame_this_id): Rename at a user.
+@
+text
+@d3 1
+a3 1
+   Copyright (C) 2008-2012 Free Software Foundation, Inc.
+@
+
+
+1.13
+log
+@2012-03-01  Pedro Alves  <palves@@redhat.com>
+
+	* inline-frame.c: Include inline-frame.h.
+@
+text
+@d181 1
+a181 1
+  (*this_id).inline_depth++;
+@
+
+
+1.12
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d21 1
+@
+
+
+1.11
+log
+@gdb/
+	* ada-lang.c: Fix typos.
+	* amd64-tdep.c: Likewise.
+	* breakpoint.c: Likewise.
+	* cli/cli-decode.c: Likewise.
+	* findcmd.c: Likewise.
+	* inline-frame.c: Likewise.
+	* mi/mi-main.c: Likewise.
+	* minsyms.c: Likewise.
+	* monitor.c: Likewise.
+	* monitor.h: Likewise.
+	* prologue-value.c: Likewise.
+	* reverse.c: Likewise.
+	* s390-tdep.c: Likewise.
+
+gdb/testsuite/
+	* gdb.base/call-sc.c: Likewise.
+	* gdb.base/ifelse.exp: Likewise.
+	* gdb.base/structs.c: Likewise.
+
+gdb/doc/
+	* gdb.texinfo: Likewise.
+@
+text
+@d3 1
+a3 1
+   Copyright (C) 2008, 2009, 2010, 2011 Free Software Foundation, Inc.
+@
+
+
+1.11.2.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d3 1
+a3 1
+   Copyright (C) 2008-2012 Free Software Foundation, Inc.
+@
+
+
+1.10
+log
+@	gdb/
+	* frame.c (frame_unwind_register): Throw an error if unwinding the
+	register failed.
+	* get_prev_frame_1 (get_prev_frame_1): Ask the unwinder if there's
+	an unwind stop reason.
+	(frame_stop_reason_string): Handle UNWIND_UNAVAILABLE.
+	* frame.h (enum unwind_stop_reason) <UNWIND_OUTERMOST,
+	UNWIND_UNAVAILABLE>: New.
+	* inline-frame.c (inline_frame_unwind): Install
+	default_frame_unwind_stop_reason.
+	* frame-unwind.c: Include "exceptions.h".
+	(frame_unwind_find_by_frame): Swallow NOT_AVAILABLE_ERROR errors.
+	(default_frame_unwind_stop_reason): New.
+	* frame-unwind.h (frame_unwind_stop_reason_ftype): New typedef.
+	(default_frame_unwind_stop_reason): Declare.
+	(struct frame_unwind) <stop_reason>: New function pointer.
+
+	* dummy-frame.c: Install default_frame_unwind_stop_reason.
+	* dwarf2-frame.c: Include exceptions.h.
+	(struct dwarf2_frame_cache) <unavailable_retaddr>: New field.
+	(dwarf2_frame_cache): Swallow NOT_AVAILABLE_ERROR errors when
+	computing the CFA.  If such an error was thrown, set
+	unavailable_retaddr.
+	(dwarf2_frame_unwind_stop_reason): New.
+	(dwarf2_frame_this_id): Don't build a frame id if the CFA was
+	unavailable.
+	(dwarf2_frame_unwind): Install dwarf2_frame_unwind_stop_reason.
+	(dwarf2_signal_frame_unwind): Ditto.
+
+	* amd64-tdep.c: Include "exceptions.h".
+	(struct amd64_frame_cache): New field "base_p".
+	(amd64_init_frame_cache): Clear it.
+	(amd64_frame_cache_1): New, factored out from amd64_frame_cache.
+	Avoid reading registers with functions that throw if the register
+	is not necessary to compute the frame base.
+	(amd64_frame_cache): Reimplement wrapping amd64_frame_cache_1, and
+	swallowing NOT_AVAILABLE_ERROR.
+	(amd64_frame_unwind_stop_reason): New.
+	(amd64_frame_this_id): Don't build a frame id if the frame base
+	was unavailable.
+	(amd64_frame_unwind): Install amd64_frame_unwind_stop_reason.
+	(amd64_sigtramp_frame_cache): Swallow NOT_AVAILABLE_ERROR, and set
+	base_p if the frame base was computable.
+	(amd64_sigtramp_frame_unwind_stop_reason): New.
+	(amd64_sigtramp_frame_this_id): Don't build a frame id if the
+	frame base was unavailable.
+	(amd64_sigtramp_frame_unwind): Install
+	amd64_sigtramp_frame_unwind_stop_reason.
+	(amd64_epilogue_frame_cache): Swallow NOT_AVAILABLE_ERROR, and set
+	base_p if the frame base was computable.
+	(amd64_epilogue_frame_unwind_stop_reason): New.
+	(amd64_epilogue_frame_this_id): Don't build a frame id if the
+	frame base was unavailable.
+	(amd64_epilogue_frame_unwind): Install
+	amd64_epilogue_frame_unwind_stop_reason.
+	* i386-tdep.c: Include "exceptions.h".
+	(struct i386_frame_cache): New field "base_p".
+	(i386_init_frame_cache): Clear it.
+	(i386_frame_cache_1): New, factored out from amd64_frame_cache.
+	Avoid reading registers with functions that throw if the register
+	is not necessary to compute the frame base.
+	(i386_frame_cache): Reimplement wrapping amd64_frame_cache_1, and
+	swallowing NOT_AVAILABLE_ERROR.
+	(i386_frame_unwind_stop_reason): New.
+	(i386_frame_this_id): Don't build a frame id if the frame base was
+	unavailable.
+	(i386_frame_prev_register): Handle unavailable SP.
+	(i386_frame_unwind): Install i386_frame_unwind_stop_reason.
+	(i386_epilogue_frame_cache): Swallow NOT_AVAILABLE_ERROR, and set
+	base_p if the frame base was computable.
+	(i386_epilogue_frame_unwind_stop_reason): New.
+	(i386_epilogue_frame_this_id): Don't build a frame id if the frame
+	base was unavailable.
+	(i386_epilogue_frame_unwind): Install
+	i386_epilogue_frame_unwind_stop_reason.
+	(i386_sigtramp_frame_cache): Swallow NOT_AVAILABLE_ERROR, and set
+	base_p if the frame base was computable.
+	(i386_sigtramp_frame_unwind_stop_reason): New.
+	(i386_sigtramp_frame_this_id): Don't build a frame id if the frame
+	base was unavailable.
+	(i386_sigtramp_frame_unwind): Install
+	i386_sigtramp_frame_unwind_stop_reason.
+	* sentinel-frame.c (sentinel_frame_prev_register): Use the value
+	type's size, not the register's.
+	(sentinel_frame_unwind): Install default_frame_unwind_stop_reason.
+
+	* alpha-mdebug-tdep.c (alpha_mdebug_frame_unwind): Install
+	default_frame_unwind_stop_reason.
+	* alpha-tdep.c (alpha_sigtramp_frame_unwind)
+	(alpha_heuristic_frame_unwind): Ditto.
+	* amd64obsd-tdep.c (amd64obsd_trapframe_unwind): Ditto.
+	* arm-tdep.c (arm_prologue_unwind, arm_stub_unwind): Ditto.
+	* avr-tdep.c (avr_frame_unwind): Ditto.
+	* cris-tdep.c (cris_sigtramp_frame_unwind, cris_frame_unwind):
+	Ditto.
+	* frv-linux-tdep.c (frv_linux_sigtramp_frame_unwind): Ditto.
+	* frv-tdep.c (frv_frame_unwind): Ditto.
+	* h8300-tdep.c (h8300_frame_unwind): Ditto.
+	* hppa-hpux-tdep.c (hppa_hpux_sigtramp_frame_unwind): Ditto.
+	* hppa-linux-tdep.c (hppa_linux_sigtramp_frame_unwind): Ditto.
+	* hppa-tdep.c (hppa_frame_unwind, hppa_fallback_frame_unwind)
+	(hppa_stub_frame_unwind): Ditto.
+	* i386obsd-tdep.c (i386obsd_trapframe_unwind): Ditto.
+	* ia64-tdep.c (ia64_frame_unwind, ia64_sigtramp_frame_unwind)
+	(ia64_libunwind_frame_unwind)
+	(ia64_libunwind_sigtramp_frame_unwind): Ditto.
+	* iq2000-tdep.c (iq2000_frame_unwind): Ditto.
+	* lm32-tdep.c (lm32_frame_unwind): Ditto.
+	* m32c-tdep.c (m32c_unwind): Ditto.
+	* m32r-linux-tdep.c (m32r_linux_sigtramp_frame_unwind): Ditto.
+	* m32r-tdep.c (m32r_frame_unwind): Ditto.
+	* m68hc11-tdep.c (m68hc11_frame_unwind): Ditto.
+	* m68k-tdep.c (m68k_frame_unwind): Ditto.
+	* m68klinux-tdep.c (m68k_linux_sigtramp_frame_unwind): Ditto.
+	* m88k-tdep.c (m88k_frame_unwind): Ditto.
+	* mep-tdep.c (mep_frame_unwind): Ditto.
+	* microblaze-tdep.c (microblaze_frame_unwind): Ditto.
+	* mips-tdep.c (mips_insn16_frame_unwind, mips_insn32_frame_unwind)
+	(mips_stub_frame_unwind): Ditto.
+	* mn10300-tdep.c (mn10300_frame_unwind): Ditto.
+	* moxie-tdep.c (moxie_frame_unwind): Ditto.
+	* mt-tdep.c (mt_frame_unwind): Ditto.
+	* ppc-linux-tdep.c (ppu2spu_unwind): Ditto.
+	* ppcobsd-tdep.c (ppcobsd_sigtramp_frame_unwind): Ditto.
+	* rs6000-tdep.c (rs6000_frame_unwind): Ditto.
+	* s390-tdep.c (s390_frame_unwind, s390_stub_frame_unwind)
+	(s390_sigtramp_frame_unwind): Ditto.
+	* score-tdep.c (score_prologue_unwind): Ditto.
+	* sh-tdep.c (sh_frame_unwind): Ditto.
+	* sh64-tdep.c (sh64_frame_unwind): Ditto.
+	* sparc-sol2-tdep.c (sparc32_sol2_sigtramp_frame_unwind): Ditto.
+	* sparc-tdep.c (sparc32_frame_unwind): Ditto.
+	* sparc64-sol2-tdep.c (sparc64_sol2_sigtramp_frame_unwind): Ditto.
+	* sparc64-tdep.c (sparc64_frame_unwind): Ditto.
+	* sparc64fbsd-tdep.c (sparc64fbsd_sigtramp_frame_unwind): Ditto.
+	* sparc64nbsd-tdep.c (sparc64nbsd_sigcontext_frame_unwind): Ditto.
+	* sparc64obsd-tdep.c (sparc64obsd_frame_unwind)
+	(sparc64obsd_trapframe_unwind): Ditto.
+	* sparcnbsd-tdep.c (sparc32nbsd_sigcontext_frame_unwind): Ditto.
+	* sparcobsd-tdep.c (sparc32obsd_sigtramp_frame_unwind): Ditto.
+	* spu-tdep.c (spu_frame_unwind, spu2ppu_unwind): Ditto.
+	* v850-tdep.c (v850_frame_unwind): Ditto.
+	* vax-tdep.c (vax_frame_unwind): Ditto.
+	* vaxobsd-tdep.c (vaxobsd_sigtramp_frame_unwind): Ditto.
+	* xstormy16-tdep.c (frame_unwind xstormy16_frame_unwind): Ditto.
+	* xtensa-tdep.c (xtensa_unwind): Ditto.
+@
+text
+@d291 1
+a291 1
+  /* The immediately preceeding address belongs to a different block,
+@
+
+
+1.9
+log
+@2011-01-05  Michael Snyder  <msnyder@@vmware.com>
+
+	* addrmap.c: Shorten lines of >= 80 columns.
+	* arch-utils.c: Ditto.
+	* arch-utils.h: Ditto.
+	* ax-gdb.c: Ditto.
+	* ax-general.c: Ditto.
+	* bcache.c: Ditto.
+	* blockframe.c: Ditto.
+	* breakpoint.c: Ditto.
+	* buildsym.c: Ditto.
+	* c-lang.c: Ditto.
+	* c-typeprint.c: Ditto.
+	* charset.c: Ditto.
+	* coffread.c: Ditto.
+	* command.h: Ditto.
+	* corelow.c: Ditto.
+	* cp-abi.c: Ditto.
+	* cp-namespace.c: Ditto.
+	* cp-support.c: Ditto.
+	* dbug-rom.c: Ditto.
+	* dbxread.c: Ditto.
+	* defs.h: Ditto.
+	* dfp.c: Ditto.
+	* dfp.h: Ditto.
+	* dictionary.c: Ditto.
+	* disasm.c: Ditto.
+	* doublest.c: Ditto.
+	* dwarf2-frame.c: Ditto.
+	* dwarf2expr.c: Ditto.
+	* dwarf2loc.c: Ditto.
+	* dwarf2read.c: Ditto.
+	* elfread.c: Ditto.
+	* eval.c: Ditto.
+	* event-loop.c: Ditto.
+	* event-loop.h: Ditto.
+	* exceptions.h: Ditto.
+	* exec.c: Ditto.
+	* expprint.c: Ditto.
+	* expression.h: Ditto.
+	* f-lang.c: Ditto.
+	* f-valprint.c: Ditto.
+	* findcmd.c: Ditto.
+	* frame-base.c: Ditto.
+	* frame-unwind.c: Ditto.
+	* frame-unwind.h: Ditto.
+	* frame.c: Ditto.
+	* frame.h: Ditto.
+	* gcore.c: Ditto.
+	* gdb-stabs.h: Ditto.
+	* gdb_assert.h: Ditto.
+	* gdb_dirent.h: Ditto.
+	* gdb_obstack.h: Ditto.
+	* gdbcore.h: Ditto.
+	* gdbtypes.c: Ditto.
+	* gdbtypes.h: Ditto.
+	* inf-ttrace.c: Ditto.
+	* infcall.c: Ditto.
+	* infcmd.c: Ditto.
+	* inflow.c: Ditto.
+	* infrun.c: Ditto.
+	* inline-frame.h: Ditto.
+	* language.c: Ditto.
+	* language.h: Ditto.
+	* libunwind-frame.c: Ditto.
+	* libunwind-frame.h: Ditto.
+	* linespec.c: Ditto.
+	* linux-nat.c: Ditto.
+	* linux-nat.h: Ditto.
+	* linux-thread-db.c: Ditto.
+	* machoread.c: Ditto.
+	* macroexp.c: Ditto.
+	* macrotab.c: Ditto.
+	* main.c: Ditto.
+	* maint.c: Ditto.
+	* mdebugread.c: Ditto.
+	* memattr.c: Ditto.
+	* minsyms.c: Ditto.
+	* monitor.c: Ditto.
+	* monitor.h: Ditto.
+	* objfiles.c: Ditto.
+	* objfiles.h: Ditto.
+	* osabi.c: Ditto.
+	* p-typeprint.c: Ditto.
+	* p-valprint.c: Ditto.
+	* parse.c: Ditto.
+	* printcmd.c: Ditto.
+	* proc-events.c: Ditto.
+	* procfs.c: Ditto.
+	* progspace.c: Ditto.
+	* progspace.h: Ditto.
+	* psympriv.h: Ditto.
+	* psymtab.c: Ditto.
+	* record.c: Ditto.
+	* regcache.c: Ditto.
+	* regcache.h: Ditto.
+	* remote-fileio.c: Ditto.
+	* remote.c: Ditto.
+	* ser-mingw.c: Ditto.
+	* ser-tcp.c: Ditto.
+	* ser-unix.c: Ditto.
+	* serial.c: Ditto.
+	* serial.h: Ditto.
+	* solib-frv.c: Ditto.
+	* solib-irix.c: Ditto.
+	* solib-osf.c: Ditto.
+	* solib-pa64.c: Ditto.
+	* solib-som.c: Ditto.
+	* solib-sunos.c: Ditto.
+	* solib-svr4.c: Ditto.
+	* solib-target.c: Ditto.
+	* solib.c: Ditto.
+	* somread.c: Ditto.
+	* source.c: Ditto.
+	* stabsread.c: Ditto.
+	* stabsread.c: Ditto.
+	* stack.c: Ditto.
+	* stack.h: Ditto.
+	* symfile-mem.c: Ditto.
+	* symfile.c: Ditto.
+	* symfile.h: Ditto.
+	* symmisc.c: Ditto.
+	* symtab.c: Ditto.
+	* symtab.h: Ditto.
+	* target-descriptions.c: Ditto.
+	* target-memory.c: Ditto.
+	* target.c: Ditto.
+	* target.h: Ditto.
+	* terminal.h: Ditto.
+	* thread.c: Ditto.
+	* top.c: Ditto.
+	* tracepoint.c: Ditto.
+	* tracepoint.h: Ditto.
+	* ui-file.c: Ditto.
+	* ui-file.h: Ditto.
+	* ui-out.h: Ditto.
+	* user-regs.c: Ditto.
+	* user-regs.h: Ditto.
+	* utils.c: Ditto.
+	* valarith.c: Ditto.
+	* valops.c: Ditto.
+	* valprint.c: Ditto.
+	* valprint.h: Ditto.
+	* value.c: Ditto.
+	* varobj.c: Ditto.
+	* varobj.h: Ditto.
+	* vec.h: Ditto.
+	* xcoffread.c: Ditto.
+	* xcoffsolib.c: Ditto.
+	* xcoffsolib.h: Ditto.
+	* xml-syscall.c: Ditto.
+	* xml-tdesc.c: Ditto.
+@
+text
+@d263 1
+@
+
+
+1.8
+log
+@run copyright.sh for 2011.
+@
+text
+@d129 3
+a131 1
+      for (ix = 0; VEC_iterate (inline_state_s, inline_states, ix, state); ix++)
+@
+
+
+1.7
+log
+@gdb/
+	Code cleanup.
+	* dummy-frame.c (dummy_frame_unwinder): Remove its static qualifier.
+	Rename to dummy_frame_unwind.
+	(dummy_frame_unwind): Remove.
+	* dummy-frame.h (dummy_frame_unwind): Reference directly the struct.
+	* frame-unwind.c (frame_unwind_init): Use address of
+	dummy_frame_unwind and inline_frame_unwind.
+	* frame.c (create_sentinel_frame): Use address of
+	sentinel_frame_unwind.
+	* inline-frame.c (inline_frame_unwinder): Rename to
+	inline_frame_unwind.
+	(inline_frame_unwind): Remove.
+	* inline-frame.h (inline_frame_unwind): Reference directly the struct.
+	* sentinel-frame.c (sentinel_frame_unwinder): Rename to
+	sentinel_frame_unwind.
+	(sentinel_frame_unwind): Remove.
+	* sentinel-frame.h (sentinel_frame_unwind): Reference directly the
+	struct.
+@
+text
+@d3 1
+a3 1
+   Copyright (C) 2008, 2009, 2010 Free Software Foundation, Inc.
+@
+
+
+1.6
+log
+@2010-05-14  Michael Snyder  <msnyder@@vmware.com>
+
+	* infcall.c: White space.
+	* inf-child.c: White space.
+	* infcmd.c: White space.
+	* inferior.c: White space.
+	* inf-loop.c: White space.
+	* inflow.c: White space.
+	* inline-frame.c: White space.
+	* interps.c: White space.
+@
+text
+@d259 1
+a259 1
+const struct frame_unwind inline_frame_unwinder = {
+a266 2
+const struct frame_unwind *const inline_frame_unwind = &inline_frame_unwinder;
+
+@
+
+
+1.5
+log
+@Update copyright year in most headers.
+
+Automatic update by copyright.sh.
+@
+text
+@d78 1
+d128 1
+@
+
+
+1.4
+log
+@	* inline-frame.c (find_inline_frame_state): Check for changed PC
+	here...
+	(inline_frame_sniffer): ... not here.
+@
+text
+@d3 1
+a3 1
+   Copyright (C) 2008, 2009 Free Software Foundation, Inc.
+@
+
+
+1.3
+log
+@2009-11-11  Michael Snyder  <msnyder@@vmware.com>
+
+	* darwin-nat-info.c: Update copyright.
+	* dbxread.c: Ditto.
+	* gdbarch.sh: Ditto.
+	* gdbarch.c: Ditto.
+	* gdbarch.h: Ditto.
+	* inline-frame.c: Ditto.
+	* inline-frame.h: Ditto.
+@
+text
+@d25 1
+d63 2
+a64 1
+/* Locate saved inlined frame state for PTID, if it exists.  */
+d75 13
+a87 1
+	return state;
+d242 2
+a243 7
+      if (this_pc != state->saved_pc)
+	state->skipped_frames = 0;
+      else
+	{
+	  gdb_assert (depth >= state->skipped_frames);
+	  depth -= state->skipped_frames;
+	}
+@
+
+
+1.2
+log
+@        gdb/
+        * frame.c (get_frame_id): Default to outer_frame_id if the this_id
+        method does not supply an ID.  Assert that the result is not
+        null_frame_id.
+        (outer_frame_id): New.
+        (frame_id_p): Accept outer_frame_id.
+        (frame_id_eq): Allow outer_frame_id to be equal to itself.
+        (frame_find_by_id): Revert previous local workarounds.
+        (get_prev_frame_1): Adjust end-of-stack check to test outer_frame_id.
+        * frame.h (null_frame_id, frame_id_p): Update comments.
+        (outer_frame_id): Declare.
+        * infrun.c (handle_inferior_event): Do not treat all steps from the
+        outermost frame as subroutine calls.
+
+        * libunwind-frame.c (libunwind_frame_this_id): Do not clear THIS_ID.
+        * hppa-tdep.c (hppa_stub_frame_this_id): Likewise.
+        * ia64-tdep.c (ia64_frame_this_id): Likewise.
+        (ia64_libunwind_frame_this_id, ia64_libunwind_sigtramp_frame_this_id):
+        Use outer_frame_id instead of null_frame_id.
+        * amd64obsd-tdep.c (amd64obsd_trapframe_cache): Use outer_frame_id.
+        * i386obsd-tdep.c (i386obsd_trapframe_cache): Likewise.
+        * inline-frame.c (inline_frame_this_id): Refuse outer_frame_id.
+        * thread.c (restore_selected_frame): Update comment and remove
+        frame_id_p check.
+
+        gdb/doc/
+        * gdbint.texinfo (Unwinding the Frame ID): Reference outer_frame_id.
+@
+text
+@d3 1
+a3 1
+   Copyright (C) 2008 Free Software Foundation, Inc.
+@
+
+
+1.1
+log
+@	gdb/
+	* NEWS: Document inlined function support.
+	* Makefile.in (SFILES): Add inline-frame.c.
+	(COMMON_OBS): Add inline-frame.o.
+	* block.c (contained_in): Rewrite to use lexical nesting.
+	(block_linkage_function): Skip inlined function blocks.
+	(block_inlined_p): New.
+	* block.h (struct block): Update comment.
+	(block_inlined_p): New prototype.
+	* blockframe.c (get_frame_block): Handle inlined functions.
+	(get_frame_function): Do not use block_linkage_function.
+	(block_innermost_frame): Use get_frame_block and contained_in.
+	* breakpoint.c (watchpoint_check): Remove extra reinit_frame_cache.
+	Skip over inlined functions.  Simplify epilogue check.
+	(bpstat_check_breakpoint_conditions): Use get_stack_frame_id.
+	Update comments.
+	(set_momentary_breakpoint): Only accept non-inlined frames.
+	(watch_command_1): Use frame_unwind_caller_pc and
+	frame_unwind_caller_id instead of get_prev_frame.
+	(until_break_command): Likewise.  Use get_stack_frame_id.
+	* buildsym.c (end_symtab): Set SYMBOL_SYMTAB for block functions.
+	* dwarf2loc.c (dwarf_expr_frame_base): Use block_linkage_function.
+	* dwarf2read.c (process_die): Handle DW_TAG_inlined_subroutine.
+	(read_func_scope, new_symbol): Likewise.  Handle arguments specially
+	for inlined functions without call site information.
+	(inherit_abstract_dies): Allow tag mismatch for inlined subroutines.
+	(die_specification): Treat DW_AT_abstract_origin as a specification.
+	(read_type_die): Handle DW_TAG_inlined_subroutine.
+	* frame-unwind.c (frame_unwind_init): Add inline_frame_unwind.
+	* frame.c (fprint_frame_id): Print inline depth.
+	(fprint_frame_type): Handle INLINE_FRAME and SENTINEL_FRAME.
+	(skip_inlined_frames, get_stack_frame_id): New.
+	(frame_unwind_caller_id): Use skip_inlined_frames.
+	(frame_id_inlined_p): New.
+	(frame_id_eq): Make the logic match the comments.  Add inline_depth
+	check.
+	(frame_id_inner): Handle inlined functions.
+	(frame_unwind_pc): New function, copied from frame_unwind_caller_pc.
+	(frame_unwind_caller_pc): Use skip_inlined_frames and frame_unwind_pc.
+	(get_prev_frame_1): Check for inline frames.  Split out frame
+	allocation to get_prev_frame_raw.
+	(get_prev_frame_raw): New function.
+	(get_prev_frame): Handle inline frames.
+	(get_frame_pc): Use frame_unwind_pc.
+	(get_frame_address_in_block): Skip inlined frames on both sides.
+	(pc_notcurrent): Delete.
+	(find_frame_sal): Rewrite to handle inline call sites.  Use
+	get_frame_address_in_block.
+	(deprecated_update_frame_pc_hack): Make static.
+	* frame.h: Update comments.
+	(struct frame_id): Add inline_depth.
+	(enum frame_type): Add INLINE_FRAME.
+	(frame_id_inlined_p, get_stack_frame_id): New prototypes.
+	* gdbthread.h (struct thread_info): Add step_stack_frame_id field.
+	* infcmd.c (set_step_frame): New function.
+	(step_once): Use set_step_frame.  Handle inlined functions.
+	(until_next_command): Use set_step_frame.
+	(finish_backward), finish_forward): Use get_stack_frame_id.
+	(finish_command): Support inlined functions.
+	* inferior.h (set_step_info): New prototype.
+	* infrun.c (RESUME_ALL): Use minus_one_ptid.
+	(clear_proceed_status): Clear step_stack_frame_id.
+	(init_wait_for_inferior): Call clear_inline_frame_state.
+	(init_execution_control_state): Make static.
+	(set_step_info): New function.
+	(init_thread_stepping_state): Do not set the symtab or line here.
+	(stepped_in_from): New function.
+	(handle_inferior_event): Handle inlined functions.  Use set_step_info.
+	(insert_step_resume_breakpoint_at_frame): Use get_stack_frame_id.
+	(struct inferior_status): Add step_stack_frame_id.
+	(save_inferior_status, restore_inferior_status): Save and restore
+	step_stack_frame_id.
+	* inline-frame.c, inline-frame.h: New files.
+	* minsyms.c (prim_record_minimal_symbol_and_info): Use XCALLOC.
+	* regcache.c (regcache_write_pc): Call reinit_frame_cache.
+	* s390-tdep.c (s390_prologue_frame_unwind_cache): Handle INLINE_FRAME.
+	* stack.c (frame_show_address): New.
+	(print_frame_info, print_frame): Use it.
+	(find_frame_funname): Use get_frame_function.  Handle inlined blocks.
+	(frame_info): Mark inlined functions.
+	(backtrace_command_1): Use get_current_user_frame.
+	(print_frame_local_vars, print_frame_label_vars): Update comments.
+	(return_command): Refuse inlined functions.
+	* symtab.c (lookup_symbol_aux_local): Stop at inlined function
+	boundaries.
+	(find_function_start_sal): Avoid inlined functions.
+	(completion_list_add_fields): New function.
+	(default_make_symbol_completion_list): Use it.  Use block_static_block
+	and block_global_block.  Check for inlined functions.
+	(skip_prologue_using_sal): Avoid line number comparison across
+	inlining.
+	* symtab.h (struct symbol): Add is_inlined.
+	(SYMBOL_INLINED): New.
+	* target.c (target_resume): Call clear_inline_frame_state.
+	* valops.c (value_of_variable): Check block_inlined_p.
+
+	gdb/doc/
+	* gdb.texinfo (Debugging Optimized Code): New chapter.
+	(Compiling for Debugging): Reference it.  Move some
+	text to the new section.
+
+	gdb/testsuite/
+	* gdb.base/break.exp: Add an XFAIL for gcc/36748.
+	* gdb.cp/annota2.exp: Accept frames-invalid in more places.
+	* gdb.opt/Makefile.in (EXECUTABLES): Update.
+	* gdb.opt/clobbered-registers-O2.exp: Update to GPL v3.
+	* gdb.opt/inline-bt.c, gdb.opt/inline-bt.exp,
+	gdb.opt/inline-cmds.c, gdb.opt/inline-cmds.exp,
+	gdb.opt/inline-locals.c, gdb.opt/inline-locals.exp,
+	gdb.opt/inline-markers.c: New files.
+	* lib/gdb.exp (skip_inline_frame_tests): New function.
+	(skip_inline_var_tests): New function.
+@
+text
+@d151 4
+@
+

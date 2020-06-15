@@ -1,0 +1,929 @@
+head	1.15;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.14
+	gdb_7_6-2013-04-26-release:1.14
+	gdb_7_6-branch:1.14.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.14
+	gdb_7_5_1-2012-11-29-release:1.12
+	gdb_7_5-2012-08-17-release:1.12
+	gdb_7_5-branch:1.12.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.12
+	gdb_7_4_1-2012-04-26-release:1.9.4.1
+	gdb_7_4-2012-01-24-release:1.9.4.1
+	gdb_7_4-branch:1.9.0.4
+	gdb_7_4-2011-12-13-branchpoint:1.9
+	gdb_7_3_1-2011-09-04-release:1.9
+	gdb_7_3-2011-07-26-release:1.9
+	gdb_7_3-branch:1.9.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.9
+	gdb_7_2-2010-09-02-release:1.6.2.1
+	gdb_7_2-branch:1.6.0.2
+	gdb_7_2-2010-07-07-branchpoint:1.6
+	gdb_7_1-2010-03-18-release:1.5
+	gdb_7_1-branch:1.5.0.2
+	gdb_7_1-2010-02-18-branchpoint:1.5
+	gdb_7_0_1-2009-12-22-release:1.4
+	gdb_7_0-2009-10-06-release:1.4
+	gdb_7_0-branch:1.4.0.4
+	gdb_7_0-2009-09-16-branchpoint:1.4
+	msnyder-checkpoint-072509-branch:1.4.0.2
+	msnyder-checkpoint-072509-branchpoint:1.4
+	reverse-20081226-branch:1.3.0.2
+	reverse-20081226-branchpoint:1.3
+	multiprocess-20081120-branch:1.2.0.4
+	multiprocess-20081120-branchpoint:1.2
+	reverse-20080930-branch:1.2.0.2
+	reverse-20080930-branchpoint:1.2;
+locks; strict;
+comment	@# @;
+
+
+1.15
+date	2013.05.06.22.11.15;	author devans;	state Exp;
+branches;
+next	1.14;
+
+1.14
+date	2013.01.01.06.33.24;	author brobecke;	state Exp;
+branches;
+next	1.13;
+
+1.13
+date	2012.11.06.15.21.22;	author tromey;	state Exp;
+branches;
+next	1.12;
+
+1.12
+date	2012.06.21.20.46.21;	author tromey;	state Exp;
+branches;
+next	1.11;
+
+1.11
+date	2012.01.16.16.21.44;	author palves;	state Exp;
+branches;
+next	1.10;
+
+1.10
+date	2012.01.04.08.17.45;	author brobecke;	state Exp;
+branches;
+next	1.9;
+
+1.9
+date	2011.02.15.13.35.22;	author bauermann;	state Exp;
+branches
+	1.9.4.1;
+next	1.8;
+
+1.8
+date	2011.01.01.15.33.40;	author brobecke;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2010.08.19.17.52.49;	author bauermann;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2010.05.05.18.06.57;	author brobecke;	state Exp;
+branches
+	1.6.2.1;
+next	1.5;
+
+1.5
+date	2010.01.01.07.32.00;	author brobecke;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2009.01.03.05.58.03;	author brobecke;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2008.12.21.17.38.55;	author jkratoch;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2008.09.05.19.12.11;	author bauermann;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2008.08.15.15.18.34;	author luisgpm;	state Exp;
+branches;
+next	;
+
+1.9.4.1
+date	2012.01.06.04.43.59;	author brobecke;	state Exp;
+branches;
+next	;
+
+1.6.2.1
+date	2010.08.19.17.53.53;	author bauermann;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.15
+log
+@	* lib/gdb.exp (gdb_core_cmd): New function.
+	* gdb.arch/system-gcore.exp: Use it.
+	* gdb.arch/vsx-regs.exp: Ditto.
+	* gdb.base/gcore.exp: Ditto.
+	* gdb.threads/gcore-thread.exp: Ditto.
+@
+text
+@# Copyright (C) 2008-2013 Free Software Foundation, Inc.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+
+#
+# Test the use of VSX registers, for Powerpc.
+#
+
+
+if {![istarget "powerpc*"] || [skip_vsx_tests]} then {
+    verbose "Skipping vsx register tests."
+    return
+}
+
+set testfile "vsx-regs"
+set binfile ${objdir}/${subdir}/${testfile}
+set srcfile ${testfile}.c
+
+set compile_flags {debug nowarnings quiet}
+if [get_compiler_info] {
+    warning "get_compiler failed"
+    return -1
+}
+
+if [test_compiler_info gcc*] {
+    set compile_flags "$compile_flags additional_flags=-maltivec additional_flags=-mabi=altivec"
+} elseif [test_compiler_info xlc*] {
+    set compile_flags "$compile_flags additional_flags=-qaltivec"
+} else {
+    warning "unknown compiler"
+    return -1
+}
+
+if  { [gdb_compile ${srcdir}/${subdir}/${srcfile} ${binfile} executable $compile_flags] != "" } {
+     untested vsx-regs.exp
+     return -1
+}
+
+gdb_start
+gdb_reinitialize_dir $srcdir/$subdir
+gdb_load ${binfile}
+
+# Run to `main' where we begin our tests.
+
+if ![runto_main] then {
+    gdb_suppress_tests
+}
+
+# Data sets used throughout the test
+
+set vector_register1 ".uint128 = 0x3ff4cccccccccccc0000000000000000, v2_double = .0x1, 0x0., v4_float = .0x1, 0xf99999a0, 0x0, 0x0., v4_int32 = .0x3ff4cccc, 0xcccccccc, 0x0, 0x0., v8_int16 = .0x3ff4, 0xcccc, 0xcccc, 0xcccc, 0x0, 0x0, 0x0, 0x0., v16_int8 = .0x3f, 0xf4, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0.."
+
+set vector_register1_vr ".uint128 = 0x3ff4cccccccccccc0000000100000001, v4_float = .0x1, 0xf99999a0, 0x0, 0x0., v4_int32 = .0x3ff4cccc, 0xcccccccc, 0x1, 0x1., v8_int16 = .0x3ff4, 0xcccc, 0xcccc, 0xcccc, 0x0, 0x1, 0x0, 0x1., v16_int8 = .0x3f, 0xf4, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x1.."
+
+set vector_register2 "uint128 = 0xdeadbeefdeadbeefdeadbeefdeadbeef, v2_double = .0x1, 0x1., v4_float = .0x0, 0x0, 0x0, 0x0., v4_int32 = .0xdeadbeef, 0xdeadbeef, 0xdeadbeef, 0xdeadbeef., v8_int16 = .0xdead, 0xbeef, 0xdead, 0xbeef, 0xdead, 0xbeef, 0xdead, 0xbeef., v16_int8 = .0xde, 0xad, 0xbe, 0xef, 0xde, 0xad, 0xbe, 0xef, 0xde, 0xad, 0xbe, 0xef, 0xde, 0xad, 0xbe, 0xef.."
+
+set vector_register2_vr "uint128 = 0xdeadbeefdeadbeefdeadbeefdeadbeef, v4_float = .0x0, 0x0, 0x0, 0x0., v4_int32 = .0xdeadbeef, 0xdeadbeef, 0xdeadbeef, 0xdeadbeef., v8_int16 = .0xdead, 0xbeef, 0xdead, 0xbeef, 0xdead, 0xbeef, 0xdead, 0xbeef., v16_int8 = .0xde, 0xad, 0xbe, 0xef, 0xde, 0xad, 0xbe, 0xef, 0xde, 0xad, 0xbe, 0xef, 0xde, 0xad, 0xbe, 0xef.."
+
+set vector_register3 ".uint128 = 0x00000001000000010000000100000001, v2_double = .0x0, 0x0., v4_float = .0x0, 0x0, 0x0, 0x0., v4_int32 = .0x1, 0x1, 0x1, 0x1., v8_int16 = .0x0, 0x1, 0x0, 0x1, 0x0, 0x1, 0x0, 0x1., v16_int8 = .0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x1.."
+
+set vector_register3_vr ".uint128 = 0x00000001000000010000000100000001, v4_float = .0x0, 0x0, 0x0, 0x0., v4_int32 = .0x1, 0x1, 0x1, 0x1., v8_int16 = .0x0, 0x1, 0x0, 0x1, 0x0, 0x1, 0x0, 0x1., v16_int8 = .0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x1.."
+
+set float_register ".raw 0xdeadbeefdeadbeef."
+
+# First run the F0~F31/VS0~VS31 tests
+
+# 1: Set F0~F31 registers and check if it reflects on VS0~VS31.
+for {set i 0} {$i < 32} {incr i 1} {
+    gdb_test_no_output "set \$f$i = 1\.3"
+}
+
+for {set i 0} {$i < 32} {incr i 1} {
+    gdb_test "info reg vs$i" "vs$i.*$vector_register1" "info reg vs$i (doubleword 0)"
+}
+
+# 2: Set VS0~VS31 registers and check if it reflects on F0~F31.
+for {set i 0} {$i < 32} {incr i 1} {
+        for {set j 0} {$j < 4} {incr j 1} {
+           gdb_test_no_output "set \$vs$i.v4_int32\[$j\] = 0xdeadbeef"
+        }
+}
+
+for {set i 0} {$i < 32} {incr i 1} {
+    gdb_test "info reg f$i" "f$i.*$float_register" "info reg f$i"
+}
+
+for {set i 0} {$i < 32} {incr i 1} {
+    gdb_test "info reg vs$i" "vs$i.*$vector_register2" "info reg vs$i (doubleword 1)"
+}
+
+# Now run the VR0~VR31/VS32~VS63 tests
+
+# 1: Set VR0~VR31 registers and check if it reflects on VS32~VS63.
+for {set i 0} {$i < 32} {incr i 1} {
+        for {set j 0} {$j < 4} {incr j 1} {
+           gdb_test_no_output "set \$vr$i.v4_int32\[$j\] = 1"
+        }
+}
+
+for {set i 32} {$i < 64} {incr i 1} {
+    gdb_test "info reg vs$i" "vs$i.*$vector_register3" "info reg vs$i"
+}
+# 2: Set VS32~VS63 registers and check if it reflects on VR0~VR31.
+for {set i 32} {$i < 64} {incr i 1} {
+        for {set j 0} {$j < 4} {incr j 1} {
+           gdb_test_no_output "set \$vs$i.v4_int32\[$j\] = 1"
+        }
+}
+
+for {set i 0} {$i < 32} {incr i 1} {
+    gdb_test "info reg vr$i" "vr$i.*$vector_register3_vr" "info reg vr$i"
+}
+
+# Create a core file.  We create the core file before the F32~F63/VR0~VR31 test
+# below because then we'll have more interesting register values to verify
+# later when loading the core file (i.e., different register values for different
+# vector register banks).
+
+set corefile "${objdir}/${subdir}/vsx-core.test"
+set core_supported [gdb_gcore_cmd "$corefile" "Save a VSX-enabled corefile"]
+
+# Now run the F32~F63/VR0~VR31 tests.
+
+# 1: Set F32~F63 registers and check if it reflects on VR0~VR31.
+for {set i 32} {$i < 64} {incr i 1} {
+    gdb_test_no_output "set \$f$i = 1\.3"
+}
+
+for {set i 0} {$i < 32} {incr i 1} {
+    gdb_test "info reg vr$i" "vr$i.*$vector_register1_vr" "info reg vr$i (doubleword 0)"
+}
+
+# 2: Set VR0~VR31 registers and check if it reflects on F32~F63.
+for {set i 0} {$i < 32} {incr i 1} {
+        for {set j 0} {$j < 4} {incr j 1} {
+           gdb_test_no_output "set \$vr$i.v4_int32\[$j\] = 0xdeadbeef"
+        }
+}
+
+for {set i 32} {$i < 64} {incr i 1} {
+    gdb_test "info reg f$i" "f$i.*$float_register" "info reg f$i"
+}
+
+for {set i 0} {$i < 32} {incr i 1} {
+    gdb_test "info reg vr$i" "vr$i.*$vector_register2_vr" "info reg vr$i (doubleword 1)"
+}
+
+# Test reading the core file.
+
+if {!$core_supported} {
+  return -1
+}
+
+gdb_exit
+gdb_start
+gdb_reinitialize_dir $srcdir/$subdir
+gdb_load ${binfile}
+
+set core_loaded [gdb_core_cmd "$corefile" "re-load generated corefile"]
+if { $core_loaded == -1 } {
+    # No use proceeding from here.
+    return
+}
+
+for {set i 0} {$i < 32} {incr i 1} {
+    gdb_test "info reg vs$i" "vs$i.*$vector_register2" "Restore vs$i from core file"
+}
+
+for {set i 32} {$i < 64} {incr i 1} {
+    gdb_test "info reg vs$i" "vs$i.*$vector_register3" "Restore vs$i from core file"
+}
+@
+
+
+1.14
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@d131 2
+a132 2
+set core_supported [gdb_gcore_cmd "${objdir}/${subdir}/vsx-core.test" \
+			"Save a VSX-enabled corefile"]
+d171 4
+a174 25
+gdb_test_multiple "core ${objdir}/${subdir}/vsx-core.test" \
+	"re-load generated corefile" \
+{
+    -re ".* is not a core dump:.*$gdb_prompt $" {
+	fail "re-load generated corefile (bad file format)"
+	# No use proceeding from here.
+	return;
+    }
+    -re ".*: No such file or directory.*$gdb_prompt $" {
+	fail "re-load generated corefile (file not found)"
+	# No use proceeding from here.
+	return;
+    }
+    -re ".*Couldn't find .* registers in core file.*$gdb_prompt $" {
+	fail "re-load generated corefile (incomplete note section)"
+    }
+    -re "Core was generated by .*$gdb_prompt $" {
+	pass "re-load generated corefile"
+    }
+    -re ".*$gdb_prompt $" {
+	fail "re-load generated corefile"
+    }
+    timeout {
+	fail "re-load generated corefile (timeout)"
+    }
+@
+
+
+1.13
+log
+@	* gdb.threads/gcore-thread.exp: Use gdb_gcore_cmd.
+	* gdb.python/py-strfns.exp (test_strfns_core_file): Use
+	gdb_gcore_cmd.
+	* gdb.cell/gcore.exp: Use gdb_gcore_cmd.
+	* gdb.base/gcore.exp: Use gdb_gcore_cmd.
+	* gdb.base/gcore-relro.exp: Use gdb_gcore_cmd.
+	* gdb.base/gcore-buffer-overflow.exp: Use gdb_gcore_cmd.
+	* gdb.base/auxv.exp: Use gdb_gcore_cmd.
+	* gdb.arch/vsx-regs.exp: Use gdb_gcore_cmd.
+	* gdb.arch/system-gcore.exp: Use gdb_gcore_cmd.
+	* gdb.arch/pa-nullify.exp (test_core_bt): Use gdb_gcore_cmd.
+	* lib/gdb.exp (gdb_gcore_cmd): New proc.
+@
+text
+@d1 1
+a1 1
+# Copyright (C) 2008-2012 Free Software Foundation, Inc.
+@
+
+
+1.12
+log
+@	* lib/gdb.exp (skip_altivec_tests, skip_vsx_tests)
+	(build_executable): Update.
+	(get_compiler_info): Remove 'binfile' argument.
+	* gdb.ada/arrayidx.exp: Update.
+	* gdb.ada/null_array.exp: Update.
+	* gdb.arch/altivec-abi.exp: Update.
+	* gdb.arch/altivec-regs.exp: Update.
+	* gdb.arch/amd64-byte.exp: Update.
+	* gdb.arch/amd64-dword.exp: Update.
+	* gdb.arch/amd64-word.exp: Update.
+	* gdb.arch/i386-avx.exp: Update.
+	* gdb.arch/i386-byte.exp: Update.
+	* gdb.arch/i386-sse.exp: Update.
+	* gdb.arch/i386-word.exp: Update.
+	* gdb.arch/ppc-dfp.exp: Update.
+	* gdb.arch/ppc-fp.exp: Update.
+	* gdb.arch/vsx-regs.exp: Update.
+	* gdb.base/all-bin.exp: Update.
+	* gdb.base/annota1.exp: Update.
+	* gdb.base/async.exp: Update.
+	* gdb.base/attach.exp: Update.
+	* gdb.base/break-interp.exp: Update.
+	* gdb.base/call-ar-st.exp: Update.
+	* gdb.base/call-rt-st.exp: Update.
+	* gdb.base/call-sc.exp: Update.
+	* gdb.base/callfuncs.exp: Update.
+	* gdb.base/catch-load.exp: Update.
+	* gdb.base/completion.exp: Update.
+	* gdb.base/complex.exp: Update.
+	* gdb.base/condbreak.exp: Update.
+	* gdb.base/consecutive.exp: Update.
+	* gdb.base/constvars.exp: Update.
+	* gdb.base/corefile.exp: Update.
+	* gdb.base/eval-skip.exp: Update.
+	* gdb.base/expand-psymtabs.exp: Update.
+	* gdb.base/exprs.exp: Update.
+	* gdb.base/fileio.exp: Update.
+	* gdb.base/fixsection.exp: Update.
+	* gdb.base/funcargs.exp: Update.
+	* gdb.base/gdb11530.exp: Update.
+	* gdb.base/gdb1555.exp: Update.
+	* gdb.base/gnu-ifunc.exp: Update.
+	* gdb.base/gnu_vector.exp: Update.
+	* gdb.base/info-macros.exp: Update.
+	* gdb.base/jit-simple.exp: Update.
+	* gdb.base/jit-so.exp: Update.
+	* gdb.base/jit.exp: Update.
+	* gdb.base/langs.exp: Update.
+	* gdb.base/list.exp: Update.
+	* gdb.base/logical.exp: Update.
+	* gdb.base/long_long.exp: Update.
+	* gdb.base/longjmp.exp: Update.
+	* gdb.base/macscp.exp: Update.
+	* gdb.base/mips_pro.exp: Update.
+	* gdb.base/miscexprs.exp: Update.
+	* gdb.base/morestack.exp: Update.
+	* gdb.base/nodebug.exp: Update.
+	* gdb.base/opaque.exp: Update.
+	* gdb.base/pc-fp.exp: Update.
+	* gdb.base/pending.exp: Update.
+	* gdb.base/permissions.exp: Update.
+	* gdb.base/pointers.exp: Update.
+	* gdb.base/prelink.exp: Update.
+	* gdb.base/printcmds.exp: Update.
+	* gdb.base/psymtab.exp: Update.
+	* gdb.base/ptype.exp: Update.
+	* gdb.base/relational.exp: Update.
+	* gdb.base/scope.exp: Update.
+	* gdb.base/setvar.exp: Update.
+	* gdb.base/shlib-call.exp: Update.
+	* gdb.base/shreloc.exp: Update.
+	* gdb.base/signals.exp: Update.
+	* gdb.base/sizeof.exp: Update.
+	* gdb.base/so-impl-ld.exp: Update.
+	* gdb.base/so-indr-cl.exp: Update.
+	* gdb.base/solib-disc.exp: Update.
+	* gdb.base/solib-display.exp: Update.
+	* gdb.base/solib-nodir.exp: Update.
+	* gdb.base/solib-overlap.exp: Update.
+	* gdb.base/solib-symbol.exp: Update.
+	* gdb.base/solib-weak.exp: Update.
+	* gdb.base/solib.exp: Update.
+	* gdb.base/store.exp: Update.
+	* gdb.base/structs.exp: Update.
+	* gdb.base/structs2.exp: Update.
+	* gdb.base/type-opaque.exp: Update.
+	* gdb.base/unload.exp: Update.
+	* gdb.base/varargs.exp: Update.
+	* gdb.base/volatile.exp: Update.
+	* gdb.base/watch_thread_num.exp: Update.
+	* gdb.base/watchpoint-solib.exp: Update.
+	* gdb.base/watchpoint.exp: Update.
+	* gdb.base/watchpoints.exp: Update.
+	* gdb.base/whatis.exp: Update.
+	* gdb.cell/arch.exp: Update.
+	* gdb.cell/break.exp: Update.
+	* gdb.cell/bt.exp: Update.
+	* gdb.cell/core.exp: Update.
+	* gdb.cell/data.exp: Update.
+	* gdb.cell/ea-cache.exp: Update.
+	* gdb.cell/f-regs.exp: Update.
+	* gdb.cell/fork.exp: Update.
+	* gdb.cell/gcore.exp: Update.
+	* gdb.cell/mem-access.exp: Update.
+	* gdb.cell/ptype.exp: Update.
+	* gdb.cell/registers.exp: Update.
+	* gdb.cell/sizeof.exp: Update.
+	* gdb.cell/solib-symbol.exp: Update.
+	* gdb.cell/solib.exp: Update.
+	* gdb.cp/ambiguous.exp: Update.
+	* gdb.cp/breakpoint.exp: Update.
+	* gdb.cp/bs15503.exp: Update.
+	* gdb.cp/casts.exp: Update.
+	* gdb.cp/class2.exp: Update.
+	* gdb.cp/cpexprs.exp: Update.
+	* gdb.cp/cplusfuncs.exp: Update.
+	* gdb.cp/ctti.exp: Update.
+	* gdb.cp/dispcxx.exp: Update.
+	* gdb.cp/gdb1355.exp: Update.
+	* gdb.cp/gdb2384.exp: Update.
+	* gdb.cp/gdb2495.exp: Update.
+	* gdb.cp/infcall-dlopen.exp: Update.
+	* gdb.cp/local.exp: Update.
+	* gdb.cp/m-data.exp: Update.
+	* gdb.cp/m-static.exp: Update.
+	* gdb.cp/mb-ctor.exp: Update.
+	* gdb.cp/mb-inline.exp: Update.
+	* gdb.cp/mb-templates.exp: Update.
+	* gdb.cp/member-ptr.exp: Update.
+	* gdb.cp/method.exp: Update.
+	* gdb.cp/namespace.exp: Update.
+	* gdb.cp/nextoverthrow.exp: Update.
+	* gdb.cp/nsdecl.exp: Update.
+	* gdb.cp/nsrecurs.exp: Update.
+	* gdb.cp/nsstress.exp: Update.
+	* gdb.cp/nsusing.exp: Update.
+	* gdb.cp/pr-1023.exp: Update.
+	* gdb.cp/pr-1210.exp: Update.
+	* gdb.cp/pr-574.exp: Update.
+	* gdb.cp/pr9631.exp: Update.
+	* gdb.cp/printmethod.exp: Update.
+	* gdb.cp/psmang.exp: Update.
+	* gdb.cp/re-set-overloaded.exp: Update.
+	* gdb.cp/rtti.exp: Update.
+	* gdb.cp/shadow.exp: Update.
+	* gdb.cp/templates.exp: Update.
+	* gdb.cp/try_catch.exp: Update.
+	* gdb.dwarf2/dw2-ranges.exp: Update.
+	* gdb.dwarf2/pr10770.exp: Update.
+	* gdb.fortran/library-module.exp: Update.
+	* gdb.hp/gdb.aCC/optimize.exp: Update.
+	* gdb.hp/gdb.aCC/watch-cmd.exp: Update.
+	* gdb.hp/gdb.base-hp/callfwmall.exp: Update.
+	* gdb.hp/gdb.base-hp/hwwatchbus.exp: Update.
+	* gdb.hp/gdb.base-hp/pxdb.exp: Update.
+	* gdb.hp/gdb.base-hp/sized-enum.exp: Update.
+	* gdb.hp/gdb.base-hp/so-thresh.exp: Update.
+	* gdb.hp/gdb.compat/xdb1.exp: Update.
+	* gdb.hp/gdb.compat/xdb2.exp: Update.
+	* gdb.hp/gdb.compat/xdb3.exp: Update.
+	* gdb.hp/gdb.defects/bs14602.exp: Update.
+	* gdb.hp/gdb.defects/solib-d.exp: Update.
+	* gdb.hp/gdb.objdbg/objdbg01.exp: Update.
+	* gdb.hp/gdb.objdbg/objdbg02.exp: Update.
+	* gdb.hp/gdb.objdbg/objdbg03.exp: Update.
+	* gdb.hp/gdb.objdbg/objdbg04.exp: Update.
+	* gdb.mi/gdb792.exp: Update.
+	* gdb.mi/mi-pending.exp: Update.
+	* gdb.mi/mi-solib.exp: Update.
+	* gdb.mi/mi-var-cp.exp: Update.
+	* gdb.opt/clobbered-registers-O2.exp: Update.
+	* gdb.opt/inline-bt.exp: Update.
+	* gdb.opt/inline-cmds.exp: Update.
+	* gdb.opt/inline-locals.exp: Update.
+	* gdb.python/py-events.exp: Update.
+	* gdb.python/py-finish-breakpoint.exp: Update.
+	* gdb.python/py-type.exp: Update.
+	* gdb.reverse/solib-precsave.exp: Update.
+	* gdb.reverse/solib-reverse.exp: Update.
+	* gdb.server/solib-list.exp: Update.
+	* gdb.stabs/weird.exp: Update.
+	* gdb.threads/attach-into-signal.exp: Update.
+	* gdb.threads/attach-stopped.exp: Update.
+	* gdb.threads/tls-shared.exp: Update.
+	* gdb.trace/change-loc.exp: Update.
+	* gdb.trace/strace.exp: Update.
+@
+text
+@d131 2
+a132 18
+set escapedfilename [string_to_regexp ${objdir}/${subdir}/vsx-core.test]
+
+set core_supported 0
+
+gdb_test_multiple "gcore ${objdir}/${subdir}/vsx-core.test" \
+        "Save a VSX-enabled corefile" \
+{
+  -re "Saved corefile ${escapedfilename}\[\r\n\]+$gdb_prompt $" {
+    pass "Save a VSX-enabled corefile"
+    global core_supported
+    set core_supported 1
+  }
+  -re "Can't create a corefile\[\r\n\]+$gdb_prompt $" {
+    unsupported "Save a VSX-enabled corefile"
+    global core_supported
+    set core_supported 0
+  }
+}
+@
+
+
+1.11
+log
+@2012-01-16  Pedro Alves  <palves@@redhat.com>
+
+	Remove all calls to strace.
+@
+text
+@d32 1
+a32 1
+if [get_compiler_info $binfile] {
+@
+
+
+1.10
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@a16 4
+if $tracelevel then {
+    strace $tracelevel
+}
+
+@
+
+
+1.9
+log
+@gdb/
+	* rs6000-tdep.c (IS_EFP_PSEUDOREG): Use correct constant for
+	the EFP register set size.
+	(efpr_pseudo_register_read): Use regcache_raw_read_part to read
+	data from the VMX register.
+	(efpr_pseudo_register_write): Use regcache_raw_write_part to read
+	and write data from/to the VMX register.
+
+gdb/testsuite/
+	* gdb.arch/vsx-regs.exp: Add "vector_register1_vr" and
+	"vector_register2_vr" test strings.  Test the extended floating
+	point registers (F32~F63).
+	* lib/gdb.exp (skip_vsx_tests): Update compile flags for the
+	IBM XL C compiler.  Make the test program use a register provided
+	by the compiler for the lxvd2x instruction.
+@
+text
+@d1 1
+a1 1
+# Copyright (C) 2008, 2009, 2010, 2011 Free Software Foundation, Inc.
+@
+
+
+1.9.4.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d1 1
+a1 1
+# Copyright (C) 2008-2012 Free Software Foundation, Inc.
+@
+
+
+1.8
+log
+@run copyright.sh for 2011.
+@
+text
+@d69 2
+d73 2
+d130 5
+d154 28
+@
+
+
+1.7
+log
+@	* gdb.arch/vsx-regs.exp: Remove wrong comment about testing AltiVec
+	registers.  Update data sets with the new v2_double element in the
+	VSX register union.  Add vector_register3_vr data set for the AltiVec
+	registers.  Use gdb_test_no_output instead of send_gdb.
+@
+text
+@d1 1
+a1 1
+# Copyright (C) 2008, 2009, 2010 Free Software Foundation, Inc.
+@
+
+
+1.6
+log
+@Do not set prms_id/bug_id anymore.
+
+2010-05-05  Joel Brobecker  <brobecker@@adacore.com>
+
+	Remove the use of prms_id and bug_id throughout the testsuite.
+@
+text
+@a16 2
+# Tests for Powerpc AltiVec register setting and fetching
+
+d67 3
+a69 1
+set vector_register1 ".uint128 = 0x3ff4cccccccccccc0000000000000000, v4_float = .0x1, 0xf99999a0, 0x0, 0x0., v4_int32 = .0x3ff4cccc, 0xcccccccc, 0x0, 0x0., v8_int16 = .0x3ff4, 0xcccc, 0xcccc, 0xcccc, 0x0, 0x0, 0x0, 0x0., v16_int8 = .0x3f, 0xf4, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0.."
+d71 1
+a71 1
+set vector_register2 "uint128 = 0xdeadbeefdeadbeefdeadbeefdeadbeef, v4_float = .0x0, 0x0, 0x0, 0x0., v4_int32 = .0xdeadbeef, 0xdeadbeef, 0xdeadbeef, 0xdeadbeef., v8_int16 = .0xdead, 0xbeef, 0xdead, 0xbeef, 0xdead, 0xbeef, 0xdead, 0xbeef., v16_int8 = .0xde, 0xad, 0xbe, 0xef, 0xde, 0xad, 0xbe, 0xef, 0xde, 0xad, 0xbe, 0xef, 0xde, 0xad, 0xbe, 0xef.."
+d73 1
+a73 1
+set vector_register3 ".uint128 = 0x00000001000000010000000100000001, v4_float = .0x0, 0x0, 0x0, 0x0., v4_int32 = .0x1, 0x1, 0x1, 0x1., v8_int16 = .0x0, 0x1, 0x0, 0x1, 0x0, 0x1, 0x0, 0x1., v16_int8 = .0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x1.."
+d81 1
+a81 1
+    send_gdb "set \$f$i = 1\.3"
+d91 1
+a91 1
+           send_gdb "set \$vs$i.v4_int32\[$j\] = 0xdeadbeef"
+d108 1
+a108 1
+           send_gdb "set \$vr$i.v4_int32\[$j\] = 1"
+d118 1
+a118 1
+           send_gdb "set \$vs$i.v4_int32\[$j\] = 1"
+d123 1
+a123 1
+    gdb_test "info reg vr$i" "vr$i.*$vector_register3" "info reg vr$i"
+@
+
+
+1.6.2.1
+log
+@	* gdb.arch/vsx-regs.exp: Remove wrong comment about testing AltiVec
+	registers.  Update data sets with the new v2_double element in the
+	VSX register union.  Add vector_register3_vr data set for the AltiVec
+	registers.  Use gdb_test_no_output instead of send_gdb.
+@
+text
+@d17 2
+d69 1
+a69 3
+set vector_register1 ".uint128 = 0x3ff4cccccccccccc0000000000000000, v2_double = .0x1, 0x0., v4_float = .0x1, 0xf99999a0, 0x0, 0x0., v4_int32 = .0x3ff4cccc, 0xcccccccc, 0x0, 0x0., v8_int16 = .0x3ff4, 0xcccc, 0xcccc, 0xcccc, 0x0, 0x0, 0x0, 0x0., v16_int8 = .0x3f, 0xf4, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0.."
+
+set vector_register2 "uint128 = 0xdeadbeefdeadbeefdeadbeefdeadbeef, v2_double = .0x1, 0x1., v4_float = .0x0, 0x0, 0x0, 0x0., v4_int32 = .0xdeadbeef, 0xdeadbeef, 0xdeadbeef, 0xdeadbeef., v8_int16 = .0xdead, 0xbeef, 0xdead, 0xbeef, 0xdead, 0xbeef, 0xdead, 0xbeef., v16_int8 = .0xde, 0xad, 0xbe, 0xef, 0xde, 0xad, 0xbe, 0xef, 0xde, 0xad, 0xbe, 0xef, 0xde, 0xad, 0xbe, 0xef.."
+d71 1
+a71 1
+set vector_register3 ".uint128 = 0x00000001000000010000000100000001, v2_double = .0x0, 0x0., v4_float = .0x0, 0x0, 0x0, 0x0., v4_int32 = .0x1, 0x1, 0x1, 0x1., v8_int16 = .0x0, 0x1, 0x0, 0x1, 0x0, 0x1, 0x0, 0x1., v16_int8 = .0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x1.."
+d73 1
+a73 1
+set vector_register3_vr ".uint128 = 0x00000001000000010000000100000001, v4_float = .0x0, 0x0, 0x0, 0x0., v4_int32 = .0x1, 0x1, 0x1, 0x1., v8_int16 = .0x0, 0x1, 0x0, 0x1, 0x0, 0x1, 0x0, 0x1., v16_int8 = .0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x1.."
+d81 1
+a81 1
+    gdb_test_no_output "set \$f$i = 1\.3"
+d91 1
+a91 1
+           gdb_test_no_output "set \$vs$i.v4_int32\[$j\] = 0xdeadbeef"
+d108 1
+a108 1
+           gdb_test_no_output "set \$vr$i.v4_int32\[$j\] = 1"
+d118 1
+a118 1
+           gdb_test_no_output "set \$vs$i.v4_int32\[$j\] = 1"
+d123 1
+a123 1
+    gdb_test "info reg vr$i" "vr$i.*$vector_register3_vr" "info reg vr$i"
+@
+
+
+1.5
+log
+@Update copyright year in most headers.
+
+Automatic update by copyright.sh.
+@
+text
+@a26 2
+set prms_id 0
+set bug_id 0
+@
+
+
+1.4
+log
+@        Updated copyright notices for most files.
+@
+text
+@d1 1
+a1 1
+# Copyright (C) 2008, 2009 Free Software Foundation, Inc.
+@
+
+
+1.3
+log
+@	Fix for PR gdb/8648.
+	* gdb.arch/ppc-fp.exp, gdb.arch/vsx-regs.exp, gdb.base/watchpoint-hw.c,
+	gdb.gdbtk/browser.test, gdb.gdbtk/console.test, gdb.gdbtk/srcwin.test,
+	gdb.gdbtk/srcwin2.test, gdb.gdbtk/srcwin3.test, gdb.gdbtk/windows.test,
+	gdb.threads/tls2.c: Remove reference to bug-gdb@@prep.ai.mit.edu .
+@
+text
+@d1 1
+a1 1
+# Copyright (C) 2008 Free Software Foundation, Inc.
+@
+
+
+1.2
+log
+@	* gdb.arch/altivec-abi.exp: Remove extra verbose call.
+	* gdb.arch/altivec-regs.exp: Likewise.
+	* gdb.arch/vsx-regs.exp: Likewise.
+@
+text
+@a15 3
+# Please email any bugs, comments, and/or additions to this file to:
+# bug-gdb@@prep.ai.mit.edu
+#
+@
+
+
+1.1
+log
+@	* rs6000-tdep: Include "features/rs6000/powerpc-vsx32.c".
+	Include "features/rs6000/powerpc-vsx64.c".
+	(ppc_supply_vsxregset): New function.
+	(ppc_collect_vsxregset): New function.
+	(IS_VSX_PSEUDOREG): New macro.
+	(IS_EFP_PSEUDOREG): New macro.
+	(vsx_register_p): New function.
+	(ppc_vsx_support_p): New function.
+	(rs6000_builtin_type_vec128): New function.
+	(rs6000_register_name): Hide upper halves of vs0~vs31.  Return
+	correct names for VSX registers and EFPR registers.
+	(rs6000_pseudo_register_type): Return correct types for VSX
+	and EFPR registers.
+	(rs6000_pseudo_register_reggroup_p): Return correct group for
+	VSX and EFPR registers.
+	(ppc_pseudo_register_read): Rename to dfp_pseudo_register_read.
+	(ppc_pseudo_register_write): Rename to dfp_pseudo_register_write.
+	(vsx_pseudo_register_read): New function.
+	(vsx_pseudo_register_write): New function.
+	(efpr_pseudo_register_read): New function.
+	(efpr_pseudo_register_write): New function.
+	(rs6000_pseudo_register_read): Call new VSX and EFPR read functions.
+	(rs6000_pseudo_register_write): Call new VSX and EFPR write functions.
+	(rs6000_gdbarch_init): Declare have_vsx.
+	Initialize new upper half VSX registers.
+	Initialize VSX-related and EFPR-related pseudo-registers variables.
+	Adjust the number of pseudo registers accordingly.
+
+	* ppc-linux-nat.c: Define PTRACE_GETVSXREGS, PTRACE_SETVSXREGS
+	and SIZEOF_VSRREGS.
+	(gdb_vsxregset_t): New type.
+	(have_ptrace_getsetvsxregs): New variable.
+	(fetch_vsx_register): New function.
+	(fetch_register): Handle VSX registers.
+	(fetch_vsx_registers): New function.
+	(fetch_ppc_registers): Handle VSX registers.
+	(store_ppc_registers): Handle VSX registers.
+	(store_vsx_register): New function.
+	(store_register): Handle VSX registers.
+	(store_vsx_registers): New function.
+	(ppc_linux_read_description): Handle VSX-enabled inferiors.
+	(gdb_vsxregset_t): New type.
+	(supply_vsxregset): New function.
+	(fill_vsxregset): New function.
+
+	* ppc-tdep.h (vsx_register_p): New prototype.
+	(vsx_support_p): New prototype.
+	(ppc_vsr0_regnum): New variable.
+	(ppc_vsr0_upper_regnum): Likewise.
+	(ppc_efpr0_regnum): Likewise.
+	(ppc_builtin_type_vec128): New type.
+	(ppc_num_vsrs): New constant.
+	(ppc_num_vshrs): New constant.
+	(ppc_num_efprs): Likewise.
+	Define POWERPC_VEC_VSX PPC_VSR0_UPPER_REGNUM and PPC_VSR31_UPPER_REGNUM.
+	(ppc_supply_vsxregset): New prototype.
+	(ppc_collect_vsxregset): New prototype.
+
+	* ppc-linux-tdep.c: Include "features/rs6000/powerpc-vsx32l.c"
+	Include "features/rs6000/powerpc-vsx64l.c".
+	(_initialize_ppc_linux_tdep): Initialize VSX-enabled targets.
+	(ppc_linux_regset_sections): Add new ".reg-ppc-vsx" field.
+	(ppc32_linux_vsxregset): New 32-bit VSX-enabled regset.
+	(ppc_linux_regset_from_core_section): Handle VSX core section.
+	(ppc_linux_core_read_description): Support VSX-enabled core files.
+
+	* ppc-linux-tdep.h: Declare *tdesc_powerpc_vsx32l
+	Declare tdesc_powerpc_vsx64l
+
+	* corelow.c (get_core_register_section): Support VSX-enabled
+	core files.
+
+	* features/rs6000/power-vsx.xml: New VSX descriptions.
+	* features/rs6000/powerpc-vsx32.xml: New file.
+	* features/rs6000/powerpc-vsx32l.xml: New file.
+	* features/rs6000/powerpc-vsx64.xml: New file.
+	* features/rs6000/powerpc-vsx64l.xml: New file.
+	* features/rs6000/powerpc-vsx32.c: New file (generated).
+	* features/rs6000/powerpc-vsx32l.c: New file (generated).
+	* features/rs6000/powerpc-vsx64.c: New file (generated).
+	* features/rs6000/powerpc-vsx64l.c: New file (generated).
+	* features/Makefile: Updated with new descriptions.
+	* regformats/rs6000/powerpc-vsx32l.dat: New file (generated).
+	* regformats/rs6000/powerpc-vsx64l.dat: New file (generated).
+
+	* testsuite/gdb.arch/vsx-regs.c: New source file.
+	* testsuite/gdb.arch/vsx-regs.exp: New testcase.
+	* testsuite/lib/gdb.exp (skip_vsx_tests): New function.
+@
+text
+@a34 1
+    verbose -log "Skipping vsx register tests."
+@
+

@@ -1,0 +1,95 @@
+head	1.1;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.1
+	gdb_7_6-2013-04-26-release:1.1
+	gdb_7_6-branch:1.1.0.6
+	gdb_7_6-2013-03-12-branchpoint:1.1
+	gdb_7_5_1-2012-11-29-release:1.1
+	gdb_7_5-2012-08-17-release:1.1
+	gdb_7_5-branch:1.1.0.4
+	gdb_7_5-2012-07-18-branchpoint:1.1
+	gdb_7_4_1-2012-04-26-release:1.1
+	gdb_7_4-2012-01-24-release:1.1
+	gdb_7_4-branch:1.1.0.2
+	gdb_7_4-2011-12-13-branchpoint:1.1;
+locks; strict;
+comment	@# @;
+
+
+1.1
+date	2011.09.29.03.19.47;	author vapier;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.1
+log
+@sim: bfin: use store buffer for VIT_MAX insns
+
+The VIT_MAX insns can be used in parallel, so we need to use the store
+buffer so we don't clobber the output register before we get a chance
+to do a memory store with it.
+
+Reported-by: Kai Iskratsch <kai@@stella.at>
+Signed-off-by: Mike Frysinger <vapier@@gentoo.org>
+@
+text
+@# Blackfin testcase for parallel VIT_MAX (taken from PRM)
+# mach: bfin
+
+	.include "testutils.inc"
+
+	start
+
+	loadsym P0, scratch
+
+	# Do parallel VIT_MAX's with stores to same reg; don't really
+	# care what the result is of VIT_MAX as long as it doesn't
+	# clobber the memory store.
+
+	imm32 R1, 0xFFFF0000
+	imm32 R2, 0x0000FFFF
+	imm32 R0, 0xFACE
+	R0 = VIT_MAX (R1, R2) (ASL) || W[P0] = R0.L;
+	imm32 R0, 0xFACE
+	R4 = W[P0];
+	CC = R4 == R0;
+	IF !CC JUMP 1f;
+
+	imm32 R5, 0xFEEDBEEF
+	imm32 R4, 0xDEAF0000
+	imm32 R6, 0xFACE
+	R6 = VIT_MAX (R5, R4) (ASR) || W[P0] = R6.L;
+	imm32 R6, 0xFACE
+	R4 = W[P0];
+	CC = R4 == R6;
+	IF !CC JUMP 1f;
+
+	imm32 R3, 0xFFFF0000
+	imm32 R1, 0xFACE
+	R1.L = VIT_MAX (R3) (ASL) || W[P0] = R1.L;
+	imm32 R1, 0xFACE
+	R4 = W[P0];
+	CC = R4 == R1;
+	IF !CC JUMP 1f;
+
+	imm32 R2, 0x1234FADE
+	imm32 R5, 0xFACE
+	R5.L = VIT_MAX (R2) (ASR) || W[P0] = R5.L;
+	imm32 R5, 0xFACE
+	R4 = W[P0];
+	CC = R4 == R5;
+	IF !CC JUMP 1f;
+
+	pass
+1:	fail
+
+	.data
+scratch:
+	.dw 0xffff
+@

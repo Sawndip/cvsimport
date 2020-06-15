@@ -1,0 +1,267 @@
+head	1.3;
+access;
+symbols
+	binutils-2_24-branch:1.3.0.2
+	binutils-2_24-branchpoint:1.3
+	binutils-2_23_2:1.2
+	binutils-2_23_1:1.2
+	binutils-2_23:1.2
+	binutils-2_23-branch:1.2.0.6
+	binutils-2_23-branchpoint:1.2
+	binutils-2_22_branch:1.2.0.4
+	binutils-2_22:1.2
+	binutils-2_22-branch:1.2.0.2
+	binutils-2_22-branchpoint:1.2
+	binutils_latest_snapshot:1.3;
+locks; strict;
+comment	@# @;
+
+
+1.3
+date	2013.04.06.22.22.03;	author davem;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2011.09.21.22.29.55;	author davem;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2011.09.08.19.01.10;	author davem;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.3
+log
+@Increase the accuracy of sparc instruction aliases.
+
+Make current with UA2011 specification.
+
+Add an F_PREFERRED opcode flag that indicates a preferred alias
+when multiple aliases for the same opcode exists.
+
+For 'lzd':
+
+	Add 'lzcnt' as primary instruction, and make 'lzd' an alias.
+
+Add 'ldtw', 'ldtwa', 'sttw', 'sttwa':
+
+	The modern opcode for for 'ldd', 'ldda', 'std', and 'stda' on
+	integer registers.  Mark the latter now as aliases.
+
+For 'flush':
+
+	Support "[address]" syntax as well as plain "address".
+
+Rework 'mov' aliases for 'wr':
+
+	Eliminate bogus three operand moves, and encode the
+	instructions properly for the "mov REG, %ASR" cases,
+	specifically we should encode the register in rs2 not rs1 as
+	per The SPARC V8 Architecture Manual.
+
+Add missing cbcond aliases:
+
+	c{w,x}bz, c{w,x}blu, c{w,x}bnz, c{w,x}bgeu
+
+Add 'd' suffix VIS logical ops:
+
+	The primary opcode for 'fzero' is now 'fzerod' (compare with
+	'fzeros'), for example.  And thus 'fzero' is now an alias.
+
+Add modern opcodes for condition code setting edge instructions:
+
+	They are now edgeN{,l}cc instead of plain edgeN{,l}.
+
+Add modern opcodes for VIS comparisons:
+
+	All VIS comparisons now start with prefix "fp", retain the
+	older variants as aliases.
+
+	The signed variants for equal and not-equal have "u" aliases
+	to show that these comparisons are equally suited for unsigned
+	compares.
+
+Update existing test cases as needed, and add several new ones.
+
+include/opcode/
+
+	* sparc.h (F_PREFERRED): Define.
+	(F_PREF_ALIAS): Define.
+
+opcodes/
+
+	* sparc-dis.c (compare_opcodes): When encountering multiple aliases
+	of an opcode, prefer the one with F_PREFERRED set.
+	* sparc-opc.c (sparc_opcodes): Add ldtw, ldtwa, sttw, sttwa,
+	lzcnt, flush with '[address]' syntax, and missing cbcond pseudo
+	ops.  Make 64-bit VIS logical ops have "d" suffix in their names,
+	mark existing mnenomics as aliases.  Add "cc" suffix to edge
+	instructions generating condition codes, mark existing mnenomics
+	as aliases.  Add "fp" prefix to VIS compare instructions, mark
+	existing mnenomics as aliases.
+
+gas/testsuite/
+
+	* gas/sparc/cbcond.s: Add tests for new opcode aliases.
+	* gas/sparc/cbcond.d: Updated.
+	* gas/sparc/hpcvis3.s: Add tests for new opcode aliases.
+	* gas/sparc/hpcvis3.d: Updated.
+	* gas/sparc/v8-movwr-imm.d: Fix expected disassembly.
+	* gas/sparc/edge.s: New test.
+	* gas/sparc/edge.d: Expected disassembly.
+	* gas/sparc/flush.s: New test.
+	* gas/sparc/flush.d: Expected disassembly.
+	* gas/sparc/ldd_std.s: New test.
+	* gas/sparc/ldd_std.d: Expected disassembly.
+	* gas/sparc/ldtw_sttw.s: New test.
+	* gas/sparc/ldtw_sttw.d: Expected disassembly.
+	* gas/sparc/sparc.exp: Run new tests.
+@
+text
+@#as: -32 -Av8
+#objdump: -dr
+#name: V8 mov/wr aliases
+
+.*: +file format .*
+
+Disassembly of section .text:
+
+0+ <foo>:
+   0:	83 80 00 10 	wr  %l0, %asr1
+   4:	81 80 00 10 	wr  %l0, %y
+   8:	81 88 00 10 	wr  %l0, %psr
+   c:	81 90 00 10 	wr  %l0, %wim
+  10:	81 98 00 10 	wr  %l0, %tbr
+  14:	83 80 00 00 	wr  %g0, %asr1
+  18:	81 80 00 00 	wr  %g0, %y
+  1c:	81 88 00 00 	wr  %g0, %psr
+  20:	81 90 00 00 	wr  %g0, %wim
+  24:	81 98 00 00 	wr  %g0, %tbr
+  28:	83 80 20 00 	wr  %g0, %asr1
+  2c:	81 80 20 00 	wr  %g0, %y
+  30:	81 88 20 00 	wr  %g0, %psr
+  34:	81 90 20 00 	wr  %g0, %wim
+  38:	81 98 20 00 	wr  %g0, %tbr
+  3c:	83 80 3f ff 	wr  -1, %asr1
+  40:	81 80 3f ff 	wr  -1, %y
+  44:	81 88 3f ff 	wr  -1, %psr
+  48:	81 90 3f ff 	wr  -1, %wim
+  4c:	81 98 3f ff 	wr  -1, %tbr
+  50:	83 80 00 10 	wr  %l0, %asr1
+  54:	81 80 00 10 	wr  %l0, %y
+  58:	81 88 00 10 	wr  %l0, %psr
+  5c:	81 90 00 10 	wr  %l0, %wim
+  60:	81 98 00 10 	wr  %l0, %tbr
+  64:	83 80 00 00 	wr  %g0, %asr1
+  68:	81 80 00 00 	wr  %g0, %y
+  6c:	81 88 00 00 	wr  %g0, %psr
+  70:	81 90 00 00 	wr  %g0, %wim
+  74:	81 98 00 00 	wr  %g0, %tbr
+  78:	83 80 20 00 	wr  %g0, %asr1
+  7c:	81 80 20 00 	wr  %g0, %y
+  80:	81 88 20 00 	wr  %g0, %psr
+  84:	81 90 20 00 	wr  %g0, %wim
+  88:	81 98 20 00 	wr  %g0, %tbr
+  8c:	83 80 3f ff 	wr  -1, %asr1
+  90:	81 80 3f ff 	wr  -1, %y
+  94:	81 88 3f ff 	wr  -1, %psr
+  98:	81 90 3f ff 	wr  -1, %wim
+  9c:	81 98 3f ff 	wr  -1, %tbr
+@
+
+
+1.2
+log
+@Fix sparc testcases when building with 64-bit default.
+
+gas/testsuite/
+
+	* gas/sparc/imm-plus-rreg.d: Fix address regex for 64-bit.
+	* gas/sparc/save-args.d: Likewise.
+	* gas/sparc/ticc-imm-reg.d: Likewise, add -32 to options.
+	* gas/sparc/v8-movwr-imm.d: Likewise.
+@
+text
+@d10 40
+a49 40
+   0:	83 80 00 10 	mov  %l0, %asr1
+   4:	81 80 00 10 	mov  %l0, %y
+   8:	81 88 00 10 	mov  %l0, %psr
+   c:	81 90 00 10 	mov  %l0, %wim
+  10:	81 98 00 10 	mov  %l0, %tbr
+  14:	83 80 00 00 	mov  %g0, %asr1
+  18:	81 80 00 00 	mov  %g0, %y
+  1c:	81 88 00 00 	mov  %g0, %psr
+  20:	81 90 00 00 	mov  %g0, %wim
+  24:	81 98 00 00 	mov  %g0, %tbr
+  28:	83 80 20 00 	mov  %g0, %asr1
+  2c:	81 80 20 00 	mov  %g0, %y
+  30:	81 88 20 00 	mov  %g0, %psr
+  34:	81 90 20 00 	mov  %g0, %wim
+  38:	81 98 20 00 	mov  %g0, %tbr
+  3c:	83 80 3f ff 	mov  -1, %asr1
+  40:	81 80 3f ff 	mov  -1, %y
+  44:	81 88 3f ff 	mov  -1, %psr
+  48:	81 90 3f ff 	mov  -1, %wim
+  4c:	81 98 3f ff 	mov  -1, %tbr
+  50:	83 80 00 10 	mov  %l0, %asr1
+  54:	81 80 00 10 	mov  %l0, %y
+  58:	81 88 00 10 	mov  %l0, %psr
+  5c:	81 90 00 10 	mov  %l0, %wim
+  60:	81 98 00 10 	mov  %l0, %tbr
+  64:	83 80 00 00 	mov  %g0, %asr1
+  68:	81 80 00 00 	mov  %g0, %y
+  6c:	81 88 00 00 	mov  %g0, %psr
+  70:	81 90 00 00 	mov  %g0, %wim
+  74:	81 98 00 00 	mov  %g0, %tbr
+  78:	83 80 20 00 	mov  %g0, %asr1
+  7c:	81 80 20 00 	mov  %g0, %y
+  80:	81 88 20 00 	mov  %g0, %psr
+  84:	81 90 20 00 	mov  %g0, %wim
+  88:	81 98 20 00 	mov  %g0, %tbr
+  8c:	83 80 3f ff 	mov  -1, %asr1
+  90:	81 80 3f ff 	mov  -1, %y
+  94:	81 88 3f ff 	mov  -1, %psr
+  98:	81 90 3f ff 	mov  -1, %wim
+  9c:	81 98 3f ff 	mov  -1, %tbr
+@
+
+
+1.1
+log
+@opcodes/
+
+	The changes below bring 'mov' and 'ticc' instructions into line
+	with the V8 SPARC Architecture Manual.
+	* sparc-opc.c (sparc_opcodes): Add entry for 'ticc imm + regrs1'.
+	* sparc-opc.c (sparc_opcodes): Add alias entries for
+	'mov regrs2,%asrX'; 'mov regrs2,%y'; 'mov regrs2,%prs';
+	'mov regrs2,%wim' and 'mov regrs2,%tbr'.
+	* sparc-opc.c (sparc_opcodes): Move/Change entries for
+	'mov imm,%asrX'; 'mov imm,%y'; 'mov imm,%prs'; 'mov imm,%wim'
+	and 'mov imm,%tbr'.
+	* sparc-opc.c (sparc_opcodes): Add wr alias entries to match above
+	mov aliases.
+
+gas/testsuite/
+
+	* gas/sparc/ticc-imm-reg.[sd]: New test.
+	* gas/sparc/v8-movwr-imm.[sd]: New test.
+	* gas/sparc/sparc.exp: Run new tests.
+@
+text
+@d1 1
+a1 1
+#as: -Av8
+d9 1
+a9 1
+00000000 <foo>:
+@
+

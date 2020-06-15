@@ -1,0 +1,605 @@
+head	1.8;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.5
+	gdb_7_6-2013-04-26-release:1.5
+	gdb_7_6-branch:1.5.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.5
+	gdb_7_5_1-2012-11-29-release:1.3
+	gdb_7_5-2012-08-17-release:1.3
+	gdb_7_5-branch:1.3.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.3;
+locks; strict;
+comment	@ * @;
+
+
+1.8
+date	2013.08.05.15.51.02;	author tromey;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2013.04.08.20.13.22;	author tromey;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2013.04.08.19.59.09;	author tromey;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2013.01.01.06.32.47;	author brobecke;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2012.12.18.19.21.53;	author tromey;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2012.01.04.08.17.06;	author brobecke;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2011.12.22.02.34.34;	author tromey;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2011.12.21.21.51.56;	author tromey;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.8
+log
+@remove msymbol_objfile
+
+This is another patch in my ongoing series to "split" objfile to share
+more read-only data across inferiors.  See
+
+    http://sourceware.org/gdb/wiki/ObjfileSplitting
+
+When symbols are finally shared, there will be no back-link from the
+symbol to its containing objfile, because there may be more than one
+such objfile.  So, all such back-links must be removed.
+
+One hidden back-link is the msymbol_objfile function.  Since
+(eventually) a symbol may appear in more than one objfile, trying to
+look up the objfile given just a symbol cannot work.
+
+This patch removes msymbol_objfile in favor of using a bound minimal
+symbol.  It introduces a new function to make this conversion simpler
+in some spots.
+
+The bonus of this patch is that using msymbol_objfile is slower than
+simply looking up the owning objfile in the first place.
+
+Built and regtested on x86-64 Fedora 18.
+
+	* ada-exp.y (write_var_or_type): Use bound_minimal_symbol.
+	* ada-lang.c (ada_lookup_simple_minsym): Return
+	bound_minimal_symbol.
+	* ada-lang.h (ada_lookup_simple_minsym): Update.
+	* c-exp.y (variable): Use lookup_bound_minimal_symbol.
+	* f-exp.y (variable): Use lookup_bound_minimal_symbol.
+	* go-exp.y (variable): Use lookup_bound_minimal_symbol.
+	* jv-exp.y (push_expression_name): Use lookup_bound_minimal_symbol.
+	* m2-exp.y (variable): Use lookup_bound_minimal_symbol.
+	* minsyms.c (msymbol_objfile): Remove.
+	(lookup_minimal_symbol_internal): New function, from
+	lookup_minimal_symbol.
+	(lookup_minimal_symbol): Rewrite using
+	lookup_minimal_symbol_internal.
+	(lookup_bound_minimal_symbol): New function.
+	* minsyms.h (msymbol_objfile): Remove.
+	(lookup_bound_minimal_symbol): Declare.
+	* p-exp.y (variable): Use lookup_bound_minimal_symbol.
+	* parse.c (write_exp_msymbol): Change parameter to a
+	bound_minimal_symbol.
+	(write_dollar_variable): Use lookup_bound_minimal_symbol.
+	* parser-defs.h (write_exp_msymbol): Update.
+	* printcmd.c (address_info): Use lookup_bound_minimal_symbol.
+	* symfile.c (simple_read_overlay_table): Use
+	lookup_bound_minimal_symbol.
+	* symtab.c (skip_prologue_sal): Don't use msymbol_objfile.
+	(search_symbols): Likewise.
+	(print_msymbol_info): Take a bound_minimal_symbol argument.
+	(symtab_symbol_info, rbreak_command): Update.
+	* symtab.h (struct symbol_search) <msymbol>: Change type
+	to bound_minimal_symbol.
+	* valops.c (find_function_in_inferior): Use
+	lookup_bound_minimal_symbol.
+	* value.c (value_fn_field): Use lookup_bound_minimal_symbol.
+@
+text
+@/* Minimal symbol table definitions for GDB.
+
+   Copyright (C) 2011-2013 Free Software Foundation, Inc.
+
+   This file is part of GDB.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+#ifndef MINSYMS_H
+#define MINSYMS_H
+
+/* Several lookup functions return both a minimal symbol and the
+   objfile in which it is found.  This structure is used in these
+   cases.  */
+
+struct bound_minimal_symbol
+{
+  /* The minimal symbol that was found, or NULL if no minimal symbol
+     was found.  */
+
+  struct minimal_symbol *minsym;
+
+  /* If MINSYM is not NULL, then this is the objfile in which the
+     symbol is defined.  */
+
+  struct objfile *objfile;
+};
+
+/* This header declares most of the API for dealing with minimal
+   symbols and minimal symbol tables.  A few things are declared
+   elsewhere; see below.
+
+   A minimal symbol is a symbol for which there is no direct debug
+   information.  For example, for an ELF binary, minimal symbols are
+   created from the ELF symbol table.
+
+   For the definition of the minimal symbol structure, see struct
+   minimal_symbol in symtab.h.
+
+   Minimal symbols are stored in tables attached to an objfile; see
+   objfiles.h for details.  Code should generally treat these tables
+   as opaque and use functions provided by minsyms.c to inspect them.
+*/
+
+/* Prepare to start collecting minimal symbols.  This should be called
+   by a symbol reader to initialize the minimal symbol module.
+   Currently, minimal symbol table creation is not reentrant; it
+   relies on global (static) variables in minsyms.c.  */
+
+void init_minimal_symbol_collection (void);
+
+/* Return a cleanup which is used to clean up the global state left
+   over by minimal symbol creation.  After calling
+   init_minimal_symbol_collection, a symbol reader should call this
+   function.  Then, after all minimal symbols have been read,
+   regardless of whether they are installed or not, the cleanup
+   returned by this function should be run.  */
+
+struct cleanup *make_cleanup_discard_minimal_symbols (void);
+
+/* Record a new minimal symbol.  This is the "full" entry point;
+   simpler convenience entry points are also provided below.
+   
+   This returns a new minimal symbol.  It is ok to modify the returned
+   minimal symbol (though generally not necessary).  It is not ok,
+   though, to stash the pointer anywhere; as minimal symbols may be
+   moved after creation.  The memory for the returned minimal symbol
+   is still owned by the minsyms.c code, and should not be freed.
+   
+   Arguments are:
+
+   NAME - the symbol's name
+   NAME_LEN - the length of the name
+   COPY_NAME - if true, the minsym code must make a copy of NAME.  If
+   false, then NAME must be NUL-terminated, and must have a lifetime
+   that is at least as long as OBJFILE's lifetime.
+   ADDRESS - the address of the symbol
+   MS_TYPE - the type of the symbol
+   SECTION - the symbol's section
+   appropriate obj_section for the minimal symbol.  This can be NULL.
+   OBJFILE - the objfile associated with the minimal symbol.  */
+
+struct minimal_symbol *prim_record_minimal_symbol_full
+    (const char *name,
+     int name_len,
+     int copy_name,
+     CORE_ADDR address,
+     enum minimal_symbol_type ms_type,
+     int section,
+     struct objfile *objfile);
+
+/* Like prim_record_minimal_symbol_full, but:
+   - uses strlen to compute NAME_LEN,
+   - passes COPY_NAME = 0,
+   - and passes a default SECTION, depending on the type
+   
+   This variant does not return the new symbol.  */
+
+void prim_record_minimal_symbol (const char *, CORE_ADDR,
+				 enum minimal_symbol_type,
+				 struct objfile *);
+
+/* Like prim_record_minimal_symbol_full, but:
+   - uses strlen to compute NAME_LEN,
+   - passes COPY_NAME = 0.  */
+
+struct minimal_symbol *prim_record_minimal_symbol_and_info
+    (const char *,
+     CORE_ADDR,
+     enum minimal_symbol_type,
+     int section,
+     struct objfile *);
+
+/* Install the minimal symbols that have been collected into the given
+   objfile.  After this is called, the cleanup returned by
+   make_cleanup_discard_minimal_symbols should be run in order to
+   clean up global state.  */
+
+void install_minimal_symbols (struct objfile *);
+
+/* Create the terminating entry of OBJFILE's minimal symbol table.
+   If OBJFILE->msymbols is zero, allocate a single entry from
+   OBJFILE->objfile_obstack; otherwise, just initialize
+   OBJFILE->msymbols[OBJFILE->minimal_symbol_count].  */
+
+void terminate_minimal_symbol_table (struct objfile *objfile);
+
+/* Sort all the minimal symbols in OBJFILE.  This should be only be
+   called after relocating symbols; it ensures that the minimal
+   symbols are properly sorted by address.  */
+
+void msymbols_sort (struct objfile *objfile);
+
+
+
+/* Compute a hash code for the string argument.  */
+
+unsigned int msymbol_hash (const char *);
+
+/* Like msymbol_hash, but compute a hash code that is compatible with
+   strcmp_iw.  */
+
+unsigned int msymbol_hash_iw (const char *);
+
+/* Compute the next hash value from previous HASH and the character C.  This
+   is only a GDB in-memory computed value with no external files compatibility
+   requirements.  */
+
+#define SYMBOL_HASH_NEXT(hash, c)			\
+  ((hash) * 67 + tolower ((unsigned char) (c)) - 113)
+
+
+
+/* Look through all the current minimal symbol tables and find the
+   first minimal symbol that matches NAME.  If OBJF is non-NULL, limit
+   the search to that objfile.  If SFILE is non-NULL, the only file-scope
+   symbols considered will be from that source file (global symbols are
+   still preferred).  Returns a pointer to the minimal symbol that
+   matches, or NULL if no match is found.  */
+
+struct minimal_symbol *lookup_minimal_symbol (const char *,
+					      const char *,
+					      struct objfile *);
+
+/* Like lookup_minimal_symbol, but searches all files and objfiles
+   and returns a bound minimal symbol.  */
+
+struct bound_minimal_symbol lookup_bound_minimal_symbol (const char *);
+
+/* Find the minimal symbol named NAME, and return both the minsym
+   struct and its objfile.  This only checks the linkage name.  */
+
+struct bound_minimal_symbol lookup_minimal_symbol_and_objfile (const char *);
+
+/* Look through all the current minimal symbol tables and find the
+   first minimal symbol that matches NAME and has text type.  If OBJF
+   is non-NULL, limit the search to that objfile.  Returns a pointer
+   to the minimal symbol that matches, or NULL if no match is found.
+
+   This function only searches the mangled (linkage) names.  */
+
+struct minimal_symbol *lookup_minimal_symbol_text (const char *,
+						   struct objfile *);
+
+/* Look through all the current minimal symbol tables and find the
+   first minimal symbol that matches NAME and is a solib trampoline.
+   If OBJF is non-NULL, limit the search to that objfile.  Returns a
+   pointer to the minimal symbol that matches, or NULL if no match is
+   found.
+
+   This function only searches the mangled (linkage) names.  */
+
+struct minimal_symbol *lookup_minimal_symbol_solib_trampoline
+    (const char *,
+     struct objfile *);
+
+/* Look through all the current minimal symbol tables and find the
+   first minimal symbol that matches NAME and PC.  If OBJF is non-NULL,
+   limit the search to that objfile.  Returns a pointer to the minimal
+   symbol that matches, or NULL if no match is found.  */
+
+struct minimal_symbol *lookup_minimal_symbol_by_pc_name
+    (CORE_ADDR, const char *, struct objfile *);
+
+/* Search through the minimal symbol table for each objfile and find
+   the symbol whose address is the largest address that is still less
+   than or equal to PC, and which matches SECTION.
+
+   If SECTION is NULL, this uses the result of find_pc_section
+   instead.
+
+   The result has a non-NULL 'minsym' member if such a symbol is
+   found, or NULL if PC is not in a suitable range.  */
+
+struct bound_minimal_symbol lookup_minimal_symbol_by_pc_section
+    (CORE_ADDR,
+     struct obj_section *);
+
+/* Backward compatibility: search through the minimal symbol table 
+   for a matching PC (no section given).
+   
+   This is a wrapper that calls lookup_minimal_symbol_by_pc_section
+   with a NULL section argument.  */
+
+struct bound_minimal_symbol lookup_minimal_symbol_by_pc (CORE_ADDR);
+
+/* Iterate over all the minimal symbols in the objfile OBJF which
+   match NAME.  Both the ordinary and demangled names of each symbol
+   are considered.  The caller is responsible for canonicalizing NAME,
+   should that need to be done.
+
+   For each matching symbol, CALLBACK is called with the symbol and
+   USER_DATA as arguments.  */
+
+void iterate_over_minimal_symbols (struct objfile *objf,
+				   const char *name,
+				   void (*callback) (struct minimal_symbol *,
+						     void *),
+				   void *user_data);
+
+#endif /* MINSYMS_H */
+@
+
+
+1.7
+log
+@	* coffread.c (record_minimal_symbol): Update.
+	* dbxread.c (record_minimal_symbol): Update.
+	* elfread.c (record_minimal_symbol): Update.
+	* machoread.c (macho_symtab_add_minsym): Update.
+	* mdebugread.c (record_minimal_symbol, parse_partial_symbols):
+	Update.
+	* minsyms.c (prim_record_minimal_symbol): Update.
+	(prim_record_minimal_symbol_full): Remove 'bfd_section'
+	argument.
+	(prim_record_minimal_symbol_and_info): Likewise.
+	* minsyms.h (prim_record_minimal_symbol_full)
+	(prim_record_minimal_symbol_and_info): Update.
+	* symtab.c (allocate_symbol, initialize_symbol)
+	(allocate_template_symbol): Initialize SYMBOL_SECTION.
+	* xcoffread.c (record_minimal_symbol, scan_xcoff_symtab):
+	Update.
+@
+text
+@a164 8
+/* Return the objfile that holds the minimal symbol SYM.  Every
+   minimal symbols is held by some objfile; this will never return
+   NULL.  */
+
+struct objfile *msymbol_objfile (struct minimal_symbol *sym);
+
+
+
+d176 5
+@
+
+
+1.6
+log
+@	* minsyms.h (struct bound_minimal_symbol): New.
+	(lookup_minimal_symbol_and_objfile): Return bound_minimal_symbol.
+	Remove objfile argument.
+	(lookup_minimal_symbol_by_pc_section, lookup_minimal_symbol_by_pc):
+	Return bound_minimal_symbol.
+	* minsyms.c (lookup_minimal_symbol_by_pc_1)
+	(lookup_minimal_symbol_by_pc_section, lookup_minimal_symbol_by_pc):
+	Return bound_minimal_symbol.
+	(in_gnu_ifunc_stub): Update.
+	(lookup_minimal_symbol_and_objfile): Return bound_minimal_symbol.
+	Remove 'objfile_p' argument.
+	(lookup_solib_trampoline_symbol_by_pc): Update.
+	* ada-tasks.c, amd64-windows-tdep.c, arm-tdep.c,
+	arm-wince-tdep.c, block.c, blockframe.c, breakpoint.c, btrace.c,
+	c-valprint.c, dwarf2loc.c, elfread.c, frame.c, frv-tdep.c,
+	glibc-tdep.c, gnu-v2-abi.c, gnu-v3-abi.c, hppa-hpux-tdep.c,
+	i386-tdep.c, ia64-tdep.c, infcall.c, infcmd.c, jit.c,
+	linux-fork.c, m32c-tdep.c, m68hc11-tdep.c, maint.c,
+	mips-tdep.c, p-valprint.c, parse.c, ppc-linux-tdep.c,
+	ppc-sysv-tdep.c, printcmd.c, rs6000-tdep.c, sh64-tdep.c,
+	stack.c, symtab.c, tui/tui-disasm.c: Update.
+@
+text
+@a90 1
+   BFD_SECTION - the symbol's BFD section; used to find the
+a100 1
+     asection *bfd_section,
+d106 1
+a106 2
+   - passes SECTION = 0,
+   - and passes BFD_SECTION = NULL.
+a122 1
+     asection *bfd_section,
+@
+
+
+1.5
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@d23 17
+d189 1
+a189 3
+   struct and its objfile.  This only checks the linkage name.  Sets
+   *OBJFILE_P and returns the minimal symbol, if it is found.  If it
+   is not found, returns NULL.  */
+d191 1
+a191 2
+struct minimal_symbol *lookup_minimal_symbol_and_objfile (const char *,
+							  struct objfile **);
+d230 2
+a231 2
+   Returns a pointer to the minimal symbol if such a symbol is found,
+   or NULL if PC is not in a suitable range.  */
+d233 1
+a233 1
+struct minimal_symbol *lookup_minimal_symbol_by_pc_section
+d243 1
+a243 1
+struct minimal_symbol *lookup_minimal_symbol_by_pc (CORE_ADDR);
+@
+
+
+1.4
+log
+@	* minsyms.c (lookup_solib_trampoline_symbol_by_pc): Now static.
+	* minsyms.h (lookup_solib_trampoline_symbol_by_pc): Don't
+	declare.
+@
+text
+@d3 1
+a3 1
+   Copyright (C) 2011-2012 Free Software Foundation, Inc.
+@
+
+
+1.3
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@a230 6
+/* Check if PC is in a shared library trampoline code stub.
+   Return minimal symbol for the trampoline entry or NULL if PC is not
+   in a trampoline code stub.  */
+
+struct minimal_symbol *lookup_solib_trampoline_symbol_by_pc (CORE_ADDR);
+
+@
+
+
+1.2
+log
+@	* minsyms.h: Rearrange.  Document header and all functions.
+	* minsyms.c: Move some comments to minsyms.h.
+@
+text
+@d3 1
+a3 1
+   Copyright (C) 2011 Free Software Foundation, Inc.
+@
+
+
+1.1
+log
+@	* symtab.h: Include minsyms.h.
+	(prim_record_minimal_symbol, prim_record_minimal_symbol_full)
+	(prim_record_minimal_symbol_and_info, msymbol_hash_iw)
+	(msymbol_hash, SYMBOL_HASH_NEXT, msymbol_objfile)
+	(lookup_minimal_symbol, lookup_minimal_symbol_text)
+	(lookup_minimal_symbol_solib_trampoline)
+	(lookup_minimal_symbol_by_pc_name, lookup_minimal_symbol_by_pc)
+	(iterate_over_minimal_symbols, lookup_minimal_symbol_and_objfile)
+	(lookup_minimal_symbol_by_pc_section)
+	(lookup_solib_trampoline_symbol_by_pc)
+	(init_minimal_symbol_collection)
+	(make_cleanup_discard_minimal_symbols, install_minimal_symbols)
+	(msymbols_sort): Move to minsyms.h.
+	* objfiles.c (terminate_minimal_symbol_table): Move to minsyms.c.
+	* minsyms.c (terminate_minimal_symbol_table): Move from
+	objfiles.c.
+	* minsyms.h: New file.
+@
+text
+@d23 72
+a94 2
+/* Functions for dealing with the minimal symbol table, really a misc
+   address<->symbol mapping for things we don't have debug symbols for.  */
+d100 3
+a102 7
+struct minimal_symbol *prim_record_minimal_symbol_full
+    (const char *,
+     int, int, CORE_ADDR,
+     enum minimal_symbol_type,
+     int section,
+     asection *bfd_section,
+     struct objfile *);
+d112 23
+a134 1
+unsigned int msymbol_hash_iw (const char *);
+d138 5
+d150 6
+d158 9
+d171 15
+d189 8
+d201 5
+d207 1
+a207 1
+(CORE_ADDR, const char *, struct objfile *);
+d209 6
+a214 1
+struct minimal_symbol *lookup_minimal_symbol_by_pc (CORE_ADDR);
+d216 2
+a217 2
+struct minimal_symbol *lookup_minimal_symbol_and_objfile (const char *,
+							  struct objfile **);
+d223 5
+a227 1
+struct minimal_symbol *lookup_solib_trampoline_symbol_by_pc (CORE_ADDR);
+d229 1
+a229 1
+void init_minimal_symbol_collection (void);
+d231 3
+a233 1
+struct cleanup *make_cleanup_discard_minimal_symbols (void);
+d235 1
+a235 1
+void install_minimal_symbols (struct objfile *);
+d237 4
+a240 1
+/* Sort all the minimal symbols in OBJFILE.  */
+d242 2
+a243 8
+void msymbols_sort (struct objfile *objfile);
+
+/* Create the terminating entry of OBJFILE's minimal symbol table.
+   If OBJFILE->msymbols is zero, allocate a single entry from
+   OBJFILE->objfile_obstack; otherwise, just initialize
+   OBJFILE->msymbols[OBJFILE->minimal_symbol_count].  */
+
+void terminate_minimal_symbol_table (struct objfile *objfile);
+@
+

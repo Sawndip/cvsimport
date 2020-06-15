@@ -1,0 +1,1006 @@
+head	1.8;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.8
+	gdb_7_6-2013-04-26-release:1.8
+	gdb_7_6-branch:1.8.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.8
+	gdb_7_5_1-2012-11-29-release:1.7
+	gdb_7_5-2012-08-17-release:1.7
+	gdb_7_5-branch:1.7.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.7
+	gdb_7_4_1-2012-04-26-release:1.6.4.1
+	gdb_7_4-2012-01-24-release:1.6.4.1
+	gdb_7_4-branch:1.6.0.4
+	gdb_7_4-2011-12-13-branchpoint:1.6
+	gdb_7_3_1-2011-09-04-release:1.6
+	gdb_7_3-2011-07-26-release:1.6
+	gdb_7_3-branch:1.6.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.6
+	gdb_7_2-2010-09-02-release:1.2
+	gdb_7_2-branch:1.2.0.4
+	gdb_7_2-2010-07-07-branchpoint:1.2
+	gdb_7_1-2010-03-18-release:1.2
+	gdb_7_1-branch:1.2.0.2
+	gdb_7_1-2010-02-18-branchpoint:1.2;
+locks; strict;
+comment	@ * @;
+
+
+1.8
+date	2013.01.01.06.41.40;	author brobecke;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2012.01.04.08.28.24;	author brobecke;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2011.01.01.15.34.04;	author brobecke;	state Exp;
+branches
+	1.6.4.1;
+next	1.5;
+
+1.5
+date	2010.09.30.00.03.23;	author kevinb;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2010.07.29.18.41.28;	author dj;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2010.07.28.21.58.22;	author dj;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2010.01.01.10.03.33;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2009.11.24.19.22.45;	author dj;	state Exp;
+branches;
+next	;
+
+1.6.4.1
+date	2012.01.06.04.54.55;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.8
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@/* mem.c --- memory for RX simulator.
+
+Copyright (C) 2005-2013 Free Software Foundation, Inc.
+Contributed by Red Hat, Inc.
+
+This file is part of the GNU simulators.
+
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+/* This slows down the simulator and we get some false negatives from
+   gcc, like when it uses a long-sized hole to hold a byte-sized
+   variable, knowing that it doesn't care about the other bits.  But,
+   if you need to track down a read-from-unitialized bug, set this to
+   1.  */
+#define RDCHECK 0
+
+#include "config.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include "opcode/rx.h"
+#include "mem.h"
+#include "cpu.h"
+#include "syscalls.h"
+#include "misc.h"
+#include "err.h"
+
+#define L1_BITS  (10)
+#define L2_BITS  (10)
+#define OFF_BITS PAGE_BITS
+
+#define L1_LEN  (1 << L1_BITS)
+#define L2_LEN  (1 << L2_BITS)
+#define OFF_LEN (1 << OFF_BITS)
+
+static unsigned char **pt[L1_LEN];
+static unsigned char **ptr[L1_LEN];
+static RX_Opcode_Decoded ***ptdc[L1_LEN];
+
+/* [ get=0/put=1 ][ byte size ] */
+static unsigned int mem_counters[2][5];
+
+#define COUNT(isput,bytes)                                      \
+  if (verbose && enable_counting) mem_counters[isput][bytes]++
+
+void
+init_mem (void)
+{
+  int i, j;
+
+  for (i = 0; i < L1_LEN; i++)
+    if (pt[i])
+      {
+	for (j = 0; j < L2_LEN; j++)
+	  if (pt[i][j])
+	    free (pt[i][j]);
+	free (pt[i]);
+      }
+  memset (pt, 0, sizeof (pt));
+  memset (ptr, 0, sizeof (ptr));
+  memset (mem_counters, 0, sizeof (mem_counters));
+}
+
+unsigned char *
+rx_mem_ptr (unsigned long address, enum mem_ptr_action action)
+{
+  int pt1 = (address >> (L2_BITS + OFF_BITS)) & ((1 << L1_BITS) - 1);
+  int pt2 = (address >> OFF_BITS) & ((1 << L2_BITS) - 1);
+  int pto = address & ((1 << OFF_BITS) - 1);
+
+  if (address == 0)
+    execution_error (SIM_ERR_NULL_POINTER_DEREFERENCE, 0);
+
+  if (pt[pt1] == 0)
+    {
+      pt[pt1] = (unsigned char **) calloc (L2_LEN, sizeof (char **));
+      ptr[pt1] = (unsigned char **) calloc (L2_LEN, sizeof (char **));
+      ptdc[pt1] = (RX_Opcode_Decoded ***) calloc (L2_LEN, sizeof (RX_Opcode_Decoded ***));
+    }
+  if (pt[pt1][pt2] == 0)
+    {
+      if (action == MPA_READING)
+	execution_error (SIM_ERR_READ_UNWRITTEN_PAGES, address);
+
+      pt[pt1][pt2] = (unsigned char *) calloc (OFF_LEN, 1);
+      ptr[pt1][pt2] = (unsigned char *) calloc (OFF_LEN, 1);
+      ptdc[pt1][pt2] = (RX_Opcode_Decoded **) calloc (OFF_LEN, sizeof(RX_Opcode_Decoded *));
+    }
+  else if (action == MPA_READING
+	   && ptr[pt1][pt2][pto] == MC_UNINIT)
+    execution_error (SIM_ERR_READ_UNWRITTEN_BYTES, address);
+
+  if (action == MPA_WRITING)
+    {
+      int pto_dc;
+      if (ptr[pt1][pt2][pto] == MC_PUSHED_PC)
+	execution_error (SIM_ERR_CORRUPT_STACK, address);
+      ptr[pt1][pt2][pto] = MC_DATA;
+
+      /* The instruction decoder doesn't store it's decoded instructions
+         at word swapped addresses.  Therefore, when clearing the decode
+	 cache, we have to account for that here.  */
+      pto_dc = pto ^ (rx_big_endian ? 3 : 0);
+      if (ptdc[pt1][pt2][pto_dc])
+	{
+	  free (ptdc[pt1][pt2][pto_dc]);
+	  ptdc[pt1][pt2][pto_dc] = NULL;
+	}
+    }
+
+  if (action == MPA_CONTENT_TYPE)
+    return (unsigned char *) (ptr[pt1][pt2] + pto);
+
+  if (action == MPA_DECODE_CACHE)
+    return (unsigned char *) (ptdc[pt1][pt2] + pto);
+
+  return pt[pt1][pt2] + pto;
+}
+
+RX_Opcode_Decoded **
+rx_mem_decode_cache (unsigned long address)
+{
+  return (RX_Opcode_Decoded **) rx_mem_ptr (address, MPA_DECODE_CACHE);
+}
+
+static inline int
+is_reserved_address (unsigned int address)
+{
+  return (address >= 0x00020000 && address < 0x00080000)
+    ||   (address >= 0x00100000 && address < 0x01000000)
+    ||   (address >= 0x08000000 && address < 0xff000000);
+}
+
+static void
+used (int rstart, int i, int j)
+{
+  int rend = i << (L2_BITS + OFF_BITS);
+  rend += j << OFF_BITS;
+  if (rstart == 0xe0000 && rend == 0xe1000)
+    return;
+  printf ("mem:   %08x - %08x (%dk bytes)\n", rstart, rend - 1,
+	  (rend - rstart) / 1024);
+}
+
+static char *
+mcs (int isput, int bytes)
+{
+  return comma (mem_counters[isput][bytes]);
+}
+
+void
+mem_usage_stats ()
+{
+  int i, j;
+  int rstart = 0;
+  int pending = 0;
+
+  for (i = 0; i < L1_LEN; i++)
+    if (pt[i])
+      {
+	for (j = 0; j < L2_LEN; j++)
+	  if (pt[i][j])
+	    {
+	      if (!pending)
+		{
+		  pending = 1;
+		  rstart = (i << (L2_BITS + OFF_BITS)) + (j << OFF_BITS);
+		}
+	    }
+	  else if (pending)
+	    {
+	      pending = 0;
+	      used (rstart, i, j);
+	    }
+      }
+    else
+      {
+	if (pending)
+	  {
+	    pending = 0;
+	    used (rstart, i, 0);
+	  }
+      }
+  /*       mem foo: 123456789012 123456789012 123456789012 123456789012
+            123456789012 */
+  printf ("                 byte        short        3byte         long"
+          "       opcode\n");
+  if (verbose > 1)
+    {
+      /* Only use comma separated numbers when being very verbose.
+	 Comma separated numbers are hard to parse in awk scripts.  */
+      printf ("mem get: %12s %12s %12s %12s %12s\n", mcs (0, 1), mcs (0, 2),
+	      mcs (0, 3), mcs (0, 4), mcs (0, 0));
+      printf ("mem put: %12s %12s %12s %12s\n", mcs (1, 1), mcs (1, 2),
+	      mcs (1, 3), mcs (1, 4));
+    }
+  else
+    {
+      printf ("mem get: %12u %12u %12u %12u %12u\n",
+	      mem_counters[0][1], mem_counters[0][2],
+	      mem_counters[0][3], mem_counters[0][4],
+	      mem_counters[0][0]);
+      printf ("mem put: %12u %12u %12u %12u\n",
+	      mem_counters [1][1], mem_counters [1][2],
+	      mem_counters [1][3], mem_counters [1][4]);
+    }
+}
+
+unsigned long
+mem_usage_cycles (void)
+{
+  unsigned long rv = mem_counters[0][0];
+  rv += mem_counters[0][1] * 1;
+  rv += mem_counters[0][2] * 2;
+  rv += mem_counters[0][3] * 3;
+  rv += mem_counters[0][4] * 4;
+  rv += mem_counters[1][1] * 1;
+  rv += mem_counters[1][2] * 2;
+  rv += mem_counters[1][3] * 3;
+  rv += mem_counters[1][4] * 4;
+  return rv;
+}
+
+static int tpr = 0;
+static void
+s (int address, char *dir)
+{
+  if (tpr == 0)
+    printf ("MEM[%08x] %s", address, dir);
+  tpr++;
+}
+
+#define S(d) if (trace) s(address, d)
+static void
+e ()
+{
+  if (!trace)
+    return;
+  tpr--;
+  if (tpr == 0)
+    printf ("\n");
+}
+
+static char
+mtypec (int address)
+{
+  unsigned char *cp = rx_mem_ptr (address, MPA_CONTENT_TYPE);
+  return "udp"[*cp];
+}
+
+#define E() if (trace) e()
+
+void
+mem_put_byte (unsigned int address, unsigned char value)
+{
+  unsigned char *m;
+  char tc = ' ';
+
+  if (trace)
+    tc = mtypec (address);
+  m = rx_mem_ptr (address, MPA_WRITING);
+  if (trace)
+    printf (" %02x%c", value, tc);
+  *m = value;
+  switch (address)
+    {
+    case 0x0008c02a: /* PA.DR */
+     {
+	static int old_led = -1;
+	int red_on = 0;
+	int i;
+
+	if (old_led != value)
+	  {
+	    fputs (" ", stdout);
+	    for (i = 0; i < 8; i++)
+	      if (value & (1 << i))
+		{
+		  if (! red_on)
+		    {
+		      fputs ("\033[31m", stdout);
+		      red_on = 1;
+		    }
+		  fputs (" @@", stdout);
+		}
+	      else
+		{
+		  if (red_on)
+		    {
+		      fputs ("\033[0m", stdout);
+		      red_on = 0;
+		    }
+		  fputs (" *", stdout);
+		}
+
+	    if (red_on)
+	      fputs ("\033[0m", stdout);
+
+	    fputs ("\r", stdout);
+	    fflush (stdout);
+	    old_led = value;
+	  }
+      }
+      break;
+
+#ifdef CYCLE_STATS
+    case 0x0008c02b: /* PB.DR */
+      {
+	if (value == 0)
+	  halt_pipeline_stats ();
+	else
+	  reset_pipeline_stats ();
+      }
+#endif
+
+    case 0x00088263: /* SCI4.TDR */
+      {
+	static int pending_exit = 0;
+	if (pending_exit == 2)
+	  {
+	    step_result = RX_MAKE_EXITED(value);
+	    longjmp (decode_jmp_buf, 1);
+	  }
+	else if (value == 3)
+	  pending_exit ++;
+	else
+	  pending_exit = 0;
+
+	putchar(value);
+      }
+      break;
+
+    default:
+      if (is_reserved_address (address))
+	generate_access_exception ();
+    }
+}
+
+void
+mem_put_qi (int address, unsigned char value)
+{
+  S ("<=");
+  mem_put_byte (address, value & 0xff);
+  E ();
+  COUNT (1, 1);
+}
+
+#ifdef CYCLE_ACCURATE
+static int tpu_base;
+#endif
+
+void
+mem_put_hi (int address, unsigned short value)
+{
+  S ("<=");
+  switch (address)
+    {
+#ifdef CYCLE_ACCURATE
+    case 0x00088126: /* TPU1.TCNT */
+      tpu_base = regs.cycle_count;
+      break;
+    case 0x00088136: /* TPU2.TCNT */
+      tpu_base = regs.cycle_count;
+      break;
+#endif
+    default:
+      if (rx_big_endian)
+	{
+	  mem_put_byte (address, value >> 8);
+	  mem_put_byte (address + 1, value & 0xff);
+	}
+      else
+	{
+	  mem_put_byte (address, value & 0xff);
+	  mem_put_byte (address + 1, value >> 8);
+	}
+    }
+  E ();
+  COUNT (1, 2);
+}
+
+void
+mem_put_psi (int address, unsigned long value)
+{
+  S ("<=");
+  if (rx_big_endian)
+    {
+      mem_put_byte (address, value >> 16);
+      mem_put_byte (address + 1, (value >> 8) & 0xff);
+      mem_put_byte (address + 2, value & 0xff);
+    }
+  else
+    {
+      mem_put_byte (address, value & 0xff);
+      mem_put_byte (address + 1, (value >> 8) & 0xff);
+      mem_put_byte (address + 2, value >> 16);
+    }
+  E ();
+  COUNT (1, 3);
+}
+
+void
+mem_put_si (int address, unsigned long value)
+{
+  S ("<=");
+  if (rx_big_endian)
+    {
+      mem_put_byte (address + 0, (value >> 24) & 0xff);
+      mem_put_byte (address + 1, (value >> 16) & 0xff);
+      mem_put_byte (address + 2, (value >> 8) & 0xff);
+      mem_put_byte (address + 3, value & 0xff);
+    }
+  else
+    {
+      mem_put_byte (address + 0, value & 0xff);
+      mem_put_byte (address + 1, (value >> 8) & 0xff);
+      mem_put_byte (address + 2, (value >> 16) & 0xff);
+      mem_put_byte (address + 3, (value >> 24) & 0xff);
+    }
+  E ();
+  COUNT (1, 4);
+}
+
+void
+mem_put_blk (int address, void *bufptr, int nbytes)
+{
+  S ("<=");
+  if (enable_counting)
+    mem_counters[1][1] += nbytes;
+  while (nbytes--)
+    mem_put_byte (address++, *(unsigned char *) bufptr++);
+  E ();
+}
+
+unsigned char
+mem_get_pc (int address)
+{
+  unsigned char *m = rx_mem_ptr (address, MPA_READING);
+  COUNT (0, 0);
+  return *m;
+}
+
+static unsigned char
+mem_get_byte (unsigned int address)
+{
+  unsigned char *m;
+
+  S ("=>");
+  m = rx_mem_ptr (address, MPA_READING);
+  switch (address)
+    {
+    case 0x00088264: /* SCI4.SSR */
+      E();
+      return 0x04; /* transmitter empty */
+      break;
+    default: 
+      if (trace)
+	printf (" %02x%c", *m, mtypec (address));
+      if (is_reserved_address (address))
+	generate_access_exception ();
+      break;
+    }
+  E ();
+  return *m;
+}
+
+unsigned char
+mem_get_qi (int address)
+{
+  unsigned char rv;
+  S ("=>");
+  rv = mem_get_byte (address);
+  COUNT (0, 1);
+  E ();
+  return rv;
+}
+
+unsigned short
+mem_get_hi (int address)
+{
+  unsigned short rv;
+  S ("=>");
+  switch (address)
+    {
+#ifdef CYCLE_ACCURATE
+    case 0x00088126: /* TPU1.TCNT */
+      rv = (regs.cycle_count - tpu_base) >> 16;
+      break;
+    case 0x00088136: /* TPU2.TCNT */
+      rv = (regs.cycle_count - tpu_base) >> 0;
+      break;
+#endif
+
+    default:
+      if (rx_big_endian)
+	{
+	  rv = mem_get_byte (address) << 8;
+	  rv |= mem_get_byte (address + 1);
+	}
+      else
+	{
+	  rv = mem_get_byte (address);
+	  rv |= mem_get_byte (address + 1) << 8;
+	}
+    }
+  COUNT (0, 2);
+  E ();
+  return rv;
+}
+
+unsigned long
+mem_get_psi (int address)
+{
+  unsigned long rv;
+  S ("=>");
+  if (rx_big_endian)
+    {
+      rv = mem_get_byte (address + 2);
+      rv |= mem_get_byte (address + 1) << 8;
+      rv |= mem_get_byte (address) << 16;
+    }
+  else
+    {
+      rv = mem_get_byte (address);
+      rv |= mem_get_byte (address + 1) << 8;
+      rv |= mem_get_byte (address + 2) << 16;
+    }
+  COUNT (0, 3);
+  E ();
+  return rv;
+}
+
+unsigned long
+mem_get_si (int address)
+{
+  unsigned long rv;
+  S ("=>");
+  if (rx_big_endian)
+    {
+      rv = mem_get_byte (address + 3);
+      rv |= mem_get_byte (address + 2) << 8;
+      rv |= mem_get_byte (address + 1) << 16;
+      rv |= mem_get_byte (address) << 24;
+    }
+  else
+    {
+      rv = mem_get_byte (address);
+      rv |= mem_get_byte (address + 1) << 8;
+      rv |= mem_get_byte (address + 2) << 16;
+      rv |= mem_get_byte (address + 3) << 24;
+    }
+  COUNT (0, 4);
+  E ();
+  return rv;
+}
+
+void
+mem_get_blk (int address, void *bufptr, int nbytes)
+{
+  S ("=>");
+  if (enable_counting)
+    mem_counters[0][1] += nbytes;
+  while (nbytes--)
+    *(char *) bufptr++ = mem_get_byte (address++);
+  E ();
+}
+
+int
+sign_ext (int v, int bits)
+{
+  if (bits < 32)
+    {
+      v &= (1 << bits) - 1;
+      if (v & (1 << (bits - 1)))
+	v -= (1 << bits);
+    }
+  return v;
+}
+
+void
+mem_set_content_type (int address, enum mem_content_type type)
+{
+  unsigned char *mt = rx_mem_ptr (address, MPA_CONTENT_TYPE);
+  *mt = type;
+}
+
+void
+mem_set_content_range (int start_address, int end_address, enum mem_content_type type)
+{
+  while (start_address < end_address)
+    {
+      int sz, ofs;
+      unsigned char *mt;
+
+      sz = end_address - start_address;
+      ofs = start_address % L1_LEN;
+      if (sz + ofs > L1_LEN)
+	sz = L1_LEN - ofs;
+
+      mt = rx_mem_ptr (start_address, MPA_CONTENT_TYPE);
+      memset (mt, type, sz);
+
+      start_address += sz;
+    }
+}
+
+enum mem_content_type
+mem_get_content_type (int address)
+{
+  unsigned char *mt = rx_mem_ptr (address, MPA_CONTENT_TYPE);
+  return *mt;
+}
+@
+
+
+1.7
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d3 1
+a3 1
+Copyright (C) 2005, 2007-2012 Free Software Foundation, Inc.
+@
+
+
+1.6
+log
+@run copyright.sh for 2011.
+@
+text
+@d3 1
+a3 2
+Copyright (C) 2005, 2007, 2008, 2009, 2010, 2011
+Free Software Foundation, Inc.
+@
+
+
+1.6.4.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d3 2
+a4 1
+Copyright (C) 2005, 2007-2012 Free Software Foundation, Inc.
+@
+
+
+1.5
+log
+@	* mem.c (rx_mem_ptr): When invalidating the decode cache, account
+	for the fact that the instruction decoder never uses swapped
+	addresses.
+@
+text
+@d3 2
+a4 1
+Copyright (C) 2005, 2007, 2008, 2009, 2010 Free Software Foundation, Inc.
+@
+
+
+1.4
+log
+@[include/opcode]
+
+* rx.h (RX_Operand_Type): Add TwoReg.
+(RX_Opcode_ID): Remove ediv and ediv2.
+
+[opcodes]
+
+* rx-decode.opc (SRR): New.
+(rx_decode_opcode): Use it for movbi and movbir.  Decode NOP2 (mov
+r0,r0) and NOP3 (max r0,r0) special cases.
+* rx-decode.c: Regenerate.
+
+[sim/rx]
+
+* rx.c (decode_cache_base): New.
+(id_names): Remove ediv and edivu.
+(optype_names): Add TwoReg.
+(maybe_get_mem_page): New.
+(rx_get_byte): Call it.
+(get_op): Add TwoReg support.
+(put_op): Likewise.
+(PD, PS, PS2, GD, GS, GS2, DSZ, SSZ, S2SZ, US1, US2, OM): "opcode"
+is a pointer now.
+(DO_RETURN): New.  We use longjmp to return an exception result.
+(decode_opcode): Make opcode a pointer to the decode cache.  Save
+decoded opcode information and re-use.  Call DO_RETURN instead of
+return throughout.  Remove ediv and edivu.
+* mem.c (ptdc): New.  Adds decode cache.
+(rx_mem_ptr): Support it.
+(rx_mem_decode_cache): New.
+* mem.h (enum mem_ptr_action): add MPA_DECODE_CACHE.
+(rx_mem_decode_cache): Declare.
+* gdb-if.c (sim_resume): Add decode_opcode's setjmp logic here...
+* main.c (main): ...and here.  Use a fast loop if neither trace
+nor disassemble is given.
+* cpu.h (RX_MAKE_STEPPED, RX_MAKE_HIT_BREAK, RX_MAKE_EXITED,
+RX_MAKE_STOPPED, RX_EXITED, RX_STOPPED): Adjust so that 0 is not a
+valid code for anything.
+@
+text
+@d107 1
+d111 6
+a116 1
+      if (ptdc[pt1][pt2][pto])
+d118 2
+a119 2
+	  free (ptdc[pt1][pt2][pto]);
+	  ptdc[pt1][pt2][pto] = NULL;
+@
+
+
+1.3
+log
+@[sim/rx]
+* README.txt: New.
+* config.h (CYCLE_ACCURATE, CYCLE_STATS): New.
+* configure.in (--enable-cycle-accurate, --enable-cycle-stats):
+New.  Default to enabled.
+* configure: Regenerate.
+
+* cpu.h (regs_type): Add cycle tracking info.
+(reset_pipeline_stats): Declare.
+(halt_pipeline_stats): Declare.
+(pipeline_stats): Declare.
+* main.c (done): Call pipeline_stats().
+* mem.h (rx_mem_ptr): Moved to here ...
+* mem.c (mem_ptr): ... from here.  Rename throughout.
+(mem_put_byte): Move LEDs to Port A.  Add Port B to control cycle
+statistics.  Move UART to SCI4.
+(mem_put_hi): Add TPU 1-2.  TPU 1 and 2 count CPU cycles.
+* reg.c (init_regs): Set Rt reg to -1 (no reg).
+* rx.c: Add cycle counting and statistics throughout.
+(rx_get_byte): Optimize for speed.
+(decode_opcode): Likewise.
+(reset_pipeline_stats): New.
+(halt_pipeline_stats): New.
+(pipeline_stats): New.
+* trace.c (sim_disasm_one): Print cycle count.
+
+[include/opcode]
+* rx.h (RX_Opcode_ID): Add nop2 and nop3 for statistics.
+@
+text
+@d33 1
+d50 1
+d90 1
+d97 3
+a99 4
+      pt[pt1][pt2] = (unsigned char *) malloc (OFF_LEN);
+      memset (pt[pt1][pt2], 0, OFF_LEN);
+      ptr[pt1][pt2] = (unsigned char *) malloc (OFF_LEN);
+      memset (ptr[pt1][pt2], MC_UNINIT, OFF_LEN);
+d110 5
+d118 4
+a121 1
+    return ptr[pt1][pt2] + pto;
+d126 6
+d354 1
+d356 1
+@
+
+
+1.2
+log
+@Update copyright notices to add year 2010.
+@
+text
+@d28 1
+d41 1
+a41 1
+#define OFF_BITS (12)
+d74 2
+a75 9
+enum mem_ptr_action
+{
+  MPA_WRITING,
+  MPA_READING,
+  MPA_CONTENT_TYPE
+};
+
+static unsigned char *
+mem_ptr (unsigned long address, enum mem_ptr_action action)
+d237 1
+a237 1
+  unsigned char *cp = mem_ptr (address, MPA_CONTENT_TYPE);
+d251 1
+a251 1
+  m = mem_ptr (address, MPA_WRITING);
+d257 2
+a258 2
+    case 0x00e1:
+      {
+d260 1
+a260 3
+	static char *led_on[] =
+	  { "\033[31m O ", "\033[32m O ", "\033[34m O " };
+	static char *led_off[] = { "\033[0m · ", "\033[0m · ", "\033[0m · " };
+d262 1
+d265 2
+a266 2
+	    fputs ("  ", stdout);
+	    for (i = 0; i < 3; i++)
+d268 8
+a275 1
+		fputs (led_off[i], stdout);
+d277 13
+a289 2
+		fputs (led_on[i], stdout);
+	    fputs ("\033[0m\r", stdout);
+d296 11
+a306 1
+    case 0x3aa: /* uart1tx */
+d309 1
+a309 1
+	if (value == 0)
+d311 2
+a312 6
+	    if (pending_exit)
+	      {
+		step_result = RX_MAKE_EXITED(value);
+		return;
+	      }
+	    pending_exit = 1;
+d314 2
+d317 3
+a319 1
+	  putchar(value);
+d338 2
+d344 1
+a344 1
+  if (rx_big_endian)
+d346 19
+a364 7
+      mem_put_byte (address, value >> 8);
+      mem_put_byte (address + 1, value & 0xff);
+    }
+  else
+    {
+      mem_put_byte (address, value & 0xff);
+      mem_put_byte (address + 1, value >> 8);
+d426 1
+a426 1
+  unsigned char *m = mem_ptr (address, MPA_READING);
+d437 1
+a437 1
+  m = mem_ptr (address, MPA_READING);
+d440 1
+a440 1
+    case 0x3ad: /* uart1c1 */
+d442 1
+a442 1
+      return 2; /* transmitter empty */
+d471 1
+a471 1
+  if (rx_big_endian)
+d473 20
+a492 7
+      rv = mem_get_byte (address) << 8;
+      rv |= mem_get_byte (address + 1);
+    }
+  else
+    {
+      rv = mem_get_byte (address);
+      rv |= mem_get_byte (address + 1) << 8;
+d571 1
+a571 1
+  unsigned char *mt = mem_ptr (address, MPA_CONTENT_TYPE);
+d588 1
+a588 1
+      mt = mem_ptr (start_address, MPA_CONTENT_TYPE);
+d598 1
+a598 1
+  unsigned char *mt = mem_ptr (address, MPA_CONTENT_TYPE);
+@
+
+
+1.1
+log
+@[sim]
+	* rx: New directory.
+	* configure.ac: Add entry for Renesas RX.
+	* configure: Regenerate.
+
+[include/gdb]
+	* sim-rx.h: New.
+@
+text
+@d3 1
+a3 1
+Copyright (C) 2005, 2007, 2008, 2009 Free Software Foundation, Inc.
+@
+

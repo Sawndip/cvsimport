@@ -1,0 +1,181 @@
+head	1.3;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.3
+	gdb_7_6-2013-04-26-release:1.3
+	gdb_7_6-branch:1.3.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.3
+	gdb_7_5_1-2012-11-29-release:1.2
+	gdb_7_5-2012-08-17-release:1.2
+	gdb_7_5-branch:1.2.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.2;
+locks; strict;
+comment	@ * @;
+
+
+1.3
+date	2013.01.01.06.33.26;	author brobecke;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2012.07.02.12.06.56;	author jkratoch;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2012.06.18.17.28.38;	author jkratoch;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.3
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@/* This testcase is part of GDB, the GNU debugger.
+
+   Copyright 2012-2013 Free Software Foundation, Inc.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+#include <setjmp.h>
+#include <string.h>
+#include <stdlib.h>
+
+#define BUFSIZE 0x1000
+
+static jmp_buf jmp;
+
+void
+infcall (void)
+{
+  longjmp (jmp, 1); /* test-next */
+}
+
+static void
+run1 (void)
+{
+  char buf[BUFSIZE / 2];
+  int dummy = 0;
+
+  dummy++; /* break-run1 */
+}
+
+static char buf_zero[BUFSIZE];
+
+static void
+run2 (void)
+{
+  char buf[BUFSIZE];
+
+  memset (buf, 0, sizeof (buf));
+
+  if (memcmp (buf, buf_zero, sizeof (buf)) != 0) /* break-run2 */
+    abort (); /* break-fail */
+}
+
+int
+main ()
+{
+  if (setjmp (jmp) == 0) /* test-pass */
+    infcall ();
+
+  if (setjmp (jmp) == 0) /* test-fail */
+    run1 ();
+  else
+    run2 ();
+
+  return 0; /* break-exit */
+}
+@
+
+
+1.2
+log
+@gdb/testsuite/
+	* gdb.base/stale-infcall.c (infcall): New label test-next.
+	(main): New labels test-pass and test-fail.
+	* gdb.base/stale-infcall.exp: Continue to test-next.  Put breakpoint
+	$test_fail_bpnum to test-fail.
+	(test system longjmp tracking support): New test.
+	Delete $test_fail_bpnum.
+	* lib/gdb.exp (gdb_continue_to_breakpoint): Accept also Temporary
+	breakpoint.
+@
+text
+@d3 1
+a3 1
+   Copyright 2012 Free Software Foundation, Inc.
+@
+
+
+1.1
+log
+@gdb/
+	Remove stale dummy frames.
+	* breakpoint.c: Include dummy-frame.h.
+	(longjmp_breakpoint_ops): New variable.
+	(update_breakpoints_after_exec, breakpoint_init_inferior): Delete also
+	bp_longjmp_call_dummy.
+	(bpstat_what, bptype_string, print_one_breakpoint_location)
+	(init_bp_location): Support bp_longjmp_call_dummy.
+	(set_longjmp_breakpoint): Use longjmp_breakpoint_ops.  Comment why.
+	(set_longjmp_breakpoint_for_call_dummy)
+	(check_longjmp_breakpoint_for_call_dummy, longjmp_bkpt_dtor): New
+	functions.
+	(initialize_breakpoint_ops): Initialize longjmp_breakpoint_ops.
+	* breakpoint.h (enum bptype): New item bp_longjmp_call_dummy.  Delete
+	FIXME comment and extend the other comment for bp_call_dummy.
+	(set_longjmp_breakpoint_for_call_dummy)
+	(check_longjmp_breakpoint_for_call_dummy): New declarations.
+	* dummy-frame.c: Include gdbthread.h.
+	(pop_dummy_frame_bpt): New function.
+	(pop_dummy_frame): Call pop_dummy_frame_bpt.
+	(dummy_frame_discard): New function.
+	(cleanup_dummy_frames): Update the comment about longjmps.
+	* dummy-frame.h (dummy_frame_discard): New declaration.
+	* gdbthread.h (struct thread_info): Extend initiating_frame comment.
+	* infcall.c (call_function_by_hand): New variable longjmp_b.  Call
+	set_longjmp_breakpoint_for_call_dummy.  Chain its breakpoints with BPT.
+	* infrun.c (handle_inferior_event) <BPSTAT_WHAT_CLEAR_LONGJMP_RESUME>:
+	Add case 4 comment.  Call check_longjmp_breakpoint_for_call_dummy and
+	keep_going if IS_LONGJMP and there is no other reason to stop.
+
+gdb/testsuite/
+	Remove stale dummy frames.
+	* gdb.base/call-signal-resume.exp (maintenance print dummy-frames)
+	(maintenance info breakpoints): New tests.
+	* gdb.base/stale-infcall.c: New file.
+	* gdb.base/stale-infcall.exp: New file.
+@
+text
+@d29 1
+a29 1
+  longjmp (jmp, 1);
+d57 4
+a60 1
+  if (setjmp (jmp) == 0)
+@
+

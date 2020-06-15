@@ -1,0 +1,653 @@
+head	1.12;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.12
+	gdb_7_6-2013-04-26-release:1.12
+	gdb_7_6-branch:1.12.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.12
+	gdb_7_5_1-2012-11-29-release:1.11
+	gdb_7_5-2012-08-17-release:1.11
+	gdb_7_5-branch:1.11.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.11
+	gdb_7_4_1-2012-04-26-release:1.8.2.1
+	gdb_7_4-2012-01-24-release:1.8.2.1
+	gdb_7_4-branch:1.8.0.2
+	gdb_7_4-2011-12-13-branchpoint:1.8
+	gdb_7_3_1-2011-09-04-release:1.7.2.1
+	gdb_7_3-2011-07-26-release:1.7.2.1
+	gdb_7_3-branch:1.7.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.7
+	gdb_7_2-2010-09-02-release:1.6
+	gdb_7_2-branch:1.6.0.4
+	gdb_7_2-2010-07-07-branchpoint:1.6
+	gdb_7_1-2010-03-18-release:1.6
+	gdb_7_1-branch:1.6.0.2
+	gdb_7_1-2010-02-18-branchpoint:1.6
+	gdb_7_0_1-2009-12-22-release:1.4
+	gdb_7_0-2009-10-06-release:1.4
+	gdb_7_0-branch:1.4.0.2
+	gdb_7_0-2009-09-16-branchpoint:1.4
+	msnyder-checkpoint-072509-branch:1.3.0.2
+	msnyder-checkpoint-072509-branchpoint:1.3;
+locks; strict;
+comment	@# @;
+
+
+1.12
+date	2013.01.01.06.33.27;	author brobecke;	state Exp;
+branches;
+next	1.11;
+
+1.11
+date	2012.07.10.15.18.18;	author tromey;	state Exp;
+branches;
+next	1.10;
+
+1.10
+date	2012.01.16.16.21.45;	author palves;	state Exp;
+branches;
+next	1.9;
+
+1.9
+date	2012.01.04.08.17.46;	author brobecke;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2011.04.20.19.42.51;	author jkratoch;	state Exp;
+branches
+	1.8.2.1;
+next	1.7;
+
+1.7
+date	2011.01.01.15.33.43;	author brobecke;	state Exp;
+branches
+	1.7.2.1;
+next	1.6;
+
+1.6
+date	2010.02.16.20.23.43;	author drow;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2010.01.01.07.32.01;	author brobecke;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2009.08.24.22.01.30;	author kseitz;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2009.07.13.19.24.18;	author jkratoch;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2009.02.03.01.09.01;	author tromey;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2009.02.03.01.00.40;	author tromey;	state Exp;
+branches;
+next	;
+
+1.8.2.1
+date	2012.01.06.04.44.02;	author brobecke;	state Exp;
+branches;
+next	;
+
+1.7.2.1
+date	2011.04.20.20.10.30;	author jkratoch;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.12
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@# Copyright 2009-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# This file is part of the gdb testsuite.
+
+# A helper procedure to test location completions restricted by
+# class.
+proc test_class_complete {class expr name matches} {
+    global gdb_prompt
+
+    set matches [lsort $matches]
+    set cmd "complete break ${class}::$expr"
+    set seen {}
+    gdb_test_multiple $cmd $name {
+	"break ${class}::main" { fail "$name (saw global symbol)" }
+	$cmd { exp_continue }
+	-re "break ${class}::\[A-Za-z0-9_~\]+" {
+	    set str $expect_out(0,string)
+	    scan $str "break ${class}::%\[^(\]" method
+	    lappend seen $method
+	    exp_continue
+	}
+	-re "$gdb_prompt $" {
+	    set failed ""
+	    foreach got [lsort $seen] have $matches {
+		if {![string equal $got $have]} {
+		    set failed $have
+		    break
+		}
+	    }
+	    if {[string length $failed] != 0} {
+		fail "$name ($failed not found)"
+	    } else {
+		pass $name
+	    }
+	}
+    }
+}
+
+if { [skip_cplus_tests] } { continue }
+
+standard_testfile pr9594.cc
+
+if {[prepare_for_testing $testfile.exp $testfile $srcfile {debug c++}]} {
+    return -1
+}
+
+# Test that completion is restricted by class name (all methods)
+test_class_complete Foo "" "complete class methods" \
+    [list Foo Foofoo get_foo set_foo ~Foo]
+
+test_class_complete Foo F "complete class methods beginning with F" \
+    [list Foo Foofoo]
+
+# The tests below depend on the current code scope.
+
+set bp_location [gdb_get_line_number "Set breakpoint here" ${srcfile}]
+
+if {![runto "${srcfile}:$bp_location"]} {
+    perror "test suppressed"
+    return
+}
+
+# This also tests inheritance -- completion should only see a single
+# "get_foo".
+gdb_test "complete p foo1.g" "p foo1\\.get_foo"
+
+# Test inheritance without overriding.
+gdb_test "complete p foo1.base" "p foo1\\.base_function_only"
+
+# Test non-completion of constructor names.
+gdb_test "complete p foo1.Fo" "p foo1\\.Foofoo"
+
+# Test completion with an anonymous struct.
+gdb_test "complete p a.g" "p a\\.get"
+@
+
+
+1.11
+log
+@	* gdb.cp/abstract-origin.exp: Use standard_testfile.
+	* gdb.cp/ambiguous.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/annota2.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/annota3.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/anon-ns.exp: Use standard_testfile.
+	* gdb.cp/anon-struct.exp: Use standard_testfile.
+	* gdb.cp/anon-union.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/arg-reference.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/bool.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/breakpoint.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/bs15503.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/call-c.exp: Use standard_testfile, clean_restart,
+	standard_output_file.
+	* gdb.cp/casts.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/class2.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/classes.exp: Use standard_testfile, prepare_for_testing.
+	(test_static_members): Update.
+	* gdb.cp/cmpd-minsyms.exp: Use standard_testfile.
+	* gdb.cp/converts.exp: Use standard_testfile.
+	* gdb.cp/cp-relocate.exp: Use standard_testfile.
+	* gdb.cp/cpcompletion.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/cpexprs.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/cplabel.exp: Use standard_testfile.
+	* gdb.cp/cplusfuncs.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/ctti.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/derivation.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/destrprint.exp: Use standard_testfile.
+	* gdb.cp/dispcxx.exp: Use standard_testfile.
+	* gdb.cp/exception.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/expand-psymtabs-cxx.exp: Use standard_testfile.
+	* gdb.cp/extern-c.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/formatted-ref.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/fpointer.exp: Use standard_testfile.
+	* gdb.cp/gdb1355.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/gdb2384.exp: Use standard_testfile, clean_restart,
+	standard_output_file.
+	* gdb.cp/gdb2495.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/hang.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/infcall-dlopen.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.cp/inherit.exp: Use standard_testfile, prepare_for_testing.
+	(do_tests): Update.
+	* gdb.cp/koenig.exp: Use standard_testfile.
+	* gdb.cp/local.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/m-data.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/m-static.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/mb-ctor.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/mb-inline.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/mb-templates.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/member-ptr.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/meth-typedefs.exp: Use standard_testfile.
+	* gdb.cp/method.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/method2.exp: Use standard_testfile.
+	* gdb.cp/minsym-fallback.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.cp/misc.exp: Use standard_testfile, prepare_for_testing.
+	(do_tests): Update.
+	* gdb.cp/namespace-enum.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/namespace-nested-import.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/namespace.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/nextoverthrow.exp: Use standard_testfile.
+	* gdb.cp/no-dmgl-verbose.exp: Use standard_testfile.
+	* gdb.cp/nsdecl.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/nsimport.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/nsnested.exp: Use standard_testfile.
+	* gdb.cp/nsnoimports.exp: Use standard_testfile.
+	* gdb.cp/nsrecurs.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/nsstress.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/nsusing.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/operator.exp: Use standard_testfile.
+	* gdb.cp/oranking.exp: Use standard_testfile.
+	* gdb.cp/overload-const.exp: Use standard_testfile.
+	* gdb.cp/overload.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/ovldbreak.exp: Use standard_testfile.
+	* gdb.cp/ovsrch.exp: Use standard_testfile.
+	* gdb.cp/paren-type.exp: Use standard_testfile.
+	* gdb.cp/pass-by-ref.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/pr-1023.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/pr-1210.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/pr-574.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/pr10687.exp: Use standard_testfile, clean_restart.
+	* gdb.cp/pr10728.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.cp/pr12028.exp: Use standard_testfile.
+	* gdb.cp/pr9067.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/pr9167.exp: Use standard_testfile.
+	* gdb.cp/pr9631.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/printmethod.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/psmang.exp: Use standard_testfile, clean_restart.
+	* gdb.cp/psymtab-parameter.exp: Use standard_testfile.
+	* gdb.cp/ptype-cv-cp.exp: Use standard_testfile.
+	* gdb.cp/re-set-overloaded.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.cp/readnow-language.exp: Use standard_testfile.
+	* gdb.cp/ref-params.exp: Use standard_testfile, build_executable.
+	(gdb_start_again): Use clean_restart.
+	* gdb.cp/ref-types.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/rtti.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/shadow.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/smartp.exp: Use standard_testfile.
+	* gdb.cp/static-method.exp: Use standard_testfile.
+	* gdb.cp/static-print-quit.exp: Use standard_testfile.
+	* gdb.cp/temargs.exp: Use standard_testfile.
+	* gdb.cp/templates.exp: Use standard_testfile,
+	prepare_for_testing.
+	(do_tests): Update.
+	* gdb.cp/try_catch.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/typedef-operator.exp: Use standard_testfile.
+	* gdb.cp/userdef.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/virtbase.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/virtfunc.exp: Use standard_testfile,
+	prepare_for_testing.
+	(do_tests): Update.
+	* gdb.cp/virtfunc2.exp: Use standard_testfile,
+	prepare_for_testing.
+@
+text
+@d1 1
+a1 1
+# Copyright 2009-2012 Free Software Foundation, Inc.
+@
+
+
+1.10
+log
+@2012-01-16  Pedro Alves  <palves@@redhat.com>
+
+	Remove all calls to strace.
+@
+text
+@d54 1
+a54 2
+set testfile pr9594
+set binfile ${objdir}/${subdir}/${testfile}
+d56 1
+a56 2
+if {[gdb_compile "${srcdir}/${subdir}/${testfile}.cc" "${testfile}.o" object {c++ debug}] != ""} {
+    untested cpcompletion.exp
+a59 11
+if {[gdb_compile "${testfile}.o" ${binfile} executable {c++ debug}] != "" } {
+     untested cpcompletion.exp
+     return -1
+}
+
+gdb_exit
+
+gdb_start
+gdb_reinitialize_dir $srcdir/$subdir
+gdb_load ${binfile}
+
+d69 1
+a69 1
+set bp_location [gdb_get_line_number "Set breakpoint here" ${testfile}.cc]
+d71 1
+a71 1
+if {![runto "${testfile}.cc:$bp_location"]} {
+@
+
+
+1.9
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@a51 4
+if $tracelevel then {
+	strace $tracelevel
+}
+
+@
+
+
+1.8
+log
+@gdb/
+	* ada-lang.c (struct add_partial_datum): Update the comment for
+	expand_partial_symbol_name.
+	(ada_add_partial_symbol_completions): Rename to ...
+	(ada_expand_partial_symbol_name): ... here, change return type, update
+	function comment, call symbol_completion_match instead of
+	symbol_completion_add.
+	(ada_make_symbol_completion_list): Use now expand_partial_symbol_names
+	and ada_expand_partial_symbol_name.
+	* dwarf2read.c (dw2_expand_symtabs_matching): Support NULL
+	FILE_MATCHER.
+	(dw2_map_symbol_names): Remove.
+	(dwarf2_gdb_index_functions): Unlist dw2_map_symbol_names.
+	* psymtab.c (map_symbol_names_psymtab): Remove.
+	(expand_symtabs_matching_via_partial): Support NULL FILE_MATCHER.
+	Support KIND == ALL_DOMAIN.  Exchange the NAME_MATCHER and KIND check
+	order.
+	(psym_functions): Unlist map_symbol_names_psymtab.
+	(map_partial_symbol_names): Rename to ...
+	(expand_partial_symbol_names): ... here, change the FUN type, call
+	expand_symtabs_matching with ALL_DOMAIN and NULL FILE_MATCHER now.
+	* psymtab.h (map_partial_symbol_names): Rename to ...
+	(expand_partial_symbol_names): ... here, change the FUN type.
+	* symfile.h (struct quick_symbol_functions): Update the description of
+	expand_symtabs_matching.  Remove map_symbol_names.
+	* symtab.c (search_symbols): Add ALL_DOMAIN to the function comment.
+	(struct add_name_data): Update the comment for
+	expand_partial_symbol_name.
+	(add_partial_symbol_name): Rename to ...
+	(expand_partial_symbol_name): ... here.  Replace
+	completion_list_add_name call by strncmp.
+	(default_make_symbol_completion_list_break_on): Use now
+	expand_partial_symbol_names and expand_partial_symbol_name.
+	* symtab.h (enum search_domain): New element ALL_DOMAIN.
+
+gdb/testsuite/
+	* gdb.cp/cpcompletion.exp (complete class methods)
+	(complete class methods beginning with F): Move them above runto.  New
+	comment about the runto delimiter.
+@
+text
+@d1 1
+a1 1
+# Copyright 2009, 2010, 2011 Free Software Foundation, Inc.
+@
+
+
+1.8.2.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d1 1
+a1 1
+# Copyright 2009-2012 Free Software Foundation, Inc.
+@
+
+
+1.7
+log
+@run copyright.sh for 2011.
+@
+text
+@d77 9
+a104 8
+
+# Test that completion is restricted by class name (all methods)
+test_class_complete Foo "" "complete class methods" \
+    [list Foo Foofoo get_foo set_foo ~Foo]
+
+test_class_complete Foo F "complete class methods beginning with F" \
+    [list Foo Foofoo]
+
+@
+
+
+1.7.2.1
+log
+@gdb/
+	* ada-lang.c (struct add_partial_datum): Update the comment for
+	expand_partial_symbol_name.
+	(ada_add_partial_symbol_completions): Rename to ...
+	(ada_expand_partial_symbol_name): ... here, change return type, update
+	function comment, call symbol_completion_match instead of
+	symbol_completion_add.
+	(ada_make_symbol_completion_list): Use now expand_partial_symbol_names
+	and ada_expand_partial_symbol_name.
+	* dwarf2read.c (dw2_expand_symtabs_matching): Support NULL
+	FILE_MATCHER.
+	(dw2_map_symbol_names): Remove.
+	(dwarf2_gdb_index_functions): Unlist dw2_map_symbol_names.
+	* psymtab.c (map_symbol_names_psymtab): Remove.
+	(expand_symtabs_matching_via_partial): Support NULL FILE_MATCHER.
+	Support KIND == ALL_DOMAIN.  Exchange the NAME_MATCHER and KIND check
+	order.
+	(psym_functions): Unlist map_symbol_names_psymtab.
+	(map_partial_symbol_names): Rename to ...
+	(expand_partial_symbol_names): ... here, change the FUN type, call
+	expand_symtabs_matching with ALL_DOMAIN and NULL FILE_MATCHER now.
+	* psymtab.h (map_partial_symbol_names): Rename to ...
+	(expand_partial_symbol_names): ... here, change the FUN type.
+	* symfile.h (struct quick_symbol_functions): Update the description of
+	expand_symtabs_matching.  Remove map_symbol_names.
+	* symtab.c (search_symbols): Add ALL_DOMAIN to the function comment.
+	(struct add_name_data): Update the comment for
+	expand_partial_symbol_name.
+	(add_partial_symbol_name): Rename to ...
+	(expand_partial_symbol_name): ... here.  Replace
+	completion_list_add_name call by strncmp.
+	(default_make_symbol_completion_list_break_on): Use now
+	expand_partial_symbol_names and expand_partial_symbol_name.
+	* symtab.h (enum search_domain): New element ALL_DOMAIN.
+
+gdb/testsuite/
+	* gdb.cp/cpcompletion.exp (complete class methods)
+	(complete class methods beginning with F): Move them above runto.  New
+	comment about the runto delimiter.
+@
+text
+@a76 9
+# Test that completion is restricted by class name (all methods)
+test_class_complete Foo "" "complete class methods" \
+    [list Foo Foofoo get_foo set_foo ~Foo]
+
+test_class_complete Foo F "complete class methods beginning with F" \
+    [list Foo Foofoo]
+
+# The tests below depend on the current code scope.
+
+d96 8
+@
+
+
+1.6
+log
+@	gdb/testsuite/
+	* gdb.cp/cpcompletion.exp: Specify source file name explicitly.
+@
+text
+@d1 1
+a1 1
+# Copyright 2009, 2010 Free Software Foundation, Inc.
+@
+
+
+1.5
+log
+@Update copyright year in most headers.
+
+Automatic update by copyright.sh.
+@
+text
+@d79 1
+a79 1
+if {![runto $bp_location]} {
+d81 1
+@
+
+
+1.4
+log
+@	* gdb.cp/cpcompletion.exp (test_class_complete): New procedure.
+	Add two new C++ completer tests which limit the output to a
+	given class.
+@
+text
+@d1 1
+a1 1
+# Copyright 2009 Free Software Foundation, Inc.
+@
+
+
+1.3
+log
+@gdb/testsuite/
+	Fix gdb.base/macscp.exp when using custom inputrc.
+	* gdb.base/completion.exp: Remove env(INPUTRC) set and restore.
+	* gdb.base/readline.exp: Remove env(INPUTRC) set and restore.  Remove
+	env(TERM) set.
+	* gdb.cp/cpcompletion.exp: Remove env(INPUTRC) set.
+	* lib/gdb.exp (default_gdb_start): Add env(INPUTRC) and env(TERM) set.
+@
+text
+@d18 34
+d95 8
+@
+
+
+1.2
+log
+@Fix ChangeLog to point to the correct bug, PR gdb/9594.
+
+gdb/testsuite
+	* gdb.cp/cpcompletion.exp: Name the test "pr9594".
+	* gdb.cp/pr2489.cc: Rename...
+	* gdb.cp/pr9594.cc: ... to this.
+@
+text
+@a38 12
+# Don't let a .inputrc file or an existing setting of INPUTRC mess up
+# the test results.  Even if /dev/null doesn't exist on the particular
+# platform, the readline library will use the default setting just by
+# failing to open the file.  OTOH, opening /dev/null successfully will
+# also result in the default settings being used since nothing will be
+# read from this file.
+global env
+if [info exists env(INPUTRC)] {
+    set old_inputrc $env(INPUTRC)
+}
+set env(INPUTRC) "/dev/null"
+
+@
+
+
+1.1
+log
+@gdb
+	PR gdb/2489:
+	* completer.c (count_struct_fields): Count method names.
+	(add_struct_fields): Add matching method names.
+gdb/testsuite
+	* gdb.cp/Makefile.in (EXECUTABLES): Add pr2489.
+	* gdb.cp/pr2489.cc: New file.
+	* gdb.cp/cpcompletion.exp: New file.
+@
+text
+@d24 1
+a24 1
+set testfile pr2489
+@
+

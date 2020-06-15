@@ -1,0 +1,375 @@
+head	1.5;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.3
+	gdb_7_6-2013-04-26-release:1.3
+	gdb_7_6-branch:1.3.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.3;
+locks; strict;
+comment	@ * @;
+
+
+1.5
+date	2013.10.04.07.42.06;	author qiyao;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2013.10.04.07.32.56;	author qiyao;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2013.03.07.17.52.58;	author palves;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2013.01.01.06.32.50;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2012.12.15.03.50.22;	author qiyao;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.5
+log
+@Move pending_event to remote_notif_state.
+
+This patch moves pending_event to remote_notif_state.  All pending
+events are destroyed in remote_notif_state_xfree.  However,
+discard_pending_stop_replies release pending event too, so the pending
+event of stop notification is released twice, we need some refactor
+here.  We add a new function discard_pending_stop_replies_in_queue
+which only discard events in stop_reply_queue, and let
+remote_notif_state_xfree release pending event for all notif_client.
+
+After this change, discard_pending_stop_replies is only attached to
+ifnerior_exit observer, so the INF can't be NULL any more.  The
+NULL checking is removed too.
+
+gdb:
+
+2013-10-04  Yao Qi  <yao@@codesourcery.com>
+
+	* remote-notif.h (REMOTE_NOTIF_ID): New enum.
+	(struct notif_client) <pending_event>: Moved
+	to struct remote_notif_state.
+	<id>: New field.
+	(struct remote_notif_state) <pending_event>: New field.
+	(notif_event_xfree): Declare.
+	* remote-notif.c (handle_notification): Adjust.
+	(notif_event_xfree): New function.
+	(do_notif_event_xfree): Call notif_event_xfree.
+	(remote_notif_state_xfree): Call notif_event_xfree to free
+	each element in field pending_event.
+	* remote.c (discard_pending_stop_replies): Remove declaration.
+	(discard_pending_stop_replies_in_queue): Declare.
+	(remote_close): Call discard_pending_stop_replies_in_queue
+	instead of discard_pending_stop_replies.
+	(remote_start_remote): Adjust.
+	(stop_reply_xfree): Call notif_event_xfree.
+	(notif_client_stop): Adjust initialization.
+	(remote_notif_remove_all): Rename it to ...
+	(remove_stop_reply_for_inferior): ... this.  Update comments.
+	Don't check INF is NULL.
+	(discard_pending_stop_replies): Return early if notif_state is
+	NULL.  Adjust.  Don't check INF is NULL.
+	(remote_notif_get_pending_events): Adjust.
+ 	(discard_pending_stop_replies_in_queue): New function.
+	(remote_wait_ns): Likewise.
+@
+text
+@/* Remote notification in GDB protocol
+
+   Copyright (C) 1988-2013 Free Software Foundation, Inc.
+
+   This file is part of GDB.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+#ifndef REMOTE_NOTIF_H
+#define REMOTE_NOTIF_H
+
+#include "queue.h"
+
+/* An event of a type of async remote notification.  */
+
+struct notif_event
+{
+  /* Destructor.  Release everything from SELF, but not SELF
+     itself.  */
+  void (*dtr) (struct notif_event *self);
+};
+
+/* ID of the notif_client.  */
+
+enum REMOTE_NOTIF_ID
+{
+  REMOTE_NOTIF_STOP = 0,
+  REMOTE_NOTIF_LAST,
+};
+
+/* A client to a sort of async remote notification.  */
+
+typedef struct notif_client
+{
+  /* The name of notification packet.  */
+  const char *name;
+
+  /* The packet to acknowledge a previous reply.  */
+  const char *ack_command;
+
+  /* Parse BUF to get the expected event and update EVENT.  This
+     function may throw exception if contents in BUF is not the
+     expected event.  */
+  void (*parse) (struct notif_client *self, char *buf,
+		 struct notif_event *event);
+
+  /* Send field <ack_command> to remote, and do some checking.  If
+     something wrong, throw an exception.  */
+  void (*ack) (struct notif_client *self, char *buf,
+	       struct notif_event *event);
+
+  /* Check this notification client can get pending events in
+     'remote_notif_process'.  */
+  int (*can_get_pending_events) (struct notif_client *self);
+
+  /* Allocate an event.  */
+  struct notif_event *(*alloc_event) (void);
+
+  /* Id of this notif_client.  */
+  const enum REMOTE_NOTIF_ID id;
+} *notif_client_p;
+
+DECLARE_QUEUE_P (notif_client_p);
+
+/* State on remote async notification.  */
+
+struct remote_notif_state
+{
+  /* Notification queue.  */
+
+  QUEUE(notif_client_p) *notif_queue;
+
+  /* Asynchronous signal handle registered as event loop source for when
+     the remote sent us a notification.  The registered callback
+     will do a ACK sequence to pull the rest of the events out of
+     the remote side into our event queue.  */
+
+  struct async_event_handler *get_pending_events_token;
+
+/* One pending event for each notification client.  This is where we
+   keep it until it is acknowledged.  When there is a notification
+   packet, parse it, and create an object of 'struct notif_event' to
+   assign to it.  This field is unchanged until GDB starts to ack
+   this notification (which is done by
+   remote.c:remote_notif_pending_replies).  */
+
+  struct notif_event *pending_event[REMOTE_NOTIF_LAST];
+};
+
+void remote_notif_ack (struct notif_client *nc, char *buf);
+struct notif_event *remote_notif_parse (struct notif_client *nc,
+					char *buf);
+
+void notif_event_xfree (struct notif_event *event);
+
+void handle_notification (struct remote_notif_state *notif_state,
+			  char *buf);
+
+void remote_notif_process (struct remote_notif_state *state,
+			   struct notif_client *except);
+struct remote_notif_state *remote_notif_state_allocate (void);
+void remote_notif_state_xfree (struct remote_notif_state *state);
+
+extern struct notif_client notif_client_stop;
+
+extern int notif_debug;
+
+#endif /* REMOTE_NOTIF_H */
+@
+
+
+1.4
+log
+@Move notif_queue and remote_async_get_pending_events_token to remote_state
+
+This patch also removes notif_xfree, and don't pass it QUEUE_alloc, because
+we don't have to free notif_client when the remote_notif_state is freed.
+
+gdb:
+
+2013-10-04  Yao Qi  <yao@@codesourcery.com>
+
+	* remote-notif.c (DECLARE_QUEUE_P): Remove.
+	(notif_queue): Remove.
+	(remote_notif_process): Add one parameter 'notif_queue'.
+	Update comments.  Callers update.
+	(remote_async_get_pending_events_token): Remove.
+	(remote_notif_register_async_event_handler): Remove.
+	(remote_notif_unregister_async_event_handler): Remove.
+	(handle_notification): Add parameter 'notif_queue'.  Update
+	comments.  Callers update.
+	(notif_xfree): Remove.
+	(remote_notif_state_allocate): New function.
+	(remote_notif_state_xfree): New function.
+	(_initialize_notif): Remove code to allocate queue.
+	* remote-notif.h (DECLARE_QUEUE_P): Moved from remote-notif.c.
+	(struct remote_notif_state): New.
+	(handle_notification): Update declaration.
+	(remote_notif_process): Likewise.
+	(remote_notif_register_async_event_handler): Remove.
+	(remote_notif_unregister_async_event_handler): Remove.
+	(remote_notif_state_allocate): Declare.
+	(remote_notif_state_xfree): Declare.
+	* remote.c (struct remote_state) <notif_state>: New field.
+	(remote_close): Don't call
+	remote_notif_unregister_async_event_handler.  Call
+	remote_notif_state_xfree.
+	(remote_open_1): Don't call
+	remote_notif_register_async_event_handler.  Call
+	remote_notif_state_allocate.
+@
+text
+@d34 8
+d70 2
+a71 7
+  /* One pending event.  This is where we keep it until it is
+     acknowledged.  When there is a notification packet, parse it,
+     and create an object of 'struct notif_event' to assign to
+     it.  This field is unchanged until GDB starts to ack this
+     notification (which is done by
+     remote.c:remote_notif_pending_replies).  */
+  struct notif_event *pending_event;
+d90 9
+d105 2
+@
+
+
+1.3
+log
+@remote-notif.[h|c]:notif_debug: Change type to int.
+
+notif_debug is installed as variable of a "signed" command:
+
+  add_setshow_boolean_cmd ("notification", no_class, &notif_debug,
+                           _("\
+
+and:
+
+command.h:extern void add_setshow_boolean_cmd (char *name,
+command.h-                                   enum command_class class,
+command.h-                                   int *var,
+
+2013-03-07  Pedro Alves  <palves@@redhat.com>
+
+	* remote-notif.c (notif_debug): Change type to int.
+	* remote-notif.h (notif_debug): Likewise.
+@
+text
+@d71 18
+d93 2
+a94 1
+void handle_notification (char *buf);
+d96 4
+a99 2
+void remote_notif_register_async_event_handler (void);
+void remote_notif_unregister_async_event_handler (void);
+a100 1
+void remote_notif_process (struct notif_client *except);
+@
+
+
+1.2
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@d83 1
+a83 1
+extern unsigned int notif_debug;
+@
+
+
+1.1
+log
+@gdb/
+2012-12-15  Yao Qi  <yao@@codesourcery.com>
+
+	* Makefile.in (REMOTE_OBS): Add "remote-notif.o".
+	(SFILES): Add "remote-notif.c".
+	(HFILES_NO_SRCDIR): Add "remote-notif.h" and "common/queue.h".
+	* remote-notif.c: New.  Factored out from remote.c.
+	* remote-notif.h: New.
+	* remote.c: Include "remote-notif.h".
+	(stop_reply_xmalloc, do_stop_reply_xfree):
+	(remote_parse_stop_reply, remote_get_pending_stop_replies):
+	(remote_async_get_pending_events_handler): Remove declarations.
+	(remote_parse_stop_reply): Declare.
+	(pending_stop_reply): Remove.
+	(remote_async_get_pending_events_token): Move to
+	remote-notif.c.
+	(remote_close): Replace 'delete_async_event_handler' with
+	remote_notif_unregister_async_event_handler.
+	Don't call discard_pending_stop_replies.
+	(remote_start_remote): Replace code with remote_notif_parse
+	and remote_notif_get_pending_replies.
+	(remote_open_1): Replace 'create_async_event_handler' with
+	remote_notif_register_async_event_handler.
+	(extended_remote_attach_1): Call remote_notif_parse and
+	notif_stop_reply_push.
+	(struct stop_reply) <next>: Remove.
+	<base>: New field.
+	Callers update.
+	(stop_reply_queue): Change its type.
+	(stop_reply_xmalloc, do_stop_reply_xfree): Remove.
+	(remote_notif_remove_all): New.
+	(discard_pending_stop_replies): Update.
+	(remote_notif_stop_ack, stop_reply_dtr): New.
+	(remote_notif_stop_alloc_event): New.
+	(notif_client_stop): New variable.
+	(stop_reply_match_ptid, stop_reply_match_ptid_and_ws: New.
+	(queued_stop_reply, peek_stop_reply): Adjust.
+	(remote_get_pending_stop_replies): Rename to
+	remote_notif_get_pending_events.
+	(handle_notification): Move to remote-notif.c.
+	(remote_async_get_pending_events_handler): Likewise.
+	(remote_wait_as): Adjust to call remote_notif_parse.
+	Call 'getpkt_or_notif_sane' instead of 'getpkt_sane'.
+	Return minus_one_ptid early if gets a notification.
+	(remote_wait): Call QUEUE_is_empty (notif_reply_p).
+	(_initialize_remote): Call QUEUE_alloc.  Update caller.
+	(remote_resume): Call 'remote_notif_process' in all-stop mode.
+	* remote.h: Include "remote-notif.h".
+	(remote_notif_get_pending_replies): Declare.
+@
+text
+@d3 1
+a3 1
+   Copyright (C) 1988-2012 Free Software Foundation, Inc.
+@
+

@@ -1,0 +1,360 @@
+head	1.8;
+access;
+symbols
+	cygwin-1_7_17-release:1.7
+	cygwin-64bit-branch:1.7.0.8
+	cygwin-1_7_16-release:1.7
+	cygwin-1_7_15-release:1.7
+	cygwin-1_7_14_2-release:1.7
+	cygwin-1_7_14-release:1.7
+	cygwin-1_7_12-release:1.7
+	cygwin-1_7_11-release:1.7
+	cygwin-1_7_10-release:1.7
+	cygwin-1_7_9-release:1.7
+	cygwin-1_7_8-release:1.7
+	cygwin-1_7_7-release:1.7
+	cygwin-1_7_5-release:1.7
+	cygwin-1_7_4-release:1.7
+	cygwin-1_7_3-release:1.7
+	cygwin-1_7_2-release:1.7
+	cygwin-1_7_1-release:1.7
+	cv-branch-2:1.7.0.6
+	cr-0x5f1:1.7.0.4
+	cv-branch:1.7.0.2
+	cr-0x3b58:1.6.0.2
+	cr-0x9e:1.3.0.12
+	cr-0x9d:1.3.0.10
+	corinna-01:1.3
+	cr-0x9c:1.3.0.8
+	cr-0x9b:1.3.0.6
+	cr-0x99:1.3
+	Z-emcb-cygwin_daemon:1.3.0.4
+	w32api-2_2:1.3
+	mingw-runtime-2_4:1.3
+	mingw-std-ns-branch:1.3.0.2
+	mingw-runtime-2_0:1.2
+	mingwex:1.1.0.2;
+locks; strict;
+comment	@ * @;
+
+
+1.8
+date	2012.11.07.16.52.19;	author cgf;	state dead;
+branches;
+next	1.7;
+
+1.7
+date	2006.07.03.10.32.58;	author dannysmith;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2005.10.08.02.14.45;	author dannysmith;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2005.08.25.08.39.54;	author dannysmith;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2005.08.25.02.35.34;	author dannysmith;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2002.09.05.11.51.26;	author earnie;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2002.06.13.10.20.44;	author dannysmith;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2002.03.22.22.43.17;	author dannysmith;	state dead;
+branches
+	1.1.2.1;
+next	;
+
+1.1.2.1
+date	2002.03.22.22.43.17;	author dannysmith;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.8
+log
+@* mingw: Delete obsolete directory.
+* w32api: Ditto.
+@
+text
+@#include <fenv.h>
+#include "cpu_features.h"
+
+/* 7.6.4.1
+   The fegetenv function stores the current floating-point environment
+   in the object pointed to by envp.  */
+
+int fegetenv (fenv_t * envp)
+{
+  __asm__ ("fnstenv %0;": "=m" (*envp));
+ /* fnstenv sets control word to non-stop for all exceptions, so we
+    need to reload our env to restore the original mask.  */
+  __asm__ ("fldenv %0" : : "m" (*envp));
+
+  /* And the SSE environment.  */
+  if (__HAS_SSE)
+    __asm__ ("stmxcsr %0" : "=m" (envp->__mxcsr));
+
+  return 0;
+}
+@
+
+
+1.7
+log
+@ 	Support SSE float environment in fenv.h functions.
+
+	* cpu_features.c: New file.
+	* cpu_features.h: New file.
+	* crt1.c: Include "cpu_features.h".
+	(__mingw_CRTStartup): Call cpu_features_init().
+	* Makefile.in (MING_OBJS): Add cpu_features.c.
+	(SRCDIST_FILES): Add cpu_features.c, cpu_features.h.
+	* include/fenv,h ( fenv_t;): Append  __mxcsr field.
+	(__MXCSR_EXCEPT_FLAG_SHIFT): New define.
+	(__MXCSR_EXCEPT_MASK_SHIFT): New define.
+	(__MXCSR_ROUND_FLAG_SHIFT): New define.
+	* mingwex/feclearexcept.c: Include "cpu_features.h".
+	Handle SSE environment.
+	* mingwex/fegetenv.c: Likewise.
+	* mingwex/feholdexcept.c: Likewise.
+	* mingwex/fesetenv.c: Likewise.
+	* mingwex/fesetexceptflag.c: Likewise.
+	* mingwex/fesetround.c: Likewise.
+	* mingwex/fetestexcept.c: Likewise.
+	* mingwex/feupdateenv.c: Likewise.
+	* mingwex/fegetround.c: Add comment.
+@
+text
+@@
+
+
+1.6
+log
+@	* mingwex/fegetenv.c (fegetenv): Restore exception masks.
+	* mingwex/feholdexcept.c (feholdexcept): Don't set exceptions
+	to non-stop. Use "fnclex" to clear exception flags.
+@
+text
+@d2 1
+d14 5
+@
+
+
+1.5
+log
+@	* mingwex/fe*.c: Revert previous changes.
+	* include/fenv.h: Revert previous changes.
+
+	Add Changelog entry for the reverted change.
+@
+text
+@d5 1
+a5 1
+   in the object pointed to by envp. */
+d10 3
+a14 1
+
+@
+
+
+1.4
+log
+@	* mingwex/feclearexcept.c (feclearexcept): Change declaration.
+	Do not return a value.
+	* mingwex/fegetexceptflag.c (fegetexceptflag): Likewise.
+	* mingwex/feraiseexcept.c (feraiseexcept): Likewise.
+	* mingwex/fesetexceptflag.c (fesetexceptflag): Likewise.
+	* mingwex/fegetenv.c (fegetenv): Likewise.
+	* mingwex/fesetenv.c (fesetenv): Likewise.
+	* mingwex/feupdateenv.c (feupdateenv): Likewise.
+	* include/fenv.h (feclearexcept, fegetexceptflag, feraiseexcept,
+	fesetexceptflag, fegetenv, fesetenv, feupdateenv): Correct
+	prototypes.
+@
+text
+@d7 1
+a7 1
+void fegetenv (fenv_t * envp)
+d10 1
+@
+
+
+1.3
+log
+@
+	* mingwex/fegetenv.c: Change to \n line endings.
+	* mingwex/vsnprintf.c: Ditto.
+	* mingwex/vsnwprintf.c: Ditto.
+@
+text
+@d7 1
+a7 1
+int fegetenv (fenv_t * envp)
+a9 1
+  return 0;
+@
+
+
+1.2
+log
+@	* include/_mingw.h: Increment version to 2.0.
+	* Makefile.in: Ditto.
+	Merge in mingwex branch.
+@
+text
+@d1 12
+a12 12
+#include <fenv.h>
+
+/* 7.6.4.1
+   The fegetenv function stores the current floating-point environment
+   in the object pointed to by envp. */
+
+int fegetenv (fenv_t * envp)
+{
+  __asm__ ("fnstenv %0;": "=m" (*envp));
+  return 0;
+}
+
+@
+
+
+1.1
+log
+@file fegetenv.c was initially added on branch mingwex.
+@
+text
+@d1 12
+@
+
+
+1.1.2.1
+log
+@	* configure.in: Add mingwex as SUBDIRS and configdirs.
+	* configure: Regenerate.
+	* Makefile.in (MINGW_OBJS): Remove dirent.o.
+	(SRC_DIST_FILES): Remove dirent.c.
+	* dirent.c: Remove.
+	* include/stdlib.h (_Exit): Add static inline
+	function.
+	(struct lldiv_t): Define.
+	(lldiv): Add prototype.
+	(llabs): Add extern inline function.
+	(strtoll,strtoull): Add prototypes.
+	(wcstol, wcstoul, wcstod): Group together.
+	(strtof, wcstof): Add extern inline definitions.
+	(atoll,lltoa,ulltoa, wtoll, lltow ulltow): Add prototypes
+	and extern inline definitions.
+	* include/wchar.h (fwide, wcstoll,wcstoull, wmemchr
+	wmemcmp, wmemcpy, wmemmove, wmemset. mbsinit): Add
+	prototypes.
+	(wcstol, wcstoul,wcstod): Copy prototypes from stdlib.h.
+	(wcstof): Add extern inline definition.
+	* include/math.h (nan, nanf): Add prototypes.
+	(NAN, INFINITE): Define constants.
+	(fpclassify, isnan ,signbit): Add macros and supporting float
+	and double functions.
+	(isfinite, isinf, isnormal): Add macros.
+	(isgreater, isless, isgreaterequal, islessequal,islessgreater):
+	Add macros.
+	(rint, rintf, round, roundf, trunc. truncf, fmax, fmaxf,
+	fmin, fminf, fma, fmaf, log2, log2f): Add prototypes.
+	(copysign, logb, nextafter, scalb): Add prototypes and
+	inline stubs for underscored versions in msvcrt.dll.
+	* include/inttypes.h: New file.
+	* include/fenv.h: New file
+
+	Add new mingwex subdir and files.
+	* mingwex: New directory.
+	* mingwex/Makefile.in: New file.
+	* mingwex/configure.in: New file.
+	* mingwex/configure: Generate.
+	* mingwex/dirent.c: Moved here from parent dir.
+	* mingwex/atoll.c: New file.
+	* mingwex/feclearexcept.c: New file.
+	* mingwex/fegetenv.c: New file.
+	* mingwex/fegetexceptflag.c: New file.
+	* mingwex/fegetround.c: New file.
+	* mingwex/feholdexcept.c: New file.
+	* mingwex/feraiseexcept.c: New file.
+	* mingwex/fesetenv.c: New file.
+	* mingwex/fesetexceptflag.c: New file.
+	* mingwex/fesetround.o: New file.
+	* mingwex/fetestexcept.c: New file.
+	* mingwex/feupdateenv.c: New file.
+	* mingwex/fma.S: New file.
+	* mingwex/fmaf.S: New file.
+	* mingwex/fmax.c: New file.
+	* mingwex/fmaxf.c: New file.
+	* mingwex/fmin.c: New file.
+	* mingwex/fminf.c: New file.
+	* mingwex/fp_consts.c: New file.
+	* mingwex/fpclassify.c: New file.
+	* mingwex/fucom.c: New file.
+	* mingwex/fwide.c: New file.
+	* mingwex/imaxabs.c: New file.
+	* mingwex/imaxdiv.c: New file.
+	* mingwex/isnan.c: New file.
+	* mingwex/isnanf.c: New file.
+	* mingwex/lltoa.c: New file.
+	* mingwex/lltow.c: New file.
+	* mingwex/log2.c: New file.
+	* mingwex/log2f.c: New file.
+	* mingwex/math_stubs.c: New file.
+	* mingwex/mbsinit.c: New file.
+	* mingwex/rint.c: New file.
+	* mingwex/round.c: New file.
+	* mingwex/signbit.c: New file.
+	* mingwex/sitest.c: New file.
+	* mingwex/strtof.c: New file.
+	* mingwex/strtoimax.c: New file.
+	* mingwex/strtoumax.c: New file.
+	* mingwex/testwmem.c: New file.
+	* mingwex/trunc.c: New file.
+	* mingwex/ulltoa.c: New file.
+	* mingwex/ulltow.c: New file.
+	* mingwex/wcstof.c: New file.
+	* mingwex/wcstoimax.c: New file.
+	* mingwex/wcstoumax.c: New file.
+	* mingwex/wmemchr.c: New file.
+	* mingwex/wmemcmp.c: New file.
+	* mingwex/wmemcpy.c: New file.
+	* mingwex/wmemmove.c: New file.
+	* mingwex/wmemset.c: New file.
+	* mingwex/wtoll.c: New file.
+@
+text
+@a0 12
+#include <fenv.h>
+
+/* 7.6.4.1
+   The fegetenv function stores the current floating-point environment
+   in the object pointed to by envp. */
+
+int fegetenv (fenv_t * envp)
+{
+  __asm__ ("fnstenv %0;": "=m" (*envp));
+  return 0;
+}
+
+@
+

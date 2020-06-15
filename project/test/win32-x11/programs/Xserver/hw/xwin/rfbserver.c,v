@@ -1,0 +1,1393 @@
+head     1.1;
+branch   1.1.1;
+access   ;
+symbols  win32-x11-2001-03-26:1.1.1.1 SNAPSHOT:1.1.1;
+locks    ; strict;
+comment  @ * @;
+expand   @o@;
+
+
+1.1
+date     2001.03.25.19.37.24;  author ssiddiqi;  state Exp;
+branches 1.1.1.1;
+next     ;
+
+1.1.1.1
+date     2001.03.25.19.37.24;  author ssiddiqi;  state Exp;
+branches ;
+next     ;
+
+
+desc
+@@
+
+
+
+1.1
+log
+@Initial revision
+@
+text
+@/*
+ * rfbserver.c - deal with server-side of the RFB protocol.
+ */
+
+/*
+ *  Copyright (C) 1999 AT&T Laboratories Cambridge.  All Rights Reserved.
+ *
+ *  This is free software; you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This software is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this software; if not, write to the Free Software
+ *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307,
+ *  USA.
+ */
+
+#include <stdio.h>
+#include <stdlib.h>
+//#include <unistd.h>
+//#include <pwd.h>
+#include <sys/types.h>
+#include <Xwinsock.h>
+//#include <netinet/in.h>
+//#include <arpa/inet.h>
+#include "windowstr.h"
+#include "rfb.h"
+#include "input.h"
+#include "mipointer.h"
+#include "sprite.h"
+#include "vnckeysymdef.h"
+
+rfbClientPtr rfbClientHead = NULL;
+rfbClientPtr pointerClient = NULL;  /* Mutex for pointer events */
+
+Bool rfbAlwaysShared = FALSE;
+Bool rfbNeverShared = FALSE;
+Bool rfbDontDisconnect = FALSE;
+/* Windows only start */
+/* TODO: put in separete file in vnc directory */
+
+typedef struct {
+    CARD32 keycodes[4];
+    CARD32 releaseModifiers;
+} KeyActionSpec;
+
+typedef struct vncKeymapping_struct {
+	UINT wincode;
+	UINT Xcode;
+} vncKeymapping;
+
+static const vncKeymapping keymap[] = {
+	{VK_BACK,		XK_BackSpace},
+	{VK_TAB,		XK_Tab},
+	{VK_CLEAR,		XK_Clear},
+	{VK_RETURN,		XK_Return},
+	{VK_LSHIFT,		XK_Shift_L},
+	{VK_RSHIFT,		XK_Shift_R},
+    {VK_SHIFT,      XK_Shift_L},
+	{VK_LCONTROL,	XK_Control_L},
+	{VK_RCONTROL,	XK_Control_R},
+    {VK_CONTROL,	XK_Control_L},
+    {VK_LMENU,		XK_Alt_L},
+    {VK_RMENU,		XK_Alt_R},
+    {VK_MENU,		XK_Alt_L},
+    {VK_PAUSE,		XK_Pause},
+    {VK_CAPITAL,	XK_Caps_Lock},
+    {VK_ESCAPE,		XK_Escape},
+    {VK_SPACE,		XK_space},
+    {VK_PRIOR,		XK_Page_Up},
+    {VK_NEXT,		XK_Page_Down},
+    {VK_END,		XK_End},
+    {VK_HOME,		XK_Home},
+    {VK_LEFT,		XK_Left},
+    {VK_UP,			XK_Up},
+    {VK_RIGHT,		XK_Right},
+    {VK_DOWN,		XK_Down},
+    {VK_SELECT,		XK_Select},
+    {VK_EXECUTE,	XK_Execute},
+    {VK_SNAPSHOT,	XK_Print},
+    {VK_INSERT,		XK_Insert},
+    {VK_DELETE,		XK_Delete},
+    {VK_HELP,		XK_Help},
+    {VK_NUMPAD0,	XK_KP_0},
+    {VK_NUMPAD1,	XK_KP_1},
+    {VK_NUMPAD2,	XK_KP_2},
+    {VK_NUMPAD3,	XK_KP_3},
+    {VK_NUMPAD4,	XK_KP_4},
+    {VK_NUMPAD5,	XK_KP_5},
+    {VK_NUMPAD6,	XK_KP_6},
+    {VK_NUMPAD7,	XK_KP_7},
+    {VK_NUMPAD8,	XK_KP_8},
+    {VK_NUMPAD9,	XK_KP_9},
+    {VK_MULTIPLY,	XK_KP_Multiply},
+    {VK_ADD,		XK_KP_Add},
+    {VK_SEPARATOR,	XK_KP_Separator},
+    {VK_SUBTRACT,	XK_KP_Subtract},
+    {VK_DECIMAL,	XK_KP_Decimal},
+    {VK_DIVIDE,		XK_KP_Divide},
+    {VK_F1,			XK_F1},
+    {VK_F2,			XK_F2},
+    {VK_F3,			XK_F3},
+    {VK_F4,			XK_F4},
+    {VK_F5,			XK_F5},
+    {VK_F6,			XK_F6},
+    {VK_F7,			XK_F7},
+    {VK_F8,			XK_F8},
+    {VK_F9,			XK_F9},
+    {VK_F10,		XK_F10},
+    {VK_F11,		XK_F11},
+    {VK_F12,		XK_F12},
+    {VK_F13,		XK_F13},
+    {VK_F14,		XK_F14},
+    {VK_F15,		XK_F15},
+    {VK_F16,		XK_F16},
+    {VK_F17,		XK_F17},
+    {VK_F18,		XK_F18},
+    {VK_F19,		XK_F19},
+    {VK_F20,		XK_F20},
+    {VK_F21,		XK_F21},
+    {VK_F22,		XK_F22},
+    {VK_F23,		XK_F23},
+    {VK_F24,		XK_F24},
+    {VK_NUMLOCK,	XK_Num_Lock},
+    {VK_SCROLL,		XK_Scroll_Lock}
+};
+
+const CARD32 KEYMAP_LCONTROL = 0x0001;
+const CARD32 KEYMAP_RCONTROL = 0x0002;
+const CARD32 KEYMAP_LALT     = 0x0004;
+const CARD32 KEYMAP_RALT     = 0x0008;
+const CARD32 VoidKeyCode = XK_VoidSymbol;
+
+#define BUMPSCROLLBORDER 4
+#define BUMPSCROLLAMOUNTX 16
+#define BUMPSCROLLAMOUNTY 4
+
+HBITMAP  hBitmap;
+HDC		 hBitmapDC;
+HPALETTE hPalette;
+HWND     m_hwnd;
+
+int m_hScrollPos = 0;
+int m_vScrollPos = 0;
+int m_hScrollMax = 0;
+int m_vScrollMax = 0;
+int m_cliheight = 0;
+int m_cliwidth = 0;
+int m_fullwinwidth = 0;
+int m_fullwinheight = 0;
+
+#define WM_REGIONUPDATED WM_USER+1
+
+#define COLOR_FROM_PIXEL(p) (PALETTERGB( \
+                (int) (((p >> rs) & rm) * 255 / rm), \
+                (int) (((p >> gs) & gm) * 255 / gm), \
+                (int) (((p >> bs) & bm) * 255 / bm) ))
+
+
+
+//
+// MessageBoxPrintf
+//
+
+int MessageBoxPrintf (TCHAR * szCaption, TCHAR * szFormat, ...)
+{
+     TCHAR   szBuffer [1024] ;
+     va_list pArgList ;
+     va_start (pArgList, szFormat) ;
+     wvsprintf (szBuffer, szFormat, pArgList) ;
+     va_end (pArgList) ;
+     return MessageBox (NULL, szBuffer, szCaption, 0) ;
+}
+
+
+//
+// GdiUpdateRect
+//
+
+int GdiUpdateRect(int x, int y, int w, int h, char *pfbMemory)
+{
+    RECT rect;
+	UINT i, k, j;
+	UINT bitsPerPixel = screenInfo.screens[0]->allowedDepths->depth;
+	UINT bytesBetweenInputLines;
+	CARD8  rs;
+	CARD8  gs;
+	CARD8  bs;
+	CARD16 rm;
+	CARD16 gm;
+	CARD16 bm;
+	CARD8  *p8;
+	CARD16 *p16;
+	CARD32 *p32;
+    register CARD8 pix8;
+    register CARD16 pix16;
+    register CARD32 pix32;
+
+	if (bitsPerPixel == 8)
+	{
+		rs = 0;
+		gs = 3;
+		bs = 6;
+		rm = 7;
+		gm = 7;
+		bm = 3;
+	}
+	else if (bitsPerPixel == 16)
+	{
+		rs =  0;
+		gs =  6;
+		bs = 11;
+		rm = 63;
+		gm = 31;
+		bm = 31;
+	}
+	else if (bitsPerPixel == 24)
+	{
+		rs =  0;
+		gs =  8;
+		bs =  16;
+		rm = 255;
+		gm = 255;
+		bm = 255;
+	}
+	else /* bitsPerPixel == 32 */
+	{
+		rs =  0;
+		gs = 11;
+		bs = 22;
+		rm = 2047;
+		gm = 2047;
+		bm = 1023;
+	}
+
+    SelectObject (hBitmapDC, hBitmap);
+	SelectPalette(hBitmapDC, hPalette, FALSE);
+	RealizePalette(hBitmapDC);
+
+	switch (bitsPerPixel)
+	{
+	case 8:
+		    bytesBetweenInputLines = screenInfo.screens[0]->width;
+			for (k = y; k < y+h; k++)
+			{
+				p8 = (CARD8 *)(pfbMemory + (bytesBetweenInputLines * k) + (x * bitsPerPixel / 8));
+				for (j = x; j < x+w; j++)
+				{
+					pix8 = *p8;
+					SetPixelV(hBitmapDC, j,k, COLOR_FROM_PIXEL(pix8));
+					p8++;
+				}
+			}
+			break;
+	case 16:
+			bytesBetweenInputLines = screenInfo.screens[0]->width * 2;
+			for (k = y; k < y+h; k++)
+			{
+				p16 = (CARD16 *)(pfbMemory + (bytesBetweenInputLines * k) + (x * bitsPerPixel / 8));
+				for (j = x; j < x+w; j++)
+				{
+					pix16 = *p16;
+					SetPixelV(hBitmapDC, j,k, COLOR_FROM_PIXEL(pix16));
+					p16++;
+				}
+			}
+			break;
+	case 24:
+		    // Needs to be mapped on 24 bits
+			bytesBetweenInputLines = screenInfo.screens[0]->width * 3;
+			for (k = y; k < y+h; k++)
+			{
+				p8 = (CARD32 *)(pfbMemory + (bytesBetweenInputLines * k) + (x * bitsPerPixel / 8));
+				for (j = x; j < x+w; j++)
+				{
+					pix32 = (CARD32 *)*p8;
+					SetPixelV(hBitmapDC, j,k, COLOR_FROM_PIXEL(pix32));
+					p8 += 3;
+				}
+			}
+			break;
+	case 32:
+			bytesBetweenInputLines = screenInfo.screens[0]->width * 4;
+			for (k = y; k < y+h; k++)
+			{
+				p32 = (CARD32 *)(pfbMemory + (bytesBetweenInputLines * k) + (x * bitsPerPixel / 8));
+				for (j = x; j < x+w; j++)
+				{
+					pix32 = *p32;
+					SetPixelV(hBitmapDC, j,k, COLOR_FROM_PIXEL(pix32));
+					p32++;
+				}
+			}
+			break;
+	}
+
+	rect.left   = x  - m_hScrollPos;
+	rect.top    = y  - m_vScrollPos;
+	rect.right  = rect.left + w;
+	rect.bottom = rect.top  + h;
+	InvalidateRect(m_hwnd, &rect, FALSE);
+
+	return 1;
+}
+
+
+//
+// vncCopyRect
+//
+
+void GdiCopyRect(int x, int y, int w, int h, int srcX, int srcY)
+{
+    SelectObject (hBitmapDC, hBitmap);
+	SelectPalette(hBitmapDC, hPalette, FALSE);
+	RealizePalette(hBitmapDC);
+	BitBlt(hBitmapDC, x, y, w, h, hBitmapDC, srcX, srcY, SRCCOPY);
+}
+
+
+//
+// SendPointerEvent.
+//
+
+void SendPointerEvent(int x, int y, int buttonMask)
+{
+    if (x < 0) x = 0;
+    if (y < 0) y = 0;
+	PtrAddEvent (buttonMask, x, y);
+}
+
+
+//
+// SubProcessPointerEvent
+//
+
+void SubProcessPointerEvent(int x, int y, DWORD keyflags)
+{
+  int mask;
+
+  mask = ( ((keyflags & MK_LBUTTON) ? rfbButton1Mask : 0) |
+		   ((keyflags & MK_MBUTTON) ? rfbButton2Mask : 0) |
+		   ((keyflags & MK_RBUTTON) ? rfbButton3Mask : 0)  );
+
+  SendPointerEvent((x + m_hScrollPos) , (y + m_vScrollPos) , mask);
+}
+
+
+//
+// PCtoX
+//
+
+KeyActionSpec PCtoX(UINT virtkey, DWORD keyData) {
+	UINT numkeys = 0;
+    BOOL extended;
+    KeyActionSpec kas;
+	UINT mapsize, i, key;
+	int ret;
+	BYTE keystate[256];
+    unsigned char buf[4];
+
+    kas.releaseModifiers = 0;
+
+    extended = ((keyData & 0x1000000) != 0);
+
+    if (extended) {
+        switch (virtkey) {
+        case VK_MENU :
+            virtkey = VK_RMENU; break;
+        case VK_CONTROL:
+            virtkey = VK_RCONTROL; break;
+        }
+    }
+
+    // We try looking it up in our table
+    mapsize = sizeof(keymap) / sizeof(vncKeymapping);
+
+    // Look up the desired code in the table
+    for (i = 0; i < mapsize; i++)
+    {
+        if (keymap[i].wincode == virtkey) {
+            kas.keycodes[numkeys++] = keymap[i].Xcode;
+            break;
+        }
+    }
+
+
+    if (numkeys != 0) {
+        key = kas.keycodes[numkeys-1];
+    } else {
+        // not found in table
+
+        // we try a simple conversion to Ascii, using the current keyboard mapping
+		GetKeyboardState(keystate);
+
+   		ret = ToAscii(virtkey, 0, keystate, (WORD *) buf, 0);
+
+        // If Left Ctrl & Alt both pressed and ToAscii gives a valid keysym
+        // This is for AltGr on international keyboards  (= LCtrl-Alt).
+        // e.g. Ctrl-Alt-Q gives @@ on German keyboards
+        if (  ((keystate[VK_MENU] & 0x80) != 0) &&
+            ((keystate[VK_CONTROL] & 0x80) != 0) ) {
+
+           // If the key means anything in this keyboard layout
+           if  ( (ret >= 1) &&
+                 ( ( (*buf >= 32) && (*buf <= 126) ) ||
+                   ( (*buf >= 160) && (*buf <= 255) ) )
+                ) {
+
+               // Send the modifiers up, then the keystroke, then mods down
+               // We don't release the right control; this allows German users
+               // to use it for doing Ctl-@@ etc. (though not under Win95 --
+               // see below)
+
+               if (GetKeyState(VK_LCONTROL) & 0x8000) kas.releaseModifiers |= KEYMAP_LCONTROL;
+               if (GetKeyState(VK_LMENU)    & 0x8000) kas.releaseModifiers |= KEYMAP_LALT;
+               if (GetKeyState(VK_RMENU)    & 0x8000) kas.releaseModifiers |= KEYMAP_RALT;
+
+               // This is for windows 95, and possibly other systems.
+               // The above GetKeyState calls don't work in 95 - they always return 0.
+               // But if we're here at all we know that control and alt are pressed, so let's
+               // raise all Control and Alt keys if we haven't registered any yet.
+               if (kas.releaseModifiers == 0)
+                   kas.releaseModifiers = KEYMAP_LCONTROL | KEYMAP_LALT | KEYMAP_RALT;
+
+                for (i = 0; i < ret; i++) {
+                   kas.keycodes[numkeys++] = *(buf+i);
+                }
+           }
+        }
+
+        // If not a ctrl-alt key
+        if (numkeys == 0) {
+
+            // There are no keysyms corresponding to control characters
+            // Eg Ctrl F.  The server already knows whether the control
+            // key is pressed. So we are interested in the key that would be
+            // there if the Ctrl were not pressed.
+            keystate[VK_CONTROL] = keystate[VK_LCONTROL] = keystate[VK_RCONTROL] = 0;
+
+		    ret = ToAscii(virtkey, 0, keystate, (WORD *) buf, 0);
+            if (ret < 0) {
+                switch (*buf) {
+				case '`' :
+					kas.keycodes[numkeys++] = XK_dead_grave; break;
+				case '\'' :
+					kas.keycodes[numkeys++] = XK_dead_acute; break;
+				case '~' :
+					kas.keycodes[numkeys++] = XK_dead_tilde; break;
+				case '^':
+					kas.keycodes[numkeys++] = XK_dead_circumflex; break;
+				}
+            }
+            // if this works, and it's a regular printable character, we just send that
+            if (ret >= 1) {
+                for (i = 0; i < ret; i++) {
+                   kas.keycodes[numkeys++] = *(buf+i);
+                }
+            }
+        }
+    }
+
+    kas.keycodes[numkeys] = VoidKeyCode;
+	return kas;
+};
+
+
+//
+// SendKeyEvent
+//
+
+void SendKeyEvent(CARD32 key, BOOL down)
+{
+	KbdAddEvent((down ? 1 : 0), key);
+}
+
+
+//
+// ProcessKeyEvent
+//
+
+void ProcessKeyEvent(int virtkey, DWORD keyData)
+{
+    BOOL down = ((keyData & 0x80000000l) == 0);
+	int i;
+    // if virtkey found in mapping table, send X equivalent
+    // else
+    //   try to convert directly to ascii
+    //   if result is in range supported by X keysyms,
+    //      raise any modifiers, send it, then restore mods
+    //   else
+    //      calculate what the ascii would be without mods
+    //      send that
+
+	KeyActionSpec kas = PCtoX(virtkey, keyData);
+
+	if (kas.releaseModifiers & KEYMAP_LCONTROL) {
+		SendKeyEvent(XK_Control_L, FALSE );
+	}
+	if (kas.releaseModifiers & KEYMAP_LALT) {
+		SendKeyEvent(XK_Alt_L, FALSE );
+	}
+	if (kas.releaseModifiers & KEYMAP_RCONTROL) {
+		SendKeyEvent(XK_Control_R, FALSE );
+	}
+	if (kas.releaseModifiers & KEYMAP_RALT) {
+		SendKeyEvent(XK_Alt_R, FALSE );
+	}
+
+	for (i = 0; kas.keycodes[i] != XK_VoidSymbol && i < 4; i++) {
+		SendKeyEvent(kas.keycodes[i], down );
+	}
+
+	if (kas.releaseModifiers & KEYMAP_RALT) {
+		SendKeyEvent(XK_Alt_R, TRUE );
+	}
+	if (kas.releaseModifiers & KEYMAP_RCONTROL) {
+		SendKeyEvent(XK_Control_R, TRUE );
+	}
+	if (kas.releaseModifiers & KEYMAP_LALT) {
+		SendKeyEvent(XK_Alt_L, FALSE );
+	}
+	if (kas.releaseModifiers & KEYMAP_LCONTROL) {
+		SendKeyEvent(XK_Control_L, FALSE );
+	}
+}
+
+
+//
+// vncRegionUpdated()
+//
+
+void GdiRegionUpdated()
+{
+	PostMessage(m_hwnd, WM_REGIONUPDATED, NULL, NULL);
+}
+
+
+//
+// GdiProcessPointerEvent
+//
+
+void GdiProcessPointerEvent(int x, int y, DWORD keyflags, UINT msg)
+{
+
+/*	if (m_opts.m_Emul3Buttons) {
+		// XXX To be done:
+		// If this is a left or right press, the user may be
+		// about to press the other button to emulate a middle press.
+		// We need to start a timer, and if it expires without any
+		// further presses, then we send the button press.
+		// If a press of the other button, or any release, comes in
+		// before timer has expired, we cancel timer & take different action.
+	  if (m_waitingOnEmulateTimer)
+	    {
+	      if (msg == WM_LBUTTONUP || msg == WM_RBUTTONUP ||
+		  abs(x - m_emulateButtonPressedX) > m_opts.m_Emul3Fuzz ||
+		  abs(y - m_emulateButtonPressedY) > m_opts.m_Emul3Fuzz)
+		{
+		  // if button released or we moved too far then cancel.
+		  // First let the remote know where the button was down
+		  SubProcessPointerEvent(
+					 m_emulateButtonPressedX,
+					 m_emulateButtonPressedY,
+					 m_emulateKeyFlags);
+		  // Then tell it where we are now
+		  SubProcessPointerEvent(x, y, keyflags);
+		}
+	      else if (
+		       (msg == WM_LBUTTONDOWN && (m_emulateKeyFlags & MK_RBUTTON))
+		       || (msg == WM_RBUTTONDOWN && (m_emulateKeyFlags & MK_LBUTTON)))
+		{
+		  // Triggered an emulate; remove left and right buttons, put
+		  // in middle one.
+		  DWORD emulatekeys = keyflags & ~(MK_LBUTTON|MK_RBUTTON);
+		  emulatekeys |= MK_MBUTTON;
+		  SubProcessPointerEvent(x, y, emulatekeys);
+
+		  m_emulatingMiddleButton = true;
+		}
+	      else
+		{
+		  // handle movement normally & don't kill timer.
+		  // just remove the pressed button from the mask.
+		  DWORD keymask = m_emulateKeyFlags & (MK_LBUTTON|MK_RBUTTON);
+		  DWORD emulatekeys = keyflags & ~keymask;
+		  SubProcessPointerEvent(x, y, emulatekeys);
+		  return;
+		}
+
+	      // if we reached here, we don't need the timer anymore.
+	      KillTimer(m_hwnd, m_emulate3ButtonsTimer);
+	      m_waitingOnEmulateTimer = false;
+	    }
+	  else if (m_emulatingMiddleButton)
+	    {
+	      if ((keyflags & MK_LBUTTON) == 0 && (keyflags & MK_RBUTTON) == 0)
+		{
+		  // We finish emulation only when both buttons come back up.
+		  m_emulatingMiddleButton = false;
+		  SubProcessPointerEvent(x, y, keyflags);
+		}
+	      else
+		{
+		  // keep emulating.
+		  DWORD emulatekeys = keyflags & ~(MK_LBUTTON|MK_RBUTTON);
+		  emulatekeys |= MK_MBUTTON;
+		  SubProcessPointerEvent(x, y, emulatekeys);
+		}
+	    }
+	  else
+	    {
+	      // Start considering emulation if we've pressed a button
+	      // and the other isn't pressed.
+	      if ( (msg == WM_LBUTTONDOWN && !(keyflags & MK_RBUTTON))
+		   || (msg == WM_RBUTTONDOWN && !(keyflags & MK_LBUTTON)))
+		{
+		  // Start timer for emulation.
+		  m_emulate3ButtonsTimer =
+		    SetTimer(
+			     m_hwnd,
+			     IDT_EMULATE3BUTTONSTIMER,
+			     m_opts.m_Emul3Timeout,
+			     NULL);
+
+		  if (!m_emulate3ButtonsTimer)
+		    {
+		      log.Print(0, _T("Failed to create timer for emulating 3 buttons"));
+		      PostMessage(m_hwnd, WM_CLOSE, 0, 0);
+		      return;
+		    }
+
+		  m_waitingOnEmulateTimer = true;
+
+		  // Note that we don't send the event here; we're batching it for
+		  // later.
+		  m_emulateKeyFlags = keyflags;
+		  m_emulateButtonPressedX = x;
+		  m_emulateButtonPressedY = y;
+		}
+	      else
+		{
+		  // just send event noramlly
+		  SubProcessPointerEvent(x, y, keyflags);
+		}
+	    }
+ 	}
+	else */
+	  {
+	    SubProcessPointerEvent(x, y, keyflags);
+	  }
+}
+
+
+
+/*
+ * rfbNewClient is called when a new connection has been made by whatever
+ * means.
+ */
+
+void rfbNewClient()
+{
+    rfbClientPtr cl;
+    BoxRec box;
+
+    cl = (rfbClientPtr)xalloc(sizeof(rfbClientRec));
+    cl->state = RFB_PROTOCOL_VERSION;
+    cl->reverseConnection = FALSE;
+    cl->readyForSetColourMapEntries = FALSE;
+    cl->useCopyRect = FALSE;
+    cl->preferredEncoding = rfbEncodingRaw;
+    cl->correMaxWidth = 48;
+    cl->correMaxHeight = 48;
+    REGION_INIT(pScreen,&cl->copyRegion,NullBox,0);
+    cl->copyDX = 0;
+    cl->copyDY = 0;
+    box.x1 = box.y1 = 0;
+    box.x2 = rfbScreen.width;
+    box.y2 = rfbScreen.height;
+    REGION_INIT(pScreen,&cl->modifiedRegion,&box,0);
+    REGION_INIT(pScreen,&cl->requestedRegion,NullBox,0);
+    cl->translateLookupTable = NULL;
+	cl->next = rfbClientHead;
+    rfbClientHead = cl;
+}
+
+
+
+void GdiFramebufferUpdateRequest()
+{
+    rfbClientPtr cl;
+    BoxRec box;
+	RegionRec tmpRegion;
+    ScreenPtr pScreen = screenInfo.screens[0];
+
+	cl = rfbClientHead;
+
+    box.x1 = box.y1 = 0;
+    box.x2 = rfbScreen.width;
+    box.y2 = rfbScreen.height;
+	SAFE_REGION_INIT(pScreen,&tmpRegion,&box,0);
+
+	REGION_UNION(pScreen, &cl->requestedRegion, &cl->requestedRegion,
+		     &tmpRegion);
+
+//	if (!incremental) {
+//	    REGION_UNION(pScreen,&cl->modifiedRegion,&cl->modifiedRegion,
+//			 &tmpRegion);
+//	    REGION_SUBTRACT(pScreen,&cl->copyRegion,&cl->copyRegion,
+//			    &tmpRegion);
+//	}
+
+	if (FB_UPDATE_PENDING(cl)) {
+	    rfbSendFramebufferUpdate(cl);
+	}
+}
+
+
+
+/*
+ * rfbSendFramebufferUpdate - send the currently pending framebuffer update to
+ * the RFB client.
+ */
+
+Bool rfbSendFramebufferUpdate(cl)
+    rfbClientPtr cl;
+{
+    BoxRec box;
+    ScreenPtr pScreen = screenInfo.screens[0];
+    int i;
+    int nUpdateRegionRects;
+    RegionRec updateRegion, updateCopyRegion;
+    int dx, dy;
+
+    /*
+     * If the cursor isn't drawn, make sure it's put up.
+     */
+
+    if (!rfbScreen.cursorIsDrawn) {
+	rfbSpriteRestoreCursor(pScreen);
+    }
+
+    /*
+     * The modifiedRegion may overlap the destination copyRegion.  We remove
+     * any overlapping bits from the copyRegion (since they'd only be
+     * overwritten anyway).
+     */
+
+    REGION_SUBTRACT(pScreen, &cl->copyRegion, &cl->copyRegion,
+		    &cl->modifiedRegion);
+
+    /*
+     * The client is interested in the region requestedRegion.  The region
+     * which should be updated now is the intersection of requestedRegion
+     * and the union of modifiedRegion and copyRegion.  If it's empty then
+     * no update is needed.
+     */
+
+    REGION_INIT(pScreen,&updateRegion,NullBox,0);
+    REGION_UNION(pScreen, &updateRegion, &cl->copyRegion,
+		 &cl->modifiedRegion);
+    REGION_INTERSECT(pScreen, &updateRegion, &cl->requestedRegion,
+		     &updateRegion);
+
+    if (!REGION_NOTEMPTY(pScreen,&updateRegion)) {
+	REGION_UNINIT(pScreen,&updateRegion);
+	return TRUE;
+    }
+
+    /*
+     * We assume that the client doesn't have any pixel data outside the
+     * requestedRegion.  In other words, both the source and destination of a
+     * copy must lie within requestedRegion.  So the region we can send as a
+     * copy is the intersection of the copyRegion with both the requestedRegion
+     * and the requestedRegion translated by the amount of the copy.  We set
+     * updateCopyRegion to this.
+     */
+
+    REGION_INIT(pScreen,&updateCopyRegion,NullBox,0);
+    REGION_INTERSECT(pScreen, &updateCopyRegion, &cl->copyRegion,
+		     &cl->requestedRegion);
+    REGION_TRANSLATE(pScreen, &cl->requestedRegion, cl->copyDX, cl->copyDY);
+    REGION_INTERSECT(pScreen, &updateCopyRegion, &updateCopyRegion,
+		     &cl->requestedRegion);
+    dx = cl->copyDX;
+    dy = cl->copyDY;
+
+    /*
+     * Next we remove updateCopyRegion from updateRegion so that updateRegion
+     * is the part of this update which is sent as ordinary pixel data (i.e not
+     * a copy).
+     */
+
+    REGION_SUBTRACT(pScreen, &updateRegion, &updateRegion, &updateCopyRegion);
+
+    /*
+     * Finally we leave modifiedRegion to be the remainder (if any) of parts of
+     * the screen which are modified but outside the requestedRegion.  We also
+     * empty both the requestedRegion and the copyRegion - note that we never
+     * carry over a copyRegion for a future update.
+     */
+
+    REGION_UNION(pScreen, &cl->modifiedRegion, &cl->modifiedRegion,
+		 &cl->copyRegion);
+    REGION_SUBTRACT(pScreen, &cl->modifiedRegion, &cl->modifiedRegion,
+		    &updateRegion);
+    REGION_SUBTRACT(pScreen, &cl->modifiedRegion, &cl->modifiedRegion,
+		    &updateCopyRegion);
+
+    REGION_EMPTY(pScreen, &cl->requestedRegion);
+    REGION_EMPTY(pScreen, &cl->copyRegion);
+    cl->copyDX = 0;
+    cl->copyDY = 0;
+
+    /*
+     * Now send the update.
+     */
+
+    if (REGION_NOTEMPTY(pScreen,&updateCopyRegion)) {
+	if (!rfbSendCopyRegion(&updateCopyRegion,dx,dy)) {
+	    REGION_UNINIT(pScreen,&updateRegion);
+	    REGION_UNINIT(pScreen,&updateCopyRegion);
+	    return FALSE;
+	}
+    }
+
+    REGION_UNINIT(pScreen,&updateCopyRegion);
+
+    for (i = 0; i < REGION_NUM_RECTS(&updateRegion); i++) {
+	int x = REGION_RECTS(&updateRegion)[i].x1;
+	int y = REGION_RECTS(&updateRegion)[i].y1;
+	int w = REGION_RECTS(&updateRegion)[i].x2 - x;
+	int h = REGION_RECTS(&updateRegion)[i].y2 - y;
+
+	if (!GdiUpdateRect(x, y, w, h, rfbScreen.pfbMemory)) {
+	  REGION_UNINIT(pScreen,&updateRegion);
+	  return FALSE;
+	}
+	}
+
+    REGION_UNINIT(pScreen,&updateRegion);
+
+	GdiRegionUpdated();
+
+    return TRUE;
+}
+
+
+
+/*
+ * Send the copy region as a string of CopyRect encoded rectangles.
+ * The only slightly tricky thing is that we should send the messages in
+ * the correct order so that an earlier CopyRect will not corrupt the source
+ * of a later one.
+ */
+
+static Bool rfbSendCopyRegion(reg, dx, dy)
+    RegionPtr reg;
+    int dx, dy;
+{
+    int nrects, nrectsInBand, x_inc, y_inc, thisRect, firstInNextBand;
+    int x, y, w, h, srcX, srcY;
+
+    nrects = REGION_NUM_RECTS(reg);
+
+    if (dx <= 0) {
+	x_inc = 1;
+    } else {
+	x_inc = -1;
+    }
+
+    if (dy <= 0) {
+	thisRect = 0;
+	y_inc = 1;
+    } else {
+	thisRect = nrects - 1;
+	y_inc = -1;
+    }
+
+    while (nrects > 0) {
+
+	firstInNextBand = thisRect;
+	nrectsInBand = 0;
+
+	while ((nrects > 0) &&
+	       (REGION_RECTS(reg)[firstInNextBand].y1
+		== REGION_RECTS(reg)[thisRect].y1))
+	{
+	    firstInNextBand += y_inc;
+	    nrects--;
+	    nrectsInBand++;
+	}
+
+	if (x_inc != y_inc) {
+	    thisRect = firstInNextBand - y_inc;
+	}
+
+	while (nrectsInBand > 0) {
+	    x = REGION_RECTS(reg)[thisRect].x1;
+	    y = REGION_RECTS(reg)[thisRect].y1;
+	    w = REGION_RECTS(reg)[thisRect].x2 - x;
+	    h = REGION_RECTS(reg)[thisRect].y2 - y;
+
+	    srcX = x - dx;
+	    srcY = y - dy;
+
+		GdiCopyRect(x, y, w, h, srcX, srcY);
+
+	    thisRect += x_inc;
+	    nrectsInBand--;
+	}
+
+	thisRect = firstInNextBand;
+    }
+
+    return TRUE;
+}
+
+
+
+
+/*
+ * rfbSendBell sends a Bell message to all the clients.
+ */
+
+void rfbSendBell()
+{
+}
+
+
+/*
+ * rfbSendServerCutText sends a ServerCutText message to all the clients.
+ */
+
+void rfbSendServerCutText(char *str, int len)
+{
+    rfbClientPtr cl, nextCl;
+    rfbServerCutTextMsg sct;
+
+    for (cl = rfbClientHead; cl; cl = nextCl) {
+	nextCl = cl->next;
+	sct.type = rfbServerCutText;
+	sct.length = Swap32IfLE(len);
+  }
+}
+
+
+//
+// UpdateScrollbars
+//
+
+void UpdateScrollbars()
+{
+	SCROLLINFO scri;
+	scri.cbSize = sizeof(scri);
+	scri.fMask = SIF_ALL;
+	scri.nMin = 0;
+	scri.nMax = m_hScrollMax;
+	scri.nPage= m_cliwidth;
+	scri.nPos = m_hScrollPos;
+
+	SetScrollInfo(m_hwnd, SB_HORZ, &scri, TRUE);
+
+	scri.cbSize = sizeof(scri);
+	scri.fMask = SIF_ALL;
+	scri.nMin = 0;
+	scri.nMax = m_vScrollMax;
+	scri.nPage= m_cliheight;
+	scri.nPos = m_vScrollPos;
+
+	SetScrollInfo(m_hwnd, SB_VERT, &scri, TRUE);
+}
+
+
+//
+// ScrollScreen
+//
+
+BOOL ScrollScreen(int dx, int dy)
+{
+	RECT clirect;
+
+	dx = max(dx, -m_hScrollPos);
+	dx = min(dx, m_hScrollMax-(m_cliwidth)-m_hScrollPos);
+	dy = max(dy, -m_vScrollPos);
+	dy = min(dy, m_vScrollMax-(m_cliheight)-m_vScrollPos);
+	if (dx || dy) {
+		m_hScrollPos += dx;
+		m_vScrollPos += dy;
+		GetClientRect(m_hwnd, &clirect);
+		ScrollWindowEx(m_hwnd, -dx, -dy, NULL, &clirect, NULL, NULL,  SW_INVALIDATE);
+		UpdateScrollbars();
+		UpdateWindow(m_hwnd);
+		return TRUE;
+	}
+	return FALSE;
+}
+
+
+//
+// RealiseFullScreenMode
+//
+
+void RealiseFullScreenMode()
+{
+	int cx;
+	int cy;
+	LONG style = GetWindowLong(m_hwnd, GWL_STYLE);
+	ShowWindow(m_hwnd, SW_MAXIMIZE);
+	style = GetWindowLong(m_hwnd, GWL_STYLE);
+	style &= ~(WS_DLGFRAME | WS_THICKFRAME);
+	SetWindowLong(m_hwnd, GWL_STYLE, style);
+	cx = GetSystemMetrics(SM_CXSCREEN);
+	cy = GetSystemMetrics(SM_CYSCREEN);
+	SetWindowPos(m_hwnd, HWND_TOPMOST, -1, -1, cx+3, cy+3, SWP_FRAMECHANGED);
+}
+
+
+
+//
+// SizeWindow
+//
+
+void SizeWindow()
+{
+	// Find how large the desktop work area is
+	RECT workrect;
+	RECT fullwinrect;
+	int workwidth;
+	int workheight;
+	int m_winwidth;
+	int m_winheight;
+
+	SystemParametersInfo(SPI_GETWORKAREA, 0, &workrect, 0);
+	workwidth = workrect.right -  workrect.left;
+	workheight = workrect.bottom - workrect.top;
+
+	// Size the window.
+	// Let's find out how big a window would be needed to display the
+	// whole desktop (assuming no scrollbars).
+
+
+	SetRect(&fullwinrect, 0, 0, screenInfo.screens[0]->width, screenInfo.screens[0]->height);
+	AdjustWindowRectEx(&fullwinrect,
+			   GetWindowLong(m_hwnd, GWL_STYLE) & ~WS_VSCROLL & ~WS_HSCROLL,
+			   FALSE, GetWindowLong(m_hwnd, GWL_EXSTYLE));
+	m_fullwinwidth = fullwinrect.right - fullwinrect.left;
+	m_fullwinheight = fullwinrect.bottom - fullwinrect.top;
+
+	m_winwidth  = min(m_fullwinwidth,  workwidth);
+	m_winheight = min(m_fullwinheight, workheight);
+	SetWindowPos(m_hwnd, HWND_TOP,
+		workrect.left + (workwidth-m_winwidth) / 2,
+		workrect.top + (workheight-m_winheight) / 2,
+		m_winwidth, m_winheight, SWP_SHOWWINDOW);
+
+	SetForegroundWindow(m_hwnd);
+}
+
+
+
+void DoBlit()
+{
+	PAINTSTRUCT ps;
+    HDC hdc;
+
+	hdc = BeginPaint(m_hwnd, &ps);
+	SelectPalette(hdc, hPalette, FALSE);
+	RealizePalette(hdc);
+	SelectObject(hBitmapDC, hBitmap);
+	if (!BitBlt(hdc, ps.rcPaint.left, ps.rcPaint.top,
+		    ps.rcPaint.right-ps.rcPaint.left, ps.rcPaint.bottom-ps.rcPaint.top,
+			hBitmapDC, ps.rcPaint.left+m_hScrollPos, ps.rcPaint.top+m_vScrollPos, SRCCOPY))
+	{
+		MessageBox (NULL, TEXT ("Blit error"), TEXT ("Error"), 0) ;
+	}
+	EndPaint(m_hwnd, &ps);
+}
+
+
+//
+// WndProc
+//
+
+LRESULT CALLBACK WndProc(HWND hwnd, UINT iMsg, WPARAM wParam, LPARAM lParam) {
+	COLORREF oldbgcol ;
+	int x;
+    int y;
+	RECT rect;
+	int m_winwidth;
+	int m_winheight;
+	int newhpos;
+	int newvpos;
+	int dx, dy, pos;
+
+    switch (iMsg)
+    {
+	case WM_CREATE:
+         return 0 ;
+
+	case WM_REGIONUPDATED:
+		 DoBlit();
+		 GdiFramebufferUpdateRequest();
+    	 return 0;
+
+    case WM_PAINT:
+		 DoBlit();
+         return 0 ;
+
+	case WM_KEYDOWN:
+	case WM_KEYUP:
+	case WM_SYSKEYDOWN:
+	case WM_SYSKEYUP:
+		 ProcessKeyEvent((int) wParam, (DWORD) lParam);
+		 return 0;
+
+	case WM_CHAR:
+	case WM_SYSCHAR:
+	case WM_DEADCHAR:
+	case WM_SYSDEADCHAR:
+	     return 0;
+
+
+	case WM_LBUTTONDOWN:
+	case WM_LBUTTONUP:
+	case WM_MBUTTONDOWN:
+	case WM_MBUTTONUP:
+	case WM_RBUTTONDOWN:
+	case WM_RBUTTONUP:
+	case WM_MOUSEMOVE:
+		 if (GetFocus() != hwnd) return 0;
+		 x = LOWORD(lParam);
+		 y = HIWORD(lParam);
+         GdiProcessPointerEvent(x,y, wParam, iMsg);
+		 return 0;
+
+	case WM_WINDOWPOSCHANGED:
+	case WM_SIZE:
+		 // Calculate window dimensions
+		 GetWindowRect(hwnd, &rect);
+		 // update these for the record
+		 m_winwidth = rect.right - rect.left;
+		 m_winheight = rect.bottom - rect.top;
+
+		 // If the current window size would be large enough to hold the
+		 // whole screen without scrollbars, or if we're full-screen,
+		 // we turn them off.  Under CE, the scroll bars are unchangeable.
+
+		 if (m_winwidth  >= m_fullwinwidth  &&
+			 m_winheight >= m_fullwinheight ) {
+			 ShowScrollBar(hwnd, SB_HORZ, FALSE);
+			 ShowScrollBar(hwnd, SB_VERT, FALSE);
+		 } else {
+			 ShowScrollBar(hwnd, SB_HORZ, TRUE);
+			 ShowScrollBar(hwnd, SB_VERT, TRUE);
+		 }
+
+         // Update these for the record
+		 // And consider that in full-screen mode the window
+		 // is actually bigger than the remote screen.
+		 GetClientRect(hwnd, &rect);
+		 m_cliwidth = min( rect.right - rect.left, screenInfo.screens[0]->width);
+		 m_cliheight = min( rect.bottom - rect.top, screenInfo.screens[0]->height);
+		 m_hScrollMax = screenInfo.screens[0]->width;
+		 m_vScrollMax = screenInfo.screens[0]->height;
+
+		 newhpos = max(0, min(m_hScrollPos, m_hScrollMax - max(m_cliwidth, 0)));
+		 newvpos = max(0, min(m_vScrollPos, m_vScrollMax - max(m_cliheight, 0)));
+
+		 ScrollWindowEx(hwnd, m_hScrollPos-newhpos, m_vScrollPos-newvpos,
+				NULL, &rect, NULL, NULL,  SW_INVALIDATE);
+
+		 m_hScrollPos = newhpos;
+		 m_vScrollPos = newvpos;
+         UpdateScrollbars();
+		 return 0;
+
+	case WM_HSCROLL:
+		 dx = 0;
+		 pos = HIWORD(wParam);
+		 switch (LOWORD(wParam)) {
+		 case SB_LINEUP:
+				dx = -2;
+				break;
+		 case SB_LINEDOWN:
+				dx = 2;
+				break;
+		 case SB_PAGEUP:
+				dx = m_cliwidth * -1/4;
+				break;
+		 case SB_PAGEDOWN:
+				dx = m_cliwidth * 1/4;
+				break;
+		 case SB_THUMBPOSITION:
+				dx = pos - m_hScrollPos;
+		 case SB_THUMBTRACK:
+				dx = pos - m_hScrollPos;
+		 }
+		 ScrollScreen(dx,0);
+		 return 0;
+
+	case WM_VSCROLL:
+		 dy = 0;
+		 pos = HIWORD(wParam);
+		 switch (LOWORD(wParam)) {
+			case SB_LINEUP:
+				dy = -2;
+				break;
+			case SB_LINEDOWN:
+				dy = 2;
+				break;
+			case SB_PAGEUP:
+				dy = m_cliheight * -1/4;
+				break;
+			case SB_PAGEDOWN:
+				dy = m_cliheight * 1/4;
+				break;
+			case SB_THUMBPOSITION:
+				dy = pos - m_vScrollPos;
+			case SB_THUMBTRACK:
+				dy = pos - m_vScrollPos;
+		 }
+		 ScrollScreen(0,dy);
+		 return 0;
+
+    case WM_DESTROY:
+         PostQuitMessage (0) ;
+         return 0 ;
+	}
+
+	return DefWindowProc(hwnd, iMsg, wParam, lParam);
+}
+
+
+void GdiCreateWindow(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR szCmdLine, int iCmdShow)
+{
+	HWND hwnd;
+    WNDCLASS wndclass;
+	HMENU hsysmenu;
+	DWORD winstyle;
+	HDC     hdc;
+	MSG msg;
+    static TCHAR szAppName [] = TEXT ("GDI/XxPlayer - 2.0") ;
+	int pepos;
+	int r,g,b;
+	RECT rect;
+	COLORREF bgcol;
+	COLORREF oldbgcol;
+	COLORREF oldtxtcol;
+	LOGPALETTE *plp;
+	BYTE buf[sizeof(LOGPALETTE)+216*sizeof(PALETTEENTRY)];
+	LONG style;
+
+	wndclass.style			= 0;
+	wndclass.lpfnWndProc	= WndProc;
+	wndclass.cbClsExtra		= 0;
+	wndclass.cbWndExtra		= 0;
+	wndclass.hInstance		= hInstance;
+	wndclass.hIcon			= LoadIcon(NULL, IDI_INFORMATION);
+	wndclass.hCursor		= LoadCursor(NULL, IDC_ARROW);
+	wndclass.hbrBackground	= (HBRUSH) GetStockObject(BLACK_BRUSH);
+	wndclass.lpszMenuName	= NULL;
+    wndclass.lpszClassName	= szAppName;
+
+	RegisterClass(&wndclass);
+
+	winstyle = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_THICKFRAME | WS_VSCROLL | WS_HSCROLL;
+	
+	hwnd = CreateWindow(szAppName,
+				      TEXT("GDI/XxPlayer -2.0"),
+				      winstyle,
+				      CW_USEDEFAULT,
+				      CW_USEDEFAULT,
+				      CW_USEDEFAULT,
+				      CW_USEDEFAULT,
+				      NULL,
+				      NULL,
+				      hInstance,
+				      NULL);
+
+	m_hwnd = hwnd;
+	ShowWindow(hwnd, SW_HIDE);
+
+	// Create a memory DC which we'll use for drawing to the local framebuffer
+	hBitmapDC = CreateCompatibleDC(NULL);
+
+	// Set a suitable palette up
+	if (GetDeviceCaps(hBitmapDC, RASTERCAPS) & RC_PALETTE) {
+		plp = (LOGPALETTE *)buf;
+		pepos = 0;
+		for (r = 5; r >= 0; r--) {
+			for (g = 5; g >= 0; g--) {
+				for (b = 5; b >= 0; b--) {
+					plp->palPalEntry[pepos].peRed   = r * 255 / 5;
+					plp->palPalEntry[pepos].peGreen = g * 255 / 5;
+					plp->palPalEntry[pepos].peBlue  = b * 255 / 5;
+					plp->palPalEntry[pepos].peFlags  = NULL;
+					pepos++;
+				}
+			}
+		}
+		plp->palVersion = 0x300;
+		plp->palNumEntries = 216;
+		hPalette = CreatePalette(plp);
+	}
+
+	hdc = GetDC(hwnd);
+	hBitmap = CreateCompatibleBitmap(hdc, screenInfo.screens[0]->width, screenInfo.screens[0]->height);
+
+	// Select this bitmap into the DC with an appropriate palette
+	SelectObject (hBitmapDC, hBitmap);
+
+	SelectPalette(hBitmapDC, hPalette, FALSE);
+	RealizePalette(hBitmapDC);
+
+	// Put a "please wait" message up initially
+	SetRect(&rect, 0,0, screenInfo.screens[0]->width, screenInfo.screens[0]->height);
+	bgcol = RGB(0xcc, 0xcc, 0xcc);
+
+	ExtTextOut(hBitmapDC, 0, 0, ETO_OPAQUE, &rect, NULL, 0, NULL);
+
+	oldbgcol  = SetBkColor(  hBitmapDC, bgcol);
+	oldtxtcol = SetTextColor(hBitmapDC, RGB(0,0,64));
+	rect.right =  screenInfo.screens[0]->width / 2;
+	rect.bottom = screenInfo.screens[0]->height / 2;
+
+	DrawText (hBitmapDC, TEXT("Please wait - initial screen loading"), -1, &rect,
+	 	DT_SINGLELINE | DT_CENTER | DT_VCENTER);
+	SetBkColor(  hBitmapDC, oldbgcol);
+	SetTextColor(hBitmapDC, oldtxtcol);
+
+	InvalidateRect(hwnd, NULL, FALSE);
+
+	style = GetWindowLong(hwnd, GWL_STYLE);
+	style |= WS_DLGFRAME | WS_THICKFRAME;
+	SetWindowLong(hwnd, GWL_STYLE, style);
+	SetWindowPos(hwnd, HWND_NOTOPMOST, 0,0,screenInfo.screens[0]->width,screenInfo.screens[0]->height, SWP_NOMOVE | SWP_NOSIZE);
+	ShowWindow(hwnd, SW_NORMAL);
+	UpdateWindow(hwnd);
+	GdiFramebufferUpdateRequest();
+	if (rfbScreen.FullScreen == TRUE)
+	{
+		RealiseFullScreenMode();
+	}
+	else
+	{
+		SizeWindow();
+	}
+}
+@
+
+
+1.1.1.1
+log
+@win32-x11 source tree update March 26, 2001
+@
+text
+@@

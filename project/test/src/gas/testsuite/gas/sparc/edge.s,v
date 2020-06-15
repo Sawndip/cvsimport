@@ -1,0 +1,129 @@
+head	1.1;
+access;
+symbols
+	binutils-2_24-branch:1.1.0.2
+	binutils-2_24-branchpoint:1.1
+	binutils_latest_snapshot:1.1;
+locks; strict;
+comment	@# @;
+
+
+1.1
+date	2013.04.06.22.22.02;	author davem;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.1
+log
+@Increase the accuracy of sparc instruction aliases.
+
+Make current with UA2011 specification.
+
+Add an F_PREFERRED opcode flag that indicates a preferred alias
+when multiple aliases for the same opcode exists.
+
+For 'lzd':
+
+	Add 'lzcnt' as primary instruction, and make 'lzd' an alias.
+
+Add 'ldtw', 'ldtwa', 'sttw', 'sttwa':
+
+	The modern opcode for for 'ldd', 'ldda', 'std', and 'stda' on
+	integer registers.  Mark the latter now as aliases.
+
+For 'flush':
+
+	Support "[address]" syntax as well as plain "address".
+
+Rework 'mov' aliases for 'wr':
+
+	Eliminate bogus three operand moves, and encode the
+	instructions properly for the "mov REG, %ASR" cases,
+	specifically we should encode the register in rs2 not rs1 as
+	per The SPARC V8 Architecture Manual.
+
+Add missing cbcond aliases:
+
+	c{w,x}bz, c{w,x}blu, c{w,x}bnz, c{w,x}bgeu
+
+Add 'd' suffix VIS logical ops:
+
+	The primary opcode for 'fzero' is now 'fzerod' (compare with
+	'fzeros'), for example.  And thus 'fzero' is now an alias.
+
+Add modern opcodes for condition code setting edge instructions:
+
+	They are now edgeN{,l}cc instead of plain edgeN{,l}.
+
+Add modern opcodes for VIS comparisons:
+
+	All VIS comparisons now start with prefix "fp", retain the
+	older variants as aliases.
+
+	The signed variants for equal and not-equal have "u" aliases
+	to show that these comparisons are equally suited for unsigned
+	compares.
+
+Update existing test cases as needed, and add several new ones.
+
+include/opcode/
+
+	* sparc.h (F_PREFERRED): Define.
+	(F_PREF_ALIAS): Define.
+
+opcodes/
+
+	* sparc-dis.c (compare_opcodes): When encountering multiple aliases
+	of an opcode, prefer the one with F_PREFERRED set.
+	* sparc-opc.c (sparc_opcodes): Add ldtw, ldtwa, sttw, sttwa,
+	lzcnt, flush with '[address]' syntax, and missing cbcond pseudo
+	ops.  Make 64-bit VIS logical ops have "d" suffix in their names,
+	mark existing mnenomics as aliases.  Add "cc" suffix to edge
+	instructions generating condition codes, mark existing mnenomics
+	as aliases.  Add "fp" prefix to VIS compare instructions, mark
+	existing mnenomics as aliases.
+
+gas/testsuite/
+
+	* gas/sparc/cbcond.s: Add tests for new opcode aliases.
+	* gas/sparc/cbcond.d: Updated.
+	* gas/sparc/hpcvis3.s: Add tests for new opcode aliases.
+	* gas/sparc/hpcvis3.d: Updated.
+	* gas/sparc/v8-movwr-imm.d: Fix expected disassembly.
+	* gas/sparc/edge.s: New test.
+	* gas/sparc/edge.d: Expected disassembly.
+	* gas/sparc/flush.s: New test.
+	* gas/sparc/flush.d: Expected disassembly.
+	* gas/sparc/ldd_std.s: New test.
+	* gas/sparc/ldd_std.d: Expected disassembly.
+	* gas/sparc/ldtw_sttw.s: New test.
+	* gas/sparc/ldtw_sttw.d: Expected disassembly.
+	* gas/sparc/sparc.exp: Run new tests.
+@
+text
+@# Test VIS EDGE instructions
+	.text
+	edge8cc		%g1, %g2, %g3
+	edge8		%g1, %g2, %g3
+	edge8n		%g1, %g2, %g3
+	edge8lcc	%g2, %g3, %g4
+	edge8l		%g2, %g3, %g4
+	edge8ln 	%g2, %g3, %g4
+	edge8cc		%l4, %g2, %g1
+	edge8		%l4, %g2, %g1
+	edge8n		%l4, %g2, %g1
+	edge8lcc	%g2, %g1, %l4
+	edge8l		%g2, %g1, %l4
+	edge8ln 	%g2, %g1, %l4
+	edge32cc	%o5, %o4, %o2
+	edge32		%o5, %o4, %o2
+	edge32n		%o5, %o4, %o2
+	edge32lcc	%o2, %g5, %l1
+	edge32l		%o2, %g5, %l1
+	edge32ln 	%o2, %g5, %l1
+@

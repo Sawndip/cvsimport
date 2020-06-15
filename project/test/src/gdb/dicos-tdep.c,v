@@ -1,0 +1,452 @@
+head	1.8;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.8
+	gdb_7_6-2013-04-26-release:1.8
+	gdb_7_6-branch:1.8.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.8
+	gdb_7_5_1-2012-11-29-release:1.7
+	gdb_7_5-2012-08-17-release:1.7
+	gdb_7_5-branch:1.7.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.7
+	gdb_7_4_1-2012-04-26-release:1.5.4.1
+	gdb_7_4-2012-01-24-release:1.5.4.1
+	gdb_7_4-branch:1.5.0.4
+	gdb_7_4-2011-12-13-branchpoint:1.5
+	gdb_7_3_1-2011-09-04-release:1.5
+	gdb_7_3-2011-07-26-release:1.5
+	gdb_7_3-branch:1.5.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.5
+	gdb_7_2-2010-09-02-release:1.3
+	gdb_7_2-branch:1.3.0.4
+	gdb_7_2-2010-07-07-branchpoint:1.3
+	gdb_7_1-2010-03-18-release:1.3
+	gdb_7_1-branch:1.3.0.2
+	gdb_7_1-2010-02-18-branchpoint:1.3
+	gdb_7_0_1-2009-12-22-release:1.2
+	gdb_7_0-2009-10-06-release:1.2
+	gdb_7_0-branch:1.2.0.4
+	gdb_7_0-2009-09-16-branchpoint:1.2
+	msnyder-checkpoint-072509-branch:1.2.0.2
+	msnyder-checkpoint-072509-branchpoint:1.2;
+locks; strict;
+comment	@ * @;
+
+
+1.8
+date	2013.01.01.06.32.41;	author brobecke;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2012.06.18.17.31.34;	author jkratoch;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2012.01.04.08.17.00;	author brobecke;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2011.01.07.19.36.15;	author msnyder;	state Exp;
+branches
+	1.5.4.1;
+next	1.4;
+
+1.4
+date	2011.01.01.15.33.00;	author brobecke;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2010.01.01.07.31.30;	author brobecke;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2009.05.19.00.23.49;	author palves;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2009.02.17.17.56.50;	author palves;	state Exp;
+branches;
+next	;
+
+1.5.4.1
+date	2012.01.06.04.43.07;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.8
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@/* Target-dependent, architecture-independent code for DICOS, for GDB.
+
+   Copyright (C) 2009-2013 Free Software Foundation, Inc.
+
+   This file is part of GDB.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+#include "defs.h"
+#include "osabi.h"
+#include "gdb_string.h"
+#include "solib.h"
+#include "solib-target.h"
+#include "inferior.h"
+#include "dicos-tdep.h"
+
+void
+dicos_init_abi (struct gdbarch *gdbarch)
+{
+  struct gdbarch_tdep *tdep = gdbarch_tdep (gdbarch);
+
+  set_solib_ops (gdbarch, &solib_target_so_ops);
+
+  /* Every process, although has its own address space, sees the same
+     list of shared libraries.  There's no "main executable" in DICOS,
+     so this accounts for all code.  */
+  set_gdbarch_has_global_solist (gdbarch, 1);
+
+  /* The DICOS breakpoint API takes care of magically making
+     breakpoints visible to all inferiors.  */
+  set_gdbarch_has_global_breakpoints (gdbarch, 1);
+
+  /* There's no (standard definition of) entry point or a guaranteed
+     text location with a symbol where to place the call dummy, so we
+     need it on the stack.  Rely on i386_gdbarch_init used also for
+     amd64 to set up ON_STACK inferior calls.  */
+
+  /* DICOS rewinds the PC itself.  */
+  set_gdbarch_decr_pc_after_break (gdbarch, 0);
+}
+
+/* Return true if ABFD is a dicos load module.  HEADER_SIZE is the
+   expected size of the "header" section in bytes.  */
+
+int
+dicos_load_module_p (bfd *abfd, int header_size)
+{
+  long storage_needed;
+  int ret = 0;
+  asymbol **symbol_table = NULL;
+  const char *symname = "Dicos_loadModuleInfo";
+  asection *section;
+
+  /* DICOS files don't have a .note.ABI-tag marker or something
+     similar.  We do know there's always a "header" section of
+     HEADER_SIZE bytes (size depends on architecture), and there's
+     always a "Dicos_loadModuleInfo" symbol defined.  Look for the
+     section first, as that should be cheaper.  */
+
+  section = bfd_get_section_by_name (abfd, "header");
+  if (!section)
+    return 0;
+
+  if (bfd_section_size (abfd, section) != header_size)
+    return 0;
+
+  /* Dicos LMs always have a "Dicos_loadModuleInfo" symbol
+     defined.  Look for it.  */
+
+  storage_needed = bfd_get_symtab_upper_bound (abfd);
+  if (storage_needed < 0)
+    {
+      warning (_("Can't read elf symbols from %s: %s"),
+	       bfd_get_filename (abfd),
+	       bfd_errmsg (bfd_get_error ()));
+      return 0;
+    }
+
+  if (storage_needed > 0)
+    {
+      long i, symcount;
+
+      symbol_table = xmalloc (storage_needed);
+      symcount = bfd_canonicalize_symtab (abfd, symbol_table);
+
+      if (symcount < 0)
+	warning (_("Can't read elf symbols from %s: %s"),
+		 bfd_get_filename (abfd),
+		 bfd_errmsg (bfd_get_error ()));
+      else
+	{
+	  for (i = 0; i < symcount; i++)
+	    {
+	      asymbol *sym = symbol_table[i];
+	      if (sym->name != NULL
+		  && symname[0] == sym->name[0]
+		  && strcmp (symname + 1, sym->name + 1) == 0)
+		{
+		  ret = 1;
+		  break;
+		}
+	    }
+	}
+    }
+
+  xfree (symbol_table);
+  return ret;
+}
+@
+
+
+1.7
+log
+@gdb/
+	Switch i386 and derived targets to ON_STACK.
+	* amd64-dicos-tdep.c (amd64_dicos_push_dummy_code): Remove.
+	(amd64_dicos_init_abi): Remove its installment.
+	* dicos-tdep.c (dicos_init_abi): Remove the
+	set_gdbarch_call_dummy_location call.  Update the comment here.
+	* i386-dicos-tdep.c (i386_dicos_push_dummy_code): Remove.
+	(i386_dicos_init_abi): Remove its installment.
+	* i386-tdep.c (i386_push_dummy_code): New function.
+	(i386_gdbarch_init): Call set_gdbarch_call_dummy_location, install
+	i386_push_dummy_code.
+@
+text
+@d3 1
+a3 1
+   Copyright (C) 2009-2012 Free Software Foundation, Inc.
+@
+
+
+1.6
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d46 2
+a47 2
+     put it on the stack.  */
+  set_gdbarch_call_dummy_location (gdbarch, ON_STACK);
+@
+
+
+1.5
+log
+@2011-01-07  Michael Snyder  <msnyder@@vmware.com>
+
+	* ada-lang.c: Comment cleanup, mostly periods and spaces.
+	* ada-lang.h: Ditto.
+	* ada-tasks.c: Ditto.
+	* ada-valprint.c: Ditto.
+	* aix-threads.c: Ditto.
+	* alpha-linux-nat.c: Ditto.
+	* alpha-linux-tdep.c: Ditto.
+	* alpha-mdebug-tdep.c: Ditto.
+	* alpha-nat.c: Ditto.
+	* alpha-osf1-tdep.c: Ditto.
+	* alpha-tdep.c: Ditto.
+	* alphabsd-nat.c: Ditto.
+	* alphabsd-tdep.c: Ditto.
+	* amd64-darwin-tdep.c: Ditto.
+	* amd64-linux-nat.c: Ditto.
+	* amd64-linux-tdep.c: Ditto.
+	* amd64-sol2-tdep.c: Ditto.
+	* amd64-tdep.c: Ditto.
+	* amd64-fbsd-tdep.c: Ditto.
+	* amd64-nbsd-tdep.c: Ditto.
+	* amd64-obsd-tdep.c: Ditto.
+	* amd64-linux-nat.c: Ditto.
+	* amd64-linux-tdep.c: Ditto.
+	* arm-tdep.c: Ditto.
+	* arm-tdep.h: Ditto.
+	* armnbsd-nat.c: Ditto.
+	* avr-tdep.c: Ditto.
+	* bfin-tdep.c: Ditto.
+	* bsd-kvm.c: Ditto.
+	* c-typeprintc: Ditto.
+	* c-valprint.c: Ditto.
+	* coff-pe-read.h: Ditto.
+	* coffreead.c: Ditto.
+	* cris-tdep.c: Ditto.
+	* d-lang.c: Ditto.
+	* darwin-nat-info.c: Ditto.
+	* darwin-nat.c: Ditto.
+	* dbug-rom.c: Ditto.
+	* dbxread.c: Ditto.
+	* dcache.c: Ditto.
+	* dcache.h: Ditto.
+	* dec-thread.c: Ditto.
+	* defs.h: Ditto.
+	* demangle.c: Ditto.
+	* dicos-tdep.c: Ditto.
+	* dictionary.c: Ditto.
+	* dictionary.h: Ditto.
+	* dink32-rom.c: Ditto.
+	* disasm.c: Ditto.
+	* doublest.c: Ditto.
+	* dsrec.c: Ditto.
+	* dummy-frame.c: Ditto.
+	* dwarf2-frame.c: Ditto.
+	* dwarf2expr.c: Ditto.
+	* dwarf2loc.c: Ditto.
+	* dwarf2read.c: Ditto.
+	* elfread.c: Ditto.
+	* environ.c: Ditto.
+	* eval.c: Ditto.
+	* event-top.h: Ditto.
+	* exceptions.c: Ditto.
+	* exceptions.h: Ditto.
+	* exec.c: Ditto.
+	* expprint.c: Ditto.
+	* expression.h: Ditto.
+	* f-exp.y: Ditto.
+	* f-lang.c: Ditto.
+	* f-lang.h: Ditto.
+	* f-typeprint.c: Ditto.
+	* f-valprint.c: Ditto.
+	* fbsd-nat.c: Ditto.
+	* findvar.c: Ditto.
+	* fork-child.c: Ditto.
+	* frame.c: Ditto.
+	* frame.h: Ditto.
+	* frv-linux-tdep.c: Ditto.
+	* frv-tdep.c: Ditto.
+	* gcore.c: Ditto.
+	* gdb-stabs.h: Ditto.
+	* gdb_assert.h: Ditto.
+	* gdb_string.h: Ditto.
+	* gdb_thread_db.h: Ditto.
+	* gdb_wait.h: Ditto.
+	* gdbarch.sh: Ditto.
+	* gdbcore.h: Ditto.
+	* gdbthread.h: Ditto.
+	* gdbtypes.c: Ditto.
+	* gdbtypes.h: Ditto.
+	* gnu-nat.c: Ditto.
+	* gnu-nat.h: Ditto.
+	* gnu-v2-abi.c: Ditto.
+	* gnu-v3-abi.c: Ditto.
+	* go32-nat.c: Ditto.
+	* gdbarch.c: Regenerate.
+	* gdbarch.h: Regenerate.
+@
+text
+@d3 1
+a3 1
+   Copyright (C) 2009, 2010, 2011 Free Software Foundation, Inc.
+@
+
+
+1.5.4.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d3 1
+a3 1
+   Copyright (C) 2009-2012 Free Software Foundation, Inc.
+@
+
+
+1.4
+log
+@run copyright.sh for 2011.
+@
+text
+@d84 2
+a85 1
+      warning (_("Can't read elf symbols from %s: %s"), bfd_get_filename (abfd),
+@
+
+
+1.3
+log
+@Update copyright year in most headers.
+
+Automatic update by copyright.sh.
+@
+text
+@d3 1
+a3 1
+   Copyright (C) 2009, 2010 Free Software Foundation, Inc.
+@
+
+
+1.2
+log
+@	* breakpoint.c (insert_breakpoints, breakpoint_init_inferior)
+	(update_global_location_list): Use gdbarch_has_global_breakpoints
+	instead of gdbarch_has_global_solist and
+	target_supports_multi_process.
+	* dicos-tdep.c (dicos_init_abi): Set
+	gdbarch_has_global_breakpoints.
+	* gdbarch.sh (has_global_solist): Update comment.
+	(has_global_breakpoints): New.
+	* remote.c (remote_start_remote): Use
+	gdbarch_has_global_breakpoints instead of
+	gdbarch_has_global_solist.
+	* target.c (target_detach): Use gdbarch_has_global_breakpoints
+	instead of gdbarch_has_global_solist.
+	* infcmd.c (attach_command): Use gdbarch_has_global_solist instead
+	of target_supports_multi_process.
+@
+text
+@d3 1
+a3 1
+   Copyright (C) 2009 Free Software Foundation, Inc.
+@
+
+
+1.1
+log
+@	* Makefile.in (ALL_64_TARGET_OBS): Add amd64-dicos-tdep.o.
+	(ALL_TARGET_OBS): Add dicos-tdep.o.
+	(ALLDEPFILES): Add amd64-dicos-tdep.c and dicos-tdep.c.
+	* configure.tgt (i[34567]86-*-dicos*): Add dicos-tdep.o to
+	gdb_target_obs.
+	(x86_64-*-dicos*): Add dicos-tdep.o and amd64-dicos-tdep.o to
+	gdb_target_obs.
+	* dicos-tdep.h, dicos-tdep.c: New.
+	* amd64-dicos-tdep.c: New.
+	* i386-dicos-tdep.c: Don't include solib.h, solib-target.h or
+	inferior.h.  Include dicos-tdep.h.
+	(i386_dicos_init_abi): Call dicos_init_abi.
+	(i386_dicos_bfd_has_symbol_p): Delete.
+	(i386_dicos_osabi_sniffer): Use dicos_load_module_p.
+
+	* NEWS: Mention x86-64 DICOS target support.
+@
+text
+@d36 2
+a37 1
+     list of shared libraries.  */
+d40 4
+@
+

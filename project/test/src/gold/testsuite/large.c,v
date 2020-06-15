@@ -1,0 +1,175 @@
+head	1.1;
+access;
+symbols
+	binutils-2_24-branch:1.1.0.14
+	binutils-2_24-branchpoint:1.1
+	binutils-2_21_1:1.1
+	binutils-2_23_2:1.1
+	binutils-2_23_1:1.1
+	binutils-2_23:1.1
+	binutils-2_23-branch:1.1.0.12
+	binutils-2_23-branchpoint:1.1
+	binutils-2_22_branch:1.1.0.10
+	binutils-2_22:1.1
+	binutils-2_22-branch:1.1.0.8
+	binutils-2_22-branchpoint:1.1
+	binutils-2_21:1.1
+	binutils-2_21-branch:1.1.0.6
+	binutils-2_21-branchpoint:1.1
+	binutils-2_20_1:1.1
+	binutils-2_20:1.1
+	binutils-2_20-branch:1.1.0.4
+	binutils-2_20-branchpoint:1.1
+	dje-cgen-play1-branch:1.1.0.2
+	dje-cgen-play1-branchpoint:1.1
+	binutils_latest_snapshot:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.1
+date	2009.06.22.06.51.53;	author ian;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.1
+log
+@	* layout.cc (Layout::make_output_section): Call
+	Target::new_output_section.
+	(Layout::attach_allocated_section_to_segment): Put large section
+	sections in a separate load segment with the large segment flag
+	set.
+	(Layout::segment_precedes): Sort large data segments after other
+	load segments.
+	(align_file_offset): New static function.
+	(Layout::set_segment_offsets): Use align_file_offset.
+	* output.h (class Output_section): Add is_small_section_ and
+	is_large_section_ fields.
+	(Output_section::is_small_section): New function.
+	(Output_section::set_is_small_section):  New function.
+	(Output_section::is_large_section): New function.
+	(Output_section::set_is_large_section): New function.
+	(Output_section::is_large_data_section): New function.
+	(class Output_segment): Add is_large_data_segment_ field.
+	(Output_segment::is_large_data_segment): New function.
+	(Output_segment::set_is_large_data_segment): New function.
+	* output.cc (Output_section::Output_section): Initialize new
+	fields.
+	(Output_segment::Output_segment): Likewise.
+	(Output_segment::add_output_section): Add assertion that large
+	data sections always go in large data segments.  Force small data
+	sections to the end of the list of data sections.  Force small BSS
+	sections to the start of the list of BSS sections.  For large BSS
+	sections to the end of the list of BSS sections.
+	* symtab.h (class Symbol): Declare is_common_shndx.
+	(Symbol::is_defined): Check Symbol::is_common_shndx.
+	(Symbol::is_common): Likewise.
+	(class Symbol_table): Define enum Commons_section_type.  Update
+	declarations.  Add small_commons_ and large_commons_ fields.
+	* symtab.cc (Symbol::is_common_shndx): New function.
+	(Symbol_table::Symbol_table): Initialize new fields.
+	(Symbol_table::add_from_object): Put small and large common
+	symbols in the right list.
+	(Symbol_table::sized_finalized_symbol): Check
+	Symbol::is_common_shndx.
+	(Symbol_table::sized_write_globals): Likewise.
+	* common.cc (Symbol_table::do_allocate_commons): Allocate new
+	common symbol lists.  Don't call do_allocate_commons_list if the
+	list is empty.
+	(Symbol_table::do_allocate_commons_list): Remove is_tls
+	parameter.  Add comons_section_type parameter.  Change all
+	callers.  Handle small and large common symbols.
+	* object.cc (Sized_relobj::do_finalize_local_symbols): Check
+	Symbol::is_common_shndx.
+	* resolve.cc (symbol_to_bits): Likewise.
+	* target.h (Target::small_common_shndx): New function.
+	(Target::small_common_section_flags): New function.
+	(Target::large_common_shndx): New function.
+	(Target::large_common_section_flags): New function.
+	(Target::new_output_section): New function.
+	(Target::Target_info): Add small_common_shndx, large_common_shndx,
+	small_common_section_flags, and large_common_section_flags
+	fields.
+	(Target::do_new_output_section): New virtual function.
+	* arm.cc (Target_arm::arm_info): Initialize new fields.
+	* i386.cc (Target_i386::i386_info): Likewise.
+	* powerpc.cc (Target_powerpc::powerpc_info) [all versions]:
+	Likewise.
+	* sparc.c (Target_sparc::sparc_info) [all versions]: Likewise.
+	* x86_64.cc (Target_x86_64::x86_64_info): Likewise.
+	(Target_x86_64::do_new_output_section): New function.
+	* configure.ac: Define conditional MCMODEL_MEDIUM.
+	* testsuite/Makefile.am (check_PROGRAMS): Add large.
+	(large_SOURCES, large_CFLAGS, large_DEPENDENCIES): Define.
+	(large_LDFLAGS): Define.
+	* testsuite/large.c: New file.
+	* testsuite/testfile.cc (Target_test::test_target_info):
+	Initialize new fields.
+	* configure, testsuite/Makefile.in: Rebuild.
+@
+text
+@/* large.c -- a test case for gold
+
+   Copyright 2009 Free Software Foundation, Inc.
+   Written by Ian Lance Taylor <iant@@google.com>.
+
+   This file is part of gold.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+   MA 02110-1301, USA.  */
+
+#include <assert.h>
+
+/* Test large sections in gold.  */
+
+int v1;
+int v2 = 1;
+int v3[0x10000];
+int v4[0x10000] = { 1 };
+const int v5[0x10000] = { 2 };
+int v6;
+int v7 = 1;
+
+int
+main (int argc __attribute__ ((unused)), char** argv __attribute ((unused)))
+{
+  assert (v1 == 0);
+  assert (v2 == 1);
+  assert (v3[0] == 0 && v3[0xffff] == 0);
+  assert (v4[0] == 1 && v4[0xffff] == 0);
+  assert (v5[0] == 2 && v5[0xffff] == 0);
+  assert (v6 == 0);
+  assert (v7 == 1);
+
+  /* The large symbols must follow the small ones.  */
+  assert (&v1 < v3 && &v1 < v4 && &v1 < v5);
+  assert (&v2 < v3 && &v2 < v4 && &v2 < v5);
+  assert (&v6 < v3 && &v6 < v4 && &v6 < v5);
+  assert (&v7 < v3 && &v7 < v4 && &v7 < v5);
+
+  /* Large symbols should be BSS followed by read-only followed by
+     read-write.  */
+  assert (v3 < v4);
+  assert (v3 < v5);
+  assert (v5 < v4);
+
+  return 0;
+}
+@

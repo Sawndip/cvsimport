@@ -1,0 +1,796 @@
+head	1.6;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.4
+	gdb_7_6-2013-04-26-release:1.4
+	gdb_7_6-branch:1.4.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.4;
+locks; strict;
+comment	@# @;
+
+
+1.6
+date	2013.03.15.01.41.29;	author qiyao;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2013.03.14.13.34.06;	author qiyao;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2013.01.01.06.41.28;	author brobecke;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2012.12.15.02.19.21;	author qiyao;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2012.12.08.11.58.01;	author qiyao;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2012.09.29.00.03.56;	author qiyao;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.6
+log
+@gdb/testsuite/
+	* gdb.threads/non-ldr-exc-1.exp (do_test): Fix the indent of
+	using with_test_prefix.
+	* gdb.threads/non-ldr-exc-2.exp (do_test): Likewise.
+	* gdb.threads/non-ldr-exc-3.exp (do_test): Likewise.
+	* gdb.threads/non-ldr-exc-4.exp (do_test): Likewise.
+	* gdb.threads/watchpoint-fork.exp (test): Likewise.
+	* gdb.base/break-interp.exp (test_core): Likewise.
+	(test_attach_gdb): Likewise.
+	* gdb.base/catch-load.exp (one_catch_load_test): Likewise.
+	* gdb.base/disp-step-syscall.exp (disp_step_cross_syscall):
+	Likewise.
+	* gdb.base/jit-so.exp (one_jit_test): Likewise.
+	* gdb.base/jit.exp (one_jit_test): Likewise.
+	* gdb.base/sepdebug.exp (test_different_dir): Likewise.
+	* gdb.dwarf2/dw2-dir-file-name.exp (test): Likewise.
+	* gdb.dwarf2/dw2-noloc.exp (file_symbols): Likewise.
+	* gdb.mi/mi-breakpoint-changed.exp (test_pending_resolved):
+	Likewise.
+	* gdb.mi/mi-cmd-param-changed.exp (test_command_param_changed):
+	Likewise.
+	* gdb.mi/mi-watch.exp test_watchpoint_all): Likewise.
+	* gdb.mi/pr11022.exp (test_memory_changed_observer): Likewise.
+	* gdb.trace/change-loc.exp (tracepoint_change_loc_1): Likewise.
+	(tracepoint_change_loc_2): Likewise.
+	* gdb.trace/disconnected-tracing.exp (disconnected_tracing):
+	Likewise.
+	(disconnected_tfind): Likewise.
+	* gdb.trace/mi-traceframe-changed.exp (test_tfind_tfile):
+	Likewise.
+	(test_tfind_remote): Likewise.
+	* gdb.trace/mi-tracepoint-changed.exp (test_reconnect):
+	Likewise.
+	(test_pending_resolved): Likewise.
+	* gdb.trace/mi-tsv-changed.exp (test_create_delete_modify_tsv):
+	Likewise.
+	(test_upload_tsv): Likewise.
+	* gdb.trace/pending.exp (pending_tracepoint_resolved):
+	Likewise.
+	(pending_tracepoint_works): Likewise.
+	* gdb.trace/report.exp (use_collected_data): Likewise.
+	* gdb.trace/status-stop.exp (test_tstart_tstop_tstart):
+	Likewise.
+	(test_tstart_tstart, test_buffer_full_tstart): Likewise.
+	* gdb.trace/strace.exp (strace_info_marker): Likewise.
+	(strace_trace_on_same_addr): Likewise.
+	(strace_trace_on_diff_addr): Likewise.
+	* gdb.trace/unavailable.exp (gdb_collect_args_test): Likewise.
+	(gdb_collect_locals_test): Likewise.
+	(gdb_unavailable_registers_test): Likewise.
+	(gdb_collect_globals_test): Likewise.
+@
+text
+@# Copyright 2012-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+load_lib trace-support.exp
+
+if {[skip_shlib_tests]} {
+    return 0
+}
+
+standard_testfile pending.c
+set libfile1 "pendshr1"
+set libfile2 "pendshr2"
+set executable $testfile
+set libsrc1  $srcdir/$subdir/$libfile1.c
+set libsrc2  $srcdir/$subdir/$libfile2.c
+set lib_sl1  [standard_output_file pendshr1.sl]
+set lib_sl2  [standard_output_file pendshr2.sl]
+
+set lib_opts [gdb_target_symbol_prefix_flags]
+
+if { [gdb_compile_shlib $libsrc1 $lib_sl1 $lib_opts] != ""
+     || [gdb_compile_shlib $libsrc2 $lib_sl2 $lib_opts] != ""} {
+    untested "Could not compile either $libsrc1 or $libsrc2"
+    return -1
+}
+
+set exec_opts [list debug shlib=$lib_sl1 shlib_load]
+if { [gdb_compile $srcdir/$subdir/$srcfile $binfile executable $exec_opts] != "" } {
+    untested "Failed to compile $srcfile"
+    return -1
+}
+
+load_lib mi-support.exp
+set MIFLAGS "-i=mi"
+
+# Test when GDB connects to a disconnected stub, existing tracepoints in
+# remote stub can be uploaded to GDB, and GDB emits MI notification if
+# new tracepoints are created.
+
+proc test_reconnect { } {
+    with_test_prefix "reconnect" {
+
+	global gdbserver_reconnect_p
+	global gdb_prompt
+	global executable
+	global lib_sl1 lib_sl2
+
+	set gdbserver_reconnect_p 1
+	if { [info proc gdb_reconnect] == "" } {
+	    return 0
+	}
+
+	clean_restart $executable
+	gdb_load_shlibs $lib_sl1
+	gdb_load_shlibs $lib_sl2
+	if ![runto_main] then {
+	    fail "Can't run to main"
+	    return 0
+	}
+	# Create tracepoints on marker and main, and leave them in the
+	# remote stub.
+	gdb_test "trace marker" "Tracepoint.*at.* file .*" \
+	    "tracepoint on marker"
+	gdb_test "trace main" "Tracepoint.*at.* file .*" \
+	    "tracepoint on main"
+	gdb_test_no_output "tstart" "start trace experiment"
+
+	set test "disconnect"
+	gdb_test_multiple "disconnect" $test {
+	    -re "Trace is running but will stop on detach; detach anyway\\? \\(y or n\\) $" {
+		pass $test
+
+		set test "disconnected"
+		gdb_test_multiple "y" $test {
+		    -re "$gdb_prompt $" {
+			pass "$test"
+		    }
+		}
+	    }
+	}
+
+	gdb_exit
+
+	if [mi_gdb_start] {
+	    return
+	}
+
+	global srcdir
+	global subdir
+	global binfile
+
+	mi_gdb_reinitialize_dir $srcdir/$subdir
+	mi_gdb_load ${binfile}
+
+	global gdbserver_protocol
+	global gdbserver_gdbport
+
+	# Create tracepoints on marker and pendfunc2.
+	mi_gdb_test "-break-insert -a -f pendfunc2" \
+	    {.*\^done,bkpt=.*addr=\"<PENDING>\".*} \
+	    "insert tracepoint on pendfunc2"
+	mi_gdb_test "-break-insert -a marker" {.*\^done,bkpt=.*\".*} \
+	    "insert tracepoint on marker"
+
+	# Connect to the remote stub again, and make sure GDB merges the
+	# tracepoints of both sides correctly.
+	send_gdb "47-target-select $gdbserver_protocol $gdbserver_gdbport\n"
+
+	global mi_gdb_prompt
+	set test "tracepoint created"
+	gdb_expect {
+	    -re "=breakpoint-created,bkpt=\{number=\"1\",type=\"tracepoint\"" {
+		# Tracepoint 1 in GDB, which has already existed before
+		# connecting, should have been merged with a tracepoint on
+		# the target, so we shouldn't see a =breakpoint-created
+		# notification for it.
+		fail "$test: 1"
+		exp_continue
+	    }
+	    -re "=breakpoint-created,bkpt=\{number=\"2\",type=\"tracepoint\"" {
+		# Similar to above.
+		fail "$test: 2"
+		exp_continue
+	    }
+	    -re "=breakpoint-created,bkpt=\{number=\"3\",type=\"tracepoint\",disp=\"keep\",enabled=\"y\",\[^\n\]+,func=\"main\"\[^\n\]+,installed=\"y\"" {
+		# A tracepoint on main was defined in the stub, not in GDB,
+		# so we should see a =breakpoint-created notification.
+		pass $test
+	    }
+	}
+	# Tracepoint on marker is defined.  After the sync, we know that
+	# the tracepoint is in remote stub.  Mark it 'installed'.
+	set test "tracepoint on marker is installed"
+	gdb_expect {
+	    -re "=breakpoint-modified,bkpt=\{number=\"2\".*,func=\"marker\".*installed=\"y\".*${mi_gdb_prompt}$" {
+		pass "$test"
+	    }
+	}
+	# Check that tracepoint 1 is still pending.
+	mi_gdb_test "-break-info 1" \
+	    {.*\^done,BreakpointTable=.*addr=\"<PENDING>\".*} \
+	    "break-info 1"
+
+	set gdbserver_reconnect_p 0
+    }
+}
+
+# Test 'breakpoint-modified' notification is emited when pending tracepoints are
+# resolved.
+
+proc test_pending_resolved { } {
+    with_test_prefix "pending resolved" {
+	global decimal hex
+	global executable
+	global srcdir
+	global subdir
+	global binfile
+	global lib_sl1 lib_sl2
+	global mi_gdb_prompt
+
+	gdb_exit
+	if [mi_gdb_start] {
+	    continue
+	}
+
+	mi_gdb_reinitialize_dir $srcdir/$subdir
+	mi_gdb_load ${binfile}
+	mi_load_shlibs $lib_sl1 $lib_sl2
+
+	# Create a pending tracepoint on pendfunc2
+	mi_gdb_test "-break-insert -a -f pendfunc2" \
+	    {.*\^done,bkpt=.*addr=\"<PENDING>\".*} \
+	    "insert breakpoint on pendfunc2"
+	# Insert breakpoint on marker
+	mi_gdb_test "-break-insert marker" {.*\^done,bkpt=.*} \
+	    "insert breakpoint on marker"
+
+	mi_run_cmd
+	mi_expect_stop "breakpoint-hit" "marker" ""\
+	    ".*" ".*" {"" "disp=\"keep\""} \
+	    "continue to marker breakpoint"
+	mi_gdb_test "-trace-start" {\^done} "trace start"
+
+	mi_send_resuming_command "exec-continue" "continuing execution to marker 1"
+
+	# It is expected to get two "=breakpoint-modified" notifications.
+	# Pending tracepoint is resolved.
+	set test "tracepoint on pendfunc2 resolved"
+	gdb_expect {
+	    -re "=breakpoint-modified,bkpt=\{number=\"1\",type=\"tracepoint\".*.*times=\"0\".*installed=\"n\"" {
+		pass "$test"
+	    }
+	}
+	# Resolved tracepoint is installed.
+	set test "tracepoint on pendfunc2 installed"
+	gdb_expect {
+	    -re "=breakpoint-modified,bkpt=\{number=\"1\",type=\"tracepoint\".*.*times=\"0\".*installed=\"y\"" {
+		pass "$test"
+	    }
+	}
+
+	mi_expect_stop "breakpoint-hit" "marker" ".*" ".*" ".*" \
+	    {"" "disp=\"keep\""} "continue to marker"
+
+
+	mi_gdb_test "-trace-stop" {\^done,.*} "trace stop"
+	mi_gdb_test "-trace-find frame-number 0" \
+	    "-trace-find frame-number 0\r\n\\^done,found=\"1\",tracepoint=\"${decimal}\",traceframe=\"0\",frame=\{.*" \
+	    "-trace-find frame-number 0"
+	mi_gdb_test "-trace-find none" {\^done,found="0"} "back to live inferior"
+
+	mi_send_resuming_command "exec-continue" "continuing to exit"
+	set test "tracepoint on pendfunc2 becomes pending again"
+	gdb_expect {
+	    -re ".*=breakpoint-modified,bkpt=\{number=\"1\",type=\"tracepoint\".*addr=\"<PENDING>\",.*times=\"0\"" {
+		pass "$test"
+	    }
+	    -re ".*${mi_gdb_prompt}$" {
+		fail $test
+	    }
+	    timeout {
+		fail "$test (timeout)"
+	    }
+	}
+
+	mi_expect_stop "exited-normally" "" "" "" "" "" ""
+    }
+}
+
+# Test target supports tracepoints or not.
+
+clean_restart $executable
+
+gdb_load_shlibs $lib_sl1
+gdb_load_shlibs $lib_sl2
+
+if ![runto_main] {
+    fail "Can't run to main to check for trace support"
+    return -1
+}
+
+if ![gdb_target_supports_trace] {
+    unsupported "Current target does not support trace"
+    return -1
+}
+
+gdb_exit
+
+test_reconnect
+
+test_pending_resolved
+
+return 0
+@
+
+
+1.5
+log
+@gdb/testsuite/
+
+	* config/monitor.exp (gdb_target_cmd): Remove semicolon after
+	'return'.
+	(gdb_target_monitor, gdb_load): Likewise.
+	* config/sid.exp (gdb_load): Likewise.
+	* config/slite.exp (gdb_load): Likewise.
+	* config/vx.exp (gdb_start, spawn_vxgdb): Likewise.
+	* gdb.ada/arrayidx.exp, gdb.ada/null_array.exp: Likewise.
+	* gdb.arch/mips-octeon-bbit.exp (single_step): Likewise.
+	(single_step_until): Likewise.
+	* gdb.arch/powerpc-d128-regs.exp: Likewise.
+	* gdb.arch/system-gcore.exp: Likewise.
+	* gdb.base/bigcore.exp (extract_heap): Likewise.
+	* gdb.base/break-on-linker-gcd-function.exp: Likewise.
+	* gdb.base/call-ar-st.exp: Likewise.
+	* gdb.base/call-rt-st.exp: Likewise.
+	* gdb.base/call-sc.exp, gdb.base/call-strs.exp: Likewise.
+	* gdb.base/callfuncs.exp, gdb.base/completion.exp: Likewise.
+	* gdb.base/condbreak.exp, gdb.base/constvars.exp: Likewise.
+	* gdb.base/corefile.exp: Likewise.
+	* gdb.base/dbx.exp (gdb_file_cmd): Likewise.
+	* gdb.base/exprs.exp, gdb.base/fileio.exp: Likewise.
+	* gdb.base/fixsection.exp: Likewise.
+	* gdb.base/funcargs.exp: Likewise.
+	* gdb.base/gcore-buffer-overflow.exp: Likewise.
+	* gdb.base/gcore-relro.exp: Likewise.
+	* gdb.base/gcore.exp, gdb.base/gdb11530.exp: Likewise.
+	* gdb.base/gdb11531.exp, gdb.base/gnu-ifunc.exp: Likewise.
+	* gdb.base/info-os.exp, gdb.base/info-proc.exp: Likewise.
+	* gdb.base/interp.exp, gdb.base/langs.exp:: Likewise.
+	* gdb.base/list.exp: Likewise.
+	(set_listsize): Likewise.
+	* gdb.base/logical.exp, gdb.base/mips_pro.exp: Likewise.
+	* gdb.base/miscexprs.exp, gdb.base/nodebug.exp: Likewise.
+	* gdb.base/opaque.exp, gdb.base/pointers.exp: Likewise.
+	* gdb.base/psymtab.exp, gdb.base/ptype.exp: Likewise.
+	* gdb.base/relational.exp, gdb.base/scope.exp: Likewise.
+	* gdb.base/setvar.exp: Likewise.
+	(test_set): Likewise.
+	* gdb.base/signals.exp, gdb.base/sizeof.exp: Likewise.
+	* gdb.base/solib-overlap.exp: Likewise.
+	* gdb.base/store.exp, gdb.base/structs.exp: Likewise.
+	* gdb.base/structs2.exp, gdb.base/volatile.exp: Likewise.
+	* gdb.base/watchpoint.exp (initialize): Likewise.
+	(test_simple_watchpoint): Likewise.
+	(test_disabling_watchpoints): Likewise.
+	(test_watchpoint_triggered_in_syscall): Likewise.
+	* gdb.base/whatis.exp, gdb.cp/ambiguous.exp: Likewise.
+	* gdb.cp/casts.exp, gdb.cp/ctti.exp: Likewise.
+	* gdb.cp/namespace.exp, gdb.cp/nsdecl.exp: Likewise.
+	* gdb.cp/psmang.exp, gdb.dwarf2/dw2-ranges.exp: Likewise.
+	* gdb.hp/gdb.aCC/optimize.exp: Likewise.
+	* gdb.hp/gdb.aCC/watch-cmd.exp: Likewise.
+	* gdb.hp/gdb.base-hp/callfwmall.exp: Likewise.
+	* gdb.hp/gdb.base-hp/pxdb.exp: Likewise.
+	* gdb.hp/gdb.compat/xdb1.exp: Likewise.
+	* gdb.hp/gdb.compat/xdb2.exp: Likewise.
+	* gdb.hp/gdb.compat/xdb3.exp: Likewise.
+	* gdb.hp/gdb.defects/bs14602.exp: Likewise.
+	* gdb.hp/gdb.defects/solib-d.exp: Likewise.
+	* gdb.mi/gdb792.exp: Likewise.
+	* gdb.mi/mi-inheritance-syntax-error.exp: Likewise.
+	* gdb.mi/mi-logging.exp, gdb.mi/mi-var-cp.exp : Likewise.
+	* gdb.mi/mi-var-rtti.exp, gdb.python/py-type.exp: Likewise.
+	* gdb.threads/gcore-thread.exp: Likewise.
+	(load_core): Likewise.
+	* gdb.threads/pthreads.exp (all_threads_running): Likewise.
+	(test_startup, check_control_c): Likewise.
+	* gdb.threads/sigstep-threads.exp: Likewise.
+	* gdb.threads/thread_check.exp: Likewise.
+	* gdb.trace/backtrace.exp, gdb.trace/change-loc.exp: Likewise.
+	* gdb.trace/circ.exp (run_trace_experiment): Likewise.
+	(set_a_tracepoint, trace_buffer_normal): Likewise.
+	(gdb_trace_circular_tests): Likewise.
+	* gdb.trace/collection.exp: Likewise.
+	* gdb.trace/disconnected-tracing.exp: Likewise.
+	* gdb.trace/infotrace.exp: Likewise.
+	* gdb.trace/mi-traceframe-changed.exp: Likewise.
+	* gdb.trace/mi-tracepoint-changed.exp: Likewise.
+	* gdb.trace/mi-tsv-changed.exp (test_create_delete_modify_tsv): Likewise.
+	* gdb.trace/packetlen.exp, gdb.trace/passc-dyn.exp: Likewise.
+	* gdb.trace/pending.exp, gdb.trace/report.exp: Likewise.
+	* gdb.trace/stap-trace.exp: Likewise.
+	* gdb.trace/status-stop.exp,gdb.trace/strace.exp: Likewise.
+	* gdb.trace/tfind.exp, gdb.trace/trace-break.exp: Likewise.
+	* gdb.trace/trace-buffer-size.exp: Likewise.
+	* gdb.trace/tspeed.exp, gdb.trace/tsv.exp: Likewise.
+	* gdb.trace/unavailable.exp: Likewise.
+	* gdb.trace/while-dyn.exp: Likewise.
+	* lib/fortran.exp (set_lang_fortran): Likewise.
+	* lib/gdb.exp (default_gdb_version, gdb_start_cmd): Likewise.
+	(gdb_breakpoint, gdb_reinitialize_dir): Likewise.
+	(default_gdb_start, get_compiler_info): Likewise.
+	(gdb_compile, gdb_compile_objc, gdb_reload, gdb_init): Likewise.
+	(get_debug_format, setup_xfail_format): Likewise.
+	(rerun_to_main, gdb_skip_float_test): Likewise.
+	(build_id_debug_filename_get, get_remotetimeout): Likewise.
+	* lib/java.exp (set_lang_java): Likewise.
+	* lib/mi-support.exp (default_mi_gdb_start): Likewise.
+	(mi_gdb_reinitialize_dir, mi_gdb_target_cmd): Likewise.
+	(mi_gdb_file_cmd, mi_gdb_test): Likewise.
+	(mi_run_cmd_full, mi_expect_interrupt): Likewise.
+	* lib/objc.exp (set_lang_objc): Likewise.
+	* lib/pascal.exp (set_lang_pascal): Likewise.
+	* lib/prompt.exp (default_prompt_gdb_start): Likewise.
+	* lib/trace-support.exp (gdb_trace_setactions, gdb_tfind_test): Likewise.
+	(gdb_readexpr, gdb_gettpnum, gdb_find_recursion_test_baseline): Likewise.
+@
+text
+@d52 2
+a53 1
+proc test_reconnect { } { with_test_prefix "reconnect" {
+d55 35
+a89 34
+    global gdbserver_reconnect_p
+    global gdb_prompt
+    global executable
+    global lib_sl1 lib_sl2
+
+    set gdbserver_reconnect_p 1
+    if { [info proc gdb_reconnect] == "" } {
+	return 0
+    }
+
+    clean_restart $executable
+    gdb_load_shlibs $lib_sl1
+    gdb_load_shlibs $lib_sl2
+    if ![runto_main] then {
+	fail "Can't run to main"
+	return 0
+    }
+    # Create tracepoints on marker and main, and leave them in the
+    # remote stub.
+    gdb_test "trace marker" "Tracepoint.*at.* file .*" \
+	"tracepoint on marker"
+    gdb_test "trace main" "Tracepoint.*at.* file .*" \
+	"tracepoint on main"
+    gdb_test_no_output "tstart" "start trace experiment"
+
+    set test "disconnect"
+    gdb_test_multiple "disconnect" $test {
+	-re "Trace is running but will stop on detach; detach anyway\\? \\(y or n\\) $" {
+	    pass $test
+
+	    set test "disconnected"
+	    gdb_test_multiple "y" $test {
+		-re "$gdb_prompt $" {
+		    pass "$test"
+a92 1
+    }
+d94 1
+a94 1
+    gdb_exit
+d96 3
+a98 3
+    if [mi_gdb_start] {
+	return
+    }
+d100 42
+a141 41
+    global srcdir
+    global subdir
+    global binfile
+
+    mi_gdb_reinitialize_dir $srcdir/$subdir
+    mi_gdb_load ${binfile}
+
+    global gdbserver_protocol
+    global gdbserver_gdbport
+
+    # Create tracepoints on marker and pendfunc2.
+    mi_gdb_test "-break-insert -a -f pendfunc2" \
+	{.*\^done,bkpt=.*addr=\"<PENDING>\".*} \
+	"insert tracepoint on pendfunc2"
+    mi_gdb_test "-break-insert -a marker" {.*\^done,bkpt=.*\".*} \
+	"insert tracepoint on marker"
+
+    # Connect to the remote stub again, and make sure GDB merges the
+    # tracepoints of both sides correctly.
+    send_gdb "47-target-select $gdbserver_protocol $gdbserver_gdbport\n"
+
+    global mi_gdb_prompt
+    set test "tracepoint created"
+    gdb_expect {
+	-re "=breakpoint-created,bkpt=\{number=\"1\",type=\"tracepoint\"" {
+	    # Tracepoint 1 in GDB, which has already existed before
+	    # connecting, should have been merged with a tracepoint on
+	    # the target, so we shouldn't see a =breakpoint-created
+	    # notification for it.
+	    fail "$test: 1"
+	    exp_continue
+	}
+	-re "=breakpoint-created,bkpt=\{number=\"2\",type=\"tracepoint\"" {
+	    # Similar to above.
+	    fail "$test: 2"
+	    exp_continue
+	}
+	-re "=breakpoint-created,bkpt=\{number=\"3\",type=\"tracepoint\",disp=\"keep\",enabled=\"y\",\[^\n\]+,func=\"main\"\[^\n\]+,installed=\"y\"" {
+	    # A tracepoint on main was defined in the stub, not in GDB,
+	    # so we should see a =breakpoint-created notification.
+	    pass $test
+d143 7
+a149 7
+    }
+    # Tracepoint on marker is defined.  After the sync, we know that
+    # the tracepoint is in remote stub.  Mark it 'installed'.
+    set test "tracepoint on marker is installed"
+    gdb_expect {
+	-re "=breakpoint-modified,bkpt=\{number=\"2\".*,func=\"marker\".*installed=\"y\".*${mi_gdb_prompt}$" {
+	    pass "$test"
+d151 6
+d158 1
+a158 8
+    # Check that tracepoint 1 is still pending.
+    mi_gdb_test "-break-info 1" \
+	{.*\^done,BreakpointTable=.*addr=\"<PENDING>\".*} \
+	"break-info 1"
+
+    set gdbserver_reconnect_p 0
+}}
+
+d163 42
+a204 40
+proc test_pending_resolved { } { with_test_prefix "pending resolved" {
+    global decimal hex
+    global executable
+    global srcdir
+    global subdir
+    global binfile
+    global lib_sl1 lib_sl2
+    global mi_gdb_prompt
+
+    gdb_exit
+    if [mi_gdb_start] {
+	continue
+    }
+
+    mi_gdb_reinitialize_dir $srcdir/$subdir
+    mi_gdb_load ${binfile}
+    mi_load_shlibs $lib_sl1 $lib_sl2
+
+    # Create a pending tracepoint on pendfunc2
+    mi_gdb_test "-break-insert -a -f pendfunc2" \
+	{.*\^done,bkpt=.*addr=\"<PENDING>\".*} \
+	"insert breakpoint on pendfunc2"
+    # Insert breakpoint on marker
+    mi_gdb_test "-break-insert marker" {.*\^done,bkpt=.*} \
+	"insert breakpoint on marker"
+
+    mi_run_cmd
+    mi_expect_stop "breakpoint-hit" "marker" ""\
+	".*" ".*" {"" "disp=\"keep\""} \
+	"continue to marker breakpoint"
+    mi_gdb_test "-trace-start" {\^done} "trace start"
+
+    mi_send_resuming_command "exec-continue" "continuing execution to marker 1"
+
+    # It is expected to get two "=breakpoint-modified" notifications.
+    # Pending tracepoint is resolved.
+    set test "tracepoint on pendfunc2 resolved"
+    gdb_expect {
+	-re "=breakpoint-modified,bkpt=\{number=\"1\",type=\"tracepoint\".*.*times=\"0\".*installed=\"n\"" {
+	    pass "$test"
+d206 6
+a211 6
+    }
+    # Resolved tracepoint is installed.
+    set test "tracepoint on pendfunc2 installed"
+    gdb_expect {
+	-re "=breakpoint-modified,bkpt=\{number=\"1\",type=\"tracepoint\".*.*times=\"0\".*installed=\"y\"" {
+	    pass "$test"
+a212 1
+    }
+d214 2
+a215 2
+    mi_expect_stop "breakpoint-hit" "marker" ".*" ".*" ".*" \
+	{"" "disp=\"keep\""} "continue to marker"
+d218 18
+a235 17
+    mi_gdb_test "-trace-stop" {\^done,.*} "trace stop"
+    mi_gdb_test "-trace-find frame-number 0" \
+	"-trace-find frame-number 0\r\n\\^done,found=\"1\",tracepoint=\"${decimal}\",traceframe=\"0\",frame=\{.*" \
+	"-trace-find frame-number 0"
+    mi_gdb_test "-trace-find none" {\^done,found="0"} "back to live inferior"
+
+    mi_send_resuming_command "exec-continue" "continuing to exit"
+    set test "tracepoint on pendfunc2 becomes pending again"
+    gdb_expect {
+	-re ".*=breakpoint-modified,bkpt=\{number=\"1\",type=\"tracepoint\".*addr=\"<PENDING>\",.*times=\"0\"" {
+	    pass "$test"
+	}
+	-re ".*${mi_gdb_prompt}$" {
+	    fail $test
+	}
+	timeout {
+	    fail "$test (timeout)"
+d237 2
+d240 1
+a240 3
+
+    mi_expect_stop "exited-normally" "" "" "" "" "" ""
+}}
+@
+
+
+1.4
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@d253 1
+a253 1
+    return -1;
+@
+
+
+1.3
+log
+@2012-12-15  Yao Qi  <yao@@codesourcery.com>
+
+	* breakpoint.c (print_one_breakpoint_location): Display the
+	state of 'installed' of each non-pending location of a tracepoint
+	in both CLI and MI.
+	(download_tracepoint_locations): Notify 'breakpoint-modified'
+	observer if any tracepoint location is downloaded.
+	* tracepoint.c (start_tracing): Likewise.
+	(merge_uploaded_tracepoints): Record all modified
+	tracepoints and notify 'breakpoint-modified' observer for them.
+
+	* NEWS: Mention the change for CLI and MI.
+
+gdb/doc:
+2012-12-15  Yao Qi  <yao@@codesourcery.com>
+
+	* gdb.texinfo (Listing Tracepoints): New item and example about
+	'installed on target' output.
+	Add more in the example about 'installed on target'.
+	(GDB/MI Breakpoint Commands): Doc about 'installed field.
+
+gdb/testsuite:
+2012-12-15  Yao Qi  <yao@@codesourcery.com>
+
+	* gdb.trace/mi-tracepoint-changed.exp (test_pending_resolved): Check
+	'installed' field in '=breakpoint-modified'.
+	(test_reconnect): Check 'installed' field in
+	'=breakpoint-modified' and '=breakpoint-created'.
+
+	* gdb.trace/actions.exp: Update test for 'installed' field.
+	* gdb.trace/change-loc.exp (tracepoint_change_loc_1):
+	(tracepoint_change_loc_2): Likewise.
+	Check 'info tracepoint' display nothing else.
+	* gdb.trace/deltrace.exp: Likewise.
+	* gdb.trace/infotrace.exp: Likewise.
+	* gdb.trace/mi-traceframe-changed.exp (test_tfind_remote):
+	Likewise.
+	* gdb.trace/passcount.exp: Likewise.
+	* gdb.trace/tracecmd.exp: Likewise.
+	* gdb.trace/while-stepping.exp: Likewise.
+@
+text
+@d1 1
+a1 1
+# Copyright 2012 Free Software Foundation, Inc.
+@
+
+
+1.2
+log
+@gdb/testsuite
+2012-12-08  Yao Qi  <yao@@codesourcery.com>
+	    Pedro Alves  <palves@@redhat.com>
+
+	* gdb.trace/mi-tracepoint-changed.exp (test_reconnect): Test
+	'=breakpoint-created' when GDB merges the tracepoints of both
+	 sides.
+@
+text
+@d136 1
+a136 1
+	-re "=breakpoint-created,bkpt=\{number=\"3\",type=\"tracepoint\",disp=\"keep\",enabled=\"y\",.*,func=\"main\".*${mi_gdb_prompt}" {
+d141 7
+a147 2
+	timeout {
+	    fail $test
+d196 2
+d200 1
+a200 1
+	-re ".*=breakpoint-modified,bkpt=\{number=\"1\",type=\"tracepoint\".*.*times=\"0\"" {
+d203 6
+a208 5
+	-re ".*${mi_gdb_prompt}$" {
+	    fail $test
+	}
+	timeout {
+	    fail "$test (timeout)"
+d211 1
+@
+
+
+1.1
+log
+@gdb/testsuite/
+	* gdb.trace/mi-tracepoint-changed.exp: New.
+	* gdb.mi/mi-breakpoint-changed.exp: New.
+	* gdb.mi/pending.c, gdb.mi/pendshr1.c: New
+	* gdb.mi/pendshr2.c: New.
+@
+text
+@d71 2
+d74 3
+a76 1
+	"tracepointpoint on marker"
+d109 9
+d123 16
+a138 1
+	-re "=breakpoint-created,bkpt=\{number=\"1\",type=\"tracepoint\",disp=\"keep\",enabled=\"y\",.*,func=\"marker\".*${mi_gdb_prompt}" {
+d145 4
+@
+

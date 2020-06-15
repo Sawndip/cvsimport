@@ -1,0 +1,510 @@
+head	1.9;
+access;
+symbols
+	gdb_7_5_1-2012-11-29-release:1.6
+	gdb_7_5-2012-08-17-release:1.6
+	gdb_7_5-branch:1.6.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.6
+	gdb_7_4_1-2012-04-26-release:1.4.4.1
+	gdb_7_4-2012-01-24-release:1.4.4.1
+	gdb_7_4-branch:1.4.0.4
+	gdb_7_4-2011-12-13-branchpoint:1.4
+	gdb_7_3_1-2011-09-04-release:1.4
+	gdb_7_3-2011-07-26-release:1.4
+	gdb_7_3-branch:1.4.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.4;
+locks; strict;
+comment	@ * @;
+
+
+1.9
+date	2012.12.15.14.29.00;	author brobecke;	state dead;
+branches;
+next	1.8;
+
+1.8
+date	2012.12.15.14.27.56;	author brobecke;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2012.10.24.19.08.16;	author brobecke;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2012.03.09.00.31.15;	author brobecke;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2012.01.04.08.17.09;	author brobecke;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2011.01.10.20.38.50;	author msnyder;	state Exp;
+branches
+	1.4.4.1;
+next	1.3;
+
+1.3
+date	2011.01.01.15.33.13;	author brobecke;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2010.11.23.00.29.45;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2010.09.28.21.39.31;	author brobecke;	state Exp;
+branches;
+next	;
+
+1.4.4.1
+date	2012.01.06.04.43.26;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.9
+log
+@Rename ravenscar-sparc-thread.[hc] into sparc-ravenscar-thread.[hc].
+
+gdb/ChangeLog:
+
+        * sparc-ravenscar-thread.h: Renames ravenscar-sparc-thread.h.
+        * sparc-ravenscar-thread.c: Renames ravenscar-sparc-thread.c.
+        Adjust sparc-ravenscar-thread.h #include.
+        * sparc-tdep.c: Adjust sparc-ravenscar-thread.h #include
+        accordingly.
+        * Makefile.in: Replace ravenscar-sparc-thread with
+        sparc-ravenscar-thread throughout.
+        * configure.tgt: Likewise.
+@
+text
+@/* Ravenscar SPARC target support.
+
+   Copyright 2004, 2010-2012 Free Software Foundation, Inc.
+
+   This file is part of GDB.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+#include "defs.h"
+#include "gdbcore.h"
+#include "regcache.h"
+#include "sparc-tdep.h"
+#include "inferior.h"
+#include "ravenscar-thread.h"
+#include "ravenscar-sparc-thread.h"
+
+static void ravenscar_sparc_fetch_registers (struct regcache *regcache,
+                                             int regnum);
+static void ravenscar_sparc_store_registers (struct regcache *regcache,
+                                             int regnum);
+static void ravenscar_sparc_prepare_to_store (struct regcache *regcache);
+
+/* Register offsets from a referenced address (exempli gratia the
+   Thread_Descriptor).  The referenced address depends on the register
+   number.  The Thread_Descriptor layout and the stack layout are documented
+   in the GNAT sources, in sparc-bb.h.  */
+
+static const int sparc_register_offsets[] =
+{
+  /* G0 - G7 */
+  -1,   0x24, 0x28, 0x2C, 0x30, 0x34, 0x38, 0x3C,
+  /* O0 - O7 */
+  0x00, 0x04, 0x08, 0x0C, 0x10, 0x14, 0x18, 0x1C,
+  /* L0 - L7 */
+  0x00, 0x04, 0x08, 0x0C, 0x10, 0x14, 0x18, 0x1C,
+  /* I0 - I7 */
+  0x20, 0x24, 0x28, 0x2C, 0x30, 0x34, 0x38, 0x3C,
+  /* F0 - F31 */
+  0x50, 0x54, 0x58, 0x5C, 0x60, 0x64, 0x68, 0x6C,
+  0x70, 0x74, 0x78, 0x7C, 0x80, 0x84, 0x88, 0x8C,
+  0x90, 0x94, 0x99, 0x9C, 0xA0, 0xA4, 0xA8, 0xAC,
+  0xB0, 0xB4, 0xBB, 0xBC, 0xC0, 0xC4, 0xC8, 0xCC,
+  /* Y  PSR   WIM   TBR   PC    NPC   FPSR  CPSR */
+  0x40, 0x20, 0x44, -1,   0x1C, -1,   0x4C, -1
+};
+
+/* supply register REGNUM, which has been saved on REGISTER_ADDR, to the
+   regcache.  */
+
+static void
+supply_register_at_address (struct regcache *regcache, int regnum,
+                            CORE_ADDR register_addr)
+{
+  struct gdbarch *gdbarch = get_regcache_arch (regcache);
+  int buf_size = register_size (gdbarch, regnum);
+  char *buf;
+
+  buf = (char *) alloca (buf_size);
+  read_memory (register_addr, buf, buf_size);
+  regcache_raw_supply (regcache, regnum, buf);
+}
+
+/* Return true if, for a non-running thread, REGNUM has been saved on the
+   stack.  */
+
+static int
+register_on_stack_p (int regnum)
+{
+  return (regnum >= SPARC_L0_REGNUM && regnum <= SPARC_L7_REGNUM)
+    || (regnum >= SPARC_I0_REGNUM && regnum <= SPARC_I7_REGNUM);
+}
+
+/* Return true if, for a non-running thread, REGNUM has been saved on the
+   Thread_Descriptor.  */
+
+static int
+register_in_thread_descriptor_p (int regnum)
+{
+  return (regnum >= SPARC_O0_REGNUM && regnum <= SPARC_O7_REGNUM)
+    || (regnum == SPARC32_PSR_REGNUM)
+    || (regnum >= SPARC_G1_REGNUM && regnum <= SPARC_G7_REGNUM)
+    || (regnum == SPARC32_Y_REGNUM)
+    || (regnum == SPARC32_WIM_REGNUM)
+    || (regnum == SPARC32_FSR_REGNUM)
+    || (regnum >= SPARC_F0_REGNUM && regnum <= SPARC_F0_REGNUM + 31)
+    || (regnum == SPARC32_PC_REGNUM);
+}
+
+/* to_fetch_registers when inferior_ptid is different from the running
+   thread.  */
+
+static void
+ravenscar_sparc_fetch_registers (struct regcache *regcache, int regnum)
+{
+  struct gdbarch *gdbarch = get_regcache_arch (regcache);
+  const int sp_regnum = gdbarch_sp_regnum (gdbarch);
+  const int num_regs = gdbarch_num_regs (gdbarch);
+  int current_regnum;
+  CORE_ADDR current_address;
+  CORE_ADDR thread_descriptor_address;
+  ULONGEST stack_address;
+
+  /* The tid is the thread_id field, which is a pointer to the thread.  */
+  thread_descriptor_address = (CORE_ADDR) ptid_get_tid (inferior_ptid);
+
+  /* Read the saved SP in the context buffer.  */
+  current_address = thread_descriptor_address
+    + sparc_register_offsets [sp_regnum];
+  supply_register_at_address (regcache, sp_regnum, current_address);
+  regcache_cooked_read_unsigned (regcache, sp_regnum, &stack_address);
+
+  /* Read registers.  */
+  for (current_regnum = 0; current_regnum < num_regs; current_regnum ++)
+    {
+      if (register_in_thread_descriptor_p (current_regnum))
+        {
+          current_address = thread_descriptor_address
+            + sparc_register_offsets [current_regnum];
+          supply_register_at_address (regcache, current_regnum,
+                                      current_address);
+        }
+      else if (register_on_stack_p (current_regnum))
+        {
+          current_address = stack_address
+            + sparc_register_offsets [current_regnum];
+          supply_register_at_address (regcache, current_regnum,
+                                      current_address);
+        }
+    }
+}
+
+/* to_prepare_to_store when inferior_ptid is different from the running
+   thread.  */
+
+static void
+ravenscar_sparc_prepare_to_store (struct regcache *regcache)
+{
+  /* Nothing to do.  */
+}
+
+/* to_store_registers when inferior_ptid is different from the running
+   thread.  */
+
+static void
+ravenscar_sparc_store_registers (struct regcache *regcache, int regnum)
+{
+  struct gdbarch *gdbarch = get_regcache_arch (regcache);
+  int buf_size = register_size (gdbarch, regnum);
+  char buf [buf_size];
+  ULONGEST register_address;
+
+  if (register_in_thread_descriptor_p (regnum))
+    register_address =
+      ptid_get_tid (inferior_ptid) + sparc_register_offsets [regnum];
+  else if (register_on_stack_p (regnum))
+    {
+      regcache_cooked_read_unsigned (regcache, SPARC_SP_REGNUM,
+                                     &register_address);
+      register_address += sparc_register_offsets [regnum];
+    }
+  else
+    return;
+
+  regcache_raw_collect (regcache, regnum, buf);
+  write_memory (register_address,
+                buf,
+                buf_size);
+}
+
+static struct ravenscar_arch_ops ravenscar_sparc_ops =
+{
+  ravenscar_sparc_fetch_registers,
+  ravenscar_sparc_store_registers,
+  ravenscar_sparc_prepare_to_store
+};
+
+/* Register ravenscar_arch_ops in GDBARCH.  */
+
+void
+register_sparc_ravenscar_ops (struct gdbarch *gdbarch)
+{
+  set_gdbarch_ravenscar_ops (gdbarch, &ravenscar_sparc_ops);
+}
+@
+
+
+1.8
+log
+@gdbarch-ification of ravenscar-thread support.
+
+gdb/ChangeLog:
+
+        * gdbarch.sh: Add "struct ravenscar_arch_ops" advance
+        declaration.
+        (ravenscar_ops): New gdbarch variable.
+        * gdbarch.h, gdbarch.c: Regenerate.
+        * ravenscar-thread.h (ravenscar_register_arch_ops): Delete.
+        * ravenscar-thread.c (current_arch_ops): Delete.
+        (ravenscar_fetch_registers): Get the ravenscar_arch_ops
+        from the gdbarch.
+        (ravenscar_store_registers, ravenscar_prepare_to_store): Likewise.
+        (ravenscar_inferior_created): Add gdbarch_ravenscar_ops check.
+        (ravenscar_register_arch_ops): Delete.
+        * ravenscar-sparc-thread.h: New file.
+        * ravenscar-sparc-thread.c: #include "ravenscar-sparc-thread.h".
+        (ravenscar_sparc_ops): Define value statically.
+        (_initialize_ravenscar_sparc): Delete.
+        (register_sparc_ravenscar_ops): New function.
+        * sparc-tdep.c: #include "ravenscar-sparc-thread.h".
+        (sparc32_gdbarch_init): Add call to register_sparc_ravenscar_ops.
+        * Makefile.in (ALL_TARGET_OBS): Add ravenscar-thread.o and
+        ravenscar-sparc-thread.o.
+        (SFILES): Add ravenscar-thread.c.
+        (HFILES_NO_SRCDIR): Add ravenscar-sparc-thread.h.
+        (ALLDEPFILES): ravenscar-sparc-thread.c.
+        * configure.tgt: Add ravenscar-thread.o and ravenscar-sparc-thread.o
+        to gdb_target_obs
+        for all the targets that use sparc-tdep.o.
+@
+text
+@@
+
+
+1.7
+log
+@Add comments in ravenscar_sparc_fetch_registers.
+
+gdb/ChangeLog:
+
+	* ravenscar-sparc-thread.c (ravenscar_sparc_fetch_registers):
+	Add comments.
+@
+text
+@d26 1
+a26 2
+
+static struct ravenscar_arch_ops ravenscar_sparc_ops;
+d181 8
+a188 2
+/* Provide a prototype to silence -Wmissing-prototypes.  */
+extern void _initialize_ravenscar_sparc (void);
+d191 1
+a191 1
+_initialize_ravenscar_sparc (void)
+d193 1
+a193 4
+  ravenscar_sparc_ops.to_fetch_registers = ravenscar_sparc_fetch_registers;
+  ravenscar_sparc_ops.to_store_registers = ravenscar_sparc_store_registers;
+  ravenscar_sparc_ops.to_prepare_to_store = ravenscar_sparc_prepare_to_store;
+  ravenscar_register_arch_ops (&ravenscar_sparc_ops);
+@
+
+
+1.6
+log
+@Add missing _initialize_ravenscar_sparc prototype.
+
+This is required now that we compile GDB with -Wmissing-prototype.
+
+gdb/ChangeLog:
+
+        * ravenscar-sparc-thread.c (_initialize_ravenscar_sparc): Add
+        prototype.
+@
+text
+@d115 1
+d117 2
+d124 1
+@
+
+
+1.5
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d178 3
+@
+
+
+1.4
+log
+@2011-01-10  Michael Snyder  <msnyder@@vmware.com>
+
+	* nto-procfs.c: Comment cleanup, mostly periods and spaces.
+	* nto-tdep.c: Ditto.
+	* nto-tdep.h: Ditto.
+	* objc-exp.y: Ditto.
+	* objc-lang.c: Ditto.
+	* objfiles.c: Ditto.
+	* objfiles.h: Ditto.
+	* observer.c: Ditto.
+	* opencl-lang.c: Ditto.
+	* osabi.c: Ditto.
+	* parse.c: Ditto.
+	* parser-defs.h: Ditto.
+	* p-exp.y: Ditto.
+	* p-lang.c: Ditto.
+	* posix-hdep.c: Ditto.
+	* ppcbug-rom.c: Ditto.
+	* ppc-linux-nat.c: Ditto.
+	* ppc-linux-tdep.c: Ditto.
+	* ppc-linux-tdep.h: Ditto.
+	* ppcnbsd-tdep.c: Ditto.
+	* ppcobsd-tdep.c: Ditto.
+	* ppcobsd-tdep.h: Ditto.
+	* ppc-sysv-tdep.c: Ditto.
+	* ppc-tdep.h: Ditto.
+	* printcmd.c: Ditto.
+	* proc-abi.c: Ditto.
+	* proc-flags.c: Ditto.
+	* procfs.c: Ditto.
+	* proc-utils.h: Ditto.
+	* progspace.h: Ditto.
+	* prologue-value.c: Ditto.
+	* prologue-value.h: Ditto.
+	* psympriv.h: Ditto.
+	* psymtab.c: Ditto.
+	* p-typeprint.c: Ditto.
+	* p-valprint.c: Ditto.
+	* ravenscar-sparc-thread.c: Ditto.
+	* ravenscar-thread.c: Ditto.
+	* ravenscar-thread.h: Ditto.
+	* record.c: Ditto.
+	* regcache.c: Ditto.
+	* regcache.h: Ditto.
+	* remote.c: Ditto.
+	* remote-fileio.c: Ditto.
+	* remote-fileio.h: Ditto.
+	* remote.h: Ditto.
+	* remote-m32r-sdi.c: Ditto.
+	* remote-mips.c: Ditto.
+	* remote-sim.c: Ditto.
+	* rs6000-aix-tdep.c: Ditto.
+	* rs6000-nat.c: Ditto.
+	* rs6000-tdep.c: Ditto.
+@
+text
+@d3 1
+a3 1
+   Copyright 2004, 2010, 2011 Free Software Foundation, Inc.
+@
+
+
+1.4.4.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d3 1
+a3 1
+   Copyright 2004, 2010-2012 Free Software Foundation, Inc.
+@
+
+
+1.3
+log
+@run copyright.sh for 2011.
+@
+text
+@d36 2
+a37 2
+   Thread_Descriptor). The referenced address depends on the register
+   number. The Thread_Descriptor layout and the stack layout are documented
+@
+
+
+1.2
+log
+@ravenscar/sparc: cannot fetch registers from non-active thread
+
+gdb/ChangeLog:
+
+        * ravenscar-sparc-thread.c (supply_register_at_address):
+        Fix passing of buf in call to regcache_raw_supply.
+@
+text
+@d3 1
+a3 1
+   Copyright 2004, 2010 Free Software Foundation, Inc.
+@
+
+
+1.1
+log
+@Add support for GNAT Ravenscar run-time library.
+
+gdb/ChangeLog (Jerome Guitton, Joel Brobecker):
+
+	* ravenscar-thread.c, ravenscar-thread.h, ravenscar-sparc-thread.c:
+	New files.
+	* configure.tgt (sparc-*-*): Add ravenscar-thread.o and
+	ravenscar-sparc-thread.o to gdb_target_obs.
+@
+text
+@d72 1
+a72 1
+  regcache_raw_supply (regcache, regnum, &buf);
+@
+

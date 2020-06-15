@@ -1,0 +1,585 @@
+head	1.3;
+access;
+symbols
+	cygwin-1_7_17-release:1.2
+	cygwin-64bit-branch:1.2.0.2
+	cygwin-1_7_16-release:1.2
+	cygwin-1_7_15-release:1.2
+	cygwin-1_7_14_2-release:1.2
+	cygwin-1_7_14-release:1.2
+	cygwin-1_7_12-release:1.2
+	cygwin-1_7_11-release:1.2
+	cygwin-1_7_10-release:1.2
+	cygwin-1_7_9-release:1.2
+	cygwin-1_7_8-release:1.2
+	cygwin-1_7_7-release:1.2
+	cygwin-1_7_5-release:1.2
+	cygwin-1_7_4-release:1.2
+	cygwin-1_7_3-release:1.2
+	cygwin-1_7_2-release:1.2
+	cygwin-1_7_1-release:1.2
+	cv-branch-2:1.1.0.2;
+locks; strict;
+comment	@ * @;
+
+
+1.3
+date	2012.11.07.16.52.22;	author cgf;	state dead;
+branches;
+next	1.2;
+
+1.2
+date	2009.07.12.22.44.37;	author ironhead;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2006.08.31.23.48.56;	author dannysmith;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.3
+log
+@* mingw: Delete obsolete directory.
+* w32api: Ditto.
+@
+text
+@/****************************************************************
+
+The author of this software is David M. Gay.
+
+Copyright (C) 1998 by Lucent Technologies
+All Rights Reserved
+
+Permission to use, copy, modify, and distribute this software and
+its documentation for any purpose and without fee is hereby
+granted, provided that the above copyright notice appear in all
+copies and that both that the copyright notice and this
+permission notice and warranty disclaimer appear in supporting
+documentation, and that the name of Lucent or any of its entities
+not be used in advertising or publicity pertaining to
+distribution of the software without specific, written prior
+permission.
+
+LUCENT DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE,
+INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS.
+IN NO EVENT SHALL LUCENT OR ANY OF ITS ENTITIES BE LIABLE FOR ANY
+SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER
+IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
+ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
+THIS SOFTWARE.
+
+****************************************************************/
+
+/* Please send bug reports to David M. Gay (dmg at acm dot org,
+ * with " at " changed at "@@" and " dot " changed to ".").	*/
+
+#include "gdtoaimp.h"
+
+#ifdef USE_LOCALE
+#include "locale.h"
+#endif
+
+int gethex (const char **sp, FPI *fpi, Long *exp, Bigint **bp, int sign)
+{
+	Bigint *b;
+	const unsigned char *decpt, *s0, *s, *s1;
+	int big, esign, havedig, irv, j, k, n, n0, nbits, up, zret;
+	ULong L, lostbits, *x;
+	Long e, e1;
+#ifdef USE_LOCALE
+	int i;
+	const unsigned char *decimalpoint;
+#ifdef NO_LOCALE_CACHE
+	decimalpoint = (unsigned char *)localeconv()->decimal_point;
+#else
+	static unsigned char *decimalpoint_cache;
+	if (!(s0 = decimalpoint_cache)) {
+		s0 = (unsigned char *)localeconv()->decimal_point;
+		decimalpoint_cache = (unsigned char *)
+					MALLOC(strlen((char *)s0) + 1);
+		if (decimalpoint_cache) {
+			strcpy((char *)decimalpoint_cache, (char *)s0);
+			s0 = decimalpoint_cache;
+		}
+	}
+	decimalpoint = s0;
+#endif
+#endif
+
+	if (!hexdig['0'])
+		hexdig_init_D2A();
+	*bp = 0;
+	havedig = 0;
+	s0 = *(const unsigned char **)sp + 2;
+	while(s0[havedig] == '0')
+		havedig++;
+	s0 += havedig;
+	s = s0;
+	decpt = 0;
+	zret = 0;
+	e = 0;
+	if (hexdig[*s])
+		havedig++;
+	else {
+		zret = 1;
+#ifdef USE_LOCALE
+		for(i = 0; decimalpoint[i]; ++i) {
+			if (s[i] != decimalpoint[i])
+				goto pcheck;
+		}
+		decpt = s += i;
+#else
+		if (*s != '.')
+			goto pcheck;
+		decpt = ++s;
+#endif
+		if (!hexdig[*s])
+			goto pcheck;
+		while(*s == '0')
+			s++;
+		if (hexdig[*s])
+			zret = 0;
+		havedig = 1;
+		s0 = s;
+	}
+	while(hexdig[*s])
+		s++;
+#ifdef USE_LOCALE
+	if (*s == *decimalpoint && !decpt) {
+		for(i = 1; decimalpoint[i]; ++i) {
+			if (s[i] != decimalpoint[i])
+				goto pcheck;
+		}
+		decpt = s += i;
+#else
+	if (*s == '.' && !decpt) {
+		decpt = ++s;
+#endif
+		while(hexdig[*s])
+			s++;
+	}/*}*/
+	if (decpt)
+		e = -(((Long)(s-decpt)) << 2);
+ pcheck:
+	s1 = s;
+	big = esign = 0;
+	switch(*s) {
+	  case 'p':
+	  case 'P':
+		switch(*++s) {
+		  case '-':
+			esign = 1;
+			/* no break */
+		  case '+':
+			s++;
+		}
+		if ((n = hexdig[*s]) == 0 || n > 0x19) {
+			s = s1;
+			break;
+		}
+		e1 = n - 0x10;
+		while((n = hexdig[*++s]) !=0 && n <= 0x19) {
+			if (e1 & 0xf8000000)
+				big = 1;
+			e1 = 10*e1 + n - 0x10;
+		}
+		if (esign)
+			e1 = -e1;
+		e += e1;
+	}
+	*sp = (char*)s;
+	if (!havedig)
+		*sp = (char*)s0 - 1;
+	if (zret)
+		return STRTOG_Zero;
+	if (big) {
+		if (esign) {
+			switch(fpi->rounding) {
+			  case FPI_Round_up:
+				if (sign)
+					break;
+				goto ret_tiny;
+			  case FPI_Round_down:
+				if (!sign)
+					break;
+				goto ret_tiny;
+			}
+			goto retz;
+ ret_tiny:
+			b = Balloc(0);
+			b->wds = 1;
+			b->x[0] = 1;
+			goto dret;
+		}
+		switch(fpi->rounding) {
+		  case FPI_Round_near:
+			goto ovfl1;
+		  case FPI_Round_up:
+			if (!sign)
+				goto ovfl1;
+			goto ret_big;
+		  case FPI_Round_down:
+			if (sign)
+				goto ovfl1;
+			goto ret_big;
+		}
+ ret_big:
+		nbits = fpi->nbits;
+		n0 = n = nbits >> kshift;
+		if (nbits & kmask)
+			++n;
+		for(j = n, k = 0; j >>= 1; ++k);
+		*bp = b = Balloc(k);
+		b->wds = n;
+		for(j = 0; j < n0; ++j)
+			b->x[j] = ALL_ON;
+		if (n > n0)
+			b->x[j] = ULbits >> (ULbits - (nbits & kmask));
+		*exp = fpi->emin;
+		return STRTOG_Normal | STRTOG_Inexlo;
+	}
+	n = s1 - s0 - 1;
+	for(k = 0; n > (1 << (kshift-2)) - 1; n >>= 1)
+		k++;
+	b = Balloc(k);
+	x = b->x;
+	n = 0;
+	L = 0;
+#ifdef USE_LOCALE
+	for(i = 0; decimalpoint[i+1]; ++i);
+#endif
+	while(s1 > s0) {
+#ifdef USE_LOCALE
+		if (*--s1 == decimalpoint[i]) {
+			s1 -= i;
+			continue;
+		}
+#else
+		if (*--s1 == '.')
+			continue;
+#endif
+		if (n == ULbits) {
+			*x++ = L;
+			L = 0;
+			n = 0;
+		}
+		L |= (hexdig[*s1] & 0x0f) << n;
+		n += 4;
+	}
+	*x++ = L;
+	b->wds = n = x - b->x;
+	n = ULbits*n - hi0bits(L);
+	nbits = fpi->nbits;
+	lostbits = 0;
+	x = b->x;
+	if (n > nbits) {
+		n -= nbits;
+		if (any_on(b,n)) {
+			lostbits = 1;
+			k = n - 1;
+			if (x[k>>kshift] & 1 << (k & kmask)) {
+				lostbits = 2;
+				if (k > 0 && any_on(b,k))
+					lostbits = 3;
+			}
+		}
+		rshift(b, n);
+		e += n;
+	}
+	else if (n < nbits) {
+		n = nbits - n;
+		b = lshift(b, n);
+		e -= n;
+		x = b->x;
+	}
+	if (e > fpi->emax) {
+ ovfl:
+		Bfree(b);
+ ovfl1:
+		SET_ERRNO(ERANGE);
+		return STRTOG_Infinite | STRTOG_Overflow | STRTOG_Inexhi;
+	}
+	irv = STRTOG_Normal;
+	if (e < fpi->emin) {
+		irv = STRTOG_Denormal;
+		n = fpi->emin - e;
+		if (n >= nbits) {
+			switch (fpi->rounding) {
+			  case FPI_Round_near:
+				if (n == nbits && (n < 2 || any_on(b,n-1)))
+					goto one_bit;
+				break;
+			  case FPI_Round_up:
+				if (!sign)
+					goto one_bit;
+				break;
+			  case FPI_Round_down:
+				if (sign) {
+ one_bit:
+					x[0] = b->wds = 1;
+ dret:
+					*bp = b;
+					*exp = fpi->emin;
+					SET_ERRNO(ERANGE);
+					return STRTOG_Denormal | STRTOG_Inexhi
+						| STRTOG_Underflow;
+				}
+			}
+			Bfree(b);
+ retz:
+			SET_ERRNO(ERANGE);
+			return STRTOG_Zero | STRTOG_Inexlo | STRTOG_Underflow;
+		}
+		k = n - 1;
+		if (lostbits)
+			lostbits = 1;
+		else if (k > 0)
+			lostbits = any_on(b,k);
+		if (x[k>>kshift] & 1 << (k & kmask))
+			lostbits |= 2;
+		nbits -= n;
+		rshift(b,n);
+		e = fpi->emin;
+	}
+	if (lostbits) {
+		up = 0;
+		switch(fpi->rounding) {
+		  case FPI_Round_zero:
+			break;
+		  case FPI_Round_near:
+			if (lostbits & 2
+			 && (lostbits | x[0]) & 1)
+				up = 1;
+			break;
+		  case FPI_Round_up:
+			up = 1 - sign;
+			break;
+		  case FPI_Round_down:
+			up = sign;
+		}
+		if (up) {
+			k = b->wds;
+			b = increment(b);
+			x = b->x;
+			if (irv == STRTOG_Denormal) {
+				if (nbits == fpi->nbits - 1
+				 && x[nbits >> kshift] & 1 << (nbits & kmask))
+					irv =  STRTOG_Normal;
+			}
+			else if (b->wds > k
+			 || ((n = nbits & kmask) !=0
+			      && hi0bits(x[k-1]) < 32-n)) {
+				rshift(b,1);
+				if (++e > fpi->emax)
+					goto ovfl;
+			}
+			irv |= STRTOG_Inexhi;
+		}
+		else
+			irv |= STRTOG_Inexlo;
+	}
+	*bp = b;
+	*exp = e;
+	return irv;
+}
+@
+
+
+1.2
+log
+@2009-06-28  Ozkan Sezer  <sezero@@users.sourceforge.net>
+
+        * mingwex/gdtoa/README.mingw mingwex/gdtoa/gdtoa_fltrnds.h: New files.
+        * mingwex/gdtoa/README mingwex/gdtoa/dmisc.c mingwex/gdtoa/dtoa.c
+        mingwex/gdtoa/g__fmt.c mingwex/gdtoa/g_dfmt.c mingwex/gdtoa/g_ffmt.c
+        mingwex/gdtoa/g_xfmt.c mingwex/gdtoa/gd_arith.h mingwex/gdtoa/gd_qnan.h
+        mingwex/gdtoa/gdtoa.c mingwex/gdtoa/gdtoa.h mingwex/gdtoa/gdtoaimp.h
+        mingwex/gdtoa/gethex.c mingwex/gdtoa/gmisc.c mingwex/gdtoa/hd_init.c
+        mingwex/gdtoa/hexnan.c mingwex/gdtoa/misc.c mingwex/gdtoa/qnan.c
+        mingwex/gdtoa/smisc.c mingwex/gdtoa/strtodg.c mingwex/gdtoa/strtodnrp.c
+        mingwex/gdtoa/strtof.c mingwex/gdtoa/strtopx.c mingwex/gdtoa/sum.c
+        mingwex/gdtoa/ulp.c:  Update the gdtoa library to match the netlib.org
+        sources as of Apr. 20, 2009.  Update further to match the sources in
+        the mingw-w64 tree as of June 28, 2009, by removing IBM, CRAY and VAX
+        code, removing KR_headers, ANSI, Void and Char ifdefs, renaming the
+        double/ulong union from U to dbl_union for better grepping and white-
+        space tidy-ups.
+@
+text
+@@
+
+
+1.1
+log
+@	Import David Gay's gdtoa library.
+
+	* mingwex/gdtoa: New directory.
+	* mingwex/gdtoa/(arithchk.c, dmisc.c, dtoa.c, g__fmt.c, g_dfmt.c,
+	g_ffmt.c, g_xfmt.c, gd_arith.h, gd_qnan.h, gdtoa.c, gdtoa.h,
+	gdtoaimp.h, gethex.c, gmisc.c, hd_init.c, hexnan.c, misc.c, qnan.c,
+	README, smisc.c, strtodg.c, strtodnrp.c, strtof.c, strtopx.c, sum.c,
+	ulp.c): New files.
+	* mingwex/(strtof.c, strtold.c, ldtoa.c): Remove files.
+	* mingwex/math/(cephes-emath.c, cephes-emath.h): Remove files.
+	* mingwex/mb_wc_common.h (get_cp_from_locale); Rename to get_codepage().
+        * mingwex/(btowc.c, wctob.c, mbrtowc.c, wcrtomb.c): Adjust call to get_codepage().
+	* mingwex/wcstold.c: Avoid using strtold internals.
+	* mingwex/wcstof.c: Rewrite.
+	* mingwex/Makefile.in (GDTOA_DISTFILES): Add to distribution.
+	(GDTOA_OBJS): Add to library.
+	(DISTFILES): Remove strtof.c strtold.c ldtoa.c cephes-emath.c cephes-emath.h.
+	(STDLIB_OBJS): Remove.
+	(STDLIB_STUB_OBJS): Remove strtof.o wcstof,o.
+	(Q8_OBJS): Add wcstof.o wcstold.o.
+	* include/stdlib.h (strtof): Remove inline definition.
+	(wcstof): Likewise.
+	* include/wchar.h (wcstof): Remove inline definition.
+@
+text
+@d38 1
+a38 7
+ int
+#ifdef KR_headers
+gethex(sp, fpi, exp, bp, sign)
+	CONST char **sp; FPI *fpi; Long *exp; Bigint **bp; int sign;
+#else
+gethex( CONST char **sp, FPI *fpi, Long *exp, Bigint **bp, int sign)
+#endif
+d41 2
+a42 2
+	CONST unsigned char *decpt, *s0, *s, *s1;
+	int esign, havedig, irv, k, n, nbits, up, zret;
+d46 4
+a49 1
+	unsigned char decimalpoint = *localeconv()->decimal_point;
+d51 12
+a62 1
+#define decimalpoint '.'
+d67 1
+d69 1
+a69 1
+	s0 = *(CONST unsigned char **)sp + 2;
+d77 3
+a79 1
+	if (!hexdig[*s]) {
+d81 8
+a88 1
+		if (*s != decimalpoint)
+d91 1
+d100 1
+a100 1
+		}
+d103 9
+a111 1
+	if (*s == decimalpoint && !decpt) {
+d113 1
+d116 1
+a116 1
+		}
+d121 1
+a124 1
+		esign = 0;
+d131 1
+a131 1
+		  }
+d135 1
+a135 1
+			}
+d137 3
+a139 1
+		while((n = hexdig[*++s]) !=0 && n <= 0x19)
+d141 1
+d145 1
+a145 1
+	  }
+d147 2
+d150 47
+a196 1
+		return havedig ? STRTOG_Zero : STRTOG_NoNumber;
+d198 1
+a198 1
+	for(k = 0; n > 7; n >>= 1)
+d204 3
+d208 3
+a210 1
+		if (*--s1 == decimalpoint)
+d212 6
+a217 1
+		if (n == 32) {
+d221 1
+a221 1
+			}
+d224 1
+a224 1
+		}
+d227 1
+a227 1
+	n = 32*n - hi0bits(L);
+d238 1
+a238 1
+				if (k > 1 && any_on(b,k-1))
+a239 1
+				}
+d241 1
+d244 1
+a244 1
+		}
+d250 1
+a250 1
+		}
+d254 2
+a255 1
+		*bp = 0;
+d257 1
+a257 1
+		}
+a274 1
+					*exp = fpi->emin;
+d276 1
+d278 2
+d282 2
+a283 2
+					}
+			  }
+d285 2
+a286 1
+			*bp = 0;
+d288 1
+a288 1
+			}
+d299 1
+a299 1
+		}
+d307 1
+a307 1
+			 && (lostbits & 1) | (x[0] & 1))
+d315 1
+a315 1
+		  }
+d324 1
+a324 1
+				}
+d327 1
+a327 1
+			     && hi0bits(x[k-1]) < 32-n)) {
+d331 1
+a331 1
+				}
+d333 1
+a333 1
+			}
+d336 1
+a336 1
+		}
+d340 1
+a340 1
+	}
+@
+

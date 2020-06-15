@@ -1,0 +1,960 @@
+head	1.9;
+access;
+symbols
+	binutils-2_24-branch:1.9.0.2
+	binutils-2_24-branchpoint:1.9
+	binutils_latest_snapshot:1.9;
+locks; strict;
+comment	@# @;
+
+
+1.9
+date	2013.04.29.08.57.48;	author willnewton;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2013.04.03.11.44.41;	author amodra;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2013.03.30.10.14.15;	author amodra;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2013.03.30.00.38.39;	author hjl;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2013.02.18.09.13.11;	author amodra;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2013.02.16.17.54.35;	author hjl;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2013.02.06.23.22.25;	author sandra;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2013.01.16.08.14.35;	author amodra;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2012.12.07.19.23.50;	author hjl;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.9
+log
+@ld-plugin/lto.exp: Disable ld/12942 test for gcc < 4.7.0.
+
+The test for ld/12942 fails with gcc versions before 4.7.0. This patch
+disables this test with these versions of gcc.
+
+ld/testsuite/ChangeLog:
+
+2013-04-29  Will Newton  <will.newton@@linaro.org>
+
+	* ld-plugin/lto.exp: Disable ld/12942 test for gcc < 4.7.0.
+@
+text
+@# Expect script for ld-plugin LTO tests
+#   Copyright 2011, 2012, 2013
+#   Free Software Foundation, Inc.
+#
+# This file is part of the GNU Binutils.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+# MA 02110-1301, USA.
+
+# These tests require plugin and LTO.
+if { ![check_plugin_api_available]
+     || ![check_lto_available] } {
+    return
+}
+
+global CFLAGS
+global CXXFLAGS
+set saved_CFLAGS "$CFLAGS"
+set saved_CXXFLAGS "$CXXFLAGS"
+regsub -all "\\-Wp,-D_FORTIFY_SOURCE=\[0-9\]+" $CFLAGS "" CFLAGS
+regsub -all "\\-Wp,-D_FORTIFY_SOURCE=\[0-9\]+" $CXXFLAGS "" CXXFLAGS
+
+proc restore_notify { } {
+  global saved_CFLAGS
+  global saved_CXXFLAGS
+  set CFLAGS "$saved_CFLAGS"
+  set CXXFLAGS "$saved_CXXFLAGS"
+}
+
+# Simple LTO tests and generate input files for complex LTO tests.
+set lto_link_tests {
+  {"LTO 1"
+   "-O2 -flto -fuse-linker-plugin" "-flto -fuse-linker-plugin"
+   {lto-1a.c lto-1b.c} {} "lto-1.exe"}
+  {"Build libdummy.a 2"
+   "" "-O2 -flto -fuse-linker-plugin"
+   {lto-2.c} {} "libdummy.a"}
+  {"LTO 2"
+   "-static -O2 -flto -fuse-linker-plugin tmpdir/lto-2.o -lm" ""
+   {dummy.c} {} "lto-2.exe"}
+  {"Build libdummy.a 3a"
+   "" "-flto"
+   {lto-3a.c} {} "libdummy.a"}
+  {"Build libdummy.a 3c"
+   "" "-O2"
+   {lto-3c.c} {} "libdummy.a"}
+  {"Build liblto-3.a"
+   "" "-flto"
+   {lto-3b.c} {} "liblto-3.a"}
+  {"Build libdummy.a 5a"
+   "" "-flto"
+   {lto-5a.c} {} "libdummy.a"}
+  {"Build libdummy.a 5b"
+   "" "-flto"
+   {lto-5b.c} {} "libdummy.a"}
+  {"LTO 6"
+   "-O2 -flto -fuse-linker-plugin" ""
+   {lto-6.c} {} "lto-6.exe" "c"}
+  {"Build libdummy.a 9"
+   "" "-O2 -finline -flto"
+   {lto-9.cc} {} "libdummy.a"}
+  {"Build libdummy.a 11a"
+   "" "-O -flto"
+   {lto-11a.c} {} "libdummy.a"}
+  {"Build libdummy.a 11b"
+   "" "-O -flto"
+   {lto-11b.c} {} "libdummy.a"}
+  {"Build libdummy.a 11c"
+   "" "-O"
+   {lto-11c.c} {} "libdummy.a"}
+  {"Build liblto-12.a"
+   "" "-O2 -flto"
+   {lto-12c.c} {} "liblto-12.a"}
+  {"Build libdummy.a 12"
+   "" "-O2 -flto"
+   {lto-12a.c lto-12b.c} {} "libdummy.a"}
+  {"Build libdummy.a 13"
+   "" "-O2 -flto"
+   {lto-13a.c lto-13b.c} {} "libdummy.a"}
+  {"Build liblto-13.a"
+   "" "-O2"
+   {lto-13c.c} {} "liblto-13.a"}
+  {"Build libdummy.a 14a"
+   "" "-flto"
+   {lto-14a.c lto-14b.c} {} "libdummy.a"}
+  {"Build liblto-14.a"
+   "" "-flto"
+   {lto-14c.c} {} "liblto-14.a"}
+  {"Build libdummy.a 15a"
+   "" "-flto"
+   {lto-15a.c} {} "libdummy.a"}
+  {"Build liblto-15.a"
+   "" "-flto"
+   {lto-15b.c} {} "liblto-15.a"}
+  {"PR ld/12696"
+   "-O2 -flto -fuse-linker-plugin -r -nostdlib" "-O2 -flto"
+   {pr12696-1.cc} {} "pr12696-1r.o" "c"}
+  {"Build libdummy.a PR ld/12758"
+   "" ""
+   {pr12758a.s} {} "libdummy.a"}
+  {"Build libpr12758.a"
+   "" "-flto -O2"
+   {pr12758b.c} {} "libpr12758.a"}
+  {"PR ld/12758"
+   "-O2 -Wl,-e,foo -nostdlib -flto -fuse-linker-plugin tmpdir/pr12758a.o -Wl,--start-group tmpdir/libpr12758.a -Wl,--end-group" ""
+   {dummy.c} {} "pr12758.exe"}
+  {"Build libdummy.a PR ld/12760"
+   "" ""
+   {pr12760a.c} {} "libdummy.a"}
+  {"Build libpr12760.a"
+   "" "-flto -O2"
+   {pr12760b.c} {} "libpr12760.a"}
+  {"PR ld/12760"
+   "-O2 -Wl,-e,foo -nostdlib -flto -fuse-linker-plugin tmpdir/pr12760a.o -Wl,--start-group tmpdir/libpr12760.a -Wl,--end-group" ""
+   {dummy.c} {} "pr12760.exe" "c" "warning: Bad bar"}
+  {"Build libpr13183.a"
+   "-T" "-flto -O2"
+   {pr13183a.c} {} "libpr13183.a"}
+  {"Build libdummy.a PR ld/13183"
+   "" "-flto -O2"
+   {pr13183b.c} {} "libdummy.a"}
+  {"Build libdummy.a PR ld/13201"
+   "" "-flto -O2"
+   {pr13201.c} {} "libdummy.a"}
+  {"PR ld/13287"
+   "-flto -fuse-linker-plugin -Wl,--as-needed" "-flto"
+   {pr13287.cc} {} "pr13287.exe" "c++"}
+  {"PR ld/15323"
+   "" "-O2"
+   {pr15323a.c} {} "libdummy.a" "c"}
+}
+
+if { [at_least_gcc_version 4 7] } {
+    set lto_link_tests [concat $lto_link_tests {
+      {"Build libdummy.a PR ld/12942 (1)"
+       "" "-flto -O2"
+       {pr12942a.cc pr12942c.cc} {} "libdummy.a" "c++"}
+      {"Build libdummy.a PR ld/12942 (2)"
+       "" "-O0"
+       {pr12942b.cc} {} "libdummy.a" "c++"}
+    }]
+}
+
+# Generate input files for complex LTO tests for ELF.
+set lto_link_elf_tests {
+  {"Build libdummy.a 7"
+   "" "-flto -O2"
+   {lto-7a.c lto-7b.c lto-7c.c} {} "libdummy.a"}
+  {"Build liblto-7.so"
+   "-shared" "-O2 -fpic"
+   {lto-7d.c} {} "liblto-7.so" "c"}
+  {"Build libdummy.a 8a"
+   "" "-O2"
+   {lto-8a.c} {} "libdummy.a"}
+  {"Build libdummy.a 8b"
+   "" "-flto -O2"
+   {lto-8b.c} {} "libdummy.a"}
+  {"Build liblto-17a.so"
+   "-shared -O2 -fpic -flto -fuse-linker-plugin" "-O2 -fpic -flto"
+   {lto-17a.c} {{"nm" {} "lto-17a.d"}} "liblto-17a.so" "c"}
+  {"Build liblto-17b.so 1"
+   "-shared -O2 -fpic -flto -fuse-linker-plugin tmpdir/lto-17a.o" "-O2 -fpic -flto"
+   {lto-17b.c} {{"nm" {} "lto-17b-1.d"}} "liblto-17b.so"}
+  {"Build liblto-17b.so 2"
+   "-shared -O2 -fpic -flto -fuse-linker-plugin tmpdir/lto-17a.o" "-O2 -fpic -flto"
+   {lto-17b.c} {{"nm" {} "lto-17b-2.d"}} "liblto-17b.so"}
+  {"PR ld/12982"
+   "-O2 -flto -fuse-linker-plugin" "-O2 -flto"
+   {pr12982.c} {{"readelf" {-l --wide} "pr12982.d"}} "pr12982.exe"}
+  {"PR ld/12975"
+   "-shared -O2 -fPIC -flto -fuse-linker-plugin -nostdlib -Wl,-version-script,pr12975.t" "-O2 -flto"
+   {pr12975.c} {{"readelf" {-s --wide} "pr12975.d"}} "pr12975.so" "c"}
+  {"PR ld/13229"
+   "-shared -O2 -fPIC -flto -fuse-linker-plugin -nostdlib" "-O2 -finline -fno-early-inlining -flto"
+   {pr13229.cc} {{"readelf" {-s --wide} "pr13229.d"}} "pr13229.so" "c++"}
+  {"PR ld/13244"
+   "-shared -O2 -fPIC -flto -fuse-linker-plugin -nostdlib" "-O2 -fno-early-inlining -flto"
+   {pr13244.c} {{"readelf" {-s --wide} "pr13244.d"}} "pr13244.so" "c"}
+  {"Build libpr15146a.a"
+   "" "-flto -O2"
+   {pr15146a.c} {} "lib15146a.a"}
+  {"Build pr15146b.so"
+   "-shared" "-O2 -fpic"
+   {pr15146b.c} {} "pr15146b.so" "c"}
+  {"Build pr15146c.so"
+   "-shared -Wl,--no-as-needed tmpdir/pr15146b.so" "-O2 -fpic"
+   {pr15146c.c} {} "pr15146c.so" "c"}
+  {"PR ld/15146 (1)"
+   "-O2 -flto -fuse-linker-plugin -Wl,-rpath-link,. -Wl,--no-copy-dt-needed-entries -Wl,--no-as-needed tmpdir/pr15146a.o tmpdir/pr15146c.so" ""
+   {dummy.c} {{"readelf" {-d} "pr15146.d"}} "pr15146a.exe"}
+  {"Build libpr15146d.a"
+   "" "-flto -O2"
+   {pr15146d.c} {} "lib15146d.a"}
+  {"Build libpr15146d.a"
+   "" "-flto -O2"
+   {pr15146d.c} {} "lib15146d.a"}
+}
+
+# Check final symbols in executables.
+set lto_link_symbol_tests {
+  {"LTO 3 symbol"
+   "-O2 -flto -fuse-linker-plugin tmpdir/lto-3a.o tmpdir/lto-3c.o tmpdir/liblto-3.a" ""
+   {dummy.c} {{"nm" {} "lto-3.d"}} "lto-3.exe" "c"}
+  {"LTO 5 symbol"
+   "-O2 -flto -fuse-linker-plugin tmpdir/lto-5.o" ""
+   {dummy.c} {{"nm" {} "lto-5.d"}} "lto-5.exe" "c"}
+  {"LTO 9 symbol"
+   "-O2 -flto -fuse-linker-plugin tmpdir/lto-9.o" ""
+   {dummy.c} {{"nm" {-C} "lto-9.d"}} "lto-9.exe" "c++"}
+  {"LTO 16a symbol"
+   "-O2 -Wl,-e,foo -nostdlib -flto -fuse-linker-plugin" "-flto"
+   {lto-16a.c} {{"nm" {} "lto-16a.d"}} "lto-16.exe" "c"}
+  {"LTO 16b symbol"
+   "-O2 -Wl,-e,foo -u bar -nostdlib -flto -fuse-linker-plugin" "-flto"
+   {lto-16a.c lto-16b.c} {{"nm" {} "lto-16b.d"}} "lto-16b.exe" "c"}
+  {"PR ld/13183"
+   "-O2 -flto -fuse-linker-plugin tmpdir/pr13183b.o tmpdir/libpr13183.a" ""
+   {dummy.c} {{"nm" {} "pr13183.d"}} "pr13183.exe" "c"}
+}
+
+# LTO run-time tests.
+set lto_run_tests {
+  {"LTO 3a"
+   "-O2 -flto -fuse-linker-plugin tmpdir/lto-3a.o tmpdir/lto-3c.o tmpdir/liblto-3.a" ""
+   {dummy.c} "lto-3b.exe" "lto-3.out" "" "c"}
+  {"LTO 3b"
+   "-O2 -flto -fuse-linker-plugin tmpdir/lto-3a.o tmpdir/lto-3c.o tmpdir/lto-3.o" ""
+   {dummy.c} "lto-3c.exe" "lto-3.out" "" "c"}
+  {"LTO 3c"
+   "-O2 -flto -fuse-linker-plugin tmpdir/lto-3a.o tmpdir/lto-3c.o -Wl,--whole-archive tmpdir/liblto-3.a -Wl,--no-whole-archive tmpdir/liblto-3.a" ""
+   {dummy.c} "lto-3d.exe" "lto-3.out" "" "c"}
+  {"LTO 5"
+   "-O2 -flto -fuse-linker-plugin tmpdir/lto-5.o" ""
+   {dummy.c} "lto-5.exe" "lto-5.out" "" "c"}
+  {"LTO 11"
+   "-O -flto -fuse-linker-plugin tmpdir/liblto-11.a" ""
+   {dummy.c} "lto-11.exe" "lto-11.out" "" "c"}
+  {"LTO 12a"
+   "-O -flto -fuse-linker-plugin tmpdir/lto-12a.o tmpdir/liblto-12.a tmpdir/lto-12b.o" ""
+   {dummy.c} "lto-12a.exe" "lto-12.out" "" "c"}
+  {"LTO 12b"
+   "-O -flto -fuse-linker-plugin tmpdir/lto-12a.o tmpdir/lto-12b.o tmpdir/liblto-12.a" ""
+   {dummy.c} "lto-12b.exe" "lto-12.out" "" "c"}
+  {"LTO 13"
+   "-O -flto -fuse-linker-plugin tmpdir/lto-13a.o tmpdir/liblto-13.a tmpdir/lto-13b.o" ""
+   {dummy.c} "lto-13.exe" "lto-13.out" "" "c"}
+  {"LTO 14"
+   "-O2 -flto -fuse-linker-plugin tmpdir/lto-14a.o -Wl,--whole-archive tmpdir/liblto-14.a -Wl,--no-whole-archive tmpdir/lto-14b.o" ""
+   {dummy.c} "lto-14.exe" "lto-14.out" "" "c"}
+  {"LTO 15"
+   "-O2 -flto -fuse-linker-plugin -Wl,--start-group tmpdir/liblto-15.a tmpdir/lto-15a.o -Wl,--end-group" ""
+   {dummy.c} "lto-15.exe" "lto-15.out" "" "c"}
+  {"PR ld/13066"
+   "-O2 -flto -fuse-linker-plugin" ""
+   {pr13066.cc} "pr13066.exe" "pr13066.out" "" "c++"}
+  {"PR ld/13201"
+   "-O2 -flto -fuse-linker-plugin -Wl,--as-needed tmpdir/pr13201.o -lm" ""
+   {dummy.c} "pr13201.exe" "pr13201.out" "" "c"}
+  {"PR ld/15323"
+   "-O2 -flto -fuse-linker-plugin tmpdir/pr15323a.o" ""
+   {pr15323b.c} "pr15323.exe" "pr15323.out" "-flto -O2" "c"}
+}
+
+if { [at_least_gcc_version 4 7] } {
+    set lto_run_tests [concat $lto_run_tests {
+      {"PR ld/12942 (1)"
+       "-O2 -flto -fuse-linker-plugin tmpdir/pr12942a.o tmpdir/pr12942b.o" ""
+       {dummy.c} "pr12942a.exe" "pr12942.out" "" "c++"}
+      {"PR ld/12942 (2)"
+       "-O2 -flto -fuse-linker-plugin tmpdir/pr12942a.o tmpdir/pr12942c.o" ""
+       {dummy.c} "pr12942c.exe" "pr12942.out" "" "c++"}
+    }]
+}
+
+# LTO run-time tests for ELF
+set lto_run_elf_tests {
+  {"LTO 7"
+   "-O2 -flto -fuse-linker-plugin tmpdir/lto-7b.o tmpdir/lto-7c.o tmpdir/lto-7a.o -Wl,--no-as-needed tmpdir/liblto-7.so" ""
+   {dummy.c} "lto-7.exe" "lto-7.out" "" "c"}
+  {"LTO 8"
+   "-O2 -flto -fuse-linker-plugin tmpdir/lto-8b.o tmpdir/lto-8a.o" ""
+   {dummy.c} "lto-8.exe" "lto-8.out" "" "c"}
+  {"LTO TLS IE"
+   "-O2 -flto -fuse-linker-plugin" ""
+   {run-ie.c} "run-ie.exe" "run-ie.out" "" "c"}
+}
+
+run_cc_link_tests $lto_link_tests
+
+# Restrict these to ELF targets that support shared libs and PIC.
+if { [is_elf_format]
+     && [run_host_cmd_yesno $CC "-shared -fPIC $srcdir/$subdir/dummy.c -o tmpdir/t.so"] } {
+    run_cc_link_tests $lto_link_elf_tests
+    set testname "PR ld/15146 (2)"
+    set exec_output [run_host_cmd "$CC" "$gcc_gas_flag $gcc_ld_flag -O2 -flto -fuse-linker-plugin -Wl,-rpath-link,. -Wl,--no-copy-dt-needed-entries -Wl,--no-as-needed tmpdir/pr15146d.o tmpdir/pr15146c.so"]
+    if { [ regexp "undefined reference to symbol 'xxx'" $exec_output ] } {
+	pass $testname
+    } {
+	fail $testname
+    }
+}
+
+set testname "Build liblto-11.a"
+remote_file host delete "tmpdir/liblto-11.a"
+set catch_output [run_host_cmd "$ar" "rc tmpdir/liblto-11.a tmpdir/lto-11a.o tmpdir/lto-11b.o tmpdir/lto-11c.o"]
+if {![string match "" $catch_output]} {
+    unresolved $testname
+    restore_notify
+    return
+}
+
+if { [at_least_gcc_version 4 7] } {
+    # Check expected LTO linker errors.
+    set testname "PR ld/12942 (3)"
+    set exec_output [run_host_cmd "$CXX" "$gcc_gas_flag $gcc_ld_flag -O2 -flto -fuse-linker-plugin tmpdir/pr12942b.o tmpdir/pr12942a.o"]
+    if { [ regexp "undefined reference to `link_error\\(\\)'" $exec_output ] } {
+        pass $testname
+    } {
+        fail $testname
+    }
+}
+
+# Run "ld -r" to generate inputs for complex LTO tests.
+run_dump_test "lto-3r"
+remote_exec host "mv" "tmpdir/dump tmpdir/lto-3.o"
+run_dump_test "lto-5r"
+remote_exec host "mv" "tmpdir/dump tmpdir/lto-5.o"
+
+run_cc_link_tests $lto_link_symbol_tests
+
+# The following tests require running the executable generated by ld.
+if ![isnative] {
+    return
+}
+
+run_ld_link_exec_tests [] $lto_run_tests
+
+if { [is_elf_format] } {
+    run_ld_link_exec_tests [] $lto_run_elf_tests
+}
+
+restore_notify
+@
+
+
+1.8
+log
+@	PR ld/15227
+	* ld-plugin/lto.exp (PR ld/12942 (3)): Remove file name and
+	line number from regexp.
+	(PR ld/15146 (2)): Similarly.
+	* ld-plugin/pr12942a.cc (main): Use __builtin_abort.
+@
+text
+@a127 6
+  {"Build libdummy.a PR ld/12942 (1)"
+   "" "-flto -O2"
+   {pr12942a.cc pr12942c.cc} {} "libdummy.a" "c++"}
+  {"Build libdummy.a PR ld/12942 (2)"
+   "" "-O0"
+   {pr12942b.cc} {} "libdummy.a" "c++"}
+d145 11
+a264 6
+  {"PR ld/12942 (1)"
+   "-O2 -flto -fuse-linker-plugin tmpdir/pr12942a.o tmpdir/pr12942b.o" ""
+   {dummy.c} "pr12942a.exe" "pr12942.out" "" "c++"}
+  {"PR ld/12942 (2)"
+   "-O2 -flto -fuse-linker-plugin tmpdir/pr12942a.o tmpdir/pr12942c.o" ""
+   {dummy.c} "pr12942c.exe" "pr12942.out" "" "c++"}
+d276 11
+d324 9
+a332 7
+# Check expected LTO linker errors.
+set testname "PR ld/12942 (3)"
+set exec_output [run_host_cmd "$CXX" "$gcc_gas_flag $gcc_ld_flag -O2 -flto -fuse-linker-plugin tmpdir/pr12942b.o tmpdir/pr12942a.o"]
+if { [ regexp "undefined reference to `link_error\\(\\)'" $exec_output ] } {
+    pass $testname
+} {
+    fail $testname
+@
+
+
+1.7
+log
+@	PR ld/15323
+bfd/
+	* elf-m10300.c (mn10300_elf_check_relocs): Set non_ir_ref for
+	global symbols referenced by relocs.
+	* elf32-arm.c (elf32_arm_check_relocs): Likewise.
+	* elf32-bfin.c (bfin_check_relocs): Likewise.
+	* elf32-cr16.c (cr16_elf_check_relocs): Likewise.
+	* elf32-cris.c (cris_elf_check_relocs): Likewise.
+	* elf32-d10v.c (elf32_d10v_check_relocs): Likewise.
+	* elf32-dlx.c (elf32_dlx_check_relocs): Likewise.
+	* elf32-fr30.c (fr30_elf_check_relocs): Likewise.
+	* elf32-frv.c (elf32_frv_check_relocs): Likewise.
+	* elf32-hppa.c (elf32_hppa_check_relocs): Likewise.
+	* elf32-i370.c (i370_elf_check_relocs): Likewise.
+	* elf32-iq2000.c (iq2000_elf_check_relocs): Likewise.
+	* elf32-lm32.c (lm32_elf_check_relocs): Likewise.
+	* elf32-m32c.c (m32c_elf_check_relocs): Likewise.
+	* elf32-m32r.c (m32r_elf_check_relocs): Likewise.
+	* elf32-m68hc1x.c (elf32_m68hc11_check_relocs): Likewise.
+	* elf32-m68k.c (elf_m68k_check_relocs): Likewise.
+	* elf32-mcore.c (mcore_elf_check_relocs): Likewise.
+	* elf32-metag.c (elf_metag_check_relocs): Likewise.
+	* elf32-microblaze.c (microblaze_elf_check_relocs): Likewise.
+	* elf32-moxie.c (moxie_elf_check_relocs): Likewise.
+	* elf32-msp430.c (elf32_msp430_check_relocs): Likewise.
+	* elf32-mt.c (mt_elf_check_relocs): Likewise.
+	* elf32-nios2.c (nios2_elf32_check_relocs): Likewise.
+	* elf32-openrisc.c (openrisc_elf_check_relocs): Likewise.
+	* elf32-ppc.c (ppc_elf_check_relocs): Likewise.
+	* elf32-rl78.c (rl78_elf_check_relocs): Likewise.
+	* elf32-s390.c (elf_s390_check_relocs): Likewise.
+	* elf32-score.c (s3_bfd_score_elf_check_relocs): Likewise.
+	* elf32-score7.c (s7_bfd_score_elf_check_relocs): Likewise.
+	* elf32-sh.c (sh_elf_check_relocs): Likewise.
+	* elf32-tic6x.c (elf32_tic6x_check_relocs): Likewise.
+	* elf32-tilepro.c (tilepro_elf_check_relocs): Likewise.
+	* elf32-v850.c (v850_elf_check_relocs): Likewise.
+	* elf32-vax.c (elf_vax_check_relocs): Likewise.
+	* elf32-xstormy16.c (xstormy16_elf_check_relocs): Likewise.
+	* elf32-xtensa.c (elf_xtensa_check_relocs): Likewise.
+	* elf64-aarch64.c (elf64_aarch64_check_relocs): Likewise.
+	* elf64-alpha.c (elf64_alpha_check_relocs): Likewise.
+	* elf64-hppa.c (elf64_hppa_check_relocs): Likewise.
+	* elf64-ia64-vms.c (elf64_ia64_check_relocs): Likewise.
+	* elf64-mmix.c (mmix_elf_check_relocs): Likewise.
+	* elf64-ppc.c (ppc64_elf_check_relocs): Likewise.
+	* elf64-s390.c (elf_s390_check_relocs): Likewise.
+	* elf64-sh64.c (sh_elf64_check_relocs): Likewise.
+	* elfnn-ia64.c (elfNN_ia64_check_relocs): Likewise.
+	* elfxx-sparc.c (_bfd_sparc_elf_check_relocs): Likewise.
+	* elfxx-tilegx.c (tilegx_elf_check_relocs): Likewise.
+	* elfxx-mips.c (_bfd_mips_elf_check_relocs): Likewise.  Don't
+	test indirect/warning links for NULL.
+ld/testsuite/
+	* ld-plugin/lto.exp (pr15323a.c): Compile without -flto rather
+	than using -r to effectively strip out lto info.
+@
+text
+@d298 1
+a298 1
+    if { [ regexp "ltrans.o: undefined reference to symbol 'xxx'" $exec_output ] } {
+d317 1
+a317 1
+if { [ regexp "pr12942a.h:7: undefined reference to `link_error\\(\\)'" $exec_output ] } {
+@
+
+
+1.6
+log
+@Set non_ir_ref if a symbol is referenced by a non-shared object
+
+bfd/
+
+	PR ld/15323
+	* elf32-i386.c (elf_i386_check_relocs): Set non_ir_ref if a
+	symbol is referenced by a non-shared object.
+	* elf64-x86-64.c (elf_x86_64_check_relocs): Likewise.
+
+ld/testsuite/
+
+	PR ld/15323
+	* ld-plugin/lto.exp (lto_link_tests): Add pr15323a-r.o.
+	(lto_run_tests): Add a test for PR ld/15323.
+
+	* ld-plugin/pr15323.out: New file.
+	* ld-plugin/pr15323a.c: Likewise.
+	* ld-plugin/pr15323b.c: Likewise.
+@
+text
+@d147 2
+a148 2
+   "-O2 -flto -fuse-linker-plugin -r -nostdlib" "-O2 -flto"
+   {pr15323a.c} {} "pr15323a-r.o" "c"}
+d273 1
+a273 1
+   "-O2 -flto -fuse-linker-plugin -Wl,--as-needed tmpdir/pr15323a-r.o" ""
+@
+
+
+1.5
+log
+@	* ld-plugin/lto.exp (Build pr15146b.so) Add -Wl,--no-as-needed.
+	(PR ld/15146 (1), (2)): Likewise.
+	(LTO 7): Likewise.
+@
+text
+@d2 1
+a2 1
+#   Copyright 2011
+d146 3
+d272 3
+@
+
+
+1.4
+log
+@Don't add DT_NEEDED for references from the dummy bfd
+
+bfd/
+
+	PR ld/15146
+	* elflink.c (elf_link_add_object_symbols): Don't add DT_NEEDED
+	for references from the dummy bfd.
+
+ld/
+
+	PR ld/15146
+	* plugin.c (plugin_notice): Replace the undefined dummy bfd with
+	the real one.
+
+ld/testsuite/
+
+	PR ld/15146
+	* ld-plugin/pr15146.d: New file.
+	* ld-plugin/pr15146a.c: Likewise.
+	* ld-plugin/pr15146b.c: Likewise.
+	* ld-plugin/pr15146c.c: Likewise.
+	* ld-plugin/pr15146d.c: Likewise.
+
+	* ld-plugin/lto.exp: Add tests for PR ld/15146.
+@
+text
+@d190 1
+a190 1
+   "-shared tmpdir/pr15146b.so" "-O2 -fpic"
+d193 1
+a193 1
+   "-O2 -flto -fuse-linker-plugin -Wl,-rpath-link,. -Wl,--no-copy-dt-needed-entries tmpdir/pr15146a.o tmpdir/pr15146c.so" ""
+d274 1
+a274 1
+   "-O2 -flto -fuse-linker-plugin tmpdir/lto-7b.o tmpdir/lto-7c.o tmpdir/lto-7a.o tmpdir/liblto-7.so" ""
+d291 1
+a291 1
+    set exec_output [run_host_cmd "$CC" "$gcc_gas_flag $gcc_ld_flag -O2 -flto -fuse-linker-plugin -Wl,-rpath-link,. -Wl,--no-copy-dt-needed-entries tmpdir/pr15146d.o tmpdir/pr15146c.so"]
+@
+
+
+1.3
+log
+@2013-02-06  Sandra Loosemore  <sandra@@codesourcery.com>
+            Andrew Jenner <andrew@@codesourcery.com>
+
+	Based on patches from Altera Corporation.
+
+	bfd/
+	* Makefile.am (ALL_MACHINES): Add cpu-nios2.lo.
+	(ALL_MACHINES_CFILES): Add cpu-nios2.c.
+	(BFD_BACKENDS): Add elf32-nios2.lo.
+	(BFD32_BACKENDS_CFILES): Add elf32-nios2.c.
+	* Makefile.in: Regenerated.
+	* configure.in: Add entries for bfd_elf32_bignios2_vec and
+	bfd_elf32_littlenios2_vec.
+	* configure: Regenerated.
+	* config.bfd: Add cases for nios2.
+	* archures.c (enum bfd_architecture): Add bfd_arch_nios2.
+	(bfd_mach_nios2): Define.
+	(bfd_nios2_arch): Declare.
+	(bfd_archures_list): Add bfd_nios2_arch.
+	* targets.c (bfd_elf32_bignios2_vec): Declare.
+	(bfd_elf32_littlenios2_vec): Declare.
+	(_bfd_target_vector): Add entries for bfd_elf32_bignios2_vec and
+	bfd_elf32_littlenios2_vec.
+	* elf-bfd.h (enum elf_target_id): Add NIOS2_ELF_DATA.
+	* reloc.c (enum bfd_reloc_code_real): Add Nios II relocations.
+	* bfd-in2.h: Regenerated.
+	* libbfd.h: Regenerated.
+	* cpu-nios2.c: New file.
+	* elf32-nios2.c: New file.
+
+	opcodes/
+	* Makefile.am (TARGET_LIBOPCODES_CFILES): Add nios2-dis.c and
+	nios2-opc.c.
+	* Makefile.in: Regenerated.
+	* configure.in: Add case for bfd_nios2_arch.
+	* configure: Regenerated.
+	* disassemble.c (ARCH_nios2): Define.
+	(disassembler): Add case for bfd_arch_nios2.
+	* nios2-dis.c: New file.
+	* nios2-opc.c: New file.
+
+	include/
+	* dis-asm.h (print_insn_big_nios2): Declare.
+	(print_insn_little_nios2): Declare.
+
+	include/elf
+	* nios2.h: New file.
+
+	include/opcode/
+	* nios2.h: New file.
+
+	gas/
+	* Makefile.am (TARGET_CPU_CFILES): Add config/tc-nios2.c.
+	(TARGET_CPU_HFILES): Add config/tc-nios2.h.
+	* Makefile.in: Regenerated.
+	* configure.tgt: Add case for nios2*-linux*.
+	* config/obj-elf.c: Conditionally include elf/nios2.h.
+	* config/tc-nios2.c: New file.
+	* config/tc-nios2.h: New file.
+	* doc/Makefile.am (CPU_DOCS): Add c-nios2.texi.
+	* doc/Makefile.in: Regenerated.
+	* doc/all.texi: Set NIOSII.
+	* doc/as.texinfo (Overview): Add Nios II options.
+	(Machine Dependencies): Include c-nios2.texi.
+	* doc/c-nios2.texi: New file.
+	* NEWS: Note Altera Nios II support.
+
+	gas/testsuite/
+	* gas/nios2/add.d: New.
+	* gas/nios2/add.s: New.
+	* gas/nios2/align_fill.d: New.
+	* gas/nios2/align_fill.s: New.
+	* gas/nios2/align_text.d: New.
+	* gas/nios2/align_text.s: New.
+	* gas/nios2/and.d: New.
+	* gas/nios2/and.s: New.
+	* gas/nios2/branch.d: New.
+	* gas/nios2/branch.s: New.
+	* gas/nios2/break.d: New.
+	* gas/nios2/break.s: New.
+	* gas/nios2/bret.d: New.
+	* gas/nios2/bret.s: New.
+	* gas/nios2/cache.d: New.
+	* gas/nios2/cache.s: New.
+	* gas/nios2/call26.d: New.
+	* gas/nios2/call26.s: New.
+	* gas/nios2/call.d: New.
+	* gas/nios2/call.s: New.
+	* gas/nios2/cmp.d: New.
+	* gas/nios2/cmp.s: New.
+	* gas/nios2/comments.d: New.
+	* gas/nios2/comments.s: New.
+	* gas/nios2/complex.d: New.
+	* gas/nios2/complex.s: New.
+	* gas/nios2/ctl.d: New.
+	* gas/nios2/ctl.s: New.
+	* gas/nios2/custom.d: New.
+	* gas/nios2/custom.s: New.
+	* gas/nios2/etbt.d: New.
+	* gas/nios2/etbt.s: New.
+	* gas/nios2/flushda.d: New.
+	* gas/nios2/flushda.s: New.
+	* gas/nios2/illegal.l: New.
+	* gas/nios2/illegal.s: New.
+	* gas/nios2/jmp.d: New.
+	* gas/nios2/jmp.s: New.
+	* gas/nios2/ldb.d: New.
+	* gas/nios2/ldb.s: New.
+	* gas/nios2/ldh.d: New.
+	* gas/nios2/ldh.s: New.
+	* gas/nios2/ldw.d: New.
+	* gas/nios2/ldw.s: New.
+	* gas/nios2/lineseparator.d: New.
+	* gas/nios2/lineseparator.s: New.
+	* gas/nios2/mov.d: New.
+	* gas/nios2/movia.d: New.
+	* gas/nios2/movia.s: New.
+	* gas/nios2/movi.d: New.
+	* gas/nios2/movi.s: New.
+	* gas/nios2/mov.s: New.
+	* gas/nios2/mul.d: New.
+	* gas/nios2/mul.s: New.
+	* gas/nios2/nios2.exp: New.
+	* gas/nios2/nor.d: New.
+	* gas/nios2/nor.s: New.
+	* gas/nios2/or.d: New.
+	* gas/nios2/or.s: New.
+	* gas/nios2/ret.d: New.
+	* gas/nios2/ret.s: New.
+	* gas/nios2/rol.d: New.
+	* gas/nios2/rol.s: New.
+	* gas/nios2/rotate.d: New.
+	* gas/nios2/rotate.s: New.
+	* gas/nios2/stb.d: New.
+	* gas/nios2/stb.s: New.
+	* gas/nios2/sth.d: New.
+	* gas/nios2/sth.s: New.
+	* gas/nios2/stw.d: New.
+	* gas/nios2/stw.s: New.
+	* gas/nios2/sub.d: New.
+	* gas/nios2/sub.s: New.
+	* gas/nios2/sync.d: New.
+	* gas/nios2/sync.s: New.
+	* gas/nios2/trap.d: New.
+	* gas/nios2/trap.s: New.
+	* gas/nios2/tret.d: New.
+	* gas/nios2/tret.s: New.
+	* gas/nios2/warn_noat.l: New.
+	* gas/nios2/warn_noat.s: New.
+	* gas/nios2/warn_nobreak.l: New.
+	* gas/nios2/warn_nobreak.s: New.
+	* gas/nios2/xor.d: New.
+	* gas/nios2/xor.s: New.
+
+	ld/
+	* Makefile.am (enios2elf.c): New rule.
+	* Makefile.in: Regenerated.
+	* configure.tgt: Add case for nios2*-*-*.
+	* emulparams/nios2elf.sh: New file.
+	* NEWS: Note Altera Nios II support.
+
+	ld/testsuite/
+	* ld-nios2/emit-relocs-1a.s: New.
+	* ld-nios2/emit-relocs-1b.s: New.
+	* ld-nios2/emit-relocs-1.d: New.
+	* ld-nios2/emit-relocs-1.ld: New.
+	* ld-nios2/gprel.d: New.
+	* ld-nios2/gprel.s: New.
+	* ld-nios2/hilo16.d: New.
+	* ld-nios2/hilo16.s: New.
+	* ld-nios2/hilo16_symbol.s: New.
+	* ld-nios2/imm5.d: New.
+	* ld-nios2/imm5.s: New.
+	* ld-nios2/imm5_symbol.s: New.
+	* ld-nios2/nios2.exp: New.
+	* ld-nios2/pcrel16.d: New.
+	* ld-nios2/pcrel16_label.s: New.
+	* ld-nios2/pcrel16.s: New.
+	* ld-nios2/relax_callr.d: New.
+	* ld-nios2/relax_callr.ld: New.
+	* ld-nios2/relax_callr.s: New.
+	* ld-nios2/relax_cjmp.d: New.
+	* ld-nios2/relax_cjmp.s: New.
+	* ld-nios2/relax_jmp.ld: New.
+	* ld-nios2/relax_section.d: New.
+	* ld-nios2/relax_section.s: New.
+	* ld-nios2/relax_ujmp.d: New.
+	* ld-nios2/relax_ujmp.s: New.
+	* ld-nios2/reloc.d: New.
+	* ld-nios2/reloc.s: New.
+	* ld-nios2/reloc_symbol.s: New.
+	* ld-nios2/s16.d: New.
+	* ld-nios2/s16.s: New.
+	* ld-nios2/s16_symbol.s: New.
+	* ld-nios2/u16.d: New.
+	* ld-nios2/u16.s: New.
+	* ld-nios2/u16_symbol.s: New.
+	* ld-elf/indirect.exp: Skip on targets that don't support
+	-shared -fPIC.
+	* ld-elfcomm/elfcomm.exp: Build with -G0 for nios2.
+	* ld-plugin/lto.exp: Skip shared library tests on targets that
+	don't support them.  Skip execution tests on non-native targets.
+
+	binutils/
+	* readelf.c: Include elf/nios2.h.
+	(dump_relocations): Add case for EM_ALTERA_NIOS2.
+	(get_nios2_dynamic_type): New.
+	(get_dynamic_type): Add case for EM_ALTERA_NIOS2.
+	(is_32bit_abs_reloc): Fix EM_ALTERA_NIOS2 case.
+	(is_16bit_abs_reloc): Likewise.
+	(is_none_reloc): Add EM_ALTERA_NIOS2 and EM_NIOS32 cases.
+	* NEWS: Note Altera Nios II support.
+	* MAINTAINERS: Add Nios II maintainers.
+@
+text
+@d183 18
+d290 7
+@
+
+
+1.2
+log
+@	* ld-plugin/lto.exp (lto-9.o, pr13229.o): Pass -finline.
+@
+text
+@d268 3
+a270 1
+if { [is_elf_format] } {
+d300 5
+@
+
+
+1.1
+log
+@Add LTO tests
+
+	* ld-plugin/dummy.c: New file.
+	* ld-plugin/dummy.s: Likewise.
+	* ld-plugin/lto-11.out: Likewise.
+	* ld-plugin/lto-11a.c: Likewise.
+	* ld-plugin/lto-11b.c: Likewise.
+	* ld-plugin/lto-11c.c: Likewise.
+	* ld-plugin/lto-12.out: Likewise.
+	* ld-plugin/lto-12a.c: Likewise.
+	* ld-plugin/lto-12b.c: Likewise.
+	* ld-plugin/lto-12c.c: Likewise.
+	* ld-plugin/lto-13.out: Likewise.
+	* ld-plugin/lto-13a.c: Likewise.
+	* ld-plugin/lto-13b.c: Likewise.
+	* ld-plugin/lto-13c.c: Likewise.
+	* ld-plugin/lto-14.out: Likewise.
+	* ld-plugin/lto-14a.c: Likewise.
+	* ld-plugin/lto-14b.c: Likewise.
+	* ld-plugin/lto-14c.c: Likewise.
+	* ld-plugin/lto-15.out: Likewise.
+	* ld-plugin/lto-15a.c: Likewise.
+	* ld-plugin/lto-15b.c: Likewise.
+	* ld-plugin/lto-16a.c: Likewise.
+	* ld-plugin/lto-16a.d: Likewise.
+	* ld-plugin/lto-16b.c: Likewise.
+	* ld-plugin/lto-16b.d: Likewise.
+	* ld-plugin/lto-17a.c: Likewise.
+	* ld-plugin/lto-17a.d: Likewise.
+	* ld-plugin/lto-17b-1.d: Likewise.
+	* ld-plugin/lto-17b-2.d: Likewise.
+	* ld-plugin/lto-17b.c: Likewise.
+	* ld-plugin/lto-1a.c: Likewise.
+	* ld-plugin/lto-1b.c: Likewise.
+	* ld-plugin/lto-2.c: Likewise.
+	* ld-plugin/lto-3.d: Likewise.
+	* ld-plugin/lto-3.out: Likewise.
+	* ld-plugin/lto-3a.c: Likewise.
+	* ld-plugin/lto-3b.c: Likewise.
+	* ld-plugin/lto-3c.c: Likewise.
+	* ld-plugin/lto-3r.d: Likewise.
+	* ld-plugin/lto-5.d: Likewise.
+	* ld-plugin/lto-5.out: Likewise.
+	* ld-plugin/lto-5a.c: Likewise.
+	* ld-plugin/lto-5b.c: Likewise.
+	* ld-plugin/lto-5r.d: Likewise.
+	* ld-plugin/lto-6.c: Likewise.
+	* ld-plugin/lto-7.out: Likewise.
+	* ld-plugin/lto-7a.c: Likewise.
+	* ld-plugin/lto-7b.c: Likewise.
+	* ld-plugin/lto-7c.c: Likewise.
+	* ld-plugin/lto-7d.c: Likewise.
+	* ld-plugin/lto-8.out: Likewise.
+	* ld-plugin/lto-8a.c: Likewise.
+	* ld-plugin/lto-8b.c: Likewise.
+	* ld-plugin/lto-9.cc: Likewise.
+	* ld-plugin/lto-9.d: Likewise.
+	* ld-plugin/lto.exp: Likewise.
+	* ld-plugin/pr12696-1.cc: Likewise.
+	* ld-plugin/pr12758a.s: Likewise.
+	* ld-plugin/pr12758b.c: Likewise.
+	* ld-plugin/pr12760a.c: Likewise.
+	* ld-plugin/pr12760b.c: Likewise.
+	* ld-plugin/pr12942.out: Likewise.
+	* ld-plugin/pr12942a.cc: Likewise.
+	* ld-plugin/pr12942a.h: Likewise.
+	* ld-plugin/pr12942b.cc: Likewise.
+	* ld-plugin/pr12942c.cc: Likewise.
+	* ld-plugin/pr12975.c: Likewise.
+	* ld-plugin/pr12975.d: Likewise.
+	* ld-plugin/pr12975.t: Likewise.
+	* ld-plugin/pr12982.c: Likewise.
+	* ld-plugin/pr12982.d: Likewise.
+	* ld-plugin/pr13066.cc: Likewise.
+	* ld-plugin/pr13066.out: Likewise.
+	* ld-plugin/pr13183.d: Likewise.
+	* ld-plugin/pr13183a.c: Likewise.
+	* ld-plugin/pr13183b.c: Likewise.
+	* ld-plugin/pr13201.c: Likewise.
+	* ld-plugin/pr13201.out: Likewise.
+	* ld-plugin/pr13229.cc: Likewise.
+	* ld-plugin/pr13229.d: Likewise.
+	* ld-plugin/pr13244.c: Likewise.
+	* ld-plugin/pr13244.d: Likewise.
+	* ld-plugin/pr13287.cc: Likewise.
+	* ld-plugin/run-ie.c: Likewise.
+	* ld-plugin/run-ie.out: Likewise.
+@
+text
+@d72 1
+a72 1
+   "" "-O2 -flto"
+d178 1
+a178 1
+   "-shared -O2 -fPIC -flto -fuse-linker-plugin -nostdlib" "-O2 -fno-early-inlining -flto"
+@
+

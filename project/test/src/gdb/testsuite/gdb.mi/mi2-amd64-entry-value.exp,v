@@ -1,0 +1,427 @@
+head	1.4;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.4
+	gdb_7_6-2013-04-26-release:1.4
+	gdb_7_6-branch:1.4.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.4
+	gdb_7_5_1-2012-11-29-release:1.3
+	gdb_7_5-2012-08-17-release:1.3
+	gdb_7_5-branch:1.3.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.3
+	gdb_7_4_1-2012-04-26-release:1.1.2.1
+	gdb_7_4-2012-01-24-release:1.1.2.1
+	gdb_7_4-branch:1.1.0.2
+	gdb_7_4-2011-12-13-branchpoint:1.1;
+locks; strict;
+comment	@# @;
+
+
+1.4
+date	2013.01.01.06.41.24;	author brobecke;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2012.07.10.15.32.52;	author tromey;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2012.01.04.08.17.54;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2011.10.09.19.34.19;	author jkratoch;	state Exp;
+branches
+	1.1.2.1;
+next	;
+
+1.1.2.1
+date	2012.01.06.04.44.09;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.4
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@# Copyright (C) 2011-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+load_lib mi-support.exp
+set MIFLAGS "-i=mi2"
+
+gdb_exit
+if [mi_gdb_start] {
+    continue
+}
+
+standard_testfile .s
+set opts {}
+
+if [info exists COMPILE] {
+    # make check RUNTESTFLAGS="gdb.mi/mi2-amd64-entry-value.exp COMPILE=1"
+    set srcfile ${testfile}.c
+    lappend opts debug optimize=-O2
+} elseif { ![istarget x86_64-*-* ] || ![is_lp64_target] } {
+    verbose "Skipping mi2-amd64-entry-value."
+    return
+}
+
+set executable ${testfile}
+
+if [build_executable ${testfile}.exp ${executable} ${srcfile} $opts] {
+    return -1
+}
+
+mi_gdb_reinitialize_dir $srcdir/$subdir
+mi_gdb_load ${binfile}
+
+foreach name {different breakhere_different breakhere_validity breakhere_invalid} {
+    mi_create_breakpoint $name .* .* .* .* .* .* "break $name"
+}
+
+
+# Test various kinds of `set print entry-values'.
+
+if {[mi_runto main] == -1} {
+    return -1
+}
+mi_gdb_test "-gdb-set print entry-values no" {\^done} "no: set print entry-values"
+mi_send_resuming_command "exec-continue" "no: entry_equal: continue"
+mi_expect_stop "breakpoint-hit" .* {{name="val",value="5"}} .* .* {.* disp="keep"} "no: entry_equal: stop"
+mi_gdb_test "-stack-list-variables --all-values" {\^done,variables=\[{name="val",arg="1",value="5"}\]} "no: entry_equal: -stack-list-variables"
+mi_send_resuming_command "exec-continue" "no: entry_different: continue"
+mi_expect_stop "breakpoint-hit" .* {{name="val",value="6"}} .* .* {.* disp="keep"} "no: entry_different: stop"
+mi_gdb_test "-stack-list-variables --all-values" {\^done,variables=\[{name="val",arg="1",value="6"}\]} "no: entry_different: -stack-list-variables"
+mi_send_resuming_command "exec-continue" "no: validity: continue"
+mi_expect_stop "breakpoint-hit" .* {{name="lost",value="<optimized out>"},{name="born",value="10"}} .* .* {.* disp="keep"} "no: validity: stop"
+mi_gdb_test "-stack-list-variables --all-values" {\^done,variables=\[{name="lost",arg="1",value="<optimized out>"},{name="born",arg="1",value="10"}\]} "no: validity: -stack-list-variables"
+mi_send_resuming_command "exec-continue" "no: invalid: continue"
+mi_expect_stop "breakpoint-hit" .* {{name="inv",value="<optimized out>"}} .* .* {.* disp="keep"} "no: invalid: stop"
+mi_gdb_test "-stack-list-variables --all-values" {\^done,variables=\[{name="inv",arg="1",value="<optimized out>"}\]} "no: invalid: -stack-list-variables"
+
+if {[mi_runto main] == -1} {
+    return -1
+}
+mi_gdb_test "-gdb-set print entry-values only" {\^done} "only: set print entry-values"
+mi_send_resuming_command "exec-continue" "only: entry_equal: continue"
+mi_expect_stop "breakpoint-hit" .* {{name="val@@entry",value="5"}} .* .* {.* disp="keep"} "only: entry_equal: stop"
+mi_gdb_test "-stack-list-variables --all-values" {\^done,variables=\[{name="val@@entry",arg="1",value="5"}\]} "only: entry_equal: -stack-list-variables"
+mi_send_resuming_command "exec-continue" "only: entry_different: continue"
+mi_expect_stop "breakpoint-hit" .* {{name="val@@entry",value="5"}} .* .* {.* disp="keep"} "only: entry_different: stop"
+mi_gdb_test "-stack-list-variables --all-values" {\^done,variables=\[{name="val@@entry",arg="1",value="5"}\]} "only: entry_different: -stack-list-variables"
+mi_send_resuming_command "exec-continue" "only: validity: continue"
+mi_expect_stop "breakpoint-hit" .* {{name="lost@@entry",value="5"},{name="born@@entry",value="<optimized out>"}} .* .* {.* disp="keep"} "only: validity: stop"
+mi_gdb_test "-stack-list-variables --all-values" {\^done,variables=\[{name="lost@@entry",arg="1",value="5"},{name="born@@entry",arg="1",value="<optimized out>"}\]} "only: validity: -stack-list-variables"
+mi_send_resuming_command "exec-continue" "only: invalid: continue"
+mi_expect_stop "breakpoint-hit" .* {{name="inv@@entry",value="<optimized out>"}} .* .* {.* disp="keep"} "only: invalid: stop"
+mi_gdb_test "-stack-list-variables --all-values" {\^done,variables=\[{name="inv@@entry",arg="1",value="<optimized out>"}\]} "only: invalid: -stack-list-variables"
+
+if {[mi_runto main] == -1} {
+    return -1
+}
+mi_gdb_test "-gdb-set print entry-values preferred" {\^done} "preferred: set print entry-values"
+mi_send_resuming_command "exec-continue" "preferred: entry_equal: continue"
+mi_expect_stop "breakpoint-hit" .* {{name="val@@entry",value="5"}} .* .* {.* disp="keep"} "preferred: entry_equal: stop"
+mi_gdb_test "-stack-list-variables --all-values" {\^done,variables=\[{name="val@@entry",arg="1",value="5"}\]} "preferred: entry_equal: -stack-list-variables"
+mi_send_resuming_command "exec-continue" "preferred: entry_different: continue"
+mi_expect_stop "breakpoint-hit" .* {{name="val@@entry",value="5"}} .* .* {.* disp="keep"} "preferred: entry_different: stop"
+mi_gdb_test "-stack-list-variables --all-values" {\^done,variables=\[{name="val@@entry",arg="1",value="5"}\]} "preferred: entry_different: -stack-list-variables"
+mi_send_resuming_command "exec-continue" "preferred: validity: continue"
+mi_expect_stop "breakpoint-hit" .* {{name="lost@@entry",value="5"},{name="born",value="10"}} .* .* {.* disp="keep"} "preferred: validity: stop"
+mi_gdb_test "-stack-list-variables --all-values" {\^done,variables=\[{name="lost@@entry",arg="1",value="5"},{name="born",arg="1",value="10"}\]} "preferred: validity: -stack-list-variables"
+mi_send_resuming_command "exec-continue" "preferred: invalid: continue"
+mi_expect_stop "breakpoint-hit" .* {{name="inv@@entry",value="<optimized out>"}} .* .* {.* disp="keep"} "preferred: invalid: stop"
+mi_gdb_test "-stack-list-variables --all-values" {\^done,variables=\[{name="inv@@entry",arg="1",value="<optimized out>"}\]} "preferred: invalid: -stack-list-variables"
+
+if {[mi_runto main] == -1} {
+    return -1
+}
+mi_gdb_test "-gdb-set print entry-values if-needed" {\^done} "if-needed: set print entry-values"
+mi_send_resuming_command "exec-continue" "if-needed: entry_equal: continue"
+mi_expect_stop "breakpoint-hit" .* {{name="val",value="5"}} .* .* {.* disp="keep"} "if-needed: entry_equal: stop"
+mi_gdb_test "-stack-list-variables --all-values" {\^done,variables=\[{name="val",arg="1",value="5"}\]} "if-needed: entry_equal: -stack-list-variables"
+mi_send_resuming_command "exec-continue" "if-needed: entry_different: continue"
+mi_expect_stop "breakpoint-hit" .* {{name="val",value="6"}} .* .* {.* disp="keep"} "if-needed: entry_different: stop"
+mi_gdb_test "-stack-list-variables --all-values" {\^done,variables=\[{name="val",arg="1",value="6"}\]} "if-needed: entry_different: -stack-list-variables"
+mi_send_resuming_command "exec-continue" "if-needed: validity: continue"
+mi_expect_stop "breakpoint-hit" .* {{name="lost@@entry",value="5"},{name="born",value="10"}} .* .* {.* disp="keep"} "if-needed: validity: stop"
+mi_gdb_test "-stack-list-variables --all-values" {\^done,variables=\[{name="lost@@entry",arg="1",value="5"},{name="born",arg="1",value="10"}\]} "if-needed: validity: -stack-list-variables"
+mi_send_resuming_command "exec-continue" "if-needed: invalid: continue"
+mi_expect_stop "breakpoint-hit" .* {{name="inv",value="<optimized out>"}} .* .* {.* disp="keep"} "if-needed: invalid: stop"
+mi_gdb_test "-stack-list-variables --all-values" {\^done,variables=\[{name="inv",arg="1",value="<optimized out>"}\]} "if-needed: invalid: -stack-list-variables"
+
+if {[mi_runto main] == -1} {
+    return -1
+}
+mi_gdb_test "-gdb-set print entry-values both" {\^done} "both: set print entry-values"
+mi_send_resuming_command "exec-continue" "both: entry_equal: continue"
+mi_expect_stop "breakpoint-hit" .* {{name="val",value="5"},{name="val@@entry",value="5"}} .* .* {.* disp="keep"} "both: entry_equal: stop"
+mi_gdb_test "-stack-list-variables --all-values" {\^done,variables=\[{name="val",arg="1",value="5"},{name="val@@entry",arg="1",value="5"}\]} "both: entry_equal: -stack-list-variables"
+mi_send_resuming_command "exec-continue" "both: entry_different: continue"
+mi_expect_stop "breakpoint-hit" .* {{name="val",value="6"},{name="val@@entry",value="5"}} .* .* {.* disp="keep"} "both: entry_different: stop"
+mi_gdb_test "-stack-list-variables --all-values" {\^done,variables=\[{name="val",arg="1",value="6"},{name="val@@entry",arg="1",value="5"}\]} "both: entry_different: -stack-list-variables"
+mi_send_resuming_command "exec-continue" "both: validity: continue"
+mi_expect_stop "breakpoint-hit" .* {{name="lost",value="<optimized out>"},{name="lost@@entry",value="5"},{name="born",value="10"},{name="born@@entry",value="<optimized out>"}} .* .* {.* disp="keep"} "both: validity: stop"
+mi_gdb_test "-stack-list-variables --all-values" {\^done,variables=\[{name="lost",arg="1",value="<optimized out>"},{name="lost@@entry",arg="1",value="5"},{name="born",arg="1",value="10"},{name="born@@entry",arg="1",value="<optimized out>"}\]} "both: validity: -stack-list-variables"
+mi_send_resuming_command "exec-continue" "both: invalid: continue"
+mi_expect_stop "breakpoint-hit" .* {{name="inv",value="<optimized out>"},{name="inv@@entry",value="<optimized out>"}} .* .* {.* disp="keep"} "both: invalid: stop"
+mi_gdb_test "-stack-list-variables --all-values" {\^done,variables=\[{name="inv",arg="1",value="<optimized out>"},{name="inv@@entry",arg="1",value="<optimized out>"}\]} "both: invalid: -stack-list-variables"
+
+if {[mi_runto main] == -1} {
+    return -1
+}
+mi_gdb_test "-gdb-set print entry-values compact" {\^done} "compact: set print entry-values"
+mi_send_resuming_command "exec-continue" "compact: entry_equal: continue"
+mi_expect_stop "breakpoint-hit" .* {{name="val",value="5"},{name="val@@entry",value="5"}} .* .* {.* disp="keep"} "compact: entry_equal: stop"
+mi_gdb_test "-stack-list-variables --all-values" {\^done,variables=\[{name="val",arg="1",value="5"},{name="val@@entry",arg="1",value="5"}\]} "compact: entry_equal: -stack-list-variables"
+mi_send_resuming_command "exec-continue" "compact: entry_different: continue"
+mi_expect_stop "breakpoint-hit" .* {{name="val",value="6"},{name="val@@entry",value="5"}} .* .* {.* disp="keep"} "compact: entry_different: stop"
+mi_gdb_test "-stack-list-variables --all-values" {\^done,variables=\[{name="val",arg="1",value="6"},{name="val@@entry",arg="1",value="5"}\]} "compact: entry_different: -stack-list-variables"
+mi_send_resuming_command "exec-continue" "compact: validity: continue"
+mi_expect_stop "breakpoint-hit" .* {{name="lost@@entry",value="5"},{name="born",value="10"}} .* .* {.* disp="keep"} "compact: validity: stop"
+mi_gdb_test "-stack-list-variables --all-values" {\^done,variables=\[{name="lost@@entry",arg="1",value="5"},{name="born",arg="1",value="10"}\]} "compact: validity: -stack-list-variables"
+mi_send_resuming_command "exec-continue" "compact: invalid: continue"
+mi_expect_stop "breakpoint-hit" .* {{name="inv",value="<optimized out>"}} .* .* {.* disp="keep"} "compact: invalid: stop"
+mi_gdb_test "-stack-list-variables --all-values" {\^done,variables=\[{name="inv",arg="1",value="<optimized out>"}\]} "compact: invalid: -stack-list-variables"
+
+if {[mi_runto main] == -1} {
+    return -1
+}
+mi_gdb_test "-gdb-set print entry-values default" {\^done} "default: set print entry-values"
+mi_send_resuming_command "exec-continue" "default: entry_equal: continue"
+mi_expect_stop "breakpoint-hit" .* {{name="val",value="5"},{name="val@@entry",value="5"}} .* .* {.* disp="keep"} "default: entry_equal: stop"
+mi_gdb_test "-stack-list-variables --all-values" {\^done,variables=\[{name="val",arg="1",value="5"},{name="val@@entry",arg="1",value="5"}\]} "default: entry_equal: -stack-list-variables"
+mi_send_resuming_command "exec-continue" "default: entry_different: continue"
+mi_expect_stop "breakpoint-hit" .* {{name="val",value="6"},{name="val@@entry",value="5"}} .* .* {.* disp="keep"} "default: entry_different: stop"
+mi_gdb_test "-stack-list-variables --all-values" {\^done,variables=\[{name="val",arg="1",value="6"},{name="val@@entry",arg="1",value="5"}\]} "default: entry_different: -stack-list-variables"
+mi_send_resuming_command "exec-continue" "default: validity: continue"
+mi_expect_stop "breakpoint-hit" .* {{name="lost",value="<optimized out>"},{name="lost@@entry",value="5"},{name="born",value="10"}} .* .* {.* disp="keep"} "default: validity: stop"
+mi_gdb_test "-stack-list-variables --all-values" {\^done,variables=\[{name="lost",arg="1",value="<optimized out>"},{name="lost@@entry",arg="1",value="5"},{name="born",arg="1",value="10"}\]} "default: validity: -stack-list-variables"
+mi_send_resuming_command "exec-continue" "default: invalid: continue"
+mi_expect_stop "breakpoint-hit" .* {{name="inv",value="<optimized out>"}} .* .* {.* disp="keep"} "default: invalid: stop"
+mi_gdb_test "-stack-list-variables --all-values" {\^done,variables=\[{name="inv",arg="1",value="<optimized out>"}\]} "default: invalid: -stack-list-variables"
+@
+
+
+1.3
+log
+@	* gdb.mi/dw2-ref-missing-frame.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.mi/gdb2549.exp: Use standard_testfile.
+	* gdb.mi/gdb669.exp: Use standard_testfile.
+	* gdb.mi/gdb701.exp: Use standard_testfile.
+	* gdb.mi/gdb792.exp: Use standard_testfile.
+	* gdb.mi/mi-async.exp: Use standard_testfile.
+	* gdb.mi/mi-basics.exp: Use standard_testfile.
+	* gdb.mi/mi-break.exp: Use standard_testfile.
+	* gdb.mi/mi-cli.exp: Use standard_testfile.
+	* gdb.mi/mi-console.exp: Use standard_testfile.
+	* gdb.mi/mi-disassemble.exp: Use standard_testfile.
+	* gdb.mi/mi-eval.exp: Use standard_testfile.
+	* gdb.mi/mi-file-transfer.exp: Use standard_testfile.
+	* gdb.mi/mi-file.exp: Use standard_testfile.
+	* gdb.mi/mi-inheritance-syntax-error.exp: Use standard_testfile.
+	* gdb.mi/mi-logging.exp: Use standard_testfile.
+	* gdb.mi/mi-nonstop-exit.exp: Use standard_testfile.
+	* gdb.mi/mi-nonstop.exp: Use standard_testfile.
+	* gdb.mi/mi-ns-stale-regcache.exp: Use standard_testfile.
+	* gdb.mi/mi-nsintrall.exp: Use standard_testfile.
+	* gdb.mi/mi-nsmoribund.exp: Use standard_testfile.
+	* gdb.mi/mi-nsthrexec.exp: Use standard_testfile.
+	* gdb.mi/mi-pending.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.mi/mi-pthreads.exp: Use standard_testfile.
+	* gdb.mi/mi-read-memory.exp: Use standard_testfile.
+	* gdb.mi/mi-regs.exp: Use standard_testfile.
+	* gdb.mi/mi-return.exp: Use standard_testfile.
+	* gdb.mi/mi-reverse.exp: Use standard_testfile.
+	* gdb.mi/mi-simplerun.exp: Use standard_testfile.
+	* gdb.mi/mi-solib.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.mi/mi-stack.exp: Use standard_testfile.
+	* gdb.mi/mi-stepi.exp: Use standard_testfile.
+	* gdb.mi/mi-stepn.exp: Use standard_testfile.
+	* gdb.mi/mi-syn-frame.exp: Use standard_testfile.
+	* gdb.mi/mi-until.exp: Use standard_testfile.
+	* gdb.mi/mi-var-block.exp: Use standard_testfile.
+	* gdb.mi/mi-var-child-f.exp: Use standard_testfile.
+	* gdb.mi/mi-var-child.exp: Use standard_testfile.
+	* gdb.mi/mi-var-cmd.exp: Use standard_testfile.
+	* gdb.mi/mi-var-cp.exp: Use standard_testfile.
+	* gdb.mi/mi-var-display.exp: Use standard_testfile.
+	* gdb.mi/mi-var-invalidate.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.mi/mi-var-rtti.exp: Use standard_testfile.
+	* gdb.mi/mi-watch-nonstop.exp: Use standard_testfile.
+	* gdb.mi/mi-watch.exp: Use standard_testfile.
+	* gdb.mi/mi2-amd64-entry-value.exp: Use standard_testfile.
+	* gdb.mi/mi2-basics.exp: Use standard_testfile.
+	* gdb.mi/mi2-break.exp: Use standard_testfile.
+	* gdb.mi/mi2-cli.exp: Use standard_testfile.
+	* gdb.mi/mi2-console.exp: Use standard_testfile.
+	* gdb.mi/mi2-disassemble.exp: Use standard_testfile.
+	* gdb.mi/mi2-eval.exp: Use standard_testfile.
+	* gdb.mi/mi2-file.exp: Use standard_testfile.
+	* gdb.mi/mi2-pthreads.exp: Use standard_testfile.
+	* gdb.mi/mi2-read-memory.exp: Use standard_testfile.
+	* gdb.mi/mi2-regs.exp: Use standard_testfile.
+	* gdb.mi/mi2-return.exp: Use standard_testfile.
+	* gdb.mi/mi2-simplerun.exp: Use standard_testfile.
+	* gdb.mi/mi2-stack.exp: Use standard_testfile.
+	* gdb.mi/mi2-stepi.exp: Use standard_testfile.
+	* gdb.mi/mi2-syn-frame.exp: Use standard_testfile.
+	* gdb.mi/mi2-until.exp: Use standard_testfile.
+	* gdb.mi/mi2-var-block.exp: Use standard_testfile.
+	* gdb.mi/mi2-var-child.exp: Use standard_testfile.
+	* gdb.mi/mi2-var-cmd.exp: Use standard_testfile.
+	* gdb.mi/mi2-var-display.exp: Use standard_testfile.
+	* gdb.mi/mi2-watch.exp: Use standard_testfile.
+@
+text
+@d1 1
+a1 1
+# Copyright (C) 2011-2012 Free Software Foundation, Inc.
+@
+
+
+1.2
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d24 1
+a24 2
+set testfile mi2-amd64-entry-value
+set srcfile ${testfile}.s
+a36 1
+set binfile ${objdir}/${subdir}/${executable}
+@
+
+
+1.1
+log
+@gdb/
+	Display @@entry parameter values (without references).
+	* dwarf2expr.c (dwarf_block_to_fb_offset, dwarf_block_to_sp_offset):
+	New functions.
+	* dwarf2expr.h (dwarf_block_to_fb_offset, dwarf_block_to_sp_offset):
+	New declarations.
+	* dwarf2loc.c (dwarf2_find_location_expression): Support location list
+	entry record.
+	(dwarf_entry_parameter_to_value, value_of_dwarf_reg_entry)
+	(value_of_dwarf_block_entry, locexpr_read_variable_at_entry): New
+	functions.
+	(dwarf2_locexpr_funcs): Install locexpr_read_variable_at_entry.
+	(loclist_read_variable_at_entry): New function.
+	(dwarf2_loclist_funcs): Install loclist_read_variable_at_entry.
+	* dwarf2read.c (read_call_site_scope): Support also DW_OP_fbreg in
+	DW_AT_location, call dwarf_block_to_sp_offset for it.
+	* frame.h (print_entry_values_no, print_entry_values_only)
+	(print_entry_values_preferred, print_entry_values_if_needed)
+	(print_entry_values_both, print_entry_values_compact)
+	(print_entry_values_default, print_entry_values): New declarations.
+	(struct frame_arg): New field entry_kind.
+	(read_frame_arg): New parameter entryargp.
+	* mi/mi-cmd-stack.c (list_arg_or_local): New gdb_assert for
+	arg->entry_kind.  Optionally print the `@@entry' suffix.
+	(list_args_or_locals): New variable entryarg, initialize it.
+	Initialize also entry_kind of arg and entryarg.  Conditionalize
+	list_arg_or_local for arg, add list_arg_or_local for entryarg.  Call
+	xfree for entryarg.error.
+	* stack.c (print_entry_values_no, print_entry_values_only)
+	(print_entry_values_preferred, print_entry_values_if_needed)
+	(print_entry_values_both, print_entry_values_compact)
+	(print_entry_values_default, print_entry_values_choices)
+	(print_entry_values): New variables.
+	(print_frame_arg): New gdb_assert for arg->entry_kind.  Optionally
+	print the `@@entry' suffix, possibly in combination for
+	print_entry_values_compact.
+	(read_frame_arg): New parameter entryargp, new variables entryval,
+	entryval_error and val_equal.  Read in also entryargp, respect
+	print_entry_values, compare the values using val_equal, fill in also
+	argp->entry_kind (together with entryargp->entry_kind).
+	(print_frame_args): New variable entryarg, initialize it.
+	Conditionalize print_frame_arg for arg, add print_frame_arg for
+	entryarg.  Call xfree for entryarg.error.
+	(_initialize_stack): Call add_setshow_enum_cmd for `entry-values'.
+	* symtab.h (struct symbol_computed_ops): New field
+	read_variable_at_entry.
+
+gdb/doc/
+	Display @@entry parameter values (without references).
+	* gdb.texinfo (Tail Call Frames): Add anchor.  Add self tail call
+	example.
+	(Print Settings): New description of set print entry-values and show
+	print entry-values.
+
+gdb/testsuite/
+	Display @@entry parameter values (without references).
+	* gdb.arch/amd64-entry-value.cc (locexpr, stacktest, data, data2)
+	(different, validity, invalid): New functions.
+	(main): Call them.
+	* gdb.arch/amd64-entry-value.exp: New breakpoints breakhere_locexpr,
+	stacktest, breakhere_stacktest, different, breakhere_different,
+	breakhere_validity and breakhere_invalid.
+	(entry: bt): Update for @@entry.
+	(entry_locexpr: *, entry_stack: *, entry_equal: *, entry_different: *)
+	(entry_validity: *, entry_invalid: *): Many new tests.
+	* gdb.base/break.exp
+	(run until breakpoint set at small function, optimized file): Accept
+	also the @@entry suffix.
+	* gdb.mi/Makefile.in (PROGS): Add mi2-amd64-entry-value.
+	* gdb.mi/mi2-amd64-entry-value.c: New files.
+	* gdb.mi/mi2-amd64-entry-value.exp: New files.
+@
+text
+@d1 1
+a1 1
+# Copyright (C) 2011 Free Software Foundation, Inc.
+@
+
+
+1.1.2.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d1 1
+a1 1
+# Copyright (C) 2011-2012 Free Software Foundation, Inc.
+@
+
+

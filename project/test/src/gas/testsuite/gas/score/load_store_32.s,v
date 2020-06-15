@@ -1,0 +1,116 @@
+head	1.1;
+access;
+symbols
+	binutils-2_24-branch:1.1.0.14
+	binutils-2_24-branchpoint:1.1
+	binutils-2_21_1:1.1
+	binutils-2_23_2:1.1
+	binutils-2_23_1:1.1
+	binutils-2_23:1.1
+	binutils-2_23-branch:1.1.0.12
+	binutils-2_23-branchpoint:1.1
+	binutils-2_22_branch:1.1.0.10
+	binutils-2_22:1.1
+	binutils-2_22-branch:1.1.0.8
+	binutils-2_22-branchpoint:1.1
+	binutils-2_21:1.1
+	binutils-2_21-branch:1.1.0.6
+	binutils-2_21-branchpoint:1.1
+	binutils-2_20_1:1.1
+	binutils-2_20:1.1
+	binutils-2_20-branch:1.1.0.4
+	binutils-2_20-branchpoint:1.1
+	dje-cgen-play1-branch:1.1.0.2
+	dje-cgen-play1-branchpoint:1.1
+	binutils_latest_snapshot:1.1;
+locks; strict;
+comment	@# @;
+
+
+1.1
+date	2009.03.02.10.33.07;	author nickc;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.1
+log
+@Add support for Score7 architecture.
+@
+text
+@/*
+ * tests for load/store instruction relaxation
+ *
+ * Author: libin
+ */
+
+.include "relaxation_macro.h"
+
+.macro _ls_op_pattern insn
+.balign 2
+  insn_32 "\insn r0,  [r0,0]"
+  insn_32 "\insn r15, [r0,0]"
+  insn_32 "\insn r0,  [r7,0]"
+  insn_32 "\insn r15, [r7,0]"
+/* NOTE: offset MUST be word aligned */
+  insn_32 "\insn r0,  [r0,124]"
+  insn_32 "\insn r15, [r0,124]"
+  insn_32 "\insn r0,  [r7,124]"
+  insn_32 "\insn r15, [r7,124]"
+
+  tran_16_32 "\insn! r0,[r0,124]", "\insn r0,[r0,124]"
+
+  /* shouldn't alter */
+  insn_32 "\insn r16, [r0, 0]"
+  insn_32 "\insn r0,  [r8, 124]"
+  insn_32 "\insn r16, [r8, 124]"
+  insn_32 "\insn r0,  [r7, -1]"
+  insn_32 "\insn r0,  [r7, 128]"
+.endm
+
+.text
+/* lw/sw rD,[rA,SImm15] -> lw!/sw! rD,[rA,Imm5] */
+_ls_op_pattern "lw"
+_ls_op_pattern "sw"
+
+/* ldi rD,SImm16 -> ldiu! rD,Imm6 */
+.balign 2
+insn_32 "ldi r0,  0"
+insn_32 "ldi r15, 0"
+insn_32 "ldi r0,  31"
+insn_32 "ldi r15, 31"
+
+tran_16_32 "ldiu! r0, 0", "ldi r0, 0"
+
+/* shouldn't alter */
+insn_32 "ldi r16, 0"
+insn_32 "ldi r0,  -1"
+insn_32 "ldi r0,  32"
+insn_32 "ldi r16, 32"
+
+/*
+ * lw rD,[rA]+,SImm12 -> pop! rD
+ *
+ * r0: stack pointer(sp)
+ */
+insn_32 "lw r2,   [r0]+, 4"
+insn_32 "lw r15,  [r0]+, 4"
+
+/* shouldn't alter */
+insn_32 "lw r16, [r0]+, 4"
+insn_32 "lw r4,  [r2]+, 4"
+insn_32 "lw r4,  [r0]+, -4"
+
+/* sw rD,[rA,SImm12]+ -> push! rD */
+insn_32 "sw r2,  [r0, -4]+"
+insn_32 "sw r15, [r0, -4]+"
+
+/* shouldn't alter */
+insn_32 "sw r16, [r0, -4]+"
+insn_32 "sw r4,  [r2, -4]+"
+insn_32 "sw r4,  [r0, 4]+"
+@

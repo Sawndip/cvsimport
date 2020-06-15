@@ -1,0 +1,217 @@
+head	1.1;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.1
+	gdb_7_6-2013-04-26-release:1.1
+	gdb_7_6-branch:1.1.0.6
+	gdb_7_6-2013-03-12-branchpoint:1.1
+	gdb_7_5_1-2012-11-29-release:1.1
+	gdb_7_5-2012-08-17-release:1.1
+	gdb_7_5-branch:1.1.0.4
+	gdb_7_5-2012-07-18-branchpoint:1.1
+	gdb_7_4_1-2012-04-26-release:1.1
+	gdb_7_4-2012-01-24-release:1.1
+	gdb_7_4-branch:1.1.0.2
+	gdb_7_4-2011-12-13-branchpoint:1.1;
+locks; strict;
+comment	@# @;
+
+
+1.1
+date	2011.05.11.23.38.40;	author jkratoch;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.1
+log
+@Imported readline 6.2, and upstream patch 001.
+
+[patch 0/3] readline-6.2 rebase
+http://sourceware.org/ml/gdb-patches/2011-05/msg00003.html
+[patch 1/3] readline-6.2: Merge of already posted patches
+http://sourceware.org/ml/gdb-patches/2011-05/msg00004.html
+	=
+	[Bug-readline] [RFC/readline] bind.c, rl_function_dumper, Free allocated
+	http://lists.gnu.org/archive/html/bug-readline/2011-03/msg00000.html
+	[Bug-readline] [patch] Fix underquotation in readline/examples/rlfe/conf
+	http://lists.gnu.org/archive/html/bug-readline/2011-04/msg00001.html
+	[Bug-readline] [patch] Makefile.in htm<->html
+	http://lists.gnu.org/archive/html/bug-readline/2011-04/msg00002.html
+	Re: [Bug-readline] [patch] Makefile.in dependency: callback.o: xmalloc.h
+	http://lists.gnu.org/archive/html/bug-readline/2011-04/msg00004.html
+	[Bug-readline] [patch] Remove . from the VPATH directive
+	http://lists.gnu.org/archive/html/bug-readline/2011-04/msg00005.html
+	Eli Zaretskii's __MSDOS__ / __GO32__ / __MINGW32__ / __DJGPP__ stuff:
+	http://sourceware.org/ml/gdb/2011-04/msg00002.html
+	Jan Kratochvil's patch for FSF GDB tree local-specific changes:
+	http://sourceware.org/ml/gdb/2011-04/msg00006.html
+	Preservation of existing ChangeLog.gdb files, their updates.
+[patch 2/3] readline-6.2: Workaround "ask" regression
+http://sourceware.org/ml/gdb-patches/2011-05/msg00005.html
+[patch 3/3] readline-6.2: Revert 5.x compat., apply 6.x compat.
+http://sourceware.org/ml/gdb-patches/2011-05/msg00006.html
+[patch 4/3] readline-6.2: Substitute inc-hist.texinfo
+http://sourceware.org/ml/gdb-patches/2011-05/msg00010.html
+
+readline/
+	Workaround gdb.base/completion.exp regression on readline-6.2.
+	* complete.c (get_y_or_n): Disable the return on RL_STATE_CALLBACK.
+
+	Imported readline 6.2, and upstream patch 001.
+	* configure: Regenerate.
+
+readline/doc/
+	* hsuser.texi (Using History Interactively): Disable !BashFeatures
+	@@defcodeindex.  Make the `Programming with GNU History' reference
+	external.
+	* inc-hist.texinfo: Remove.
+
+	Imported readline 6.2, and upstream patch 001.
+
+readline/examples/
+	Imported readline 6.2, and upstream patch 001.
+
+readline/examples/rlfe/
+	Imported readline 6.2, and upstream patch 001.
+
+gdb/
+	* config.in: Regenerate.
+	* configure: Regenerate.
+	* configure.ac <--with-system-readline> (for readline_echoing_p):
+	Remove the test.
+	* tui/tui-io.c (tui_old_readline_echoing_p): Rename to ...
+	(tui_old_rl_echoing_p): ... here.
+	(tui_setup_io): Rename extern declaration readline_echoing_p to
+	_rl_echoing_p.  Adjust assignments for the both renames.
+
+gdb/doc/
+	* Makefile.in (GDB_DOC_SOURCE_INCLUDES): Rename inc-hist.texinfo to
+	hsuser.texi.
+	* gdb.texinfo <!SYSTEM_READLINE>: Rename inc-hist.texinfo inclusion and
+	comment to hsuser.texi.  Change rluser.texi name in the comment.
+@
+text
+@dnl need: prefix exec_prefix libdir includedir CC TERMCAP_LIB
+dnl require:
+dnl	AC_PROG_CC
+dnl	BASH_CHECK_LIB_TERMCAP
+
+AC_DEFUN([RL_LIB_READLINE_VERSION],
+[
+AC_REQUIRE([BASH_CHECK_LIB_TERMCAP])
+
+AC_MSG_CHECKING([version of installed readline library])
+
+# What a pain in the ass this is.
+
+# save cpp and ld options
+_save_CFLAGS="$CFLAGS"
+_save_LDFLAGS="$LDFLAGS"
+_save_LIBS="$LIBS"
+
+# Don't set ac_cv_rl_prefix if the caller has already assigned a value.  This
+# allows the caller to do something like $_rl_prefix=$withval if the user
+# specifies --with-installed-readline=PREFIX as an argument to configure
+
+if test -z "$ac_cv_rl_prefix"; then
+test "x$prefix" = xNONE && ac_cv_rl_prefix=$ac_default_prefix || ac_cv_rl_prefix=${prefix}
+fi
+
+eval ac_cv_rl_includedir=${ac_cv_rl_prefix}/include
+eval ac_cv_rl_libdir=${ac_cv_rl_prefix}/lib
+
+LIBS="$LIBS -lreadline ${TERMCAP_LIB}"
+CFLAGS="$CFLAGS -I${ac_cv_rl_includedir}"
+LDFLAGS="$LDFLAGS -L${ac_cv_rl_libdir}"
+
+AC_CACHE_VAL(ac_cv_rl_version,
+[AC_TRY_RUN([
+#include <stdio.h>
+#include <readline/readline.h>
+
+extern int rl_gnu_readline_p;
+
+main()
+{
+	FILE *fp;
+	fp = fopen("conftest.rlv", "w");
+	if (fp == 0)
+		exit(1);
+	if (rl_gnu_readline_p != 1)
+		fprintf(fp, "0.0\n");
+	else
+		fprintf(fp, "%s\n", rl_library_version ? rl_library_version : "0.0");
+	fclose(fp);
+	exit(0);
+}
+],
+ac_cv_rl_version=`cat conftest.rlv`,
+ac_cv_rl_version='0.0',
+ac_cv_rl_version='4.2')])
+
+CFLAGS="$_save_CFLAGS"
+LDFLAGS="$_save_LDFLAGS"
+LIBS="$_save_LIBS"
+
+RL_MAJOR=0
+RL_MINOR=0
+
+# (
+case "$ac_cv_rl_version" in
+2*|3*|4*|5*|6*|7*|8*|9*)
+	RL_MAJOR=`echo $ac_cv_rl_version | sed 's:\..*$::'`
+	RL_MINOR=`echo $ac_cv_rl_version | sed -e 's:^.*\.::' -e 's:[[a-zA-Z]]*$::'`
+	;;
+esac
+
+# (((
+case $RL_MAJOR in
+[[0-9][0-9]])	_RL_MAJOR=$RL_MAJOR ;;
+[[0-9]])	_RL_MAJOR=0$RL_MAJOR ;;
+*)		_RL_MAJOR=00 ;;
+esac
+
+# (((
+case $RL_MINOR in
+[[0-9][0-9]])	_RL_MINOR=$RL_MINOR ;;
+[[0-9]])	_RL_MINOR=0$RL_MINOR ;;
+*)		_RL_MINOR=00 ;;
+esac
+
+RL_VERSION="0x${_RL_MAJOR}${_RL_MINOR}"
+
+# Readline versions greater than 4.2 have these defines in readline.h
+
+if test $ac_cv_rl_version = '0.0' ; then
+	AC_MSG_WARN([Could not test version of installed readline library.])
+elif test $RL_MAJOR -gt 4 || { test $RL_MAJOR = 4 && test $RL_MINOR -gt 2 ; } ; then
+	# set these for use by the caller
+	RL_PREFIX=$ac_cv_rl_prefix
+	RL_LIBDIR=$ac_cv_rl_libdir
+	RL_INCLUDEDIR=$ac_cv_rl_includedir
+	AC_MSG_RESULT($ac_cv_rl_version)
+else
+
+AC_DEFINE_UNQUOTED(RL_READLINE_VERSION, $RL_VERSION, [encoded version of the installed readline library])
+AC_DEFINE_UNQUOTED(RL_VERSION_MAJOR, $RL_MAJOR, [major version of installed readline library])
+AC_DEFINE_UNQUOTED(RL_VERSION_MINOR, $RL_MINOR, [minor version of installed readline library])
+
+AC_SUBST(RL_VERSION)
+AC_SUBST(RL_MAJOR)
+AC_SUBST(RL_MINOR)
+
+# set these for use by the caller
+RL_PREFIX=$ac_cv_rl_prefix
+RL_LIBDIR=$ac_cv_rl_libdir
+RL_INCLUDEDIR=$ac_cv_rl_includedir
+
+AC_MSG_RESULT($ac_cv_rl_version)
+
+fi
+])
+@

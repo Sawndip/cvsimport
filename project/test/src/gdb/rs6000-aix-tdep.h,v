@@ -1,0 +1,92 @@
+head	1.1;
+access;
+symbols;
+locks; strict;
+comment	@ * @;
+
+
+1.1
+date	2013.05.15.12.26.14;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.1
+log
+@ppc-aix core file relocation.
+
+The current code attempts to provide relocation support when debugging
+core files via the rs6000_xfer_partial method of the rs6000-nat
+target_ops vector. However, this target_ops vector does not get pushed
+on the target stack at all when debugging core files, thus bypassing
+completely that part of the code.
+
+This patch fixes the problem by extending corelow's core_xfer_partial
+into handling the TARGET_OBJECT_LIBRARIES_AIX object.
+
+gdb/ChangeLog:
+
+	* gdbarch.sh (core_xfer_shared_libraries_aix): New method.
+	* gdbarch.h, gdbarch.c: Regenerate.
+	* corelow.c (core_xfer_partial): Add TARGET_OBJECT_LIBRARIES_AIX
+	handling.
+
+	* rs6000-aix-tdep.h: New file.
+	* Makefile.in (HFILES_NO_SRCDIR): Add rs6000-aix-tdep.h.
+	* rs6000-aix-tdep.c: Include "rs6000-aix-tdep.h" and
+	"xml-utils.h".
+	(struct field_info, struct ld_info_desc): New types.
+	(ld_info32_desc, ld_info64_desc): New static constants.
+	(struct ld_info): New type.
+	(rs6000_aix_extract_ld_info): New function.
+	(rs6000_aix_shared_library_to_xml): Likewise.
+	(rs6000_aix_ld_info_to_xml): Likewise.
+	(rs6000_aix_core_xfer_shared_libraries_aix): Likewise.
+	(rs6000_aix_init_osabi): Add call to
+	set_gdbarch_core_xfer_shared_libraries_aix.
+	* rs6000-nat.c: Add "rs6000-aix-tdep.h" include.
+	Remove "xml-utils.h" include.
+	(LdInfo): Delete typedef.
+	(ARCH64_DECL, LDI_FIELD, LDI_NEXT, LDI_FD, LDI_FILENAME):
+	Delete macros.
+	(rs6000_ptrace_ldinfo): Change return type to gdb_byte *.
+	Adjust code accordingly.
+	(rs6000_core_ldinfo): Delete, folded into
+	rs6000_aix_core_xfer_shared_libraries_aix.
+	(rs6000_xfer_shared_library): Delete.
+	(rs6000_xfer_shared_libraries): Reimplement.
+@
+text
+@/* Copyright (C) 2013 Free Software Foundation, Inc.
+
+   This file is part of GDB.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+#ifndef RS6000_AIX_TDEP_H
+#define RS6000_AIX_TDEP_H
+
+extern LONGEST rs6000_aix_ld_info_to_xml (struct gdbarch *gdbarch,
+					  const gdb_byte *ldi_buf,
+					  gdb_byte *readbuf,
+					  ULONGEST offset,
+					  LONGEST len,
+					  int close_ldinfo_fd);
+
+#endif /* RS6000_AIX_TDEP_H */
+@

@@ -1,0 +1,375 @@
+head	1.3;
+access;
+symbols
+	msnyder-checkpoint-072509-branch:1.2.0.2
+	msnyder-checkpoint-072509-branchpoint:1.2;
+locks; strict;
+comment	@ * @;
+
+
+1.3
+date	2009.09.09.17.45.41;	author brobecke;	state dead;
+branches;
+next	1.2;
+
+1.2
+date	2009.07.02.17.04.23;	author uweigand;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2009.03.21.03.03.56;	author bauermann;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.3
+log
+@Checking in this patch for Thiago: Rename python-* files into py-*,
+more 8+3 friendly.
+
+
+gdb/
+        * Makefile.in (py-cmd.o): Renamed from python-cmd.o.  Updated
+        references.
+        (py-frame.o): Renamed from python-frame.o.  Updated references.
+        (py-function.o): Renamed from python-function.o.  Updated references.
+        (py-objfile.o): Renamed from python-objfile.o.  Updated references.
+        (py-prettyprint.o): Renamed from python-prettyprint.o.  Updated
++references.
+        (py-type.o): Renamed from python-type.o.  Updated references.
+        (py-utils.o): Renamed from python-utils.o.  Updated references.
+        (py-value.o): Renamed from python-value.o.  Updated references.
+        * py-cmd.o: Renamed from python-cmd.o.
+        * py-frame.o: Renamed from python-frame.o.
+        * py-function.o: Renamed from python-function.o.
+        * py-objfile.o: Renamed from python-objfile.o.
+        * py-prettyprint.o: Renamed from python-prettyprint.o.
+        * py-type.o: Renamed from python-type.o.
+        * py-utils.o: Renamed from python-utils.o.
+        * py-value.o: Renamed from python-value.o.
+
+gdb/testsuite/
+        * gdb.python/Makefile.in (EXECUTABLES): Adjust to new executable
+        names, add missing ones.
+        * gdb.python/py-cmd.exp: Rename from python-cmd.exp.
+        * gdb.python/py-frame.c: Rename from python-frame.c.
+        * gdb.python/py-frame.exp: Rename from python-frame.exp.  Adjust
+        testfile name.
+        * gdb.python/py-function.exp: Rename from python-function.exp.
+        * gdb.python/py-mi.exp: Rename from python-mi.exp.  Adjust
+        testfile name.
+        * gdb.python/py-prettyprint.c: Rename from python-prettyprint.c.
+        * gdb.python/py-prettyprint.exp: Rename from python-prettyprint.exp.
+        Adjust testfile name.
+        * gdb.python/py-prettyprint.py: Rename from python-prettyprint.py.
+        * gdb.python/py-template.cc: Rename from python-template.cc.
+        * gdb.python/py-template.exp: Rename from python-template.exp.
+        Adjust testfile name.
+        * gdb.python/py-value.c: Rename from python-value.c.
+        * gdb.python/py-value.exp: Rename from python-value.exp.  Adjust
+        testfile name.
+@
+text
+@/* Convenience functions implemented in Python.
+
+   Copyright (C) 2008, 2009 Free Software Foundation, Inc.
+
+   This file is part of GDB.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+
+#include "defs.h"
+#include "value.h"
+#include "exceptions.h"
+#include "python-internal.h"
+#include "charset.h"
+#include "gdbcmd.h"
+#include "cli/cli-decode.h"
+#include "completer.h"
+#include "expression.h"
+#include "language.h"
+
+static PyTypeObject fnpy_object_type;
+
+
+
+static PyObject *
+convert_values_to_python (int argc, struct value **argv)
+{
+  int i;
+  PyObject *result = PyTuple_New (argc);
+  for (i = 0; i < argc; ++i)
+    {
+      PyObject *elt = value_to_value_object (argv[i]);
+      if (! elt)
+	{
+	  Py_DECREF (result);
+	  error (_("Could not convert value to Python object."));
+	}
+      PyTuple_SetItem (result, i, elt);
+    }
+  return result;
+}
+
+/* Call a Python function object's invoke method.  */
+
+static struct value *
+fnpy_call (struct gdbarch *gdbarch, const struct language_defn *language,
+	   void *cookie, int argc, struct value **argv)
+{
+  int i;
+  struct value *value = NULL;
+  PyObject *result, *callable, *args;
+  struct cleanup *cleanup;
+
+  cleanup = ensure_python_env (gdbarch, language);
+
+  args = convert_values_to_python (argc, argv);
+
+  callable = PyObject_GetAttrString ((PyObject *) cookie, "invoke");
+  if (! callable)
+    {
+      Py_DECREF (args);
+      error (_("No method named 'invoke' in object."));
+    }
+
+  result = PyObject_Call (callable, args, NULL);
+  Py_DECREF (callable);
+  Py_DECREF (args);
+
+  if (!result)
+    {
+      gdbpy_print_stack ();
+      error (_("Error while executing Python code."));
+    }
+
+  value = convert_value_from_python (result);
+  if (value == NULL)
+    {
+      Py_DECREF (result);
+      gdbpy_print_stack ();
+      error (_("Error while executing Python code."));
+    }
+
+  Py_DECREF (result);
+  do_cleanups (cleanup);
+
+  return value;
+}
+
+/* Initializer for a Function object.  It takes one argument, the name
+   of the function.  */
+
+static int
+fnpy_init (PyObject *self, PyObject *args, PyObject *kwds)
+{
+  char *name, *docstring = NULL;
+  if (! PyArg_ParseTuple (args, "s", &name))
+    return -1;
+  Py_INCREF (self);
+
+  if (PyObject_HasAttrString (self, "__doc__"))
+    {
+      PyObject *ds_obj = PyObject_GetAttrString (self, "__doc__");
+      if (ds_obj && gdbpy_is_string (ds_obj))
+	/* Nothing ever frees this.  */
+	docstring = python_string_to_host_string (ds_obj);
+    }
+  if (! docstring)
+    docstring = _("This function is not documented.");
+
+  add_internal_function (name, docstring, fnpy_call, self);
+  return 0;
+}
+
+/* Initialize internal function support.  */
+
+void
+gdbpy_initialize_functions (void)
+{
+  if (PyType_Ready (&fnpy_object_type) < 0)
+    return;
+
+  Py_INCREF (&fnpy_object_type);
+  PyModule_AddObject (gdb_module, "Function", (PyObject *) &fnpy_object_type);
+}
+
+
+
+static PyTypeObject fnpy_object_type =
+{
+  PyObject_HEAD_INIT (NULL)
+  0,				  /*ob_size*/
+  "gdb.Function",		  /*tp_name*/
+  sizeof (PyObject),		  /*tp_basicsize*/
+  0,				  /*tp_itemsize*/
+  0,				  /*tp_dealloc*/
+  0,				  /*tp_print*/
+  0,				  /*tp_getattr*/
+  0,				  /*tp_setattr*/
+  0,				  /*tp_compare*/
+  0,				  /*tp_repr*/
+  0,				  /*tp_as_number*/
+  0,				  /*tp_as_sequence*/
+  0,				  /*tp_as_mapping*/
+  0,				  /*tp_hash */
+  0,				  /*tp_call*/
+  0,				  /*tp_str*/
+  0,				  /*tp_getattro*/
+  0,				  /*tp_setattro*/
+  0,				  /*tp_as_buffer*/
+  Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE, /*tp_flags*/
+  "GDB function object",	  /* tp_doc */
+  0,				  /* tp_traverse */
+  0,				  /* tp_clear */
+  0,				  /* tp_richcompare */
+  0,				  /* tp_weaklistoffset */
+  0,				  /* tp_iter */
+  0,				  /* tp_iternext */
+  0,				  /* tp_methods */
+  0,				  /* tp_members */
+  0,				  /* tp_getset */
+  0,				  /* tp_base */
+  0,				  /* tp_dict */
+  0,				  /* tp_descr_get */
+  0,				  /* tp_descr_set */
+  0,				  /* tp_dictoffset */
+  fnpy_init,			  /* tp_init */
+  0,				  /* tp_alloc */
+  PyType_GenericNew		  /* tp_new */
+};
+@
+
+
+1.2
+log
+@	* python/python-internal.h (struct language_defn): Declare.
+	(python_gdbarch, python_language): Likewise.
+	(ensure_python_env): Add prototype.
+	(make_cleanup_py_restore_gil): Remove prototype.
+
+	* python/python.c: Include "arch-utils.h", "value.h" and "language.h".
+	(python_gdbarch, python_language): New global variables.
+	(struct python_env): New data type.
+	(ensure_python_env, restore_python_env): New functions.
+	(eval_python_from_control_command): Call ensure_python_env to
+	install current architecture and language.
+	(python_command, gdbpy_new_objfile): Likewise.
+	* python/python-cmd.c: Include "arch-utils.h" and "language.h".
+	(cmdpy_destroyer, cmdpy_function, cmdpy_completer): Call
+	ensure_python_env.
+	* python/python-type.c (clean_up_objfile_types): Likewise.
+	* python/python-objfile.c: Include "language.h".
+	(clean_up_objfile): Call ensure_python_env.
+	* python/python-prettyprint.c (apply_val_pretty_printer): Likewise.
+	(apply_varobj_pretty_printer): Do not call PyGILState_Ensure.
+	* varobj.c (varobj_ensure_python_env): New helper function.
+	(varobj_get_display_hint, update_dynamic_varobj_children,
+	install_default_visualizer, varobj_set_visualizer, free_variable,
+	value_get_print_value): Call it.
+	(value_get_print_value): Add varobj argument instead of pretty
+	printer argument.  Update all callers.
+
+	* python/python-utils.c (py_gil_restore, make_cleanup_py_restore_gil):
+	Remove.
+
+	* value.h (internal_function_fn): Add GDBARCH and LANGUAGE argument.
+	(call_internal_function): Likewise.
+	* value.c (call_internal_function): Likewise.  Pass to handler.
+	* eval.c (evaluate_subexp_standard): Update call.
+	* python/python-function.c: Include "language.h".
+	(fnpy_call): Add GDBARCH and LANGAUAGE arguments and call
+	make_cleanup_python_env.
+
+	* python/python-value.c (builtin_type_pyint, builtin_type_pyfloat,
+	builtin_type_pylong, builtin_type_pybool, builtin_type_pychar,
+	valpy_str): Use python_gdbarch and python_language instead of
+	current_gdbarch and current_language.
+	* python/python-type.c (typy_lookup_typename): Likewise.
+@
+text
+@@
+
+
+1.1
+log
+@gdb/
+2009-03-05  Tom Tromey  <tromey@@redhat.com>
+
+	Add support for convenience functions in Python.
+	* Makefile.in (SUBDIR_PYTHON_OBS): Add python-function.o.
+	(SUBDIR_PYTHON_SRCS): Add python-function.c.
+	(python-function.o): New target.
+	* eval.c: Include "python/python.h" and <ctype.h>.
+	(evaluate_subexp_standard): Handle values of type
+	TYPE_CODE_INTERNAL_FUNCTION.
+	* gdbtypes.h (type_code): Add TYPE_CODE_INTERNAL_FUNCTION.
+	* parse.c (write_exp_string): Remove duplicate word in comment.
+	* python/python-function.c: New file.
+	* python/python-internal.h (gdbpy_initialize_functions): Add
+	prototype.
+	* python/python.c (_initialize_python): Call
+	gdbpy_initialize_functions.
+	* valprint.c (value_check_printable): Handle values of type
+	TYPE_CODE_INTERNAL_FUNCTION.
+	* value.c: Include "cli/cli-decode.h".
+	(internal_function): New struct.
+	(functionlist, internal_fn_type): New static variables.
+	(lookup_only_internalvar,
+	lookup_internalvar): Add const qualifier to name argument.
+	(create_internalvar): Likewise.  Initialize new field.
+	(set_internal_var): Fix typo in comment.  Don't allow assignment
+	to canonical variable.
+	(value_create_internal_function, value_internal_function_name,
+	call_internal_function, function_command, function_destroyer,
+	add_internal_function): New functions.
+	(_initialize_values): Create `function' placeholder command.
+	Initialize internal_fn_type.
+	* value.h (lookup_only_internalvar, create_internalvar,
+	lookup_internalvar): Add const qualifier to name argument.
+	(internal_function_fn, add_internal_function, call_internal_function,
+	value_internal_function_name): Add prototypes.
+	(struct internalvar) <canonical>: New field.
+
+gdb/doc/
+2008-03-05  Tom Tromey  <tromey@@redhat.com>
+
+	* gdb.texinfo (Convenience Vars): Document convenience functions.
+	(Functions In Python): New node.
+	(Python API): Update.
+
+gdb/testsuite/
+2009-03-05  Thiago Jung Bauermann  <bauerman@@br.ibm.com>
+
+	* gdb.python/python-function.exp: New file.
+@
+text
+@d30 1
+d57 2
+a58 1
+fnpy_call (void *cookie, int argc, struct value **argv)
+a63 1
+  PyGILState_STATE state;
+d65 1
+a65 2
+  state = PyGILState_Ensure ();
+  cleanup = make_cleanup_py_restore_gil (&state);
+@
+

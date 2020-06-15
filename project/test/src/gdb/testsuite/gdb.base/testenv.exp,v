@@ -1,0 +1,443 @@
+head	1.7;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.5
+	gdb_7_6-2013-04-26-release:1.5
+	gdb_7_6-branch:1.5.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.5
+	gdb_7_5_1-2012-11-29-release:1.4
+	gdb_7_5-2012-08-17-release:1.4
+	gdb_7_5-branch:1.4.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.4
+	gdb_7_4_1-2012-04-26-release:1.2.2.1
+	gdb_7_4-2012-01-24-release:1.2.2.1
+	gdb_7_4-branch:1.2.0.2
+	gdb_7_4-2011-12-13-branchpoint:1.2;
+locks; strict;
+comment	@# @;
+
+
+1.7
+date	2013.06.27.19.00.47;	author tromey;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2013.06.07.17.31.08;	author palves;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2013.01.01.06.33.26;	author brobecke;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2012.01.16.16.21.45;	author palves;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2012.01.04.08.17.46;	author brobecke;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2011.11.30.08.25.17;	author uweigand;	state Exp;
+branches
+	1.2.2.1;
+next	1.1;
+
+1.1
+date	2011.10.05.14.23.37;	author muller;	state Exp;
+branches;
+next	;
+
+1.2.2.1
+date	2012.01.06.04.44.01;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.7
+log
+@test suite update - gdb.base/[t-z]
+
+Convert files gdb.base/[t-z]*.exp to use standard_output_file et al.
+
+	* gdb.base/testenv.exp, gdb.base/tui-layout.exp,
+	gdb.base/twice.exp, gdb.base/type-opaque.exp, gdb.base/unload.exp,
+	gdb.base/unwindonsignal.exp, gdb.base/valgrind-db-attach.exp,
+	gdb.base/valgrind-infcall.exp, gdb.base/value-double-free.exp,
+	gdb.base/varargs.exp, gdb.base/watch-cond-infcall.exp,
+	gdb.base/watch-cond.exp, gdb.base/watch-non-mem.exp,
+	gdb.base/watch-read.exp, gdb.base/watch-vfork.exp,
+	gdb.base/watch_thread_num.exp, gdb.base/watchpoint-cond-gone.exp,
+	gdb.base/watchpoint-delete.exp, gdb.base/watchpoint-hw.exp,
+	gdb.base/watchpoint-solib.exp, gdb.base/watchpoint.exp,
+	gdb.base/watchpoints.exp, gdb.base/wchar.exp, gdb.base/whatis.exp:
+	Use standard_testfile, standard_output_file, prepare_for_testing,
+	clean_restart.
+@
+text
+@# Copyright 2011-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# This file was written by Pierre Muller <muller@@ics.u-strasbg.fr>
+#
+# Check if environment variables are correctly passed to inferiors
+#
+
+# There's no support for passing environment variables in the remote protocol.
+if { [is_remote target] } {
+    return 0
+}
+
+standard_testfile .c
+
+# Compile binary
+# and start with a fresh gdb
+
+if { [prepare_for_testing ${testfile}.exp ${binfile} ${srcfile}] } {
+     return -1
+}
+
+# make sure $pc is sane, in case we're talking to a board.
+if { ![runto_main] } {
+    gdb_suppress_tests
+}
+
+set bp_line [gdb_get_line_number "set breakpoint here"]
+gdb_breakpoint  $bp_line
+
+#
+# Test gdb set/unset environment commands.
+# Executable lists and counts all environment variables
+# starting with TEST_GDB.
+
+
+# First test with no TEST_GDB_VAR
+gdb_test "continue" \
+  ".*Program found 0 variables starting with TEST_GDB.*" \
+  "Test no TEST_GDB var"
+
+gdb_test_no_output "set env TEST_GDB_VAR1 test1" \
+  "Set TEST_GDB_VAR1"
+
+runto_main
+gdb_breakpoint  $bp_line
+
+# Second test with one TEST_GDB_VAR
+gdb_test "continue" \
+  ".*Program found 1 variables starting with TEST_GDB.*" \
+  "Test with one TEST_GDB var"
+
+gdb_test_no_output "set env TEST_GDB_VAR2 test2" \
+  "Set TEST_GDB_VAR2"
+
+runto_main
+gdb_breakpoint  $bp_line
+
+# Third test with two TEST_GDB_VAR
+gdb_test "continue"  \
+  ".*Program found 2 variables starting with TEST_GDB.*" \
+  "Test with two TEST_GDB var"
+
+gdb_test_no_output "unset env TEST_GDB_VAR1" \
+  "Unset TEST_GDB_VAR1"
+
+runto_main
+gdb_breakpoint  $bp_line
+
+# Fourth test with one TEST_GDB_VAR left, after one was removed
+# with unset command.
+gdb_test "continue"  \
+  ".*Program found 1 variables starting with TEST_GDB.*" \
+  "Test with one TEST_GDB var, after unset"
+
+gdb_exit
+
+set env(TEST_GDB_GLOBAL) "Global environment value"
+
+clean_restart $binfile
+
+# make sure $pc is sane, in case we're talking to a board.
+if { ![runto_main] } {
+    gdb_suppress_tests
+}
+
+set bp_line [gdb_get_line_number "set breakpoint here"]
+gdb_breakpoint  $bp_line
+
+gdb_test "show env" ".*TEST_GDB_GLOBAL=.*" "Test passing TEST_GDB_GLOBAL to GDB"
+# First test with only inherited TEST_GDB_GLOBAL
+gdb_test "continue" \
+  ".*TEST_GDB_GLOBAL=Global environment value.*Program found 1 variables starting with TEST_GDB.*" \
+  "Test with TEST_GDB_GLOBAL"
+
+gdb_test_no_output "unset env TEST_GDB_GLOBAL" \
+  "Unset TEST_GDB_GLOBAL"
+
+runto_main
+gdb_breakpoint  $bp_line
+
+# Second test with one TEST_GDB_VAR
+gdb_test "continue" \
+  ".*Program found 0 variables starting with TEST_GDB.*" \
+  "Test with TEST_GDB_GLOBAL unset"
+
+gdb_exit
+
+# Clear environment in case we're doing multiple runs
+unset env(TEST_GDB_GLOBAL)
+
+@
+
+
+1.6
+log
+@Remove superfluous semicolons from testsuite throughout.
+
+A few months ago semicolons after "return" were removed throughout the
+testsuite.  However, as I pointed out in review, they're unnecessary
+not just after "return", but pretty much after any tcl command.  ';'
+is the command separator, and you only need it if there's another
+command on the same line afterwards.
+
+This patch was written by running:
+
+ $ find . -name "*.exp" | xargs grep -l ";\s*$" | xargs sed -i 's/\([^#][^\s*;]*\)\s*;\s*$/\1/'
+
+and then undoing changes to comments, and lib/future.exp.
+
+Tested on x86_64 Fedora 17.
+
+gdb/testsuite/
+2013-06-07  Pedro Alves  <palves@@redhat.com>
+
+	* boards/native-extended-gdbserver.exp: Remove semicolon.
+	* config/arm-ice.exp: Likewise.
+	* config/bfin.exp: Likewise.
+	* config/cygmon.exp: Likewise.
+	* config/h8300.exp: Likewise.
+	* config/monitor.exp: Likewise.
+	* config/sid.exp: Likewise.
+	* config/sim.exp: Likewise.
+	* config/slite.exp: Likewise.
+	* config/vx.exp: Likewise.
+	* gdb.arch/i386-bp_permanent.exp: Likewise.
+	* gdb.asm/asm-source.exp: Likewise.
+	* gdb.base/args.exp: Likewise.
+	* gdb.base/attach-pie-misread.exp: Likewise.
+	* gdb.base/auxv.exp: Likewise.
+	* gdb.base/bigcore.exp: Likewise.
+	* gdb.base/bitfields2.exp: Likewise.
+	* gdb.base/bitfields.exp: Likewise.
+	* gdb.base/break.exp: Likewise.
+	* gdb.base/break-interp.exp: Likewise.
+	* gdb.base/callfuncs.exp: Likewise.
+	* gdb.base/call-sc.exp: Likewise.
+	* gdb.base/commands.exp: Likewise.
+	* gdb.base/corefile.exp: Likewise.
+	* gdb.base/dbx.exp: Likewise.
+	* gdb.base/ending-run.exp: Likewise.
+	* gdb.base/exprs.exp: Likewise.
+	* gdb.base/funcargs.exp: Likewise.
+	* gdb.base/hbreak2.exp: Likewise.
+	* gdb.base/huge.exp: Likewise.
+	* gdb.base/list.exp: Likewise.
+	* gdb.base/memattr.exp: Likewise.
+	* gdb.base/overlays.exp: Likewise.
+	* gdb.base/printcmds.exp: Likewise.
+	* gdb.base/recurse.exp: Likewise.
+	* gdb.base/remotetimeout.exp: Likewise.
+	* gdb.base/reread.exp: Likewise.
+	* gdb.base/savedregs.exp: Likewise.
+	* gdb.base/scope.exp: Likewise.
+	* gdb.base/sepdebug.exp: Likewise.
+	* gdb.base/setshow.exp: Likewise.
+	* gdb.base/setvar.exp: Likewise.
+	* gdb.base/sigaltstack.exp: Likewise.
+	* gdb.base/siginfo-addr.exp: Likewise.
+	* gdb.base/siginfo.exp: Likewise.
+	* gdb.base/siginfo-obj.exp: Likewise.
+	* gdb.base/sigrepeat.exp: Likewise.
+	* gdb.base/sigstep.exp: Likewise.
+	* gdb.base/structs.exp: Likewise.
+	* gdb.base/testenv.exp: Likewise.
+	* gdb.base/twice.exp: Likewise.
+	* gdb.base/valgrind-db-attach.exp: Likewise.
+	* gdb.base/valgrind-infcall.exp: Likewise.
+	* gdb.base/varargs.exp: Likewise.
+	* gdb.base/watchpoint.exp: Likewise.
+	* gdb.cp/gdb1355.exp: Likewise.
+	* gdb.cp/misc.exp: Likewise.
+	* gdb.disasm/hppa.exp: Likewise.
+	* gdb.disasm/t01_mov.exp: Likewise.
+	* gdb.disasm/t02_mova.exp: Likewise.
+	* gdb.disasm/t03_add.exp: Likewise.
+	* gdb.disasm/t04_sub.exp: Likewise.
+	* gdb.disasm/t05_cmp.exp: Likewise.
+	* gdb.disasm/t06_ari2.exp: Likewise.
+	* gdb.disasm/t07_ari3.exp: Likewise.
+	* gdb.disasm/t08_or.exp: Likewise.
+	* gdb.disasm/t09_xor.exp: Likewise.
+	* gdb.disasm/t10_and.exp: Likewise.
+	* gdb.disasm/t11_logs.exp: Likewise.
+	* gdb.disasm/t12_bit.exp: Likewise.
+	* gdb.disasm/t13_otr.exp: Likewise.
+	* gdb.gdb/selftest.exp: Likewise.
+	* gdb.hp/gdb.base-hp/callfwmall.exp: Likewise.
+	* gdb.mi/mi-reverse.exp: Likewise.
+	* gdb.pascal/floats.exp: Likewise.
+	* gdb.python/py-inferior.exp: Likewise.
+	* gdb.threads/attach-into-signal.exp: Likewise.
+	* gdb.threads/pthreads.exp: Likewise.
+	* gdb.threads/thread_events.exp: Likewise.
+	* gdb.threads/watchthreads.exp: Likewise.
+	* gdb.trace/actions-changed.exp: Likewise.
+	* gdb.trace/actions.exp: Likewise.
+	* gdb.trace/ax.exp: Likewise.
+	* gdb.trace/backtrace.exp: Likewise.
+	* gdb.trace/change-loc.exp: Likewise.
+	* gdb.trace/deltrace.exp: Likewise.
+	* gdb.trace/disconnected-tracing.exp: Likewise.
+	* gdb.trace/ftrace.exp: Likewise.
+	* gdb.trace/infotrace.exp: Likewise.
+	* gdb.trace/passc-dyn.exp: Likewise.
+	* gdb.trace/passcount.exp: Likewise.
+	* gdb.trace/pending.exp: Likewise.
+	* gdb.trace/qtro.exp: Likewise.
+	* gdb.trace/range-stepping.exp: Likewise.
+	* gdb.trace/report.exp: Likewise.
+	* gdb.trace/save-trace.exp: Likewise.
+	* gdb.trace/status-stop.exp: Likewise.
+	* gdb.trace/strace.exp: Likewise.
+	* gdb.trace/tfile.exp: Likewise.
+	* gdb.trace/tfind.exp: Likewise.
+	* gdb.trace/trace-break.exp: Likewise.
+	* gdb.trace/tracecmd.exp: Likewise.
+	* gdb.trace/trace-mt.exp: Likewise.
+	* gdb.trace/tspeed.exp: Likewise.
+	* gdb.trace/tsv.exp: Likewise.
+	* gdb.trace/while-stepping.exp: Likewise.
+	* lib/gdb.exp: Likewise.
+	* lib/gdbserver-support.exp: Likewise.
+	* lib/java.exp: Likewise.
+	* lib/mi-support.exp: Likewise.
+	* lib/pascal.exp: Likewise.
+	* lib/prompt.exp: Likewise.
+	* lib/trace-support.exp: Likewise.
+@
+text
+@d26 1
+a26 3
+set testfile "testenv"
+set srcfile ${testfile}.c
+set binfile ${testfile}
+@
+
+
+1.5
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@d39 1
+a39 1
+    gdb_suppress_tests;
+d98 1
+a98 1
+    gdb_suppress_tests;
+@
+
+
+1.4
+log
+@2012-01-16  Pedro Alves  <palves@@redhat.com>
+
+	Remove all calls to strace.
+@
+text
+@d1 1
+a1 1
+# Copyright 2011-2012 Free Software Foundation, Inc.
+@
+
+
+1.3
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@a20 4
+if $tracelevel then {
+	strace $tracelevel
+}
+
+@
+
+
+1.2
+log
+@	* gdb.base/testenv.exp: Skip on remote targets.  Unset global
+	environment variable after test completed.
+@
+text
+@d1 1
+a1 1
+# Copyright 2011 Free Software Foundation, Inc.
+@
+
+
+1.2.2.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d1 1
+a1 1
+# Copyright 2011-2012 Free Software Foundation, Inc.
+@
+
+
+1.1
+log
+@	Add tests for passing of environment variables to inferior.
+	* gdb.base/testenv.c: New test source.
+	* gdb.base/testenv.exp: New expect test.
+@
+text
+@d25 4
+d126 4
+@
+

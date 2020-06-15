@@ -1,0 +1,447 @@
+head	1.1;
+access;
+symbols
+	gdb-csl-symbian-6_4_50_20060226-12:1.1.4.1
+	gdb-csl-symbian-6_4_50_20060226-11:1.1.4.1
+	gdb-csl-sourcerygxx-4_1-17:1.1.4.1
+	gdb-csl-20060226-branch-local-2:1.1.4.1
+	gdb-csl-sourcerygxx-4_1-14:1.1.4.1
+	gdb-csl-sourcerygxx-4_1-13:1.1.4.1
+	gdb-csl-sourcerygxx-4_1-12:1.1.4.1
+	gdb-csl-sourcerygxx-3_4_4-21:1.1.4.1
+	gdb-csl-sourcerygxx-4_1-9:1.1.4.1
+	gdb-csl-sourcerygxx-4_1-8:1.1.4.1
+	gdb-csl-sourcerygxx-4_1-7:1.1.4.1
+	gdb-csl-arm-2006q1-6:1.1.4.1
+	gdb-csl-sourcerygxx-4_1-6:1.1.4.1
+	gdb-csl-symbian-6_4_50_20060226-10:1.1.4.1
+	gdb-csl-symbian-6_4_50_20060226-9:1.1.4.1
+	gdb-csl-symbian-6_4_50_20060226-8:1.1.4.1
+	gdb-csl-coldfire-4_1-11:1.1.4.1
+	gdb-csl-sourcerygxx-3_4_4-19:1.1.4.1
+	gdb-csl-coldfire-4_1-10:1.1.4.1
+	gdb-csl-sourcerygxx-4_1-5:1.1.4.1
+	gdb-csl-sourcerygxx-4_1-4:1.1.4.1
+	gdb-csl-sourcerygxx-3_4_4-17:1.1.4.1
+	gdb-csl-20060226-branch-merge-to-csl-symbian-1:1.1.4.1
+	gdb-csl-symbian-20060226-branch:1.1.4.1.0.2
+	gdb-csl-symbian-20060226-branchpoint:1.1.4.1
+	gdb-csl-20060226-branch-merge-to-csl-local-1:1.1.4.1
+	gdb-csl-20060226-branch:1.1.0.4
+	gdb-csl-available-20060303-branch:1.1.0.2;
+locks; strict;
+comment	@ * @;
+expand	@o@;
+
+
+1.1
+date	2006.03.03.20.17.12;	author drow;	state dead;
+branches
+	1.1.2.1
+	1.1.4.1;
+next	;
+
+1.1.2.1
+date	2006.03.03.20.17.12;	author drow;	state Exp;
+branches;
+next	;
+
+1.1.4.1
+date	2006.04.03.00.47.36;	author drow;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.1
+log
+@file minicheck.c was initially added on branch gdb-csl-available-20060303-branch.
+@
+text
+@@
+
+
+1.1.4.1
+log
+@Merge XML and VFP support to this branch.
+@
+text
+@a0 182
+/* Miniature re-implementation of the "check" library.
+ *
+ * This is intended to support just enough of check to run the Expat
+ * tests.  This interface is based entirely on the portion of the
+ * check library being used.
+ */
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <setjmp.h>
+#include <assert.h>
+
+#include "minicheck.h"
+
+Suite *
+suite_create(char *name)
+{
+    Suite *suite = (Suite *) calloc(1, sizeof(Suite));
+    if (suite != NULL) {
+        suite->name = name;
+    }
+    return suite;
+}
+
+TCase *
+tcase_create(char *name)
+{
+    TCase *tc = (TCase *) calloc(1, sizeof(TCase));
+    if (tc != NULL) {
+        tc->name = name;
+    }
+    return tc;
+}
+
+void
+suite_add_tcase(Suite *suite, TCase *tc) 
+{
+    assert(suite != NULL);
+    assert(tc != NULL);
+    assert(tc->next_tcase == NULL);
+
+    tc->next_tcase = suite->tests;
+    suite->tests = tc;
+}
+
+void
+tcase_add_checked_fixture(TCase *tc,
+                          tcase_setup_function setup,
+                          tcase_teardown_function teardown)
+{
+    assert(tc != NULL);
+    tc->setup = setup;
+    tc->teardown = teardown;
+}
+
+void
+tcase_add_test(TCase *tc, tcase_test_function test)
+{
+    assert(tc != NULL);
+    if (tc->allocated == tc->ntests) {
+        int nalloc = tc->allocated + 100;
+        size_t new_size = sizeof(tcase_test_function) * nalloc;
+        tcase_test_function *new_tests = realloc(tc->tests, new_size);
+        assert(new_tests != NULL);
+        if (new_tests != tc->tests) {
+            free(tc->tests);
+            tc->tests = new_tests;
+        }
+        tc->allocated = nalloc;
+    }
+    tc->tests[tc->ntests] = test;
+    tc->ntests++;
+}
+
+SRunner *
+srunner_create(Suite *suite)
+{
+    SRunner *runner = calloc(1, sizeof(SRunner));
+    if (runner != NULL) {
+        runner->suite = suite;
+    }
+    return runner;
+}
+
+void
+srunner_set_fork_status(SRunner *runner, int status)
+{
+    /* We ignore this. */
+}
+
+static jmp_buf env;
+
+static char const *_check_current_function = NULL;
+static int _check_current_lineno = -1;
+static char const *_check_current_filename = NULL;
+
+void
+_check_set_test_info(char const *function, char const *filename, int lineno)
+{
+    _check_current_function = function;
+    _check_current_lineno = lineno;
+    _check_current_filename = filename;
+}
+
+
+static void
+add_failure(SRunner *runner, int verbosity)
+{
+    runner->nfailures++;
+    if (verbosity >= CK_VERBOSE) {
+        printf("%s:%d: %s\n", _check_current_filename,
+               _check_current_lineno, _check_current_function);
+    }
+}
+
+void
+srunner_run_all(SRunner *runner, int verbosity)
+{
+    Suite *suite;
+    TCase *tc;
+    assert(runner != NULL);
+    suite = runner->suite;
+    tc = suite->tests;
+    while (tc != NULL) {
+        int i;
+        for (i = 0; i < tc->ntests; ++i) {
+            runner->nchecks++;
+
+            if (tc->setup != NULL) {
+                /* setup */
+                if (setjmp(env)) {
+                    add_failure(runner, verbosity);
+                    continue;
+                }
+                tc->setup();
+            }
+            /* test */
+            if (setjmp(env)) {
+                add_failure(runner, verbosity);
+                continue;
+            }
+            (tc->tests[i])();
+
+            /* teardown */
+            if (tc->teardown != NULL) {
+                if (setjmp(env)) {
+                    add_failure(runner, verbosity);
+                    continue;
+                }
+                tc->teardown();
+            }
+        }
+        tc = tc->next_tcase;
+    }
+    if (verbosity) {
+        int passed = runner->nchecks - runner->nfailures;
+        double percentage = ((double) passed) / runner->nchecks;
+        int display = (int) (percentage * 100);
+        printf("%d%%: Checks: %d, Failed: %d\n",
+               display, runner->nchecks, runner->nfailures);
+    }
+}
+
+void
+_fail_unless(int condition, const char *file, int line, char *msg)
+{
+    longjmp(env, 1);
+}
+
+int
+srunner_ntests_failed(SRunner *runner)
+{
+    assert(runner != NULL);
+    return runner->nfailures;
+}
+
+void
+srunner_free(SRunner *runner)
+{
+    free(runner->suite);
+    free(runner);
+}
+@
+
+
+1.1.2.1
+log
+@Import unmodified expat 2.0.0.
+@
+text
+@a0 182
+/* Miniature re-implementation of the "check" library.
+ *
+ * This is intended to support just enough of check to run the Expat
+ * tests.  This interface is based entirely on the portion of the
+ * check library being used.
+ */
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <setjmp.h>
+#include <assert.h>
+
+#include "minicheck.h"
+
+Suite *
+suite_create(char *name)
+{
+    Suite *suite = (Suite *) calloc(1, sizeof(Suite));
+    if (suite != NULL) {
+        suite->name = name;
+    }
+    return suite;
+}
+
+TCase *
+tcase_create(char *name)
+{
+    TCase *tc = (TCase *) calloc(1, sizeof(TCase));
+    if (tc != NULL) {
+        tc->name = name;
+    }
+    return tc;
+}
+
+void
+suite_add_tcase(Suite *suite, TCase *tc) 
+{
+    assert(suite != NULL);
+    assert(tc != NULL);
+    assert(tc->next_tcase == NULL);
+
+    tc->next_tcase = suite->tests;
+    suite->tests = tc;
+}
+
+void
+tcase_add_checked_fixture(TCase *tc,
+                          tcase_setup_function setup,
+                          tcase_teardown_function teardown)
+{
+    assert(tc != NULL);
+    tc->setup = setup;
+    tc->teardown = teardown;
+}
+
+void
+tcase_add_test(TCase *tc, tcase_test_function test)
+{
+    assert(tc != NULL);
+    if (tc->allocated == tc->ntests) {
+        int nalloc = tc->allocated + 100;
+        size_t new_size = sizeof(tcase_test_function) * nalloc;
+        tcase_test_function *new_tests = realloc(tc->tests, new_size);
+        assert(new_tests != NULL);
+        if (new_tests != tc->tests) {
+            free(tc->tests);
+            tc->tests = new_tests;
+        }
+        tc->allocated = nalloc;
+    }
+    tc->tests[tc->ntests] = test;
+    tc->ntests++;
+}
+
+SRunner *
+srunner_create(Suite *suite)
+{
+    SRunner *runner = calloc(1, sizeof(SRunner));
+    if (runner != NULL) {
+        runner->suite = suite;
+    }
+    return runner;
+}
+
+void
+srunner_set_fork_status(SRunner *runner, int status)
+{
+    /* We ignore this. */
+}
+
+static jmp_buf env;
+
+static char const *_check_current_function = NULL;
+static int _check_current_lineno = -1;
+static char const *_check_current_filename = NULL;
+
+void
+_check_set_test_info(char const *function, char const *filename, int lineno)
+{
+    _check_current_function = function;
+    _check_current_lineno = lineno;
+    _check_current_filename = filename;
+}
+
+
+static void
+add_failure(SRunner *runner, int verbosity)
+{
+    runner->nfailures++;
+    if (verbosity >= CK_VERBOSE) {
+        printf("%s:%d: %s\n", _check_current_filename,
+               _check_current_lineno, _check_current_function);
+    }
+}
+
+void
+srunner_run_all(SRunner *runner, int verbosity)
+{
+    Suite *suite;
+    TCase *tc;
+    assert(runner != NULL);
+    suite = runner->suite;
+    tc = suite->tests;
+    while (tc != NULL) {
+        int i;
+        for (i = 0; i < tc->ntests; ++i) {
+            runner->nchecks++;
+
+            if (tc->setup != NULL) {
+                /* setup */
+                if (setjmp(env)) {
+                    add_failure(runner, verbosity);
+                    continue;
+                }
+                tc->setup();
+            }
+            /* test */
+            if (setjmp(env)) {
+                add_failure(runner, verbosity);
+                continue;
+            }
+            (tc->tests[i])();
+
+            /* teardown */
+            if (tc->teardown != NULL) {
+                if (setjmp(env)) {
+                    add_failure(runner, verbosity);
+                    continue;
+                }
+                tc->teardown();
+            }
+        }
+        tc = tc->next_tcase;
+    }
+    if (verbosity) {
+        int passed = runner->nchecks - runner->nfailures;
+        double percentage = ((double) passed) / runner->nchecks;
+        int display = (int) (percentage * 100);
+        printf("%d%%: Checks: %d, Failed: %d\n",
+               display, runner->nchecks, runner->nfailures);
+    }
+}
+
+void
+_fail_unless(int condition, const char *file, int line, char *msg)
+{
+    longjmp(env, 1);
+}
+
+int
+srunner_ntests_failed(SRunner *runner)
+{
+    assert(runner != NULL);
+    return runner->nfailures;
+}
+
+void
+srunner_free(SRunner *runner)
+{
+    free(runner->suite);
+    free(runner);
+}
+@
+

@@ -1,0 +1,158 @@
+head	1.1;
+access;
+symbols
+	cygwin-1_7_35-release:1.1
+	cygwin-1_7_34-release:1.1
+	cygwin-1_7_33-release:1.1
+	cygwin-1_7_32-release:1.1
+	cygwin-1_7_31-release:1.1
+	cygwin-1_7_30-release:1.1
+	cygwin-1_7_29-release:1.1
+	cygwin-1_7_29-release-branchpoint:1.1.0.12
+	cygwin-pre-user-db:1.1
+	cygwin-1_7_28-release:1.1
+	cygwin-1_7_27-release:1.1
+	cygwin-1_7_26-release:1.1
+	cygwin-1_7_25-release:1.1
+	cygwin-1_7_24-release:1.1
+	cygwin-1_7_23-release:1.1
+	cygwin-1_7_22-release:1.1
+	cygwin-1_7_21-release:1.1
+	cygwin-1_7_20-release:1.1
+	cygwin-1_7_19-release:1.1
+	cygwin-64bit-postmerge:1.1
+	cygwin-64bit-premerge-branch:1.1.0.10
+	cygwin-64bit-premerge:1.1
+	cygwin-1_7_18-release:1.1
+	post-ptmalloc3:1.1
+	pre-ptmalloc3:1.1
+	cygwin-1_7_17-release:1.1
+	cygwin-64bit-branch:1.1.0.8
+	cygwin-1_7_16-release:1.1
+	cygwin-1_7_15-release:1.1
+	cygwin-1_7_14_2-release:1.1
+	cygwin-1_7_14-release:1.1
+	cygwin-1_7_12-release:1.1
+	cygwin-1_7_11-release:1.1
+	cygwin-1_7_10-release:1.1
+	signal-rewrite:1.1.0.6
+	pre-notty:1.1
+	cygwin-1_7_9-release:1.1
+	cv-post-1_7_9:1.1.0.4
+	cygwin-1_7_8-release:1.1
+	cygwin-1_7_7-release:1.1
+	cygwin-1_7_5-release:1.1
+	cygwin-1_7_4-release:1.1
+	cygwin-1_7_3-release:1.1
+	cygwin-1_7_2-release:1.1
+	fifo_doover3:1.1.0.2
+	cygwin-1_7_1-release:1.1
+	prefifo:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.1
+date	2009.07.07.20.12.44;	author davek;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.1
+log
+@winsup/ChangeLog:
+
+	* Makefile.common (COMPILE_CXX): Add support for per-file overrides
+	to exclude $(nostdinc) and $(nostdincxx) from compiler flags.
+	(COMPILE_CC): Likewise for $(nostdinc).
+
+winsup/cygwin/ChangeLog:
+
+	* Makefile.in (DLL_OFILES): Add libstdcxx_wrapper.o
+	(libstdcxx_wrapper_CFLAGS): Add flags for new module.
+	(_cygwin_crt0_common_STDINCFLAGS): Define per-file override.
+	(libstdcxx_wrapper_STDINCFLAGS, cxx_STDINCFLAGS): Likewise.
+	* cxx.cc: Include "cygwin-cxx.h".
+	(operator new): Tweak prototype for full standards compliance.
+	(operator new[]): Likewise.
+	(operator new (nothrow)): New fallback function.
+	(operator new[] (nothrow), operator delete (nothrow),
+	operator delete[] (nothrow)): Likewise.
+	(default_cygwin_cxx_malloc): New struct of pointers to the above,
+	for final last-resort fallback default.
+	* cygwin-cxx.h: New file.
+	(struct per_process_cxx_malloc): Define.
+	(default_cygwin_cxx_malloc): Declare extern.
+	* cygwin.din (__wrap__ZdaPv): Export new wrapper.
+	(__wrap__ZdaPvRKSt9nothrow_t, __wrap__ZdlPv,
+	__wrap__ZdlPvRKSt9nothrow_t, __wrap__Znaj,
+	__wrap__ZnajRKSt9nothrow_t, __wrap__Znwj,
+	__wrap__ZnwjRKSt9nothrow_t): Likewise.
+	* globals.cc (__cygwin_user_data): Init newly-repurposed 'forkee'
+	field (now 'cxx_malloc') to point to default_cygwin_cxx_malloc.
+	* libstdcxx_wrapper.cc: New file.
+	(__wrap__ZdaPv, __wrap__ZdaPvRKSt9nothrow_t, __wrap__ZdlPv,
+	__wrap__ZdlPvRKSt9nothrow_t, __wrap__Znaj,
+	__wrap__ZnajRKSt9nothrow_t, __wrap__Znwj,
+	__wrap__ZnwjRKSt9nothrow_t): Define wrapper functions for libstdc++
+	malloc operators and their overrides.
+	* winsup.h (default_cygwin_cxx_malloc): Declare extern.
+	* include/cygwin/version.h (CYGWIN_VERSION_API_MINOR): Bump.
+	* include/sys/cygwin.h (struct per_process_cxx_malloc): Forward
+	declare here.
+	(struct per_process::forkee): Rename and repurpose from this ...
+	(struct per_process::cxx_malloc): ... to this.
+	* lib/_cygwin_crt0_common.cc: Include cygwin-cxx.h.
+	(WEAK): Define shorthand helper macro.
+	(__cygwin_cxx_malloc): Define and populate with weak references
+	to whatever libstdc++ malloc operators will be visible at final
+	link time for Cygwin apps and dlls.
+	(_cygwin_crt0_common): Always look up cygwin DLL's internal
+	per_process data, and don't test for (impossible) failure.  Inherit
+	any members of __cygwin_cxx_malloc that we don't have overrides
+	for from the DLL's default and store the resulting overall set of
+	overrides back into the DLL's global per_process data.
+@
+text
+@/* cygwin-cxx.h
+
+   Copyright 2009 Red Hat, Inc.
+
+This file is part of Cygwin.
+
+This software is a copyrighted work licensed under the terms of the
+Cygwin license.  Please consult the file "CYGWIN_LICENSE" for
+details. */
+
+#ifndef _CYGWIN_CXX_H
+#define _CYGWIN_CXX_H
+
+#ifndef __cplusplus
+#error This header should not be included by C source files.
+#endif
+
+/* Files including this header must override -nostdinc++ */
+#include <new>
+
+/* This is an optional struct pointed to by per_process if it exists.  */
+struct per_process_cxx_malloc
+{
+  void *(*oper_new) (std::size_t);
+  void *(*oper_new__) (std::size_t);
+  void (*oper_delete) (void *);
+  void (*oper_delete__) (void *);
+  void *(*oper_new_nt) (std::size_t, const std::nothrow_t &);
+  void *(*oper_new___nt) (std::size_t, const std::nothrow_t &);
+  void (*oper_delete_nt) (void *, const std::nothrow_t &);
+  void (*oper_delete___nt) (void *, const std::nothrow_t &);
+};
+
+/* Defined in cxx.cc  */
+extern struct per_process_cxx_malloc default_cygwin_cxx_malloc;
+
+#endif /* _CYGWIN_CXX_H */
+@

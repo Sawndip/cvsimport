@@ -1,0 +1,180 @@
+head	1.2;
+access;
+symbols
+	cygwin-1_7_35-release:1.2
+	cygwin-1_7_34-release:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.2
+date	2015.02.23.20.51.11;	author corinna;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2014.03.12.17.36.55;	author corinna;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@	* autoload.cc (LsaLookupSids): Import.
+	* cygserver_pwdgrp.h: Include userinfo.h.  Drop workaround defining
+	fetch_user_arg_type_t locally.
+	* grp.cc (internal_getgrsid_cachedonly): New function.
+	(internal_getgrfull): Ditto.
+	(internal_getgroups): Rearrange function.  Center around fetching all
+	cached group info first, calling LsaLookupSids on all so far non-cached
+	groups second.  Pass all available info to new internal_getgrfull call.
+	* pwdgrp.h: Include userinfo.h.  Move definitions of
+	fetch_user_arg_type_t and fetch_user_arg_t there.
+	(pwdgrp::add_group_from_windows): Declare with getting full group info.
+	Called from internal_getgrfull.
+	* uinfo.cc (pwdgrp::add_group_from_windows): Define.
+	(pwdgrp::fetch_account_from_line): Add default case.
+	(pwdgrp::fetch_account_from_file): Ditto.
+	(pwdgrp::fetch_account_from_windows): Handle FULL_grp_arg.
+	(client_request_pwdgrp::client_request_pwdgrp): Add default case.
+	* userinfo.h: New header.
+	(enum fetch_user_arg_type_t): Add FULL_grp_arg.
+	(struct fetch_full_grp_t): New datatype.
+@
+text
+@/* cygserver_pwdgrp.h: Request account information
+
+   Copyright 2014, 2015 Red Hat, Inc.
+
+This file is part of Cygwin.
+
+This software is a copyrighted work licensed under the terms of the
+Cygwin license.  Please consult the file "CYGWIN_LICENSE" for
+details. */
+
+#ifndef __CYGSERVER_PWDGRP_H__
+#define __CYGSERVER_PWDGRP_H__
+
+#include <sys/types.h>
+#include "cygserver.h"
+#include "userinfo.h"
+
+class transport_layer_base;
+class process_cache;
+
+class client_request_pwdgrp : public client_request
+{
+  friend class client_request;
+
+private:
+  union _pwdgrp_param_t
+  {
+    struct _pwdgrp_in_t
+    {
+      bool group;
+      fetch_user_arg_type_t type;
+      union
+      {
+      	BYTE sid[40];
+	char name[UNLEN + 1];
+	uint32_t id;
+      } arg;
+    } in;
+
+    struct
+    {
+      char line[1024];
+    } out;
+  } _parameters;
+
+#ifndef __INSIDE_CYGWIN__
+  client_request_pwdgrp ();
+  virtual void serve (transport_layer_base *, process_cache *);
+  void pwd_serve ();
+  void grp_serve ();
+#endif
+
+public:
+
+#ifdef __INSIDE_CYGWIN__
+  client_request_pwdgrp (fetch_user_arg_t &arg, bool group);
+#endif
+
+  const char *line () const { return (msglen () > 0) ? _parameters.out.line
+						     : NULL; }
+};
+
+#endif /* __CYGSERVER_PWDGRP_H__ */
+@
+
+
+1.1
+log
+@	* cygheap.h (enum cygheap_pwdgrp::cache_t): Remove.
+	(cygheap_pwdgrp::caching): Convert to bool.
+	(cygheap_pwdgrp::pwd_cache): Add cygserver member.
+	(cygheap_pwdgrp::grp_cache): Ditto.
+	(cygheap_pwdgrp::nss_db_caching): Drop.
+	(cygheap_pwdgrp::nss_db_full_caching): Drop.
+	(cygheap_pwdgrp::nss_cygserver_caching): New method.
+	(cygheap_pwdgrp::nss_disable_cygserver_caching): New method.
+	* cygserver.h (client_request::request_code_t): Add
+	CYGSERVER_REQUEST_PWDGRP.
+	* cygserver_pwdgrp.h: New file.
+	* cygtls.h (struct _local_storage): Remove pwbuf and grbuf members.
+	* grp.cc (pwdgrp::prep_tls_grbuf): Drop.
+	(internal_getgrsid): Handle cygserver caching and rearrange to check
+	the caches first.
+	(internal_getgrnam): Ditto.
+	(internal_getgrgid): Ditto.
+	(gr_ent::enumerate_caches): Handle cygserver cache.
+	* passwd.cc (pwdgrp::prep_tls_pwbuf): Drop.
+	(internal_getpwsid): Handle cygserver caching and rearrange to check
+	the caches first.
+	(internal_getpwnam): Ditto.
+	(internal_getpwuid): Ditto.
+	(pw_ent::enumerate_caches): Handle cygserver cache.
+	* pwdgrp.h (pwdgrp::add_account_from_cygserver): New method declaration.
+	(pwdgrp::fetch_account_from_cygserver): New method declaration.
+	(pwdgrp::prep_tls_pwbuf): Drop declaration.
+	(pwdgrp::prep_tls_grbuf): Drop declaration.
+	(pwdgrp::add_user_from_cygserver): New inline methods.
+	(pwdgrp::add_group_from_cygserver): New inline methods.
+	* tlsoffsets.h: Regenerate.
+	* tlsoffsets64.h: Regenerate.
+	* uinfo.cc (internal_getlogin): Call internal_getgroups if cygserver
+	caching is not available.
+	(cygheap_pwdgrp::init): Initialize pwd_cache.cygserver and
+	grp_cache.cygserver.  Set caching to true.
+	(cygheap_pwdgrp::nss_init_line): Drop db_cache handling entirely.
+	(pwdgrp::add_account_from_windows): Drop no caching handling.
+	(client_request_pwdgrp::client_request_pwdgrp): New method.
+	(pwdgrp::fetch_account_from_cygserver): New method.
+	(pwdgrp::add_account_from_cygserver): New method.
+
+	* fhandler_disk_file.cc (fhandler_base::fstat_helper): Fix formatting.
+	* include/sys/cygwin.h: Ditto.
+@
+text
+@d3 1
+a3 1
+   Copyright 2014 Red Hat, Inc.
+d16 1
+a20 11
+#ifdef __INSIDE_CYGWIN__
+#include "pwdgrp.h"
+#else
+/* Don't include pwdgrp.h, but keep this in sync. */
+enum fetch_user_arg_type_t {
+  SID_arg,
+  NAME_arg,
+  ID_arg
+};
+#endif
+
+@
+

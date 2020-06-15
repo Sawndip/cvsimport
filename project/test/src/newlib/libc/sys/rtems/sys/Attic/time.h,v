@@ -1,0 +1,204 @@
+head	1.3;
+access;
+symbols
+	cygwin-1_1_1:1.1.1.1
+	newlib-2000-02-17:1.1.1.1
+	SNAPSHOT:1.1.1;
+locks; strict;
+comment	@ * @;
+expand	@o@;
+
+
+1.3
+date	2000.12.12.01.24.09;	author jjohnstn;	state dead;
+branches;
+next	1.2;
+
+1.2
+date	2000.05.15.18.30.03;	author ranjith;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2000.02.17.19.39.50;	author cgf;	state Exp;
+branches
+	1.1.1.1;
+next	;
+
+1.1.1.1
+date	2000.02.17.19.39.50;	author cgf;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.3
+log
+@
+2000-12-11  Joel Sherrill <joel@@OARcorp.com>
+
+        * Merge RTEMS specific .h files into main libc/include.
+        * libc/sys/rtems/include/signal.h: Removed.
+        * libc/sys/rtems/include/time.h: Removed.
+        * libc/sys/rtems/sys/features.h: Removed.
+        * libc/sys/rtems/sys/sched.h: Removed.
+        * libc/sys/rtems/sys/siginfo.h: Removed.
+        * libc/sys/rtems/sys/signal.h: Removed.
+        * libc/sys/rtems/sys/time.h: Removed.
+        * libc/sys/rtems/sys/times.h: Removed.
+        definitions for time_t and clock_t since these are
+        no longer in time.h.
+        * libc/include/pthread.h: New file.
+        * libc/include/sys/sched.h: New file.
+        * libc/include/sys/features.h: New file.
+        * libc/include/time.h: Removed duplicate definition of clock_t
+        and time_t, get them from <sys/types.h> instead.  Add prototypes        for POSIX clock and timer functionality.
+        * libc/sys/linux/sys/types.h: Changed to include
+        * libc/include/machine/types.h: Add _CLOCKID_T_ and _TIMER_T_.
+        * libc/include/sys/signal.h: Add more complete set of POSIX
+        signal functionality including real-time and threaded signals.
+        * libc/include/sys/types.h: Add clock_t, time_t, struct
+        timespec, and struct itimerspec.  Centralizing these makes
+        things cleaner.  RTEMS uses 64-bit dev_t.
+        Added numerous primitive definitions
+        for pthreads including macros, pthread_attr_t,
+        pthread_mutexattr_t, pthread_condattr_t, pthread_key_t,
+        pthread_once_t, and pthread_t.
+        * libc/include/sys/unistd.h: Added getlogin_r() prototype.
+        If RTEMS follow POSIX on read(), write() and sbrk() prototype.
+        Feature flags removed and moved to new file <sys/features.h>.
+        Full set of POSIX sysconf() constants
+@
+text
+@/*
+ *  $Id: time.h,v 1.2 1999/11/18 22:34:26 ranjith Exp $
+ */
+
+#include <sys/types.h>
+
+#ifndef __POSIX_SYS_TIME_h
+#define __POSIX_SYS_TIME_h
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/*
+ *  Get the CPU dependent types for clock_t and time_t
+ *
+ *  NOTE:  These must be visible by including <time.h>.
+ */
+
+/* Get _CLOCK_T_ and _TIME_T_.  */
+#include <machine/types.h>
+ 
+#ifndef __clock_t_defined
+typedef _CLOCK_T_ clock_t;
+#define __clock_t_defined
+#endif
+ 
+#ifndef __time_t_defined
+typedef _TIME_T_ time_t;
+#define __time_t_defined
+#endif
+
+/*
+ *  14.1.1 Time Value Specification Structures, P1003.1b-1993, p. 261
+ */
+
+struct timespec {
+  time_t  tv_sec;   /* Seconds */
+  long    tv_nsec;  /* Nanoseconds */
+};
+
+struct itimerspec {
+  struct timespec  it_interval;  /* Timer period */
+  struct timespec  it_value;     /* Timer expiration */
+};
+
+/* XXX should really be ifdef'ed */
+
+/*
+ *  BSD based stuff
+ */
+
+struct timezone {
+  int tz_minuteswest;
+  int tz_dsttime;
+};
+
+struct timeval {
+  int tv_sec;
+  int tv_usec;
+};
+
+int gettimeofday(
+  struct timeval  *tp,
+  struct timezone *tzp
+);
+
+/* Convenience macros for operations on timevals.
+   NOTE: `timercmp' does not work for >= or <=.  */
+#define        timerisset(tvp)         ((tvp)->tv_sec || (tvp)->tv_usec)
+#define        timerclear(tvp)         ((tvp)->tv_sec = (tvp)->tv_usec = 0)
+#define        timercmp(a, b, CMP)                                                   \
+  (((a)->tv_sec == (b)->tv_sec) ?                                            \
+   ((a)->tv_usec CMP (b)->tv_usec) :                                         \
+   ((a)->tv_sec CMP (b)->tv_sec))
+#define        timeradd(a, b, result)                                                \
+  do {                                                                       \
+    (result)->tv_sec = (a)->tv_sec + (b)->tv_sec;                            \
+    (result)->tv_usec = (a)->tv_usec + (b)->tv_usec;                         \
+    if ((result)->tv_usec >= 1000000)                                        \
+      {                                                                              \
+       ++(result)->tv_sec;                                                   \
+       (result)->tv_usec -= 1000000;                                         \
+      }                                                                              \
+  } while (0)
+#define        timersub(a, b, result)                                                \
+  do {                                                                       \
+    (result)->tv_sec = (a)->tv_sec - (b)->tv_sec;                            \
+    (result)->tv_usec = (a)->tv_usec - (b)->tv_usec;                         \
+    if ((result)->tv_usec < 0) {                                             \
+      --(result)->tv_sec;                                                    \
+      (result)->tv_usec += 1000000;                                          \
+    }                                                                        \
+  } while (0)
+#ifdef __cplusplus
+}
+#endif 
+
+#endif
+/* end of include */
+@
+
+
+1.2
+log
+@Mon May 15 14:26:00 2000  Joel Sherrill  <joel@@oarcorp.com>
+
+	* libc/sys/rtems/sys/time.h: Add macros for manipulating timeval
+	structures.
+@
+text
+@@
+
+
+1.1
+log
+@Initial revision
+@
+text
+@d68 27
+@
+
+
+1.1.1.1
+log
+@import newlib-2000-02-17 snapshot
+@
+text
+@@

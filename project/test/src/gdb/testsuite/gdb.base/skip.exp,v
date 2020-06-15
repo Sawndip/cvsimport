@@ -1,0 +1,482 @@
+head	1.5;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.5
+	gdb_7_6-2013-04-26-release:1.5
+	gdb_7_6-branch:1.5.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.5
+	gdb_7_5_1-2012-11-29-release:1.3
+	gdb_7_5-2012-08-17-release:1.3
+	gdb_7_5-branch:1.3.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.3
+	gdb_7_4_1-2012-04-26-release:1.1.2.1
+	gdb_7_4-2012-01-24-release:1.1.2.1
+	gdb_7_4-branch:1.1.0.2
+	gdb_7_4-2011-12-13-branchpoint:1.1;
+locks; strict;
+comment	@# @;
+
+
+1.5
+date	2013.01.01.06.33.26;	author brobecke;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2012.12.24.19.40.04;	author jkratoch;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2012.01.31.00.10.58;	author qiyao;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2012.01.04.08.17.46;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2011.11.01.14.51.25;	author jlebar;	state Exp;
+branches
+	1.1.2.1;
+next	;
+
+1.1.2.1
+date	2012.01.06.04.44.01;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.5
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@#   Copyright 2011-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# This file was written by Justin Lebar. (justin.lebar@@gmail.com)
+
+if { [prepare_for_testing skip.exp "skip" \
+                          {skip.c skip1.c } \
+                          {debug nowarnings}] } {
+    return -1
+}
+
+set srcfile skip.c
+set srcfile1 skip1.c
+
+#
+# Right after we start gdb, there's no default file or function to skip.
+#
+gdb_test "skip file" "No default file now." "skip file (no default file)"
+gdb_test "skip function" "No default function now."
+gdb_test "skip" "No default function now." "skip (no default function)"
+
+if ![runto_main] { fail "skip tests suppressed" }
+
+#
+# Test |info skip| with an empty skiplist.
+#
+gdb_test "info skip" "Not skipping any files or functions\." "info skip empty"
+
+#
+# Create a skiplist entry for the current file and function.
+#
+gdb_test "skip file" "File .*$srcfile will be skipped when stepping\." "skip file ($srcfile)"
+gdb_test "skip" "Function main will be skipped when stepping\." "skip (main)"
+
+#
+# Create a skiplist entry for a specified file and function.
+#
+gdb_test "skip file skip1.c" "File .*$srcfile1 will be skipped when stepping\."
+gdb_test "skip function baz" "Function baz will be skipped when stepping\."
+
+#
+# Test bad skiplist entry modification commands
+#
+gdb_test "skip enable 999" "No skiplist entries found with number 999."
+gdb_test "skip disable 999" "No skiplist entries found with number 999."
+gdb_test "skip delete 999" "No skiplist entries found with number 999."
+gdb_test "skip enable a" "Args must be numbers or '\\$' variables."
+gdb_test "skip disable a" "Args must be numbers or '\\$' variables."
+gdb_test "skip delete a" "Args must be numbers or '\\$' variables."
+
+#
+# Ask for info on a skiplist entry which doesn't exist.
+#
+gdb_test "info skip 999" "No skiplist entries found with number 999."
+
+#
+# Does |info skip| look right?
+#
+gdb_test "info skip" \
+  "Num\\s+Type\\s+Enb\\s+What\\s*
+1\\s+file\\s+y\\s+.*$srcfile\\s*
+2\\s+function\\s+y\\s+main\\s*
+3\\s+file\\s+y\\s+$srcfile1\\s*
+4\\s+function\\s+y\\s+baz\\s*"
+
+#
+# Right now, we have an outstanding skiplist entry on both source
+# files, so when we step into the first line in main(), we should step
+# right over it and go to the second line of main().
+#
+
+if ![runto_main] { fail "skip tests suppressed" }
+gdb_test "step" ".*" "step in the main"
+gdb_test "bt" "\\s*\\#0\\s+main.*" "step after all ignored"
+
+#
+# Now remove skip.c from the skiplist.  Our first step should take us
+# into foo(), and our second step should take us to the next line in
+# main().
+#
+gdb_test "skip delete 1"
+# Check that entry 1 is missing from |info skip|
+gdb_test "info skip" \
+  "Num\\s+Type\\s+Enb\\s+What\\s*
+2\\s+function\\s+y\\s+main\\s*
+3\\s+file\\s+y\\s+$srcfile1\\s*
+4\\s+function\\s+y\\s+baz\\s*" \
+    "info skip (delete 1)"
+
+if ![runto_main] { fail "skip tests suppressed" }
+gdb_test "step" "foo \\(\\) at.*" "step after deleting 1 (1)"
+gdb_test "step" ".*" "step after deleting 1 (2)" ; # Return from foo()
+gdb_test "step" "main \\(\\) at.*" "step after deleting 1 (3)"
+
+#
+# Now disable the skiplist entry for  skip1.c.  We should now
+# step into foo(), then into bar(), but not into baz().
+#
+gdb_test "skip disable 3"
+# Is entry 3 disabled in |info skip|?
+gdb_test "info skip 3" ".*\\n3\\s+file\\s+n.*" \
+  "info skip shows entry as disabled"
+
+if ![runto_main] { fail "skip tests suppressed" }
+gdb_test "step" "bar \\(\\) at.*" "step after disabling 3 (1)"
+gdb_test "step" ".*" "step after disabling 3 (2)"; # Return from foo()
+gdb_test "step" "foo \\(\\) at.*" "step after disabling 3 (3)"
+gdb_test "step" ".*" "step after disabling 3 (4)"; # Return from bar()
+gdb_test "step" "main \\(\\) at.*" "step after disabling 3 (5)"
+
+#
+# Enable skiplist entry 3 and make sure we step over it like before.
+#
+gdb_test "skip enable 3"
+# Is entry 3 enabled in |info skip|?
+gdb_test "info skip 3" ".*\\n3\\s+file\\s+y.*" \
+  "info skip shows entry as enabled"
+if ![runto_main] { fail "skip tests suppressed" }
+gdb_test "step" "foo \\(\\) at.*" "step after enable 3 (1)"
+gdb_test "step" ".*" "step after enable 3 (2)"; # Return from foo()
+gdb_test "step" "main \\(\\) at.*" "step after enable 3 (3)"
+
+gdb_test "skip disable"
+gdb_test "info skip" \
+  "Num\\s+Type\\s+Enb\\s+What\\s*
+2\\s+function\\s+n\\s+main\\s*
+3\\s+file\\s+n\\s+$srcfile1\\s*
+4\\s+function\\s+n\\s+baz\\s*" \
+  "info skip after disabling all"
+
+gdb_test "skip enable"
+gdb_test "info skip" \
+  "Num\\s+Type\\s+Enb\\s+What\\s*
+2\\s+function\\s+y\\s+main\\s*
+3\\s+file\\s+y\\s+$srcfile1\\s*
+4\\s+function\\s+y\\s+baz\\s*" \
+  "info skip after enabling all"
+
+gdb_test "skip disable 4 2-3"
+gdb_test "info skip" \
+  "Num\\s+Type\\s+Enb\\s+What\\s*
+2\\s+function\\s+n\\s+main\\s*
+3\\s+file\\s+n\\s+$srcfile1\\s*
+4\\s+function\\s+n\\s+baz\\s*" \
+  "info skip after disabling 4 2-3"
+
+gdb_test "skip enable 2-3"
+gdb_test "info skip" \
+  "Num\\s+Type\\s+Enb\\s+What\\s*
+2\\s+function\\s+y\\s+main\\s*
+3\\s+file\\s+y\\s+$srcfile1\\s*
+4\\s+function\\s+n\\s+baz\\s*" \
+  "info skip after enabling 2-3"
+
+gdb_test "info skip 2-3" \
+  "Num\\s+Type\\s+Enb\\s+What\\s*
+2\\s+function\\s+y\\s+main\\s*
+3\\s+file\\s+y\\s+$srcfile1\\s*" \
+  "info skip 2-3"
+
+gdb_test "skip delete 2 3"
+gdb_test "info skip" \
+  "4\\s+function\\s+n\\s+baz\\s*" \
+  "info skip after deleting 2 3"
+
+gdb_test "skip delete"
+gdb_test "info skip" "Not skipping any files or functions\." \
+  "info skip after deleting all"
+@
+
+
+1.4
+log
+@gdb/
+	* breakpoint.c (breakpoint_re_set): Remove the skip_re_set call.
+	* infrun.c (handle_inferior_event): Rename the called function to
+	function_name_is_marked_for_skip, pass it TMP_SAL.
+	* skip.c (struct skiplist_entry): Update function_name comment.  Remove
+	fields pc, gdbarch and pending.
+	(skip_function_pc): Rename this forward declaration to ...
+	(skip_function): ... here.
+	(skip_file_command): Remove variable pending and its use, remove
+	initialization of E fields pending and gdbarch.  Do not use SYMTAB
+	filename, use the specified one.
+	(skip_function_command): Remove variable func_pc, do not set it.
+	Update the caller of skip_function.  Replace decode_line_1 call by
+	a lookup_symbol call.  Remove variables orig_arg, decode_exception and
+	sals.  Update the caller of skip_function.
+	(skip_info): Remove variable address_width and its use.  Do not print
+	address (PC).  Renumber column 5 to 4.
+	(skip_function_pc): Rename to ...
+	(skip_function): ... here and remove its parameters pc, arch and
+	pending.  Update the function comment and no longer use those
+	parameters.
+	(function_pc_is_marked_for_skip): Rename to ...
+	(function_name_is_marked_for_skip): ... here, update function comment
+	just to a skip.h reference, replace pc parameter by function_name and
+	function_sal.  No longer use E field pending and pc.  Remove variables
+	searched_for_sal, sal and filename.  Call compare_filenames_for_search
+	instead of just strcmp.
+	(skip_re_set): Remove the function.
+	* skip.h (struct symtab_and_line): New declaration.
+	(function_pc_is_marked_for_skip): Rename to ...
+	(function_name_is_marked_for_skip): ... here, replace pc parameter by
+	function_name and function_sal, update the function comment.
+
+gdb/testsuite/
+	* gdb.base/skip-solib.exp (info skip with pending file): Update the
+	expected output.
+	(info skip with pending file): Remove.
+	(ignoring function in solib, info skip for function multiply): Update
+	the expected output.
+	* gdb.base/skip.ex (skip (main), skip function baz, info skip)
+	(info skip (delete 1), info skip after disabling all)
+	(info skip after enabling all, info skip after disabling 4 2-3)
+	(info skip after enabling 2-3, info skip 2-3)
+	(info skip after deleting 2 3): Update the expected output.
+	* gdb.linespec/base/two/thefile.cc (n): New variable v, split the
+	statement to its initialization and return.
+	* gdb.linespec/skip-two.exp: New file.
+@
+text
+@d1 1
+a1 1
+#   Copyright 2011-2012 Free Software Foundation, Inc.
+@
+
+
+1.3
+log
+@gdb/testsuite/
+	* gdb.base/skip.exp: Make test result unique.
+@
+text
+@d45 1
+a45 1
+gdb_test "skip" "Function main at .* will be skipped when stepping\." "skip (main)"
+d51 1
+a51 1
+gdb_test "skip function baz" "Function baz at .* will be skipped when stepping\."
+d72 1
+a72 1
+  "Num\\s+Type\\s+Enb\\s+Address\\s+What\\s*
+d74 3
+a76 3
+2\\s+function\\s+y\\s+0x\[0-9a-f\]+ main at .*$srcfile:\[0-9\]+\\s*
+3\\s+file\\s+y\\s+.*$srcfile1\\s*
+4\\s+function\\s+y\\s+0x\[0-9a-f\]+ baz at .*$srcfile1:\[0-9\]+\\s*"
+d96 4
+a99 4
+  "Num\\s+Type\\s+Enb\\s+Address\\s+What\\s*
+2\\s+function\\s+y\\s+0x\[0-9a-f\]+ main at .*$srcfile:\[0-9\]+\\s*
+3\\s+file\\s+y\\s+.*$srcfile1\\s*
+4\\s+function\\s+y\\s+0x\[0-9a-f\]+ baz at .*$srcfile1:\[0-9\]+\\s*" \
+d137 4
+a140 4
+  "Num\\s+Type\\s+Enb\\s+Address\\s+What\\s*
+2\\s+function\\s+n\\s+0x\[0-9a-f\]+ main at .*$srcfile:\[0-9\]+\\s*
+3\\s+file\\s+n\\s+.*$srcfile1\\s*
+4\\s+function\\s+n\\s+0x\[0-9a-f\]+ baz at .*$srcfile1:\[0-9\]+\\s*" \
+d145 4
+a148 4
+  "Num\\s+Type\\s+Enb\\s+Address\\s+What\\s*
+2\\s+function\\s+y\\s+0x\[0-9a-f\]+ main at .*$srcfile:\[0-9\]+\\s*
+3\\s+file\\s+y\\s+.*$srcfile1\\s*
+4\\s+function\\s+y\\s+0x\[0-9a-f\]+ baz at .*$srcfile1:\[0-9\]+\\s*" \
+d153 4
+a156 4
+  "Num\\s+Type\\s+Enb\\s+Address\\s+What\\s*
+2\\s+function\\s+n\\s+0x\[0-9a-f\]+ main at .*$srcfile:\[0-9\]+\\s*
+3\\s+file\\s+n\\s+.*$srcfile1\\s*
+4\\s+function\\s+n\\s+0x\[0-9a-f\]+ baz at .*$srcfile1:\[0-9\]+\\s*" \
+d161 4
+a164 4
+  "Num\\s+Type\\s+Enb\\s+Address\\s+What\\s*
+2\\s+function\\s+y\\s+0x\[0-9a-f\]+ main at .*$srcfile:\[0-9\]+\\s*
+3\\s+file\\s+y\\s+.*$srcfile1\\s*
+4\\s+function\\s+n\\s+0x\[0-9a-f\]+ baz at .*$srcfile1:\[0-9\]+\\s*" \
+d168 3
+a170 3
+  "Num\\s+Type\\s+Enb\\s+Address\\s+What\\s*
+2\\s+function\\s+y\\s+0x\[0-9a-f\]+ main at .*$srcfile:\[0-9\]+\\s*
+3\\s+file\\s+y\\s+.*$srcfile1\\s*" \
+d175 1
+a175 1
+  "4\\s+function\\s+n\\s+0x\[0-9a-f\]+ baz at .*$srcfile1:\[0-9\]+\\s*" \
+@
+
+
+1.2
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d30 1
+a30 1
+gdb_test "skip file" "No default file now."
+d32 1
+a32 1
+gdb_test "skip" "No default function now."
+d44 2
+a45 2
+gdb_test "skip file" "File .*$srcfile will be skipped when stepping\."
+gdb_test "skip" "Function main at .* will be skipped when stepping\."
+d85 1
+a85 1
+gdb_test "step"
+d99 2
+a100 1
+4\\s+function\\s+y\\s+0x\[0-9a-f\]+ baz at .*$srcfile1:\[0-9\]+\\s*"
+d104 2
+a105 2
+gdb_test "step"; # Return from foo()
+gdb_test "step" "main \\(\\) at.*" "step after deleting 1 (2)"
+d118 4
+a121 4
+gdb_test "step"; # Return from foo()
+gdb_test "step" "foo \\(\\) at.*" "step after disabling 3 (2)"
+gdb_test "step"; # Return from bar()
+gdb_test "step" "main \\(\\) at.*" "step after disabling 3 (3)"
+d131 3
+a133 3
+gdb_test "step" "foo \\(\\) at.*" "step after deleting 1 (1)"
+gdb_test "step"; # Return from foo()
+gdb_test "step" "main \\(\\) at.*" "step after deleting 1 (2)"
+@
+
+
+1.1
+log
+@2011-10-06  Justin Lebar  <justin.lebar@@gmail.com>
+
+	* Makefile.in: (SFILES): Add skip.c.
+	(HFILES_NO_SRCDIR): Add skip.h.
+	(COMMON_OBS): Add skip.o.
+	* skip.h, skip.c: New.
+	* breakpoint.h (set_default_breakpoint): Remove.
+	(get_sal_arch): Declare.
+	* breakpoint.c: Remove default_breakpoint_valid,
+	default_breakpoint_address, default_breakpoint_symtab,
+	default_breakpoint_line, default_breakpoint_pspace variables.
+	(get_sal_arch): Make public.
+	(set_default_breakpoint): Remove.
+	(parse_breakpoint_sals, create_breakpoint, clear_command,
+	decode_line_spec_1): Remove uses of default_breakpoint variables;
+	replaced with function calls into stack.c.
+	* cli/cli-cmds.h: Add cmd_list_element *skiplist.
+	* cli/cli-cmds.c: Add skiplist.
+	(init_cmd_lists): Initialize skiplist.
+	(init_cli_cmds): Fix comment (classes of commands appear in
+	alphabetical order).
+	* infrun.c (handle_inferior_event): Add check that we don't step into
+	a function whose pc is marked for skip.
+	* stack.c: Declare last_displayed_sal_valid, last_displayed_pspace,
+	last_displayed_addr, last_displayed_symtab, last_displayed_line
+	variables.
+	(set_last_displayed_sal): New static function.
+	(print_frame_info): Switch call to set_default_breakpoint to call to
+	set_last_displayed_sal.
+	(clear_last_displayed_sal, last_displayed_sal_is_valid,
+	get_last_displayed_pspace, get_last_displayed_addr,
+	get_last_displayed_symtab, get_last_displayed_line,
+	get_last_displayed_sal): New public functions.
+	* stack.h (clear_last_displayed_sal, last_displayed_sal_is_valid,
+	get_last_displayed_pspace, get_last_displayed_addr,
+	get_last_displayed_symtab, get_last_displayed_line,
+	get_last_displayed_sal): Declare.
+
+2011-10-06  Justin Lebar <justin.lebar@@gmail.com>
+
+	Add tests for skip command.
+	* testsuite/gdb.base/skip-solib-lib.c: New
+	* testsuite/gdb.base/skip-solib-main.c: New
+	* testsuite/gdb.base/skip-solib.exp: New
+	* testsuite/gdb.base/skip.c: New
+	* testsuite/gdb.base/skip.exp: New
+	* testsuite/gdb.base/skip1.c: New
+	* testsuite/gdb.base/Makefile.in: Adding new files.
+@
+text
+@d1 1
+a1 1
+#   Copyright 2011 Free Software Foundation, Inc.
+@
+
+
+1.1.2.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d1 1
+a1 1
+#   Copyright 2011-2012 Free Software Foundation, Inc.
+@
+
+

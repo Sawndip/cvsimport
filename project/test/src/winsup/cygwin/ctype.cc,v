@@ -1,0 +1,1109 @@
+head	1.5;
+access;
+symbols
+	cygwin-1_7_35-release:1.5
+	cygwin-1_7_34-release:1.5
+	cygwin-1_7_33-release:1.5
+	cygwin-1_7_32-release:1.5
+	cygwin-1_7_31-release:1.5
+	cygwin-1_7_30-release:1.5
+	cygwin-1_7_29-release:1.5
+	cygwin-1_7_29-release-branchpoint:1.5.0.8
+	cygwin-pre-user-db:1.5
+	cygwin-1_7_28-release:1.5
+	cygwin-1_7_27-release:1.5
+	cygwin-1_7_26-release:1.5
+	cygwin-1_7_25-release:1.5
+	cygwin-1_7_24-release:1.5
+	cygwin-1_7_23-release:1.5
+	cygwin-1_7_22-release:1.5
+	cygwin-1_7_21-release:1.5
+	cygwin-1_7_20-release:1.5
+	cygwin-1_7_19-release:1.5
+	cygwin-64bit-postmerge:1.5
+	cygwin-64bit-premerge-branch:1.5.0.6
+	cygwin-64bit-premerge:1.5
+	cygwin-1_7_18-release:1.5
+	post-ptmalloc3:1.5
+	pre-ptmalloc3:1.5
+	cygwin-1_7_17-release:1.5
+	cygwin-64bit-branch:1.5.0.4
+	cygwin-1_7_16-release:1.5
+	cygwin-1_7_15-release:1.5
+	cygwin-1_7_14_2-release:1.5
+	cygwin-1_7_14-release:1.5
+	cygwin-1_7_12-release:1.5
+	cygwin-1_7_11-release:1.5
+	cygwin-1_7_10-release:1.5
+	signal-rewrite:1.5.0.2
+	pre-notty:1.5
+	cygwin-1_7_9-release:1.4
+	cv-post-1_7_9:1.4.0.6
+	cygwin-1_7_8-release:1.4
+	cygwin-1_7_7-release:1.4
+	cygwin-1_7_5-release:1.4
+	cygwin-1_7_4-release:1.4
+	cygwin-1_7_3-release:1.4
+	cygwin-1_7_2-release:1.4
+	fifo_doover3:1.4.0.4
+	cygwin-1_7_1-release:1.4
+	prefifo:1.4
+	cv-branch-2:1.4.0.2
+	pre-ripout-set_console_state_for_spawn:1.1
+	EOL_registry_mounts:1.1
+	preoverlapped:1.1
+	drop_9x_support_start:1.1
+	cr-0x5f1:1.1.0.8
+	cv-branch:1.1.0.6
+	pre-ptymaster-archetype:1.1
+	cr-0x3b58:1.1.0.4
+	cr-0x5ef:1.1.0.2
+	after-mmap-privanon-noreserve:1.1
+	after-mmap-revamp:1.1
+	before-mmap-revamp:1.1
+	cgf-more-exit-sync:1.1
+	post_wait_sig_exit:1.1
+	pre_wait_sig_exit:1.1;
+locks; strict;
+comment	@// @;
+
+
+1.5
+date	2011.06.06.05.02.08;	author cgf;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2009.04.21.20.10.55;	author corinna;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2009.03.31.09.42.58;	author corinna;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2009.03.24.12.18.34;	author corinna;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2005.03.23.17.11.24;	author cgf;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.5
+log
+@whitespace elimination
+@
+text
+@#include "winsup.h"
+extern "C" {
+#include <ctype.h>
+#include <stdlib.h>
+#include <wctype.h>
+
+extern char _ctype_b[128 + 256];
+
+/* Called from newlib's setlocale().  What we do here is to copy the
+   128 bytes of charset specific ctype data into the array at _ctype_b.
+   Given that the functionality is usually implemented locally in the
+   application, that's the only backward compatible way to do it.
+   Setlocale is usually only called once in an application, so this isn't
+   time-critical anyway. */
+extern int __iso_8859_index (const char *charset_ext);	/* Newlib */
+extern int __cp_index (const char *charset_ext);	/* Newlib */
+extern const char __ctype_cp[22][128 + 256];		/* Newlib */
+extern const char __ctype_iso[15][128 + 256];		/* Newlib */
+
+void
+__set_ctype (const char *charset)
+{
+  int idx;
+
+  switch (*charset)
+    {
+    case 'I':
+      idx = __iso_8859_index (charset + 9);
+      /* Our ctype table has a leading ISO-8859-1 element. */
+      if (idx < 0)
+	idx = 0;
+      else
+	++idx;
+      if (CYGWIN_VERSION_CHECK_FOR_OLD_CTYPE)
+	{
+	  memcpy (_ctype_b, __ctype_iso[idx], 128);
+	  memcpy (_ctype_b + 256, __ctype_iso[idx] + 256, 128);
+	}
+      __ctype_ptr__ = (char *) (__ctype_iso[idx] + 127);
+      return;
+    case 'C':
+      idx = __cp_index (charset + 2);
+      if (idx < 0)
+	break;
+      if (CYGWIN_VERSION_CHECK_FOR_OLD_CTYPE)
+	{
+	  memcpy (_ctype_b, __ctype_cp[idx], 128);
+	  memcpy (_ctype_b + 256, __ctype_cp[idx] + 256, 128);
+	}
+      __ctype_ptr__ = (char *) (__ctype_cp[idx] + 127);
+      return;
+    default:
+      break;
+    }
+  if (CYGWIN_VERSION_CHECK_FOR_OLD_CTYPE)
+    {
+      memset (_ctype_b, 0, 128);
+      memset (_ctype_b + 256, 0, 128);
+    }
+  __ctype_ptr__ = (char *) _ctype_b + 127;
+}
+
+} /* extern "C" */
+
+/*
+ * Copyright (c) 1989 The Regents of the University of California.
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+ * SUCH DAMAGE.
+ */
+
+@
+
+
+1.4
+log
+@	* ctype.cc (__set_ctype): Copy exact part of the current active
+	character class array.
+@
+text
+@d31 1
+a31 1
+      	idx = 0;
+d35 1
+a35 1
+      	{
+@
+
+
+1.3
+log
+@	* ctype.cc: Remove implementation of ctype functions in favor of
+	pointer-based newlib implementation.
+	(_ctype_b): Declare.
+	(__ctype_cp): Move to newlib. Declare.
+	(__ctype_iso): Ditto.
+	(__set_ctype): Implement changing __ctype_ptr__.  Only copy character
+	class data in applications built under older Cygwin.
+	* cygwin.din (__ctype_ptr__): Export.
+	* include/ctype.h: Remove in favor of newlib implementation.
+	* include/cygwin/config.h (__EXPORT): Define alongside __IMPORT.
+	* include/cygwin/version.h (CYGWIN_VERSION_CHECK_FOR_OLD_CTYPE):
+	Define check for old vs. new ctype implementation.
+	Bump API minor number.
+@
+text
+@d37 1
+a37 1
+	  memcpy (_ctype_b + 256, __ctype_iso[idx], 128);
+d48 1
+a48 1
+	  memcpy (_ctype_b + 256, __ctype_cp[idx], 128);
+@
+
+
+1.2
+log
+@	* ctype.cc (_CTYPE_DATA_0_127): Add _B class to TAB character.
+	(__ctype_default): New character class array for default ASCII
+	character set.
+	(__ctype_iso): New array of character class array for ISO charsets.
+	(__ctype_cp): Ditto for singlebyte Windows codepages.
+	(tolower): Implement as distinct function to support any singlebyte
+	charset.
+	(toupper): Ditto.
+	(__set_ctype): New function to copy singlebyte character classes
+	corresponding to current charset to ctype_b array.
+	Align copyright text to upstream.
+	* dcrt0.cc (dll_crt0_1): Reset current locale to "C" per POSIX.
+	* environ.cc (set_file_api_mode): Remove.
+	(codepage_init): Remove.
+	(parse_thing): Remove "codepage" setting.
+	(environ_init): Set locale according to environment settings, or
+	to current codepage, before converting environment to multibyte.
+	* fhandler.h (fhandler_console::write_replacement_char): Drop argument.
+	* fhandler_console.cc (dev_console::str_to_con): Call sys_cp_mbstowcs
+	rather than MultiByteToWideChar.
+	(fhandler_console::write_replacement_char): Always print a funny
+	half filled square if a character isn't in the current charset.
+	(fhandler_console::write_normal): Convert to using __mbtowc
+	rather than next_char.
+	* fork.cc (frok::child): Drop call to set_file_api_mode.
+	* globals.cc (enum codepage_type) Remove.
+	(current_codepage): Remove.
+	* miscfuncs.cc (cygwin_wcslwr): Unused, dangerous.  Remove.
+	(cygwin_wcsupr): Ditto.
+	(is_cp_multibyte): Remove.
+	(next_char): Remove.
+	* miscfuncs.h (is_cp_multibyte): Drop declaration.
+	(next_char): Ditto.
+	* strfuncs.cc (get_cp): Remove.
+	(__db_wctomb): New function to implement _wctomb_r functionality for
+	doublebyte charsets using WideCharToMultiByte.
+	(__sjis_wctomb): New function to replace unusable newlib function.
+	(__jis_wctomb): Ditto.
+	(__eucjp_wctomb): Ditto.
+	(__gbk_wctomb): New function.
+	(__kr_wctomb): Ditto.
+	(__big5_wctomb): Ditto.
+	(__db_mbtowc): New function to implement _mbtowc_r functionality for
+	doublebyte charsets using MultiByteToWideChar.
+	(__sjis_mbtowc): New function to replace unusable newlib function.
+	(__jis_mbtowc): Ditto.
+	(__eucjp_mbtowc): Ditto.
+	(__gbk_mbtowc): New function.
+	(__kr_mbtowc): New function
+	(__big5_mbtowc): New function
+	(__set_charset_from_codepage): New function.
+	(sys_wcstombs): Reimplement, basically using same wide char to multibyte
+	conversion as newlib's application level functions.  Plus extras.
+	Add lengthy comment to explain.  Change return type to size_t.
+	(sys_wcstombs_alloc): Just use sys_wcstombs.  Change return type to
+	size_t.
+	(sys_cp_mbstowcs): Replace sys_mbstowcs, take additional codepage
+	argument.  Explain why.  Change return type to size_t.
+	(sys_mbstowcs_alloc): Just use sys_mbstowcs.  Change return type to
+	size_t.
+	* wchar.h: Declare internal functions implemented in strfuncs.cc.
+	(wcscasecmp): Remove.
+	(wcsncasecmp): Remove.
+	(wcslwr): Remove.
+	(wcsupr): Remove.
+	* winsup.h (codepage_init): Remove declaration.
+	(get_cp): Ditto.
+	(sys_wcstombs): Align declaration to new implementation.
+	(sys_wcstombs_alloc): Ditto.
+	(sys_cp_mbstowcs): Add declaration.
+	(sys_mbstowcs): Define as inline function.
+	(sys_mbstowcs_alloc): Align declaration to new implementation.
+	(set_file_api_mode): Remove declaration.
+	* include/ctype.h (isblank): Redefine to use _B character class.
+	(toupper): Remove ASCII-only definition.
+	(tolower): Ditto.
+@
+text
+@d7 1
+a7 739
+#define _CTYPE_DATA_0_127 \
+	_C,	_C,	_C,	_C,	_C,	_C,	_C,	_C, \
+	_C,	_B|_C|_S, _C|_S, _C|_S,	_C|_S,	_C|_S,	_C,	_C, \
+	_C,	_C,	_C,	_C,	_C,	_C,	_C,	_C, \
+	_C,	_C,	_C,	_C,	_C,	_C,	_C,	_C, \
+	_S|_B,	_P,	_P,	_P,	_P,	_P,	_P,	_P, \
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, \
+	_N,	_N,	_N,	_N,	_N,	_N,	_N,	_N, \
+	_N,	_N,	_P,	_P,	_P,	_P,	_P,	_P, \
+	_P,	_U|_X,	_U|_X,	_U|_X,	_U|_X,	_U|_X,	_U|_X,	_U, \
+	_U,	_U,	_U,	_U,	_U,	_U,	_U,	_U, \
+	_U,	_U,	_U,	_U,	_U,	_U,	_U,	_U, \
+	_U,	_U,	_U,	_P,	_P,	_P,	_P,	_P, \
+	_P,	_L|_X,	_L|_X,	_L|_X,	_L|_X,	_L|_X,	_L|_X,	_L, \
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, \
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, \
+	_L,	_L,	_L,	_P,	_P,	_P,	_P,	_C
+
+#define _CTYPE_DATA_128_256 \
+	0,	0,	0,	0,	0,	0,	0,	0, \
+	0,	0,	0,	0,	0,	0,	0,	0, \
+	0,	0,	0,	0,	0,	0,	0,	0, \
+	0,	0,	0,	0,	0,	0,	0,	0, \
+	0,	0,	0,	0,	0,	0,	0,	0, \
+	0,	0,	0,	0,	0,	0,	0,	0, \
+	0,	0,	0,	0,	0,	0,	0,	0, \
+	0,	0,	0,	0,	0,	0,	0,	0, \
+	0,	0,	0,	0,	0,	0,	0,	0, \
+	0,	0,	0,	0,	0,	0,	0,	0, \
+	0,	0,	0,	0,	0,	0,	0,	0, \
+	0,	0,	0,	0,	0,	0,	0,	0, \
+	0,	0,	0,	0,	0,	0,	0,	0, \
+	0,	0,	0,	0,	0,	0,	0,	0, \
+	0,	0,	0,	0,	0,	0,	0,	0, \
+	0,	0,	0,	0,	0,	0,	0,	0 
+
+/* FIXME: These tables should rather be defined in newlib and we should
+   switch to the newer __ctype_ptr method from newlib for new applications. */
+
+static char __ctype_default[128] = { _CTYPE_DATA_128_256 };
+static char __ctype_iso[15][128] = {
+  /* ISO-8859-1 */
+ {      _C,     _C,     _C,     _C,     _C,     _C,     _C,     _C,
+        _C,     _C,     _C,     _C,     _C,     _C,     _C,     _C,
+        _C,     _C,     _C,     _C,     _C,     _C,     _C,     _C,
+        _C,     _C,     _C,     _C,     _C,     _C,     _C,     _C,
+        _S|_B,  _P,     _P,     _P,     _P,     _P,     _P,     _P,
+        _P,     _P,     _P,     _P,     _P,     _P,     _P,     _P,
+        _P,     _P,     _P,     _P,     _P,     _P,     _P,     _P,
+        _P,     _P,     _P,     _P,     _P,     _P,     _P,     _P,
+        _U,     _U,     _U,     _U,     _U,     _U,     _U,     _U,
+        _U,     _U,     _U,     _U,     _U,     _U,     _U,     _U,
+        _U,     _U,     _U,     _U,     _U,     _U,     _U,     _P,
+        _U,     _U,     _U,     _U,     _U,     _U,     _U,     _L,
+        _L,     _L,     _L,     _L,     _L,     _L,     _L,     _L,
+        _L,     _L,     _L,     _L,     _L,     _L,     _L,     _L,
+        _L,     _L,     _L,     _L,     _L,     _L,     _L,     _P,
+        _L,     _L,     _L,     _L,     _L,     _L,     _L,     _L },
+  /* ISO-8859-2 */
+  {	_C,     _C,     _C,     _C,     _C,     _C,     _C,     _C, 
+        _C,     _C,     _C,     _C,     _C,     _C,     _C,     _C, 
+        _C,     _C,     _C,     _C,     _C,     _C,     _C,     _C, 
+        _C,     _C,     _C,     _C,     _C,     _C,     _C,     _C, 
+	_S|_B,	_U,	_P,	_U,	_P,	_U,	_U,	_P, 
+	_P,	_U,	_U,	_U,	_U,	_P,	_U,	_U, 
+	_P,	_L,	_P,	_L,	_P,	_L,	_L,	_P, 
+	_P,	_L,	_L,	_L,	_L,	_P,	_L,	_L, 
+        _U,     _U,     _U,     _U,     _U,     _U,     _U,     _U, 
+        _U,     _U,     _U,     _U,     _U,     _U,     _U,     _U, 
+        _U,     _U,     _U,     _U,     _U,     _U,     _U,     _P, 
+        _U,     _U,     _U,     _U,     _U,     _U,     _U,     _L, 
+        _L,     _L,     _L,     _L,     _L,     _L,     _L,     _L, 
+        _L,     _L,     _L,     _L,     _L,     _L,     _L,     _L, 
+        _L,     _L,     _L,     _L,     _L,     _L,     _L,     _P, 
+        _L,     _L,     _L,     _L,     _L,     _L,     _L,     _L },
+  /* ISO-8859-3 */
+  {	_C,     _C,     _C,     _C,     _C,     _C,     _C,     _C, 
+        _C,     _C,     _C,     _C,     _C,     _C,     _C,     _C, 
+        _C,     _C,     _C,     _C,     _C,     _C,     _C,     _C, 
+        _C,     _C,     _C,     _C,     _C,     _C,     _C,     _C, 
+	_S|_B,	_U,	_P,	_P,	_P,	0,	_U,	_P, 
+	_P,	_U,	_U,	_U,	_U,	_P,	0,	_U, 
+	_P,	_L,	_P,	_P,	_P,	_L,	_L,	_P, 
+	_P,	_L,	_L,	_L,	_L,	_P,	0,	_L, 
+	_U,	_U,	_U,	0,	_U,	_U,	_U,	_U, 
+	_U,	_U,	_U,	_U,	_U,	_U,	_U,	_U, 
+	0,	_U,	_U,	_U,	_U,	_U,	_U,	_P, 
+	_U,	_U,	_U,	_U,	_U,	_U,	_U,	_L, 
+	_L,	_L,	_L,	0,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	0,	_L,	_L,	_L,	_L,	_L,	_L,	_P, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_P },
+  /* ISO-8859-4 */
+  {	_C,     _C,     _C,     _C,     _C,     _C,     _C,     _C, 
+        _C,     _C,     _C,     _C,     _C,     _C,     _C,     _C, 
+        _C,     _C,     _C,     _C,     _C,     _C,     _C,     _C, 
+        _C,     _C,     _C,     _C,     _C,     _C,     _C,     _C, 
+	_S|_B,	_U,	_L,	_U,	_P,	_U,	_U,	_P, 
+	_P,	_U,	_U,	_U,	_U,	_P,	_U,	_P, 
+	_P,	_L,	_P,	_L,	_P,	_L,	_L,	_P, 
+	_P,	_L,	_L,	_L,	_L,	_P,	_L,	_L, 
+        _U,     _U,     _U,     _U,     _U,     _U,     _U,     _U, 
+        _U,     _U,     _U,     _U,     _U,     _U,     _U,     _U, 
+        _U,     _U,     _U,     _U,     _U,     _U,     _U,     _P, 
+        _U,     _U,     _U,     _U,     _U,     _U,     _U,     _L, 
+        _L,     _L,     _L,     _L,     _L,     _L,     _L,     _L, 
+        _L,     _L,     _L,     _L,     _L,     _L,     _L,     _L, 
+        _L,     _L,     _L,     _L,     _L,     _L,     _L,     _P, 
+        _L,     _L,     _L,     _L,     _L,     _L,     _L,     _L },
+  /* ISO-8859-5 */
+  {	_C,     _C,     _C,     _C,     _C,     _C,     _C,     _C, 
+        _C,     _C,     _C,     _C,     _C,     _C,     _C,     _C, 
+        _C,     _C,     _C,     _C,     _C,     _C,     _C,     _C, 
+        _C,     _C,     _C,     _C,     _C,     _C,     _C,     _C, 
+	_S|_B,	_U,	_U,	_U,	_U,	_U,	_U,	_U, 
+	_U,	_U,	_U,	_U,	_U,	_P,	_U,	_U, 
+	_U,	_U,	_U,	_U,	_U,	_U,	_U,	_U, 
+	_U,	_U,	_U,	_U,	_U,	_U,	_U,	_U, 
+        _U,     _U,     _U,     _U,     _U,     _U,     _U,     _U, 
+        _U,     _U,     _U,     _U,     _U,     _U,     _U,     _U, 
+        _L,     _L,     _L,     _L,     _L,     _L,     _L,     _L, 
+        _L,     _L,     _L,     _L,     _L,     _L,     _L,     _L, 
+        _L,     _L,     _L,     _L,     _L,     _L,     _L,     _L, 
+        _L,     _L,     _L,     _L,     _L,     _L,     _L,     _L, 
+        _P,     _L,     _L,     _L,     _L,     _L,     _L,     _L, 
+        _L,     _L,     _L,     _L,     _L,     _P,     _L,     _L },
+  /* ISO-8859-6 */
+  {	_C,     _C,     _C,     _C,     _C,     _C,     _C,     _C, 
+        _C,     _C,     _C,     _C,     _C,     _C,     _C,     _C, 
+        _C,     _C,     _C,     _C,     _C,     _C,     _C,     _C, 
+        _C,     _C,     _C,     _C,     _C,     _C,     _C,     _C, 
+	_S|_B,	0,	0,	0,	_P,	0,	0,	0, 
+	0,	0,	0,	0,	_P,	_P,	0,	0, 
+	0,	0,	0,	0,	0,	0,	0,	0, 
+	0,	0,	0,	_P,	0,	0,	0,	_P, 
+	0,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	0,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	0,	0,	0,	0,	0, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	0,	0,	0,	0,	0, 
+	0,	0,	0,	0,	0,	0,	0,	0 },
+  /* ISO-8859-7 */
+  {	_C,     _C,     _C,     _C,     _C,     _C,     _C,     _C, 
+        _C,     _C,     _C,     _C,     _C,     _C,     _C,     _C, 
+        _C,     _C,     _C,     _C,     _C,     _C,     _C,     _C, 
+        _C,     _C,     _C,     _C,     _C,     _C,     _C,     _C, 
+	_S|_B,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_U,	_P, 
+	_U,	_U,	_U,	_P,	_U,	_P,	_U,	_U, 
+	_L,	_U,	_U,	_U,	_U,	_U,	_U,	_U, 
+	_U,	_U,	_U,	_U,	_U,	_U,	_U,	_U, 
+	_U,	_U,	_U,	_U,	_U,	_U,	_U,	_U, 
+	_U,	_U,	_U,	_U,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_P },
+  /* ISO-8859-8 */
+  {	_C,     _C,     _C,     _C,     _C,     _C,     _C,     _C, 
+        _C,     _C,     _C,     _C,     _C,     _C,     _C,     _C, 
+        _C,     _C,     _C,     _C,     _C,     _C,     _C,     _C, 
+        _C,     _C,     _C,     _C,     _C,     _C,     _C,     _C, 
+	_S|_B,	0,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	0, 
+	0,	0,	0,	0,	0,	0,	0,	0, 
+	0,	0,	0,	0,	0,	0,	0,	0, 
+	0,	0,	0,	0,	0,	0,	0,	0, 
+	0,	0,	0,	0,	0,	0,	0,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	0,	0,	_P,	_P,	0 },
+  /* ISO-8859-9 */
+  {	_C,     _C,     _C,     _C,     _C,     _C,     _C,     _C, 
+        _C,     _C,     _C,     _C,     _C,     _C,     _C,     _C, 
+        _C,     _C,     _C,     _C,     _C,     _C,     _C,     _C, 
+        _C,     _C,     _C,     _C,     _C,     _C,     _C,     _C, 
+	_S|_B,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_U,	_U,	_U,	_U,	_U,	_U,	_U,	_U, 
+	_U,	_U,	_U,	_U,	_U,	_U,	_U,	_U, 
+	_U,	_U,	_U,	_U,	_U,	_U,	_U,	_P, 
+	_U,	_U,	_U,	_U,	_U,	_U,	_U,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_P, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L },
+  /* ISO-8859-10 */
+  {	_C,     _C,     _C,     _C,     _C,     _C,     _C,     _C, 
+        _C,     _C,     _C,     _C,     _C,     _C,     _C,     _C, 
+        _C,     _C,     _C,     _C,     _C,     _C,     _C,     _C, 
+        _C,     _C,     _C,     _C,     _C,     _C,     _C,     _C, 
+	_S|_B,	_U,	_U,	_U,	_U,	_U,	_U,	_P, 
+	_U,	_U,	_U,	_U,	_U,	_P,	_U,	_U, 
+	_P,	_L,	_L,	_L,	_L,	_L,	_L,	_P, 
+	_L,	_L,	_L,	_L,	_L,	_P,	_L,	_L, 
+	_U,	_U,	_U,	_U,	_U,	_U,	_U,	_U, 
+	_U,	_U,	_U,	_U,	_U,	_U,	_U,	_U, 
+	_U,	_U,	_U,	_U,	_U,	_U,	_U,	_U, 
+	_U,	_U,	_U,	_U,	_U,	_U,	_U,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L },
+  /* ISO-8859-11 */
+  {	_C,     _C,     _C,     _C,     _C,     _C,     _C,     _C, 
+        _C,     _C,     _C,     _C,     _C,     _C,     _C,     _C, 
+        _C,     _C,     _C,     _C,     _C,     _C,     _C,     _C, 
+        _C,     _C,     _C,     _C,     _C,     _C,     _C,     _C, 
+	_S|_B,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_P,	_L,	_L,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	0,	0,	0,	0,	_P, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_L,	0,	0,	0,	0 },
+  /* ISO-8859-13 */
+  {	_C,     _C,     _C,     _C,     _C,     _C,     _C,     _C, 
+        _C,     _C,     _C,     _C,     _C,     _C,     _C,     _C, 
+        _C,     _C,     _C,     _C,     _C,     _C,     _C,     _C, 
+        _C,     _C,     _C,     _C,     _C,     _C,     _C,     _C, 
+	_S|_B,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_U,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_L,	_P,	_P,	_P,	_P,	_P, 
+	_U,	_U,	_U,	_U,	_U,	_U,	_U,	_U, 
+	_U,	_U,	_U,	_U,	_U,	_U,	_U,	_U, 
+	_U,	_U,	_U,	_U,	_U,	_U,	_U,	_P, 
+	_U,	_U,	_U,	_U,	_U,	_U,	_U,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_P, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_P },
+  /* ISO-8859-14 */
+  {	_C,     _C,     _C,     _C,     _C,     _C,     _C,     _C, 
+        _C,     _C,     _C,     _C,     _C,     _C,     _C,     _C, 
+        _C,     _C,     _C,     _C,     _C,     _C,     _C,     _C, 
+        _C,     _C,     _C,     _C,     _C,     _C,     _C,     _C, 
+	_S|_B,	_U,	_L,	_P,	_U,	_L,	_U,	_P, 
+	_U,	_P,	_U,	_L,	_U,	_P,	_P,	_U, 
+	_U,	_L,	_U,	_L,	_U,	_L,	_P,	_U, 
+	_L,	_L,	_L,	_U,	_L,	_U,	_L,	_L, 
+	_U,	_U,	_U,	_U,	_U,	_U,	_U,	_U, 
+	_U,	_U,	_U,	_U,	_U,	_U,	_U,	_U, 
+	_U,	_U,	_U,	_U,	_U,	_U,	_U,	_U, 
+	_U,	_U,	_U,	_U,	_U,	_U,	_U,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L },
+  /* ISO-8859-15 */
+  {	_C,     _C,     _C,     _C,     _C,     _C,     _C,     _C, 
+        _C,     _C,     _C,     _C,     _C,     _C,     _C,     _C, 
+        _C,     _C,     _C,     _C,     _C,     _C,     _C,     _C, 
+        _C,     _C,     _C,     _C,     _C,     _C,     _C,     _C, 
+        _S|_B,  _P,     _P,     _P,     _P,     _P,     _P,     _P, 
+        _P,     _P,     _P,     _P,     _P,     _P,     _P,     _P, 
+        _P,     _P,     _P,     _P,     _P,     _P,     _P,     _P, 
+        _P,     _P,     _P,     _P,     _P,     _P,     _P,     _P, 
+        _U,     _U,     _U,     _U,     _U,     _U,     _U,     _U, 
+        _U,     _U,     _U,     _U,     _U,     _U,     _U,     _U, 
+        _U,     _U,     _U,     _U,     _U,     _U,     _U,     _P, 
+        _U,     _U,     _U,     _U,     _U,     _U,     _U,     _L, 
+        _L,     _L,     _L,     _L,     _L,     _L,     _L,     _L, 
+        _L,     _L,     _L,     _L,     _L,     _L,     _L,     _L, 
+        _L,     _L,     _L,     _L,     _L,     _L,     _L,     _P, 
+        _L,     _L,     _L,     _L,     _L,     _L,     _L,     _L },
+  /* ISO-8859-16 */
+  {	_C,     _C,     _C,     _C,     _C,     _C,     _C,     _C, 
+        _C,     _C,     _C,     _C,     _C,     _C,     _C,     _C, 
+        _C,     _C,     _C,     _C,     _C,     _C,     _C,     _C, 
+        _C,     _C,     _C,     _C,     _C,     _C,     _C,     _C, 
+	_S|_B,	_U,	_L,	_U,	_P,	_P,	_U,	_P, 
+	_L,	_P,	_U,	_P,	_U,	_P,	_L,	_U, 
+	_P,	_P,	_U,	_U,	_U,	_P,	_P,	_P, 
+	_L,	_L,	_L,	_P,	_U,	_L,	_U,	_L, 
+	_U,	_U,	_U,	_U,	_U,	_U,	_U,	_U, 
+	_U,	_U,	_U,	_U,	_U,	_U,	_U,	_U, 
+	_U,	_U,	_U,	_U,	_U,	_U,	_U,	_U, 
+	_U,	_U,	_U,	_U,	_U,	_U,	_U,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L }
+};
+static char __ctype_cp[22][128] = {
+  /* CP437 */
+  {	_U,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_U,	_U, 
+	_U,	_L,	_U,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_U,	_U,	_P,	_P,	_P,	_P,	_P, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_L,	_L,	_U,	_L,	_U,	_L,	_P,	_L, 
+	_U,	_U,	_U,	_L,	_P,	_L,	_L,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_S|_B },
+  /* CP720 */
+  {	0,	0,	_L,	_L,	0,	_L,	0,	_L, 
+	_L,	_L,	_L,	_L,	_L,	0,	0,	0, 
+	0,	_P,	_P,	_L,	_P,	_P,	_L,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	0,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_S|_B },
+  /* CP737 */
+  {	_U,	_U,	_U,	_U,	_U,	_U,	_U,	_U, 
+	_U,	_U,	_U,	_U,	_U,	_U,	_U,	_U, 
+	_U,	_U,	_U,	_U,	_U,	_U,	_U,	_U, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_U,	_U,	_U,	_U,	_U,	_U, 
+	_U,	_P,	_P,	_P,	_P,	_U,	_U,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_S|_B },
+  /* CP775 */
+  {	_U,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_U,	_L,	_L,	_U,	_U,	_U, 
+	_U,	_L,	_U,	_L,	_L,	_U,	_P,	_U, 
+	_L,	_U,	_U,	_P,	_P,	_P,	_P,	_P, 
+	_U,	_U,	_L,	_U,	_L,	_L,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_U,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_U,	_U,	_U, 
+	_U,	_P,	_P,	_P,	_P,	_U,	_U,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_U,	_U, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_U, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_U,	_L,	_U,	_U,	_L,	_U,	_L,	_L, 
+	_U,	_L,	_U,	_L,	_L,	_U,	_U,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_S|_B },
+  /* CP850 */
+  {	_U,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_U,	_U, 
+	_U,	_L,	_U,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_U,	_U,	_L,	_P,	_U,	_P,	_P, 
+	_L,	_L,	_L,	_L,	_L,	_U,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_U,	_U,	_U, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_L,	_U, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_L,	_U,	_U,	_U,	_U,	_L,	_U,	_U, 
+	_U,	_P,	_P,	_P,	_P,	_P,	_U,	_P, 
+	_U,	_L,	_U,	_U,	_L,	_U,	_L,	_U, 
+	_L,	_U,	_U,	_U,	_L,	_U,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_S|_B },
+  /* CP852 */
+  {	_U,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_U,	_L,	_L,	_U,	_U,	_U, 
+	_U,	_U,	_L,	_L,	_L,	_U,	_L,	_U, 
+	_L,	_U,	_U,	_U,	_L,	_U,	_P,	_L, 
+	_L,	_L,	_L,	_L,	_U,	_L,	_U,	_L, 
+	_U,	_L,	_P,	_L,	_U,	_L,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_U,	_U,	_U, 
+	_U,	_P,	_P,	_P,	_P,	_U,	_L,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_U,	_L, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_L,	_U,	_U,	_U,	_L,	_U,	_U,	_U, 
+	_L,	_P,	_P,	_P,	_P,	_U,	_U,	_P, 
+	_U,	_L,	_U,	_U,	_L,	_L,	_U,	_L, 
+	_U,	_U,	_L,	_U,	_L,	_U,	_L,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_L,	_U,	_L,	_P,	_S|_B },
+  /* CP855 */
+  {	_L,	_U,	_L,	_U,	_L,	_U,	_L,	_U, 
+	_L,	_U,	_L,	_U,	_L,	_U,	_L,	_U, 
+	_L,	_U,	_L,	_U,	_L,	_U,	_L,	_U, 
+	_L,	_U,	_L,	_U,	_L,	_U,	_L,	_U, 
+	_L,	_U,	_L,	_U,	_L,	_U,	_L,	_U, 
+	_L,	_U,	_L,	_U,	_L,	_U,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_L,	_U,	_L, 
+	_U,	_P,	_P,	_P,	_P,	_L,	_U,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_L,	_U, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_L,	_U,	_L,	_U,	_L,	_U,	_L,	_U, 
+	_L,	_P,	_P,	_P,	_P,	_U,	_L,	_P, 
+	_U,	_L,	_U,	_L,	_U,	_L,	_U,	_L, 
+	_U,	_L,	_U,	_L,	_U,	_L,	_U,	_P, 
+	_P,	_L,	_U,	_L,	_U,	_L,	_U,	_L, 
+	_U,	_L,	_U,	_L,	_U,	_P,	_P,	_S|_B },
+  /* CP857 */
+  {	_U,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_U,	_U, 
+	_U,	_L,	_U,	_L,	_L,	_L,	_L,	_L, 
+	_U,	_U,	_U,	_L,	_P,	_U,	_U,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_U,	_U,	_L, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_U,	_U,	_U,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_L,	_U, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_U,	_U,	_U,	_L,	_U,	_U, 
+	_U,	_P,	_P,	_P,	_P,	_P,	_U,	_P, 
+	_U,	_L,	_U,	_U,	_L,	_U,	_L,	_L, 
+	_P,	_U,	_U,	_U,	_L,	_L,	_P,	_P, 
+	_P,	_P,	_L,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_S|_B },
+  /* CP858 */
+  {	_U,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_U,	_U, 
+	_U,	_L,	_U,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_U,	_U,	_L,	_P,	_U,	_P,	_P, 
+	_L,	_L,	_L,	_L,	_L,	_U,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_U,	_U,	_U, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_L,	_U, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_L,	_U,	_U,	_U,	_U,	_P,	_U,	_U, 
+	_U,	_P,	_P,	_P,	_P,	_P,	_U,	_P, 
+	_U,	_L,	_U,	_U,	_L,	_U,	_L,	_U, 
+	_L,	_U,	_U,	_U,	_L,	_U,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_S|_B },
+  /* CP862 */
+  {	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_P,	_P,	_P,	_P,	_P, 
+	_L,	_L,	_L,	_L,	_L,	_U,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_L,	_L,	_U,	_L,	_U,	_L,	_P,	_L, 
+	_U,	_U,	_U,	_L,	_P,	_L,	_L,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_S|_B },
+  /* CP866 */
+  {	_U,	_U,	_U,	_U,	_U,	_U,	_U,	_U, 
+	_U,	_U,	_U,	_U,	_U,	_U,	_U,	_U, 
+	_U,	_U,	_U,	_U,	_U,	_U,	_U,	_U, 
+	_U,	_U,	_U,	_U,	_U,	_U,	_U,	_U, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_U,	_L,	_U,	_L,	_U,	_L,	_U,	_L, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_S|_B },
+  /* CP874 */
+  {	_P,	0,	0,	0,	0,	_P,	0,	0, 
+	0,	0,	0,	0,	0,	0,	0,	0, 
+	0,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	0,	0,	0,	0,	0,	0,	0,	0, 
+	_S|_B,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	0,	0,	0,	0,	_P, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_L,	_L,	0,	0,	0,	0 },
+  /* CP1125 */
+  {	_U,	_U,	_U,	_U,	_U,	_U,	_U,	_U, 
+	_U,	_U,	_U,	_U,	_U,	_U,	_U,	_U, 
+	_U,	_U,	_U,	_U,	_U,	_U,	_U,	_U, 
+	_U,	_U,	_U,	_U,	_U,	_U,	_U,	_U, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_U,	_L,	_U,	_L,	_U,	_L,	_U,	_L, 
+	_U,	_L,	_P,	_P,	_P,	_P,	_P,	_S|_B },
+  /* CP1250 */
+  {	_P,	0,	_P,	0,	_P,	_P,	_P,	_P, 
+	0,	_P,	_U,	_P,	_U,	_U,	_U,	_U, 
+	0,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	0,	_P,	_L,	_P,	_L,	_L,	_L,	_L, 
+	_S|_B,	_P,	_P,	_U,	_P,	_U,	_P,	_P, 
+	_P,	_P,	_U,	_P,	_P,	_P,	_P,	_U, 
+	_P,	_P,	_P,	_L,	_P,	_P,	_P,	_P, 
+	_P,	_L,	_L,	_P,	_U,	_P,	_L,	_L, 
+	_U,	_U,	_U,	_U,	_U,	_U,	_U,	_U, 
+	_U,	_U,	_U,	_U,	_U,	_U,	_U,	_U, 
+	_U,	_U,	_U,	_U,	_U,	_U,	_U,	_P, 
+	_U,	_U,	_U,	_U,	_U,	_U,	_U,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_P, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_P },
+  /* CP1251 */
+  {	_U,	_U,	_P,	_L,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_U,	_P,	_U,	_U,	_U,	_U, 
+	_L,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_L,	_P,	_L,	_L,	_L,	_L,	_P,	_U, 
+	_S|_B,	_U,	_L,	_U,	_P,	_U,	_P,	_P, 
+	_U,	_P,	_U,	_P,	_P,	_P,	_P,	_U, 
+	_P,	_P,	_U,	_L,	_L,	_P,	_P,	_P, 
+	_L,	_P,	_L,	_P,	_L,	_U,	_L,	_L, 
+	_U,	_U,	_U,	_U,	_U,	_U,	_U,	_U, 
+	_U,	_U,	_U,	_U,	_U,	_U,	_U,	_U, 
+	_U,	_U,	_U,	_U,	_U,	_U,	_U,	_U, 
+	_U,	_U,	_U,	_U,	_U,	_U,	_U,	_U, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L },
+  /* CP1252 */
+  {	_P,	0,	_P,	_L,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_U,	_P,	_U,	_U,	0,	0, 
+	0,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_L,	_P,	_L,	0,	_L,	_U, 
+	_S|_B,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_U,	_U,	_U,	_U,	_U,	_U,	_U,	_U, 
+	_U,	_U,	_U,	_U,	_U,	_U,	_U,	_U, 
+	_U,	_U,	_U,	_U,	_U,	_U,	_U,	_P, 
+	_U,	_U,	_U,	_U,	_U,	_U,	_U,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_P, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L },
+  /* CP1253 */
+  {	_P,	0,	_P,	_L,	_P,	_P,	_P,	_P, 
+	0,	_P,	0,	_P,	0,	0,	0,	0, 
+	0,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	0,	_P,	_P,	0,	0,	0,	0,	0, 
+	_S|_B,	_P,	_U,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	0,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_U,	_U,	_U,	_P,	_U,	_P,	_U,	_U, 
+	_L,	_U,	_U,	_U,	_U,	_U,	_U,	_U, 
+	_U,	_U,	_U,	_U,	_U,	_U,	_U,	_U, 
+	_U,	_U,	_U,	_U,	_U,	_U,	_U,	_U, 
+	_U,	_U,	_U,	_U,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L },
+  /* CP1254 */
+  {	_P,	0,	_P,	_L,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_U,	_P,	_U,	0,	0,	0, 
+	0,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_L,	_P,	_L,	0,	0,	_U, 
+	_S|_B,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_U,	_U,	_U,	_U,	_U,	_U,	_U,	_U, 
+	_U,	_U,	_U,	_U,	_U,	_U,	_U,	_U, 
+	_U,	_U,	_U,	_U,	_U,	_U,	_U,	_P, 
+	_U,	_U,	_U,	_U,	_U,	_U,	_U,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_P, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L },
+  /* CP1255 */
+  {	_P,	0,	_P,	_L,	_P,	_P,	_P,	_P, 
+	_P,	_P,	0,	_P,	0,	0,	0,	0, 
+	0,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	0,	_P,	0,	0,	0,	0, 
+	_S|_B,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	0,	0,	0,	0,	0,	0,	0, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L,
+	_L,	_L,	_L,	0,	0,	_P,	_P,	0 },
+  /* CP1256 */
+  {	_P,	_L,	_P,	_L,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_L,	_P,	_U,	_L,	_L,	_L, 
+	_L,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_L,	_P,	_L,	_P,	_L,	_P,	_P,	_L, 
+	_S|_B,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_L,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_P, 
+	_L,	_L,	_L,	_L,	_P,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L,
+	_P,	_P,	_P,	_P,	_L,	_P,	_P,	_P, 
+	_P,	_L,	_P,	_L,	_L,	_P,	_P,	_L },
+  /* CP1257 */
+  {	_P,	0,	_P,	0,	_P,	_P,	_P,	_P, 
+	0,	_P,	0,	_P,	0,	_P,	_P,	_P, 
+	0,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	0,	_P,	0,	_P,	0,	_P,	_P,	0, 
+	_S|_B,	0,	_P,	_P,	_P,	0,	_P,	_P, 
+	_U,	_P,	_U,	_P,	_P,	_P,	_P,	_U, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_L,	_P,	_L,	_P,	_P,	_P,	_P,	_L, 
+	_U,	_U,	_U,	_U,	_U,	_U,	_U,	_U, 
+	_U,	_U,	_U,	_U,	_U,	_U,	_U,	_U, 
+	_U,	_U,	_U,	_U,	_U,	_U,	_U,	_P, 
+	_U,	_U,	_U,	_U,	_U,	_U,	_U,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L,
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_P, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_P },
+  /* CP1258 */
+  {	_P,	0,	_P,	_L,	_P,	_P,	_P,	_P, 
+	_P,	_P,	0,	_P,	_U,	0,	0,	0, 
+	0,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	0,	_P,	_L,	0,	0,	_U, 
+	_S|_B,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_P,	_P,	_P,	_P,	_P,	_P,	_P,	_P, 
+	_U,	_U,	_U,	_U,	_U,	_U,	_U,	_U, 
+	_U,	_U,	_U,	_U,	_P,	_U,	_U,	_U, 
+	_U,	_U,	_P,	_U,	_U,	_U,	_U,	_P, 
+	_U,	_U,	_U,	_U,	_U,	_U,	_P,	_L,
+	_L,	_L,	_L,	_L,	_L,	_L,	_L,	_L, 
+	_L,	_L,	_L,	_L,	_P,	_L,	_L,	_L, 
+	_L,	_L,	_P,	_L,	_L,	_L,	_L,	_P, 
+	_L,	_L,	_L,	_L,	_L,	_L,	_P,	_L }
+};
+
+char ctype_b[128 + 256] = {
+	_CTYPE_DATA_128_256,
+	_CTYPE_DATA_0_127,
+	_CTYPE_DATA_128_256
+};
+
+__asm__ ("					\n\
+	.data					\n\
+	.globl	__ctype_			\n\
+	.set    __ctype_,_ctype_b+127		\n\
+	.text					\n\
+");
+
+#define makefunc(x) \
+  static int __cdecl \
+  c_##x (int c) \
+  { \
+    return x (c); \
+  } \
+  EXPORT_ALIAS(c_##x, x)
+
+makefunc(isalnum)
+makefunc(isalpha)
+makefunc(iscntrl)
+makefunc(isdigit)
+makefunc(isgraph)
+makefunc(islower)
+makefunc(isprint)
+makefunc(ispunct)
+makefunc(isspace)
+makefunc(isupper)
+makefunc(isxdigit)
+makefunc(isblank)
+makefunc(isascii)
+makefunc(toascii)
+
+static int __cdecl
+c_tolower (int c)
+{
+  if ((unsigned char) c <= 0x7f)
+    return isupper (c) ? c + 0x20 : c;
+
+  char s[8] = { c, '\0' };
+  wchar_t wc;
+  if (mbtowc (&wc, s, 1) >= 0
+      && wctomb (s, (wchar_t) towlower ((wint_t) wc)) == 1)
+    c = s[0];
+  return c;
+}
+EXPORT_ALIAS(c_tolower, tolower)
+
+static int __cdecl
+c_toupper (int c)
+{
+  if ((unsigned char) c <= 0x7f)
+    return islower (c) ? c - 0x20 : c;
+
+  char s[8] = { c, '\0' };
+  wchar_t wc;
+  if (mbtowc (&wc, s, 1) >= 0
+      && wctomb (s, (wchar_t) towupper ((wint_t) wc)) == 1)
+    c = s[0];
+  return c;
+}
+EXPORT_ALIAS(c_toupper, toupper)
+d15 4
+a18 2
+int __iso_8859_index (const char *charset_ext);	/* Newlib */
+int __cp_index (const char *charset_ext);	/* Newlib */
+d34 6
+a39 2
+      memcpy (ctype_b, __ctype_iso[idx], 128);
+      memcpy (ctype_b + 256, __ctype_iso[idx], 128);
+d45 6
+a50 2
+      memcpy (ctype_b, __ctype_cp[idx], 128);
+      memcpy (ctype_b + 256, __ctype_cp[idx], 128);
+d55 6
+a60 2
+  memcpy (ctype_b, __ctype_default, 128);
+  memcpy (ctype_b + 256, __ctype_default, 128);
+@
+
+
+1.1
+log
+@* include/ctype.h: New file.
+* ctype.cc: Ditto.
+* Makefile.in: Add ctype.o to DLL_OFILES.
+* cygwin.din: Remove _ctype_ptr (for now?).
+@
+text
+@d4 2
+d9 1
+a9 1
+	_C,	_C|_S,	_C|_S,	_C|_S,	_C|_S,	_C|_S,	_C,	_C, \
+d41 639
+a679 1
+	0,	0,	0,	0,	0,	0,	0,	0
+a712 2
+makefunc(tolower)
+makefunc(toupper)
+d716 28
+d745 43
+a800 7
+ * 3. All advertising materials mentioning features or use of this software
+ *    must display the following acknowledgement:
+ *	This product includes software developed by the University of
+ *	California, Berkeley and its contributors.
+ * 4. Neither the name of the University nor the names of its contributors
+ *    may be used to endorse or promote products derived from this software
+ *    without specific prior written permission.
+@
+

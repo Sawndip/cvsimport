@@ -1,0 +1,112 @@
+head	1.2;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.2
+	gdb_7_6-2013-04-26-release:1.2
+	gdb_7_6-branch:1.2.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.2;
+locks; strict;
+comment	@# @;
+
+
+1.2
+date	2013.01.01.06.33.06;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2012.09.10.22.18.23;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@# Copyright 2012-2013 Free Software Foundation, Inc.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+load_lib "ada.exp"
+
+standard_ada_testfile foo
+
+if {[gdb_compile_ada "${srcfile}" "${binfile}" executable [list debug ]] != "" } {
+  return -1
+}
+
+clean_restart ${testfile}
+
+if ![runto "foo" ] then {
+  perror "Couldn't run ${testfile}"
+  return
+}
+
+gdb_test "print z" \
+         "= (\\(a => .*, b => .*, c => .*\\)|<optimized out>)"
+
+
+@
+
+
+1.1
+log
+@crash printing optimized out variant type
+
+Assuming the following declarations:
+
+   type Discriminants_Record (A : Integer; B : Boolean) is record
+      C : Float;
+   end record;
+   Z : Discriminants_Record := (A => 1, B => False, C => 2.0);
+
+If variable Z is not used, and the compiler optimizes it out,
+GDB would crash as follow:
+
+    (gdb) print Z
+    /[...]/gdb/valops.c:1121: internal-error: Unexpected lazy value type.
+
+This is because the ada-lang module forgot to set the optimized_out
+flag in the value returned by ada_evaluate_subexp during the value's
+"fixing" process.  Later on, when trying to print the resulting value,
+GDB finds that the value is still lazily allocated, and thus tries to
+fetch it. But this is not allowed for not_lval values, hence the internal
+error.
+
+gdb/ChangeLog:
+
+        * ada-lang.c (coerce_unspec_val_to_type): Make sure that
+        the optimized_out flag is preserved.
+
+gdb/testsuite/ChangeLog:
+
+        * gdb.ada/optim_drec: New testcase.
+@
+text
+@d1 1
+a1 1
+# Copyright 2012 Free Software Foundation, Inc.
+@
+

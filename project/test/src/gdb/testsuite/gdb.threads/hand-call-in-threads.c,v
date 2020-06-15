@@ -1,0 +1,280 @@
+head	1.5;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.5
+	gdb_7_6-2013-04-26-release:1.5
+	gdb_7_6-branch:1.5.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.5
+	gdb_7_5_1-2012-11-29-release:1.4
+	gdb_7_5-2012-08-17-release:1.4
+	gdb_7_5-branch:1.4.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.4
+	gdb_7_4_1-2012-04-26-release:1.3.4.1
+	gdb_7_4-2012-01-24-release:1.3.4.1
+	gdb_7_4-branch:1.3.0.4
+	gdb_7_4-2011-12-13-branchpoint:1.3
+	gdb_7_3_1-2011-09-04-release:1.3
+	gdb_7_3-2011-07-26-release:1.3
+	gdb_7_3-branch:1.3.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.3
+	gdb_7_2-2010-09-02-release:1.2
+	gdb_7_2-branch:1.2.0.4
+	gdb_7_2-2010-07-07-branchpoint:1.2
+	gdb_7_1-2010-03-18-release:1.2
+	gdb_7_1-branch:1.2.0.2
+	gdb_7_1-2010-02-18-branchpoint:1.2
+	gdb_7_0_1-2009-12-22-release:1.1
+	gdb_7_0-2009-10-06-release:1.1
+	gdb_7_0-branch:1.1.0.4
+	gdb_7_0-2009-09-16-branchpoint:1.1
+	msnyder-checkpoint-072509-branch:1.1.0.2
+	msnyder-checkpoint-072509-branchpoint:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.5
+date	2013.01.01.06.41.27;	author brobecke;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2012.01.04.08.27.55;	author brobecke;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2011.01.01.15.33.50;	author brobecke;	state Exp;
+branches
+	1.3.4.1;
+next	1.2;
+
+1.2
+date	2010.01.01.07.32.06;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2009.05.30.00.19.13;	author devans;	state Exp;
+branches;
+next	;
+
+1.3.4.1
+date	2012.01.06.04.54.28;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.5
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@/* Test case for hand function calls in multi-threaded program.
+
+   Copyright 2008-2013 Free Software Foundation, Inc.
+
+   This file is part of GDB.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+#include <pthread.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
+#include <unistd.h>
+
+#ifndef NR_THREADS
+#define NR_THREADS 4
+#endif
+
+int thread_count;
+
+pthread_mutex_t thread_count_mutex;
+
+pthread_cond_t thread_count_condvar;
+
+void
+incr_thread_count (void)
+{
+  pthread_mutex_lock (&thread_count_mutex);
+  ++thread_count;
+  if (thread_count == NR_THREADS)
+    pthread_cond_signal (&thread_count_condvar);
+  pthread_mutex_unlock (&thread_count_mutex);
+}
+
+void
+cond_wait (pthread_cond_t *cond, pthread_mutex_t *mut)
+{
+  pthread_mutex_lock (mut);
+  pthread_cond_wait (cond, mut);
+  pthread_mutex_unlock (mut);
+}
+
+void
+noreturn (void)
+{
+  pthread_mutex_t mut;
+  pthread_cond_t cond;
+
+  pthread_mutex_init (&mut, NULL);
+  pthread_cond_init (&cond, NULL);
+
+  /* Wait for a condition that will never be signaled, so we effectively
+     block the thread here.  */
+  cond_wait (&cond, &mut);
+}
+
+void *
+forever_pthread (void *unused)
+{
+  incr_thread_count ();
+  noreturn ();
+}
+
+void
+hand_call (void)
+{
+}
+
+/* Wait until all threads are running.  */
+
+void
+wait_all_threads_running (void)
+{
+  pthread_mutex_lock (&thread_count_mutex);
+  if (thread_count == NR_THREADS)
+    {
+      pthread_mutex_unlock (&thread_count_mutex);
+      return;
+    }
+  pthread_cond_wait (&thread_count_condvar, &thread_count_mutex);
+  if (thread_count == NR_THREADS)
+    {
+      pthread_mutex_unlock (&thread_count_mutex);
+      return;
+    }
+  pthread_mutex_unlock (&thread_count_mutex);
+  printf ("failed waiting for all threads to start\n");
+  abort ();
+}
+
+/* Called when all threads are running.
+   Easy place for a breakpoint.  */
+
+void
+all_threads_running (void)
+{
+}
+
+int
+main (void)
+{
+  pthread_t forever[NR_THREADS];
+  int i;
+
+  pthread_mutex_init (&thread_count_mutex, NULL);
+  pthread_cond_init (&thread_count_condvar, NULL);
+
+  for (i = 0; i < NR_THREADS; ++i)
+    pthread_create (&forever[i], NULL, forever_pthread, NULL);
+
+  wait_all_threads_running ();
+  all_threads_running ();
+
+  return 0;
+}
+
+@
+
+
+1.4
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d3 1
+a3 1
+   Copyright 2008, 2010-2012 Free Software Foundation, Inc.
+@
+
+
+1.3
+log
+@run copyright.sh for 2011.
+@
+text
+@d3 1
+a3 1
+   Copyright 2008, 2010, 2011 Free Software Foundation, Inc.
+@
+
+
+1.3.4.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d3 1
+a3 1
+   Copyright 2008, 2010-2012 Free Software Foundation, Inc.
+@
+
+
+1.2
+log
+@Update copyright year in most headers.
+
+Automatic update by copyright.sh.
+@
+text
+@d3 1
+a3 1
+   Copyright 2008, 2010 Free Software Foundation, Inc.
+@
+
+
+1.1
+log
+@	* infrun.c (prepare_to_proceed): Document.  Assert !non_stop.
+	If scheduler-locking is enabled, we're not going to be singlestepping
+	any other previously stopped thread.
+
+	* gdb.threads/hand-call-in-threads.exp: New file.
+	* gdb.threads/hand-call-in-threads.c: New file.
+@
+text
+@d3 1
+a3 1
+   Copyright 2008 Free Software Foundation, Inc.
+@
+

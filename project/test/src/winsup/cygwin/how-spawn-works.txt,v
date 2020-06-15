@@ -1,0 +1,171 @@
+head	1.2;
+access;
+symbols
+	cygwin-1_7_35-release:1.2
+	cygwin-1_7_34-release:1.2
+	cygwin-1_7_33-release:1.2
+	cygwin-1_7_32-release:1.2
+	cygwin-1_7_31-release:1.2
+	cygwin-1_7_30-release:1.2
+	cygwin-1_7_29-release:1.2
+	cygwin-1_7_29-release-branchpoint:1.2.0.12
+	cygwin-pre-user-db:1.2
+	cygwin-1_7_28-release:1.2
+	cygwin-1_7_27-release:1.2
+	cygwin-1_7_26-release:1.2
+	cygwin-1_7_25-release:1.2
+	cygwin-1_7_24-release:1.2
+	cygwin-1_7_23-release:1.2
+	cygwin-1_7_22-release:1.2
+	cygwin-1_7_21-release:1.2
+	cygwin-1_7_20-release:1.2
+	cygwin-1_7_19-release:1.2
+	cygwin-64bit-postmerge:1.2
+	cygwin-64bit-premerge-branch:1.2.0.10
+	cygwin-64bit-premerge:1.2
+	cygwin-1_7_18-release:1.2
+	post-ptmalloc3:1.2
+	pre-ptmalloc3:1.2
+	cygwin-1_7_17-release:1.2
+	cygwin-64bit-branch:1.2.0.8
+	cygwin-1_7_16-release:1.2
+	cygwin-1_7_15-release:1.2
+	cygwin-1_7_14_2-release:1.2
+	cygwin-1_7_14-release:1.2
+	cygwin-1_7_12-release:1.2
+	cygwin-1_7_11-release:1.2
+	cygwin-1_7_10-release:1.2
+	signal-rewrite:1.2.0.6
+	pre-notty:1.2
+	cygwin-1_7_9-release:1.2
+	cv-post-1_7_9:1.2.0.4
+	cygwin-1_7_8-release:1.2
+	cygwin-1_7_7-release:1.2
+	cygwin-1_7_5-release:1.2
+	cygwin-1_7_4-release:1.2
+	cygwin-1_7_3-release:1.2
+	cygwin-1_7_2-release:1.2
+	fifo_doover3:1.2.0.2
+	cygwin-1_7_1-release:1.2
+	prefifo:1.2
+	cv-branch-2:1.1.0.32
+	pre-ripout-set_console_state_for_spawn:1.1
+	EOL_registry_mounts:1.1
+	preoverlapped:1.1
+	drop_9x_support_start:1.1
+	cr-0x5f1:1.1.0.30
+	cv-branch:1.1.0.28
+	pre-ptymaster-archetype:1.1
+	cr-0x3b58:1.1.0.24
+	cr-0x5ef:1.1.0.22
+	after-mmap-privanon-noreserve:1.1
+	after-mmap-revamp:1.1
+	before-mmap-revamp:1.1
+	cgf-more-exit-sync:1.1
+	post_wait_sig_exit:1.1
+	pre_wait_sig_exit:1.1
+	reparent-point:1.1
+	noreparent:1.1.0.20
+	cr-0x5e6:1.1.0.18
+	cr-0x9e:1.1.0.16
+	cr-0x9d:1.1.0.14
+	cgf-deleteme:1.1.0.12
+	pre-sigrewrite:1.1
+	corinna-01:1.1
+	cr-0x9c:1.1.0.10
+	cr-0x9b:1.1.0.8
+	cr-0x99:1.1
+	Z-emcb-cygwin_daemon:1.1.0.4
+	w32api-2_2:1.1
+	mingw-runtime-2_4:1.1
+	pre-cgf-merge:1.1
+	cgf-dev-branch:1.1.0.26
+	predaemon:1.1
+	Z-cygwin_daemon_merge_HEAD:1.1
+	cygwin_daemon_merge_HEAD:1.1
+	cygwin_daemon:1.1.0.6
+	Z-cygwin_daemon_merge-new_HEAD:1.1
+	pregp02r1:1.1.0.2;
+locks; strict;
+comment	@# @;
+
+
+1.2
+date	2009.07.12.21.26.40;	author cgf;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2002.02.11.02.25.42;	author cgf;	state Exp;
+branches
+	1.1.6.1;
+next	;
+
+1.1.6.1
+date	2002.02.28.12.53.25;	author rbcollins;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@* how-spawn-works.txt: Add "out of date" note.
+* how-vfork-works.txt: Ditto.
+@
+text
+@(THIS DESCRIPTION IS OUT-OF-DATE)
+Spawn.cc in cygwin handles spawn, vfork and exec calls. It does this via
+a mode parameter that determines its behaviour with respect to the
+child.
+
+Of particular interest is the exec behaviour.
+
+In general spawn_guts (where the action happens) does the following:
+* Finds the actual program being run (which may include path searching).
+* Determines the type (.exe, shell script, perl etc) and for non binary
+programs finds the correct interpreter.
+* Creates a commandline (based on the type and the user parameters).
+* Guesses at whether the binary that will be invoked is a cygwin program
+or not (if (real_path.iscygexec ())) and uses that information to copy
+the argv table, or to translate it for win32 program usage.
+* passes a handle to the parent to the child (note: this handle should
+have it's rights restricted  the daemon is merged).
+* Start the process.
+* if the mode is _P_OVERLAY (we are doing an exec)
+wait for the child to
+a) if it's a cygwin process, signal us via an event.
+b) if it's a win32 process, exit.
+c) exit.
+
+If a) occurs, we 'reparent' the child which makes it look to the current
+process's parent in the pid and process group chains.
+b) is where the cygwin process hangs around as a 'stub' presenting it's
+pid as the win32 process's pid, to allow cygwin tools to kill the win32
+process.
+once a-c has occured, execution resumes.
+* If the mode is _P_OVERLAY, this process exits, otherwise it's
+behaviour depends on the mode parameter. See the last block of
+spawn_guts.
+@
+
+
+1.1
+log
+@new how-to.
+@
+text
+@d1 1
+@
+
+
+1.1.6.1
+log
+@Merged changes from HEAD
+@
+text
+@@
+

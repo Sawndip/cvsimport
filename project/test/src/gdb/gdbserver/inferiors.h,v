@@ -1,0 +1,223 @@
+head	1.1;
+access;
+symbols;
+locks; strict;
+comment	@ * @;
+
+
+1.1
+date	2013.09.05.22.18.48;	author palves;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.1
+log
+@Add missing new files from these previous commits:
+
+2013-09-05  Pedro Alves  <palves@@redhat.com>
+
+	* server.h (handle_vFile, hostio_last_error_from_errno): Move
+	to ...
+	* hostio.h: ... this new file.
+	* hostio.c, server.c, linux-low.c, nto-low.c, spu-low,
+	win32-low.c: Include hostio.h.
+
+2013-09-05  Pedro Alves  <palves@@redhat.com>
+
+	* server.h (gdb_client_data, handler_func, callback_handler_func)
+	(delete_file_handler, add_file_handler, append_callback_event)
+	(delete_callback_event, start_event_loop, initialize_event_loop):
+	Move to event-loop.h and include it.
+	* event-loop.h: New file.
+
+2013-09-05  Pedro Alves  <palves@@redhat.com>
+
+	* dll.c, inferiors.c, remote-utils.c, server.c: Include "dll.h".
+	* server.h (struct dll_info, all_dlls, dlls_changed, clear_dlls)
+	(loaded_dll, unloaded_dll): Move to ...
+	* dll.h: ... this new file.
+	* inferiors.c, remote-utils.c, win32-low.c: Include "dll.h".
+
+2013-09-05  Pedro Alves  <palves@@redhat.com>
+
+	* server.h (current_process, get_thread_process, all_processes)
+	(add_inferior_to_list, for_each_inferior, current_inferior)
+	(remove_inferior, add_process, remove_process, find_process_pid)
+	(have_started_inferiors_p, have_attached_inferiors_p)
+	(thread_id_to_gdb_id, thread_to_gdb_id, gdb_id_to_thread_id)
+	(clear_inferiors, find_inferior, find_inferior_id)
+	(inferior_target_data, set_inferior_target_data)
+	(inferior_regcache_data, set_inferior_regcache_data): Move to
+	inferiors.h, and include it.
+	* inferiors.h: New file.
+
+2013-09-05  Pedro Alves  <palves@@redhat.com>
+
+	* ax.c, linux-low.c, linux-x86-low.c, server.c: Include
+	tracepoint.h.
+	* server.h (IPA_BUFSIZ, initialize_tracepoint, tracing)
+	(disconnected_tracing, tracepoint_look_up_symbols, stop_tracing
+	(handle_tracepoint_general_set, handle_tracepoint_query)
+	(tracepoint_finished_step, tracepoint_was_hit)
+	(release_while_stepping_state_list, current_traceframe)
+	(in_readonly_region, traceframe_read_mem)
+	(fetch_traceframe_registers, traceframe_read_sdata)
+	(traceframe_read_info, struct fast_tpoint_collect_status)
+	(fast_tracepoint_collecting, force_unlock_trace_buffer)
+	(handle_tracepoit_bkpts, initialize_low_tracepoint)
+	(supply_fast_tracepoint_registers)
+	(supply_static_tracepoint_registers, set_trampoline_buffer_space)
+	(ipa_tdesc, claim_trampoline_space)
+	(have_fast_tracepoint_trampoline_buffer, gdb_agent_about_to_close)
+	(agent_mem_read, agent_get_trace_state_variable_value)
+	(agent_set_trace_state_variable_value, agent_tsv_read)
+	(agent_mem_read_string, get_raw_reg_func_addr)
+	(get_get_tsv_func_addr, get_set_tsv_func_addr): Move to ...
+	* tracepoint.h: ... this new file.
+
+2013-09-05  Pedro Alves  <palves@@redhat.com>
+
+	* server.h (perror_with_name, error, fatal, warning, paddress)
+	(pulongest, plongest, phex_nz, pfildes): Move to utils.h, and
+	include it.
+	* utils.h: New file.
+
+2013-09-05  Pedro Alves  <palves@@redhat.com>
+
+	* server.h (remote_debug, noack_mode, transport_is_reliable)
+	(gdb_connected, STDIO_CONNECTION_NAME, remote_connection_is_stdio)
+	(read_ptid, write_ptid, putpkt, putpkt_binary, putpkt_notif)
+	(getpkt, remote_prepare, remote_open, remote_close, write_ok)
+	(write_enn, initialize_async_io, enable_async_io)
+	(disable_async_io, check_remote_input_interrupt_request)
+	(convert_ascii_to_int, convert_int_to_ascii, new_thread_notify)
+	(dead_thread_notify, prepare_resume_reply)
+	(decode_address_to_semicolon, decode_address, decode_m_packet)
+	(decode_M_packet, decode_X_packet, decode_xfer_write)
+	(decode_search_memory_packet, unhexify, hexify)
+	(remote_escape_output, unpack_varlen_hex, clear_symbol_cache)
+	(look_up_one_symbol, relocate_instruction)
+	(monitor_output): Move to remote-utils.h, and include it.
+	* remote-utils.h: New file.
+@
+text
+@/* Inferior process information for the remote server for GDB.
+   Copyright (C) 1993-2013 Free Software Foundation, Inc.
+
+   This file is part of GDB.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+#ifndef INFERIORS_H
+#define INFERIORS_H
+
+/* Generic information for tracking a list of ``inferiors'' - threads,
+   processes, etc.  */
+struct inferior_list
+{
+  struct inferior_list_entry *head;
+  struct inferior_list_entry *tail;
+};
+struct inferior_list_entry
+{
+  ptid_t id;
+  struct inferior_list_entry *next;
+};
+
+struct thread_info;
+struct target_desc;
+struct sym_cache;
+struct breakpoint;
+struct raw_breakpoint;
+struct fast_tracepoint_jump;
+struct process_info_private;
+
+struct process_info
+{
+  struct inferior_list_entry head;
+
+  /* Nonzero if this child process was attached rather than
+     spawned.  */
+  int attached;
+
+  /* True if GDB asked us to detach from this process, but we remained
+     attached anyway.  */
+  int gdb_detached;
+
+  /* The symbol cache.  */
+  struct sym_cache *symbol_cache;
+
+  /* The list of memory breakpoints.  */
+  struct breakpoint *breakpoints;
+
+  /* The list of raw memory breakpoints.  */
+  struct raw_breakpoint *raw_breakpoints;
+
+  /* The list of installed fast tracepoints.  */
+  struct fast_tracepoint_jump *fast_tracepoint_jumps;
+
+  const struct target_desc *tdesc;
+
+  /* Private target data.  */
+  struct process_info_private *private;
+};
+
+/* Return a pointer to the process that corresponds to the current
+   thread (current_inferior).  It is an error to call this if there is
+   no current thread selected.  */
+
+struct process_info *current_process (void);
+struct process_info *get_thread_process (struct thread_info *);
+
+extern struct inferior_list all_processes;
+
+void add_inferior_to_list (struct inferior_list *list,
+			   struct inferior_list_entry *new_inferior);
+void for_each_inferior (struct inferior_list *list,
+			void (*action) (struct inferior_list_entry *));
+
+extern struct thread_info *current_inferior;
+void remove_inferior (struct inferior_list *list,
+		      struct inferior_list_entry *entry);
+
+struct process_info *add_process (int pid, int attached);
+void remove_process (struct process_info *process);
+struct process_info *find_process_pid (int pid);
+int have_started_inferiors_p (void);
+int have_attached_inferiors_p (void);
+
+ptid_t thread_id_to_gdb_id (ptid_t);
+ptid_t thread_to_gdb_id (struct thread_info *);
+ptid_t gdb_id_to_thread_id (ptid_t);
+
+void clear_inferiors (void);
+struct inferior_list_entry *find_inferior
+     (struct inferior_list *,
+      int (*func) (struct inferior_list_entry *,
+		   void *),
+      void *arg);
+struct inferior_list_entry *find_inferior_id (struct inferior_list *list,
+					      ptid_t id);
+void *inferior_target_data (struct thread_info *);
+void set_inferior_target_data (struct thread_info *, void *);
+void *inferior_regcache_data (struct thread_info *);
+void set_inferior_regcache_data (struct thread_info *, void *);
+
+#endif /* INFERIORS_H */
+@

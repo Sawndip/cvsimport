@@ -1,0 +1,623 @@
+head	1.9;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.9
+	gdb_7_6-2013-04-26-release:1.9
+	gdb_7_6-branch:1.9.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.9
+	gdb_7_5_1-2012-11-29-release:1.8
+	gdb_7_5-2012-08-17-release:1.8
+	gdb_7_5-branch:1.8.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.8
+	gdb_7_4_1-2012-04-26-release:1.5.2.1
+	gdb_7_4-2012-01-24-release:1.5.2.1
+	gdb_7_4-branch:1.5.0.2
+	gdb_7_4-2011-12-13-branchpoint:1.5
+	gdb_7_3_1-2011-09-04-release:1.4
+	gdb_7_3-2011-07-26-release:1.4
+	gdb_7_3-branch:1.4.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.4
+	gdb_7_2-2010-09-02-release:1.3
+	gdb_7_2-branch:1.3.0.2
+	gdb_7_2-2010-07-07-branchpoint:1.3
+	gdb_7_1-2010-03-18-release:1.2
+	gdb_7_1-branch:1.2.0.2
+	gdb_7_1-2010-02-18-branchpoint:1.2;
+locks; strict;
+comment	@# @;
+
+
+1.9
+date	2013.01.01.06.41.26;	author brobecke;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2012.07.11.15.21.36;	author tromey;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2012.06.26.17.54.59;	author tromey;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2012.01.04.08.27.54;	author brobecke;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2011.11.08.08.23.48;	author qiyao;	state Exp;
+branches
+	1.5.2.1;
+next	1.4;
+
+1.4
+date	2011.01.01.15.33.49;	author brobecke;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2010.05.28.18.26.41;	author msnyder;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2010.01.01.07.32.06;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2009.10.22.19.58.26;	author msnyder;	state Exp;
+branches;
+next	;
+
+1.5.2.1
+date	2012.01.06.04.54.28;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.9
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@# Copyright 2008-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+# This file is part of the GDB testsuite.  It tests reverse stepping.
+# Lots of code borrowed from "step-test.exp".
+
+#
+# Test step and next with a reloaded process record file.
+#
+
+# This test suitable only for process record-replay
+if ![supports_process_record] {
+    return
+}
+
+standard_testfile step-reverse.c
+set precsave [standard_output_file step.precsave]
+
+if { [prepare_for_testing $testfile.exp $testfile $srcfile] } {
+    return -1
+}
+
+runto main
+
+if [supports_process_record] {
+    # Activate process record/replay
+    gdb_test_no_output "record" "Turn on process record"
+}
+
+set end_of_main [gdb_get_line_number "end of main" ]
+gdb_test "break $end_of_main" \
+    "Breakpoint $decimal at .*/$srcfile, line $end_of_main\." \
+    "BP at end of main"
+
+gdb_test "continue" "Breakpoint .* end of main .*" "run to end of main"
+
+gdb_test "record save $precsave" \
+    "Saved core file $precsave with execution log\."  \
+    "save process recfile"
+
+gdb_test "kill" "" "Kill process, prepare to debug log file" \
+    "Kill the program being debugged\\? \\(y or n\\) " "y"
+
+gdb_test "record restore $precsave" \
+    "Program terminated with signal .*" \
+    "reload core file"
+
+# plain vanilla step/next (no count)
+
+gdb_test "next" ".*NEXT TEST 1.*" "next test 1"
+gdb_test "step" ".*STEP TEST 1.*" "step test 1"
+
+# step/next with count
+
+gdb_test "next 2" ".*NEXT TEST 2.*" "next test 2"
+gdb_test "step 3" ".*STEP TEST 2.*" "step test 2"
+
+# step over call
+
+gdb_test "step" ".*NEXT OVER THIS CALL.*" "step up to call"
+gdb_test "next" ".*STEP INTO THIS CALL.*" "next over call"
+
+# step into call
+
+gdb_test "step" ".*ARRIVED IN CALLEE.*" "step into call"
+
+# finish out of call
+
+set test_message "finish out of fn call"
+gdb_test_multiple "finish" "$test_message" {
+    -re "FINISH TEST.*$gdb_prompt $" {
+	pass "$test_message"
+    }
+    -re "STEP INTO THIS CALL.*$gdb_prompt $" {
+	send_gdb "step\n"
+	exp_continue
+    }
+}
+
+# stepi over flat code (no calls)
+
+set test_message "simple stepi"
+gdb_test_multiple "stepi" "$test_message" {
+    -re "STEPI TEST.*$gdb_prompt $" {
+	pass "$test_message"
+    }
+    -re "FINISH TEST.*$gdb_prompt $" {
+	send_gdb "stepi\n"
+	exp_continue
+    }
+    -re "NEXTI TEST.*$gdb_prompt $" {
+	fail "$test_message (too far)"
+    }
+}
+
+# stepi into a function call
+
+set test_message "stepi into function call"
+gdb_test_multiple "stepi" "$test_message" {
+    -re "ARRIVED IN CALLEE.*$gdb_prompt $" {
+	pass "$test_message"
+    }
+    -re "NEXTI TEST.*$gdb_prompt $" {
+	fail "$test_message (too far)"
+    }
+    -re "RETURN FROM CALLEE.*$gdb_prompt $" {
+	fail "$test_message (too far)"
+    }
+    -re "ENTER CALLEE.*$gdb_prompt $" {
+	send_gdb "stepi\n"
+	exp_continue
+    }
+    -re "STEPI TEST.*$gdb_prompt $" {
+	send_gdb "stepi\n"
+	exp_continue
+    }
+}
+
+# stepi thru return of a function call
+
+set test_message "stepi back from function call"
+gdb_test_multiple "stepi" "$test_message" {
+    -re "NEXTI TEST.*$gdb_prompt $" {
+	pass "$test_message"
+    }
+    -re "ARRIVED IN CALLEE.*$gdb_prompt $" {
+	send_gdb "stepi\n"
+	exp_continue
+    }
+    -re "RETURN FROM CALLEE.*$gdb_prompt $" {
+	send_gdb "stepi\n"
+	exp_continue
+    }
+    -re "STEPI TEST.*$gdb_prompt $" {
+	send_gdb "stepi\n"
+	exp_continue
+    }
+    -re "ENTER CALLEE.*$gdb_prompt $" {
+	fail "$test_message (too far)"
+    }
+}
+
+###
+###
+###
+
+# Set reverse execution direction
+
+gdb_test_no_output "set exec-dir reverse" "set reverse execution"
+
+# stepi backward thru return and into a function
+
+set stepi_location  [gdb_get_line_number "ARRIVED IN CALLEE" "$srcfile"]
+set test_message "reverse stepi thru function return"
+gdb_test_multiple "stepi" "$test_message" {
+    -re "NEXTI TEST.*$gdb_prompt $" {
+	fail "$test_message (start statement)"
+    }
+    -re "RETURN FROM CALLEE.*$gdb_prompt $" {
+	send_gdb "stepi\n"
+	exp_continue
+    }
+    -re "$hex\[ \t\]*$stepi_location.*ARRIVED IN CALLEE.*$gdb_prompt $" {
+	send_gdb "stepi\n"
+	exp_continue
+    }
+    -re "ARRIVED IN CALLEE.*$gdb_prompt $" {
+	pass "$test_message"
+    }
+    -re "ENTER CALLEE.*$gdb_prompt $" {
+	fail "$test_message (too far)"
+    }
+    -re "STEPI TEST.*$gdb_prompt $" {
+	fail "$test_message (too far)"
+    }
+}
+
+# stepi backward out of a function call
+
+set stepi_location  [gdb_get_line_number "STEPI TEST" "$srcfile"]
+set test_message "reverse stepi from a function call"
+gdb_test_multiple "stepi" "$test_message" {
+    -re "ARRIVED IN CALLEE.*$gdb_prompt $" {
+	fail "$test_message (start statement)"
+    }
+    -re "ENTER CALLEE.*$gdb_prompt $" {
+	send_gdb "stepi\n" 
+	exp_continue
+    }
+    -re "${hex} in main .*:$stepi_location.*STEPI TEST.*$gdb_prompt $" {
+	send_gdb "stepi\n"
+	exp_continue
+    }
+    -re "STEPI TEST.*$gdb_prompt $" {
+	pass "$test_message"
+    }
+    -re "STEP INTO THIS CALL.*$gdb_prompt $" {
+	fail "$test_message (too far)"
+    }
+}
+
+# stepi backward over flat code (no calls)
+
+set stepi_location  [gdb_get_line_number "FINISH TEST" "$srcfile"]
+set test_message "simple reverse stepi"
+gdb_test_multiple "stepi" "$test_message" {
+    -re "STEPI TEST.*$gdb_prompt $" {
+	fail "$test_message (start statement)"
+    }
+    -re "$hex\[ \t\]*$stepi_location.* FINISH TEST.*$gdb_prompt $" {
+	send_gdb "stepi\n"
+	exp_continue
+    }
+    -re "$stepi_location.* FINISH TEST.*$gdb_prompt $" {
+	pass "$test_message"
+    }
+    -re "STEP INTO THIS CALL.*$gdb_prompt $" {
+	fail "$test_message (too far)"
+    }
+}
+
+# step backward into function (thru return)
+
+set test_message "reverse step into fn call"
+gdb_test_multiple "step" "$test_message" {
+    -re "RETURN FROM CALLEE.*$gdb_prompt $" {
+	send_gdb "step\n"
+	exp_continue
+    }
+    -re "ARRIVED IN CALLEE.*$gdb_prompt $" {
+	pass "$test_message"
+    }
+}
+
+# step backward out of called function (thru call)
+
+gdb_test "step" ".*STEP INTO THIS CALL.*" "reverse step out of called fn"
+
+# next backward over call
+
+gdb_test "next" ".*NEXT OVER THIS CALL.*" "reverse next over call"
+
+# step/next backward with count
+
+gdb_test "step 3" ".*REVERSE STEP TEST 1.*" "reverse step test 1"
+gdb_test "next 2" ".*REVERSE NEXT TEST 1.*" "reverse next test 1"
+
+# step/next backward without count
+
+gdb_test "step" ".*STEP TEST 1.*" "reverse step test 2"
+gdb_test "next" ".*NEXT TEST 1.*" "reverse next test 2"
+
+
+
+# Finish test by running forward to the end.
+# FIXME return to this later...
+# gdb_test_no_output "set exec-dir forward" "set forward execution"
+# gdb_continue_to_end "step-reverse.exp"
+
+@
+
+
+1.8
+log
+@	* gdb.reverse/break-precsave.exp: Use standard_output_file.
+	* gdb.reverse/consecutive-precsave.exp: Use standard_output_file.
+	* gdb.reverse/finish-precsave.exp: Use standard_output_file.
+	* gdb.reverse/i386-precsave.exp: Use standard_output_file.
+	* gdb.reverse/machinestate-precsave.exp: Use standard_output_file.
+	* gdb.reverse/sigall-precsave.exp: Use standard_output_file.
+	* gdb.reverse/solib-precsave.exp: Use standard_output_file.
+	* gdb.reverse/step-precsave.exp: Use standard_output_file.
+	* gdb.reverse/until-precsave.exp: Use standard_output_file.
+	* gdb.reverse/watch-precsave.exp: Use standard_output_file.
+@
+text
+@d1 1
+a1 1
+# Copyright 2008-2012 Free Software Foundation, Inc.
+@
+
+
+1.7
+log
+@	* gdb.reverse/break-precsave.exp: Use standard_testfile.
+	* gdb.reverse/break-reverse.exp: Use standard_testfile.
+	* gdb.reverse/consecutive-precsave.exp: Use standard_testfile.
+	* gdb.reverse/consecutive-reverse.exp: Use standard_testfile.
+	* gdb.reverse/finish-precsave.exp: Use standard_testfile.
+	* gdb.reverse/finish-reverse-bkpt.exp: Use standard_testfile.
+	* gdb.reverse/finish-reverse.exp: Use standard_testfile.
+	* gdb.reverse/i386-precsave.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.reverse/i386-reverse.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.reverse/i386-sse-reverse.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.reverse/i387-env-reverse.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.reverse/i387-stack-reverse.exp: Use standard_testfile,
+	prepare_for_testing
+	* gdb.reverse/machinestate-precsave.exp: Use standard_testfile.
+	* gdb.reverse/machinestate.exp: Use standard_testfile.
+	* gdb.reverse/next-reverse-bkpt-over-sr.exp: Use standard_testfile.
+	* gdb.reverse/sigall-precsave.exp: Use standard_testfile,
+	build_executable.
+	* gdb.reverse/sigall-reverse.exp: Use standard_testfile,
+	build_executable.
+	* gdb.reverse/solib-precsave.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.reverse/solib-reverse.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.reverse/step-precsave.exp: Use standard_testfile.
+	* gdb.reverse/step-reverse.exp: Use standard_testfile.
+	* gdb.reverse/until-precsave.exp: Use standard_testfile.
+	* gdb.reverse/until-reverse.exp: Use standard_testfile.
+	* gdb.reverse/watch-precsave.exp: Use standard_testfile.
+	* gdb.reverse/watch-reverse.exp: Use standard_testfile.
+@
+text
+@d29 1
+d49 2
+a50 2
+gdb_test "record save step.precsave" \
+    "Saved core file step.precsave with execution log\."  \
+d56 1
+a56 1
+gdb_test "record restore step.precsave" \
+@
+
+
+1.6
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d28 1
+a28 2
+set testfile "step-reverse"
+set srcfile  ${testfile}.c
+@
+
+
+1.5
+log
+@gdb/testsuite/
+
+	* gdb.exp (supports_process_record): New.
+	(supports_reverse): New.
+	* gdb.reverse/break-precsave.exp: Call support_process_record
+	to run test conditionally.
+	* gdb.reverse/consecutive-precsave.exp: Likewise.
+	* gdb.reverse/i386-precsave.exp: Likewise.
+	* gdb.reverse/machinestate-precsave.exp: Likewise.
+	* gdb.reverse/solib-precsave.exp: Likewise.
+	* gdb.reverse/step-precsave.exp: Likewise.
+	* gdb.reverse/until-precsave.exp: Likewise.
+	* gdb.reverse/watch-precsave.exp: Likewise.
+	* gdb.reverse/break-reverse.exp: Call support_reverse  to run
+	test conditionally.
+	* gdb.reverse/consecutive-reverse.exp: Likewise.
+	* gdb.reverse/finish-precsave.exp: Likewise.
+	* gdb.reverse/finish-reverse-bkpt.exp: Likewise.
+	* gdb.reverse/finish-reverse.exp: Likewise.
+	* gdb.reverse/i386-reverse.exp: Likewise.
+	* gdb.reverse/i386-sse-reverse.exp: Likewise.
+	* gdb.reverse/machinestate.exp: Likewise.
+	* gdb.reverse/next-reverse-bkpt-over-sr.exp: Likewise.
+	* gdb.reverse/sigall-precsave.exp: Likewise.
+	* gdb.reverse/sigall-reverse.exp: Likewise.
+	* gdb.reverse/solib-reverse.exp: Likewise.
+	* gdb.reverse/step-reverse.exp: Likewise.
+	* gdb.reverse/until-reverse.exp: Likewise.
+	* gdb.reverse/watch-reverse.exp: Likewise.
+@
+text
+@d1 1
+a1 1
+# Copyright 2008, 2009, 2010, 2011 Free Software Foundation, Inc.
+@
+
+
+1.5.2.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d1 1
+a1 1
+# Copyright 2008-2012 Free Software Foundation, Inc.
+@
+
+
+1.4
+log
+@run copyright.sh for 2011.
+@
+text
+@d24 1
+a24 1
+if ![target_info exists gdb,use_precord] {
+d37 1
+a37 1
+if [target_info exists gdb,use_precord] {
+@
+
+
+1.3
+log
+@2010-05-28  Michael Snyder  <msnyder@@msnyder-server.eng.vmware.com>
+
+	* gdb.reverse/break-precsave.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/break-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/consecutive-precsave.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/consecutive-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/finish-precsave.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/finish-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/i386-precsave.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/i386-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/i386-sse-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/i387-env-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/i387-stack-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/machinestate-precsave.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/machinestate.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/sigall-precsave.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/sigall-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/solib-precsave.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/solib-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/step-precsave.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/step-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/until-precsave.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/until-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/watch-precsave.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/watch-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+@
+text
+@d1 1
+a1 1
+# Copyright 2008, 2009, 2010 Free Software Foundation, Inc.
+@
+
+
+1.2
+log
+@Update copyright year in most headers.
+
+Automatic update by copyright.sh.
+@
+text
+@d39 1
+a39 2
+    gdb_test "record" "" "Turn on process record"
+    # FIXME: command ought to acknowledge, so we can test if it succeeded.
+a159 1
+# FIXME: command needs to acknowledge, so we can test if it succeeded.
+d161 1
+a161 1
+gdb_test "set exec-dir reverse" "" "set reverse execution"
+d269 1
+a269 1
+# gdb_test "set exec-dir forward" "" "set forward execution"
+@
+
+
+1.1
+log
+@2009-10-19  Michael Snyder  <msnyder@@vmware.com>
+
+	* gdb.reverse/break-precsave.exp: New test.
+	* gdb.reverse/consecutive-precsave.exp: Ditto.
+	* gdb.reverse/finish-precsave.exp: Ditto.
+	* gdb.reverse/i386-precsave.exp: Ditto.
+	* gdb.reverse/machinestate-precsave.exp: Ditto.
+	* gdb.reverse/sigall-precsave.exp: Ditto.
+	* gdb.reverse/solilb-precsave.exp: Ditto.
+	* gdb.reverse/step-precsave.exp: Ditto.
+	* gdb.reverse/until-precsave.exp: Ditto.
+	* gdb.reverse/watch-precsave.exp: Ditto.
+@
+text
+@d1 1
+a1 1
+# Copyright 2008, 2009 Free Software Foundation, Inc.
+@
+

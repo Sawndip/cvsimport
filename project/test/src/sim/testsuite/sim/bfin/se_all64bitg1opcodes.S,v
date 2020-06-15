@@ -1,0 +1,157 @@
+head	1.3;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.3
+	gdb_7_6-2013-04-26-release:1.3
+	gdb_7_6-branch:1.3.0.4
+	gdb_7_6-2013-03-12-branchpoint:1.3
+	gdb_7_5_1-2012-11-29-release:1.3
+	gdb_7_5-2012-08-17-release:1.3
+	gdb_7_5-branch:1.3.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.3;
+locks; strict;
+comment	@# @;
+
+
+1.3
+date	2012.04.09.04.18.56;	author vapier;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2012.04.09.03.42.43;	author vapier;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2012.03.19.05.39.45;	author vapier;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.3
+log
+@sim: bfin: enable some parallel tests
+
+Now that we check for valid sub-insns in parallel insns, we can
+enable the tests that explicitly validate those code paths.
+
+Signed-off-by: Mike Frysinger <vapier@@gentoo.org>
+@
+text
+@/*
+ * Blackfin testcase for testing illegal/legal 64-bit opcodes (group 1)
+ * from userspace.  we track all instructions which cause some sort of
+ * exception when run from userspace, this is normally EXCAUSE :
+ *  - 0x22 : illegal instruction combination
+ * and walk every instruction from 0x0000 to 0xffff
+ */
+
+# mach: bfin
+# sim: --environment operating
+
+#include "test.h"
+	.include "testutils.inc"
+
+#define SE_ALL_BITS 16
+#include "se_allopcodes.h"
+
+.macro se_all_load_insn
+	R2 = W[P5 + 4];
+	R0 = R2;
+.endm
+
+.macro se_all_next_insn
+	/* increment, and go again. */
+	R0 = R2;
+
+	R0 += 1;
+	/* finish once we hit the 32bit limit */
+	imm32 R1, 0x10000;
+	CC = R1 == R0;
+	IF CC JUMP pass_lvl;
+
+	W[P5 + 4] = R0;
+.endm
+
+.macro se_all_insn_init
+	MNOP || NOP || NOP;
+.endm
+.macro se_all_insn_table
+	/* this table must be sorted, and end with zero */
+	/* start	end		SEQSTAT */
+	.dw 0x0001,	0x7fff,		0x22
+	.dw 0x9040,	0x9040,		0x22
+	.dw 0x9049,	0x9049,		0x22
+	.dw 0x9052,	0x9052,		0x22
+	.dw 0x905b,	0x905b,		0x22
+	.dw 0x9064,	0x9064,		0x22
+	.dw 0x906d,	0x906d,		0x22
+	.dw 0x9076,	0x9076,		0x22
+	.dw 0x907f,	0x907f,		0x22
+	.dw 0x90c0,	0x90c0,		0x22
+	.dw 0x90c9,	0x90c9,		0x22
+	.dw 0x90d2,	0x90d2,		0x22
+	.dw 0x90db,	0x90db,		0x22
+	.dw 0x90e4,	0x90e4,		0x22
+	.dw 0x90ed,	0x90ed,		0x22
+	.dw 0x90f6,	0x90f6,		0x22
+	.dw 0x90ff,	0x90ff,		0x22
+	.dw 0x9180,	0x91ff,		0x22
+	.dw 0x9380,	0x93ff,		0x22
+	.dw 0x9580,	0x95ff,		0x22
+	.dw 0x9640,	0x967f,		0x22
+	.dw 0x96c0,	0x96ff,		0x22
+	.dw 0x9740,	0x97ff,		0x22
+	.dw 0x9980,	0x99ff,		0x22
+	.dw 0x9a40,	0x9a7f,		0x22
+	.dw 0x9ac0,	0x9aff,		0x22
+	.dw 0x9b40,	0x9bff,		0x22
+	.dw 0x9c60,	0x9c7f,		0x22
+	.dw 0x9ce0,	0x9cff,		0x22
+	.dw 0x9d60,	0x9d7f,		0x22
+	.dw 0x9ef0,	0x9eff,		0x22
+	.dw 0x9f70,	0x9f7f,		0x22
+	.dw 0xc000,	0xffff,		0x22
+	.dw 0x0000,	0x0000,		0x00
+.endm
+
+	se_all_test
+@
+
+
+1.2
+log
+@sim: bfin: unify se_all helpers more
+
+Now that we have the se_all helpers together and working, we can see
+what pieces are duplicated in each test and unify them in the common
+header file.
+
+Signed-off-by: Mike Frysinger <vapier@@gentoo.org>
+@
+text
+@a10 1
+# xfail: wrong excause (0x21 instead of 0x22)
+@
+
+
+1.1
+log
+@sim: bfin: add exhaustive parallel-insn tests
+@
+text
+@d9 1
+a9 1
+# mach: none
+a36 4
+.macro se_all_new_insn_stub
+	jump fail_lvl;
+.endm
+
+@
+

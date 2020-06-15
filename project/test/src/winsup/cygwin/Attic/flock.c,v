@@ -1,0 +1,135 @@
+head	1.2;
+access;
+symbols;
+locks; strict;
+comment	@ * @;
+
+
+1.2
+date	2003.11.30.10.43.04;	author corinna;	state dead;
+branches;
+next	1.1;
+
+1.1
+date	2003.11.29.23.00.51;	author corinna;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@	* flock.cc: Renamed from flock.c.
+@
+text
+@/* One of many ways to emulate flock() on top of real (good) POSIX locks.
+ *
+ * This flock() emulation is based upon source taken from the Red Hat
+ * implementation used in their imap-2002d SRPM.
+ *
+ * $RH: flock.c,v 1.2 2000/08/23 17:07:00 nalin Exp $
+ */
+/* flock.c
+
+   Copyright 2003 Red Hat, Inc.
+
+   This file is part of Cygwin.
+
+   This software is a copyrighted work licensed under the terms of the
+   Cygwin license.  Please consult the file "CYGWIN_LICENSE" for
+   details. */
+
+#include <sys/file.h>
+#include <sys/types.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <unistd.h>
+
+int
+flock (int fd, int operation)
+{
+  int i, cmd;
+  struct flock l = { 0, 0, 0, 0, 0 };
+  if (operation & LOCK_NB)
+    {
+      cmd = F_SETLK;
+    }
+  else
+    {
+      cmd = F_SETLKW;
+    }
+  l.l_whence = SEEK_SET;
+  switch (operation & (~LOCK_NB))
+    {
+    case LOCK_EX:
+      l.l_type = F_WRLCK;
+      i = fcntl (fd, cmd, &l);
+      if (i == -1)
+	{
+	  if ((errno == EAGAIN) || (errno == EACCES))
+	    {
+	      errno = EWOULDBLOCK;
+	    }
+	}
+      break;
+    case LOCK_SH:
+      l.l_type = F_RDLCK;
+      i = fcntl (fd, cmd, &l);
+      if (i == -1)
+	{
+	  if ((errno == EAGAIN) || (errno == EACCES))
+	    {
+	      errno = EWOULDBLOCK;
+	    }
+	}
+      break;
+    case LOCK_UN:
+      l.l_type = F_UNLCK;
+      i = fcntl (fd, cmd, &l);
+      if (i == -1)
+	{
+	  if ((errno == EAGAIN) || (errno == EACCES))
+	    {
+	      errno = EWOULDBLOCK;
+	    }
+	}
+      break;
+    default:
+      i = -1;
+      errno = EINVAL;
+      break;
+    }
+  return i;
+}
+
+#ifdef FLOCK_EMULATE_IS_MAIN
+int
+main (int argc, char **argv)
+{
+  int fd = open (argv[1], O_WRONLY);
+  flock (fd, LOCK_EX);
+  return 0;
+}
+#endif
+@
+
+
+1.1
+log
+@	* Makefile.in: (DLL_OFILES): Add flock.o.
+	* cygwin.din: Export flock.
+	* flock.c: New file.
+	* include/sys/file.h: Include sys/cdefs.h.
+	Add function prototype for flock().
+	Add some comments from BSD's header for further clarity.
+	(L_SET, L_CURR, L_INCR, L_XTND): Redefine as the macros
+	SEEK_SET, SEEK_CUR, SEEK_CUR, & SEEK_END respectively.
+	(LOCK_SH,LOCK_EX,LOCK_NB,LOCK_UN): New macros for flock().
+	* include/cygwin/version.h: Bump API minor number.
+@
+text
+@@
+

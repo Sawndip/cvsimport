@@ -1,0 +1,675 @@
+head	1.12;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.12
+	gdb_7_6-2013-04-26-release:1.12
+	gdb_7_6-branch:1.12.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.12
+	gdb_7_5_1-2012-11-29-release:1.11
+	gdb_7_5-2012-08-17-release:1.11
+	gdb_7_5-branch:1.11.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.11
+	gdb_7_4_1-2012-04-26-release:1.8.2.1
+	gdb_7_4-2012-01-24-release:1.8.2.1
+	gdb_7_4-branch:1.8.0.2
+	gdb_7_4-2011-12-13-branchpoint:1.8
+	gdb_7_3_1-2011-09-04-release:1.6
+	gdb_7_3-2011-07-26-release:1.6
+	gdb_7_3-branch:1.6.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.6
+	gdb_7_2-2010-09-02-release:1.5
+	gdb_7_2-branch:1.5.0.2
+	gdb_7_2-2010-07-07-branchpoint:1.5
+	gdb_7_1-2010-03-18-release:1.4
+	gdb_7_1-branch:1.4.0.2
+	gdb_7_1-2010-02-18-branchpoint:1.4;
+locks; strict;
+comment	@# @;
+
+
+1.12
+date	2013.01.01.06.32.42;	author brobecke;	state Exp;
+branches;
+next	1.11;
+
+1.11
+date	2012.04.18.06.46.46;	author jkratoch;	state Exp;
+branches;
+next	1.10;
+
+1.10
+date	2012.02.09.15.14.46;	author jkratoch;	state Exp;
+branches;
+next	1.9;
+
+1.9
+date	2012.01.04.08.17.02;	author brobecke;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2011.10.09.19.21.38;	author jkratoch;	state Exp;
+branches
+	1.8.2.1;
+next	1.7;
+
+1.7
+date	2011.10.09.19.10.52;	author jkratoch;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2011.01.01.15.33.05;	author brobecke;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2010.06.29.16.17.58;	author devans;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2010.02.10.18.39.45;	author msnyder;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2010.01.15.19.22.40;	author jkratoch;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2010.01.15.09.15.46;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2010.01.06.03.46.18;	author brobecke;	state Exp;
+branches;
+next	;
+
+1.8.2.1
+date	2012.01.06.04.43.14;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.12
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@# Copyright (C) 2009-2013 Free Software Foundation, Inc.
+#
+# This file is part of GDB.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+import gdb
+import os.path
+
+class TypeFlag:
+    """A class that allows us to store a flag name, its short name,
+    and its value.
+
+    In the GDB sources, struct type has a component called instance_flags
+    in which the value is the addition of various flags.  These flags are
+    defined by two enumerates: type_flag_value, and type_instance_flag_value.
+    This class helps us recreate a list with all these flags that is
+    easy to manipulate and sort.  Because all flag names start with either
+    TYPE_FLAG_ or TYPE_INSTANCE_FLAG_, a short_name attribute is provided
+    that strips this prefix.
+
+    ATTRIBUTES
+      name:  The enumeration name (eg: "TYPE_FLAG_UNSIGNED").
+      value: The associated value.
+      short_name: The enumeration name, with the suffix stripped.
+    """
+    def __init__(self, name, value):
+        self.name = name
+        self.value = value
+        self.short_name = name.replace("TYPE_FLAG_", '')
+        if self.short_name == name:
+            self.short_name = name.replace("TYPE_INSTANCE_FLAG_", '')
+    def __cmp__(self, other):
+        """Sort by value order."""
+        return self.value.__cmp__(other.value)
+
+# A list of all existing TYPE_FLAGS_* and TYPE_INSTANCE_FLAGS_*
+# enumerations, stored as TypeFlags objects.  Lazy-initialized.
+TYPE_FLAGS = None
+
+class TypeFlagsPrinter:
+    """A class that prints a decoded form of an instance_flags value.
+
+    This class uses a global named TYPE_FLAGS, which is a list of
+    all defined TypeFlag values.  Using a global allows us to compute
+    this list only once.
+
+    This class relies on a couple of enumeration types being defined.
+    If not, then printing of the instance_flag is going to be degraded,
+    but it's not a fatal error.
+    """
+    def __init__(self, val):
+        self.val = val
+    def __str__(self):
+        global TYPE_FLAGS
+        if TYPE_FLAGS is None:
+            self.init_TYPE_FLAGS()
+        if not self.val:
+            return "0"
+        if TYPE_FLAGS:
+            flag_list = [flag.short_name for flag in TYPE_FLAGS
+                         if self.val & flag.value]
+        else:
+            flag_list = ["???"]
+        return "0x%x [%s]" % (self.val, "|".join(flag_list))
+    def init_TYPE_FLAGS(self):
+        """Initialize the TYPE_FLAGS global as a list of TypeFlag objects.
+        This operation requires the search of a couple of enumeration types.
+        If not found, a warning is printed on stdout, and TYPE_FLAGS is
+        set to the empty list.
+
+        The resulting list is sorted by increasing value, to facilitate
+        printing of the list of flags used in an instance_flags value.
+        """
+        global TYPE_FLAGS
+        TYPE_FLAGS = []
+        try:
+            flags = gdb.lookup_type("enum type_flag_value")
+        except:
+            print "Warning: Cannot find enum type_flag_value type."
+            print "         `struct type' pretty-printer will be degraded"
+            return
+        try:
+            iflags = gdb.lookup_type("enum type_instance_flag_value")
+        except:
+            print "Warning: Cannot find enum type_instance_flag_value type."
+            print "         `struct type' pretty-printer will be degraded"
+            return
+        # Note: TYPE_FLAG_MIN is a duplicate of TYPE_FLAG_UNSIGNED,
+        # so exclude it from the list we are building.
+        TYPE_FLAGS = [TypeFlag(field.name, field.enumval)
+                      for field in flags.fields()
+                      if field.name != 'TYPE_FLAG_MIN']
+        TYPE_FLAGS += [TypeFlag(field.name, field.enumval)
+                       for field in iflags.fields()]
+        TYPE_FLAGS.sort()
+
+class StructTypePrettyPrinter:
+    """Pretty-print an object of type struct type"""
+    def __init__(self, val):
+        self.val = val
+    def to_string(self):
+        fields = []
+        fields.append("pointer_type = %s" % self.val['pointer_type'])
+        fields.append("reference_type = %s" % self.val['reference_type'])
+        fields.append("chain = %s" % self.val['reference_type'])
+        fields.append("instance_flags = %s"
+                      % TypeFlagsPrinter(self.val['instance_flags']))
+        fields.append("length = %d" % self.val['length'])
+        fields.append("main_type = %s" % self.val['main_type'])
+        return "\n{" + ",\n ".join(fields) + "}"
+
+class StructMainTypePrettyPrinter:
+    """Pretty-print an objet of type main_type"""
+    def __init__(self, val):
+        self.val = val
+    def flags_to_string(self):
+        """struct main_type contains a series of components that
+        are one-bit ints whose name start with "flag_".  For instance:
+        flag_unsigned, flag_stub, etc.  In essence, these components are
+        really boolean flags, and this method prints a short synthetic
+        version of the value of all these flags.  For instance, if
+        flag_unsigned and flag_static are the only components set to 1,
+        this function will return "unsigned|static".
+        """
+        fields = [field.name.replace("flag_", "")
+                  for field in self.val.type.fields()
+                  if field.name.startswith("flag_")
+                     and self.val[field.name]]
+        return "|".join(fields)
+    def owner_to_string(self):
+        """Return an image of component "owner".
+        """
+        if self.val['flag_objfile_owned'] != 0:
+            return "%s (objfile)" % self.val['owner']['objfile']
+        else:
+            return "%s (gdbarch)" % self.val['owner']['gdbarch']
+    def struct_field_location_img(self, field_val):
+        """Return an image of the loc component inside the given field
+        gdb.Value.
+        """
+        loc_val = field_val['loc']
+        loc_kind = str(field_val['loc_kind'])
+        if loc_kind == "FIELD_LOC_KIND_BITPOS":
+            return 'bitpos = %d' % loc_val['bitpos']
+        elif loc_kind == "FIELD_LOC_KIND_ENUMVAL":
+            return 'enumval = %d' % loc_val['enumval']
+        elif loc_kind == "FIELD_LOC_KIND_PHYSADDR":
+            return 'physaddr = 0x%x' % loc_val['physaddr']
+        elif loc_kind == "FIELD_LOC_KIND_PHYSNAME":
+            return 'physname = %s' % loc_val['physname']
+        elif loc_kind == "FIELD_LOC_KIND_DWARF_BLOCK":
+            return 'dwarf_block = %s' % loc_val['dwarf_block']
+        else:
+            return 'loc = ??? (unsupported loc_kind value)'
+    def struct_field_img(self, fieldno):
+        """Return an image of the main_type field number FIELDNO.
+        """
+        f = self.val['flds_bnds']['fields'][fieldno]
+        label = "flds_bnds.fields[%d]:" % fieldno
+        if f['artificial']:
+            label += " (artificial)"
+        fields = []
+        fields.append("name = %s" % f['name'])
+        fields.append("type = %s" % f['type'])
+        fields.append("loc_kind = %s" % f['loc_kind'])
+        fields.append("bitsize = %d" % f['bitsize'])
+        fields.append(self.struct_field_location_img(f))
+        return label + "\n" + "  {" + ",\n   ".join(fields) + "}"
+    def bounds_img(self):
+        """Return an image of the main_type bounds.
+        """
+        b = self.val['flds_bnds']['bounds'].dereference()
+        low = str(b['low'])
+        if b['low_undefined'] != 0:
+            low += " (undefined)"
+        high = str(b['high'])
+        if b['high_undefined'] != 0:
+            high += " (undefined)"
+        return "flds_bnds.bounds = {%s, %s}" % (low, high)
+    def type_specific_img(self):
+        """Return a string image of the main_type type_specific union.
+        Only the relevant component of that union is printed (based on
+        the value of the type_specific_kind field.
+        """
+        type_specific_kind = str(self.val['type_specific_field'])
+        type_specific = self.val['type_specific']
+        if type_specific_kind == "TYPE_SPECIFIC_NONE":
+            img = 'type_specific_field = %s' % type_specific_kind
+        elif type_specific_kind == "TYPE_SPECIFIC_CPLUS_STUFF":
+            img = "cplus_stuff = %s" % type_specific['cplus_stuff']
+        elif type_specific_kind == "TYPE_SPECIFIC_GNAT_STUFF":
+            img = ("gnat_stuff = {descriptive_type = %s}"
+                   % type_specific['gnat_stuff']['descriptive_type'])
+        elif type_specific_kind == "TYPE_SPECIFIC_FLOATFORMAT":
+            img = "floatformat[0..1] = %s" % type_specific['floatformat']
+        elif type_specific_kind == "TYPE_SPECIFIC_FUNC":
+            img = ("calling_convention = %d"
+                   % type_specific['func_stuff']['calling_convention'])
+            # tail_call_list is not printed.
+        else:
+            img = ("type_specific = ??? (unknown type_secific_kind: %s)"
+                   % type_specific_kind)
+        return img
+
+    def to_string(self):
+        """Return a pretty-printed image of our main_type.
+        """
+        fields = []
+        fields.append("name = %s" % self.val['name'])
+        fields.append("tag_name = %s" % self.val['tag_name'])
+        fields.append("code = %s" % self.val['code'])
+        fields.append("flags = [%s]" % self.flags_to_string())
+        fields.append("owner = %s" % self.owner_to_string())
+        fields.append("target_type = %s" % self.val['target_type'])
+        fields.append("vptr_basetype = %s" % self.val['vptr_basetype'])
+        if self.val['nfields'] > 0:
+            for fieldno in range(self.val['nfields']):
+                fields.append(self.struct_field_img(fieldno))
+        if self.val['code'] == gdb.TYPE_CODE_RANGE:
+            fields.append(self.bounds_img())
+        fields.append(self.type_specific_img())
+
+        return "\n{" + ",\n ".join(fields) + "}"
+
+def type_lookup_function(val):
+    """A routine that returns the correct pretty printer for VAL
+    if appropriate.  Returns None otherwise.
+    """
+    if val.type.tag == "type":
+        return StructTypePrettyPrinter(val)
+    elif val.type.tag == "main_type":
+        return StructMainTypePrettyPrinter(val)
+    return None
+
+def register_pretty_printer(objfile):
+    """A routine to register a pretty-printer against the given OBJFILE.
+    """
+    objfile.pretty_printers.append(type_lookup_function)
+
+if __name__ == "__main__":
+    if gdb.current_objfile() is not None:
+        # This is the case where this script is being "auto-loaded"
+        # for a given objfile.  Register the pretty-printer for that
+        # objfile.
+        register_pretty_printer(gdb.current_objfile())
+    else:
+        # We need to locate the objfile corresponding to the GDB
+        # executable, and register the pretty-printer for that objfile.
+        # FIXME: The condition used to match the objfile is too simplistic
+        # and will not work on Windows.
+        for objfile in gdb.objfiles():
+            if os.path.basename(objfile.filename) == "gdb":
+                objfile.pretty_printers.append(type_lookup_function)
+@
+
+
+1.11
+log
+@gdb/
+	PR symtab/7259:
+	* ada-exp.y (convert_char_literal): Use TYPE_FIELD_ENUMVAL.
+	* ada-lang.c (ada_discrete_type_high_bound)
+	(ada_discrete_type_low_bound): Use TYPE_FIELD_ENUMVAL for
+	TYPE_CODE_ENUM.
+	(ada_identical_enum_types_p): Use TYPE_FIELD_ENUMVAL.
+	(pos_atr, value_val_atr): Use TYPE_FIELD_ENUMVAL for TYPE_CODE_ENUM.
+	* ada-typeprint.c (print_enum_type): Change variable lastval to LONGEST.
+	Use TYPE_FIELD_ENUMVAL.
+	* ada-valprint.c (print_optional_low_bound, ada_print_scalar)
+	(ada_val_print_1): Use TYPE_FIELD_ENUMVAL for TYPE_CODE_ENUM.
+	* c-typeprint.c (c_type_print_base): Move variable lastval to inner
+	block, change it to LONGEST.  Use TYPE_FIELD_ENUMVAL for
+	TYPE_CODE_ENUM.
+	* coffread.c (coff_read_enum_type): Use SET_FIELD_ENUMVAL.
+	* dwarf2read.c (process_enumeration_scope): Likewise.
+	* gdb-gdb.py (TypeFlagsPrinter): Use field.enumval instead of
+	field.bitpos.
+	(class StructMainTypePrettyPrinter): Support also
+	FIELD_LOC_KIND_ENUMVAL.
+	* gdbtypes.c (get_discrete_bounds): Use TYPE_FIELD_ENUMVAL for
+	TYPE_CODE_ENUM.
+	(recursive_dump_type): Use TYPE_FIELD_ENUMVAL for TYPE_CODE_ENUM.
+	(copy_type_recursive): Support also FIELD_LOC_KIND_ENUMVAL.
+	* gdbtypes.h (enum field_loc_kind): New FIELD_LOC_KIND_ENUMVAL.
+	(struct main_type.flds_bnds.fields.loc): Adjust bitpos comment.  New
+	field enumval.
+	(struct main_type.flds_bnds.bields): Adjust loc_kind and bitsize to
+	accommodate enumval.
+	(struct call_site): Adjust loc_kind to accommodate enumval.
+	(FIELD_ENUMVAL, FIELD_ENUMVAL_LVAL, SET_FIELD_ENUMVAL)
+	(TYPE_FIELD_ENUMVAL): New macros.
+	* m2-typeprint.c (m2_enum): Use TYPE_FIELD_ENUMVAL.
+	* mdebugread.c (parse_symbol): Use TYPE_FIELD_ENUMVAL for
+	TYPE_CODE_ENUM.
+	* p-typeprint.c (pascal_type_print_base): Likewise.
+	* python/lib/gdb/printing.py (class FlagEnumerationPrinter): Use
+	enumval.
+	* python/lib/gdb/types.py (make_enum_dict): Likewise.
+	* python/py-type.c (convert_field): New variable addrstring.  Use
+	TYPE_FIELD_ENUMVAL for TYPE_CODE_ENUM.
+	(check_types_equal): Support also FIELD_LOC_KIND_ENUMVAL.
+	* stabsread.c (read_enum_type): Use SET_FIELD_ENUMVAL.
+	* typepint.c (print_type_scalar): Use TYPE_FIELD_ENUMVAL for
+	TYPE_CODE_ENUM.
+	* valprint.c (generic_val_print): Likewise.
+
+gdb/testsuite/
+	PR symtab/7259:
+	* gdb.base/enumval.c: New test case.
+	* gdb.base/enumval.exp: New test case.
+	* gdb.python/py-type.exp (test_enums): Use field.enumval instead of
+	field.bitpos.
+@
+text
+@d1 1
+a1 1
+# Copyright (C) 2009-2012 Free Software Foundation, Inc.
+@
+
+
+1.10
+log
+@gdb/
+	* gdb-gdb.py (StructMainTypePrettyPrinter) <struct_field_img>: Print
+	flds_bnds.fields.
+	(StructMainTypePrettyPrinter) <bounds_img>: Print flds_bnds.bounds.
+@
+text
+@d102 1
+a102 1
+        TYPE_FLAGS = [TypeFlag(field.name, field.bitpos)
+d105 1
+a105 1
+        TYPE_FLAGS += [TypeFlag(field.name, field.bitpos)
+d157 2
+@
+
+
+1.9
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d169 1
+a169 1
+        label = "field[%d]:" % fieldno
+d189 1
+a189 1
+        return "bounds = {%s, %s}" % (low, high)
+@
+
+
+1.8
+log
+@gdb/
+	Implement basic support for DW_TAG_GNU_call_site.
+	* block.c: Include gdbtypes.h and exceptions.h.
+	(call_site_for_pc): New function.
+	* block.h (call_site_for_pc): New declaration.
+	* defs.h: Include hashtab.h.
+	(make_cleanup_htab_delete, core_addr_hash, core_addr_eq): New
+	declarations.
+	* dwarf2-frame.c (dwarf2_frame_ctx_funcs): Install
+	ctx_no_push_dwarf_reg_entry_value.
+	* dwarf2expr.c (read_uleb128, read_sleb128): Support R as NULL.
+	(dwarf_block_to_dwarf_reg): New function.
+	(execute_stack_op) <DW_OP_GNU_entry_value>: Implement it.
+	(ctx_no_push_dwarf_reg_entry_value): New function.
+	* dwarf2expr.h (struct dwarf_expr_context_funcs): New field
+	push_dwarf_reg_entry_value.
+	(ctx_no_push_dwarf_reg_entry_value, dwarf_block_to_dwarf_reg): New
+	declarations.
+	* dwarf2loc.c: Include gdbcmd.h.
+	(dwarf_expr_ctx_funcs): New forward declaration.
+	(entry_values_debug, show_entry_values_debug, call_site_to_target_addr)
+	(dwarf_expr_reg_to_entry_parameter)
+	(dwarf_expr_push_dwarf_reg_entry_value): New.
+	(dwarf_expr_ctx_funcs): Install dwarf_expr_push_dwarf_reg_entry_value.
+	(dwarf2_evaluate_loc_desc_full): Handle NO_ENTRY_VALUE_ERROR.
+	(needs_dwarf_reg_entry_value): New function.
+	(needs_frame_ctx_funcs): Install it.
+	(_initialize_dwarf2loc): New function.
+	* dwarf2loc.h (entry_values_debug): New declaration.
+	* dwarf2read.c (struct dwarf2_cu): New field call_site_htab.
+	(read_call_site_scope): New forward declaration.
+	(process_full_comp_unit): Copy call_site_htab.
+	(process_die): Support DW_TAG_GNU_call_site.
+	(read_call_site_scope): New function.
+	(dwarf2_get_pc_bounds): Support NULL HIGHPC.
+	(dwarf_tag_name): Support DW_TAG_GNU_call_site.
+	(cleanup_htab): Delete.
+	(write_psymtabs_to_index): Use make_cleanup_htab_delete instead of it.
+	* exceptions.h (enum errors): New NO_ENTRY_VALUE_ERROR.
+	* gdb-gdb.py (StructMainTypePrettyPrinter): Support
+	FIELD_LOC_KIND_DWARF_BLOCK.
+	* gdbtypes.h (enum field_loc_kind): New entry
+	FIELD_LOC_KIND_DWARF_BLOCK.
+	(struct main_type): New loc entry dwarf_block.
+	(struct call_site, FIELD_DWARF_BLOCK, SET_FIELD_DWARF_BLOCK)
+	(TYPE_FIELD_DWARF_BLOCK): New.
+	* python/py-type.c: Include dwarf2loc.h.
+	(check_types_equal): Support FIELD_LOC_KIND_DWARF_BLOCK.  New
+	internal_error call on unknown FIELD_LOC_KIND.
+	* symtab.h (struct symtab): New field call_site_htab.
+	* utils.c (do_htab_delete_cleanup, make_cleanup_htab_delete)
+	(core_addr_hash, core_addr_eq): New functions.
+
+gdb/testsuite/
+	Implement basic support for DW_TAG_GNU_call_site.
+	* gdb.arch/Makefile.in (EXECUTABLES): Add amd64-entry-value.
+	* gdb.arch/amd64-entry-value.cc: New file.
+	* gdb.arch/amd64-entry-value.exp: New file.
+@
+text
+@d1 1
+a1 1
+# Copyright (C) 2009, 2010, 2011 Free Software Foundation, Inc.
+@
+
+
+1.8.2.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d1 1
+a1 1
+# Copyright (C) 2009-2012 Free Software Foundation, Inc.
+@
+
+
+1.7
+log
+@gdb/
+	Code reshuffle.
+	* gdb-gdb.py (StructMainTypePrettyPrinter): Change
+	TYPE_SPECIFIC_CALLING_CONVENTION to TYPE_SPECIFIC_FUNC.  Move
+	calling_convention under func_stuff there.
+	* gdbtypes.c (make_function_type): Call INIT_FUNC_SPECIFIC.
+	(init_type) <TYPE_CODE_FUNC>: Likewise.
+	(recursive_dump_type): Change TYPE_SPECIFIC_CALLING_CONVENTION to
+	TYPE_SPECIFIC_FUNC.  New comment for tail_call_list.
+	* gdbtypes.h (enum type_specific_kind): Change
+	TYPE_SPECIFIC_CALLING_CONVENTION to TYPE_SPECIFIC_FUNC.
+	(struct main_type) <type_specific>: Change calling_convention to
+	func_stuff.  Move calling_convention to ...
+	(struct func_type): ... this new struct.
+	(INIT_FUNC_SPECIFIC): New #define.
+	(TYPE_CALLING_CONVENTION): Change calling_convention to func_stuff.
+@
+text
+@d161 2
+@
+
+
+1.6
+log
+@run copyright.sh for 2011.
+@
+text
+@d204 1
+a204 1
+        elif type_specific_kind == "TYPE_SPECIFIC_CALLING_CONVENTION":
+d206 2
+a207 1
+                   % type_specific['calling_convention'])
+@
+
+
+1.5
+log
+@	Delete FIELD_LOC_KIND_DWARF_BLOCK, unused.
+	* gdbtypes.h (enum field_loc_kind): Delete FIELD_LOC_KIND_DWARF_BLOCK.
+	(struct main_type, field loc): Delete dwarf_block.
+	(FIELD_DWARF_BLOCK): Delete.
+	(SET_FIELD_DWARF_BLOCK): Delete.
+	(TYPE_FIELD_DWARF_BLOCK): Delete.
+	* gdb-gdb.py (StructMainTypePrettyPrinter.struct_field_location_img):
+	Update.
+@
+text
+@d1 1
+a1 1
+# Copyright (C) 2009, 2010 Free Software Foundation, Inc.
+@
+
+
+1.4
+log
+@2010-02-10  Michael Snyder  <msnyder@@vmware.com>
+
+	* gdb-gdb.py: Comment fix.
+@
+text
+@a160 2
+        elif loc_kind == "FIELD_LOC_KIND_DWARF_BLOCK":
+            return 'dwarf_block = %s' % loc_val['dwarf_block']
+@
+
+
+1.3
+log
+@gdb/
+	* gdb-gdb.py (StructMainTypePrettyPrinter): Fix TYPE_CODE_RANGE
+	comparison.
+@
+text
+@d26 2
+a27 2
+    whose the value is the addition of various flags.  These flags are
+    defined by two emumerates: type_flag_value, and type_instance_flag_value.
+@
+
+
+1.2
+log
+@Enhance gdb-gdb.py to handle main_type.type_specific.
+
+        * gdb-gdb.py: Print the type-specific part of struct main_type.
+@
+text
+@d228 1
+a228 1
+        if self.val.type.code == gdb.TYPE_CODE_RANGE:
+@
+
+
+1.1
+log
+@New python script adding pretty printers for types defined in GDB.
+
+        * gdb-gdb.py: New file.
+@
+text
+@d190 24
+a226 1
+                fields.append("field[%d]:")
+d230 2
+a231 4
+        # FIXME: We need to print the type_specific field as well.
+        # But I will wait for a patch that introduces a discriminant.
+        # This will simplify the selection of the right component in
+        # that union.
+@
+

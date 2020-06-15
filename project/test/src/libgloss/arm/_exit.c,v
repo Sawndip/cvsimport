@@ -1,0 +1,139 @@
+head	1.2;
+access;
+symbols
+	newlib-2_2_0:1.2.0.6
+	newlib-2_1_0:1.2
+	newlib-2_0_0:1.2
+	newlib-1_20_0:1.2
+	newlib-1_19_0:1.2
+	newlib-1_18_0:1.2
+	newlib-1_17_0-arc:1.2.0.4
+	binutils-arc-20080908-branch:1.2.0.2
+	binutils-arc-20080908-branchpoint:1.2
+	newlib-1_17_0:1.2
+	newlib-1_16_0:1.2
+	newlib-csl-coldfire-4_1-32:1.1.2.1
+	newlib-csl-sourcerygxx-4_1-32:1.1.2.1
+	newlib-csl-innovasic-fido-3_4_4-33:1.1.2.1
+	newlib-csl-coldfire-4_1-30:1.1.2.1
+	newlib-csl-sourcerygxx-4_1-30:1.1.2.1
+	newlib-csl-coldfire-4_1-28:1.1.2.1
+	newlib-csl-sourcerygxx-4_1-28:1.1.2.1
+	newlib-csl-arm-2006q3-27:1.1.2.1
+	newlib-csl-sourcerygxx-4_1-27:1.1.2.1
+	newlib-csl-arm-2006q3-26:1.1.2.1
+	newlib-csl-sourcerygxx-4_1-26:1.1.2.1
+	newlib-csl-sourcerygxx-4_1-24:1.1.2.1
+	newlib-csl-sourcerygxx-4_1-23:1.1.2.1
+	newlib-csl-sourcerygxx-4_1-21:1.1.2.1
+	newlib-csl-arm-2006q3-21:1.1.2.1
+	newlib-csl-arm-2006q3-19:1.1.2.1
+	newlib-csl-sourcerygxx-4_1-19:1.1.2.1
+	newlib-csl-sourcerygxx-4_1-18:1.1.2.1
+	newlib-csl-20060320-branch:1.1.0.2;
+locks; strict;
+comment	@ * @;
+
+
+1.2
+date	2007.01.03.16.55.25;	author jjohnstn;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2006.09.01.15.28.54;	author pbrook;	state dead;
+branches
+	1.1.2.1;
+next	;
+
+1.1.2.1
+date	2006.09.01.15.28.54;	author pbrook;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@
+2006-01-03  Kazu Hirata  <kazu@@codesourcery.com>
+
+        * arm/Makefile (RDPMON_OBJS): Add _exit.o and _kill.o.
+        (RDIMON_OBJS): Define in terms of RDPMON_OBJS.
+        (rdimon-_exit.o, rdimon-_kill.o): New.
+        * arm/_exit.c, arm/_kill.c: New.
+        * arm/syscalls.c (_exit, _kill): Remove.
+@
+text
+@#include <_ansi.h>
+
+int _kill _PARAMS ((int, int));
+void _exit _PARAMS ((int));
+
+void
+_exit (int status)
+{
+  /* There is only one SWI for both _exit and _kill. For _exit, call
+     the SWI with the second argument set to -1, an invalid value for
+     signum, so that the SWI handler can distinguish the two calls.
+     Note: The RDI implementation of _kill throws away both its
+     arguments.  */
+  _kill (status, -1);
+}
+@
+
+
+1.1
+log
+@file _exit.c was initially added on branch newlib-csl-20060320-branch.
+@
+text
+@d1 15
+@
+
+
+1.1.2.1
+log
+@2006-09-01  Paul Brook  <paul@@codesourcery.com>
+
+	libgloss/
+	* arm/Makefile.in: Include _exit.c in BSPs.  Add rdimon-ram.ld.
+	Build linker scripts instead of spec files for rdimon and rdpmon.
+	Pass CRT0 ad BSP to arm.sc.
+	* arm/_exit.c: New file.
+	* arm/arm.sc: Add STARTUP, GROUP and SEARCH_DIR.  Remove defaults
+	for ROM and RAM.
+	* arm/crt0.S: Give Thumb-2 symbols function type.
+	Skip generic Arm init code for Thumb-2.
+	Add _nmi_isr and _fault_isr.
+	* arm/libcfunc.c (do_AngelSWI): Remove.
+	* arm/swi.h (do_AngelSWI): New function.
+	* arm/syscalls.c (do_AngelSWI): Remove.
+	(_exit): Remove.
+	(isatty): New function.
+@
+text
+@a0 18
+#include <_ansi.h>
+#include "swi.h"
+
+void _exit _PARAMS ((int));
+
+void
+_exit (int n)
+{
+  /* FIXME: return code is thrown away.  */
+  
+#ifdef ARM_RDI_MONITOR
+  do_AngelSWI (AngelSWI_Reason_ReportException,
+	      (void *) ADP_Stopped_ApplicationExit);
+#else
+  asm ("swi %a0" :: "i" (SWI_Exit));
+#endif
+  n = n;
+}
+@
+

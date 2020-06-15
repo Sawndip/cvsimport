@@ -1,0 +1,457 @@
+head	1.8;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.8
+	gdb_7_6-2013-04-26-release:1.8
+	gdb_7_6-branch:1.8.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.8
+	gdb_7_5_1-2012-11-29-release:1.5
+	gdb_7_5-2012-08-17-release:1.5
+	gdb_7_5-branch:1.5.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.5
+	gdb_7_4_1-2012-04-26-release:1.1.2.1
+	gdb_7_4-2012-01-24-release:1.1.2.1
+	gdb_7_4-branch:1.1.0.2
+	gdb_7_4-2011-12-13-branchpoint:1.1;
+locks; strict;
+comment	@# @;
+
+
+1.8
+date	2013.02.10.08.05.15;	author jkratoch;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2013.01.01.06.41.26;	author brobecke;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2012.12.10.21.22.21;	author pkoning;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2012.06.22.17.59.33;	author tromey;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2012.05.19.01.05.38;	author bauermann;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2012.01.16.16.21.52;	author palves;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2012.01.04.08.27.49;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2011.09.02.21.16.54;	author ratmice;	state Exp;
+branches
+	1.1.2.1;
+next	;
+
+1.1.2.1
+date	2012.01.06.04.54.27;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.8
+log
+@gdb/testsuite/
+	* gdb.python/py-prompt.exp: Add to the end a kill of $testpid.
+@
+text
+@# Copyright (C) 2011-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# This file is part of the GDB testsuite.  It tests the mechanism
+# for defining the prompt in Python.
+
+standard_testfile
+
+# We need to use TCL's exec to get the pid.
+if [is_remote target] then {
+    return 0
+}
+
+load_lib gdb-python.exp
+load_lib prompt.exp
+
+# Start with a fresh gdb.
+
+gdb_exit
+gdb_start
+gdb_reinitialize_dir $srcdir/$subdir
+
+# Skip all tests if Python scripting is not enabled.
+if { [skip_python_tests] } { continue }
+gdb_exit
+
+if {[build_executable $testfile.exp $testfile $srcfile debug] == -1} {
+    return -1
+}
+
+global GDBFLAGS
+set saved_gdbflags $GDBFLAGS
+set GDBFLAGS [concat $GDBFLAGS " -ex \"set height 0\""]
+set GDBFLAGS [concat $GDBFLAGS " -ex \"set width 0\""]
+set GDBFLAGS [concat $GDBFLAGS " -ex \"python p = list()\""]
+set prompt_func "python def foo(x): global p; p.append(x);  return \'(Foo) \'"
+set GDBFLAGS [concat $GDBFLAGS " -ex \"$prompt_func\""]
+set GDBFLAGS [concat $GDBFLAGS " -ex \"python gdb.prompt_hook=foo\""]
+
+set tmp_gdbflags $GDBFLAGS
+set gdb_prompt_fail $gdb_prompt
+
+global gdb_prompt
+# Does not include the space at the end of the prompt.
+# gdb_test expects it not to be there.
+set gdb_prompt "\[(\]Foo\[)\]"
+
+set GDBFLAGS [concat $tmp_gdbflags " -ex \"set editing on\""]
+prompt_gdb_start
+gdb_test "python x = len(p); print (gdb.execute(\"show prompt\", to_string = True))" \
+	 ".*prompt is \"$gdb_prompt \".*" \
+	 "show prompt gets the correct result"
+gdb_test "python print ('%d %d' % (x, len(p)))" "1 2" \
+	 "retrieving the prompt causes no extra prompt_hook calls"
+gdb_test "python print (\"'\" + str(p\[0\]) + \"'\")" "'$gdb_prompt_fail '" \
+	 "prompt_hook argument is default prompt."
+gdb_exit
+
+
+set GDBFLAGS [concat $tmp_gdbflags " -ex \"set editing off\""]
+prompt_gdb_start
+gdb_test "python x = len(p); print (gdb.execute(\"show prompt\", to_string = True))" \
+	 ".*prompt is \"$gdb_prompt \".*" \
+	 "show prompt gets the correct result 2"
+gdb_test "python print ('%d %d' % (x, len(p)))" "1 2" \
+	 "retrieving the prompt causes no extra prompt_hook calls 2"
+gdb_test "python print (\"'\" + str(p\[0\]) + \"'\")" "'$gdb_prompt_fail '" \
+	 "prompt_hook argument is default prompt. 2"
+gdb_exit
+
+# Start the program running and then wait for a bit, to be sure
+# that it can be attached to.
+set testpid [eval exec $binfile &]
+exec sleep 2
+if { [istarget "*-*-cygwin*"] } {
+    # testpid is the Cygwin PID, GDB uses the Windows PID, which might be
+    # different due to the way fork/exec works.
+    set testpid [ exec ps -e | gawk "{ if (\$1 == $testpid) print \$4; }" ]
+}
+
+set GDBFLAGS [concat $tmp_gdbflags " -ex \"set target-async on\""]
+set GDBFLAGS [concat $GDBFLAGS " -ex \"set pagination off\""]
+set GDBFLAGS [concat $GDBFLAGS " -ex \"set editing on\""]
+set GDBFLAGS [concat $GDBFLAGS " -ex \"attach $testpid\""]
+set GDBFLAGS [concat $GDBFLAGS " -ex \"continue&\""]
+
+# sync_execution = 1 is_running = 1
+prompt_gdb_start
+gdb_test "python x = len(p); print (gdb.execute(\"show prompt\", to_string = True))" \
+	 ".*prompt is \"$gdb_prompt \".*" \
+	 "show prompt gets the correct result 3"
+gdb_test "python print ('%d %d' % (x, len(p)))" "1 2" \
+	 "retrieving the prompt causes no extra prompt_hook calls 3"
+gdb_test "python print (\"'\" + str(p\[0\]) + \"'\")" "'$gdb_prompt_fail '" \
+	 "prompt_hook argument is default prompt. 3"
+gdb_exit
+
+set GDBFLAGS [concat $tmp_gdbflags " -ex \"set target-async on\""]
+set GDBFLAGS [concat $GDBFLAGS " -ex \"set pagination off\""]
+set GDBFLAGS [concat $GDBFLAGS " -ex \"set editing on\""]
+set GDBFLAGS [concat $GDBFLAGS " -ex \"attach $testpid\""]
+set GDBFLAGS [concat $GDBFLAGS " -ex \"interrupt\""]
+
+# sync_execution = 1 is_running = 0
+prompt_gdb_start
+gdb_test "python x = len(p); print (gdb.execute(\"show prompt\", to_string = True))" \
+	 ".*prompt is \"$gdb_prompt \".*" \
+	 "show prompt gets the correct result 4"
+gdb_test "python print ('%d %d' % (x, len(p)))" "1 2" \
+	 "retrieving the prompt causes no extra prompt_hook calls 4"
+gdb_test "python print (\"'\" + str(p\[0\]) + \"'\")" "'$gdb_prompt_fail '" \
+	 "prompt_hook argument is default prompt. 4"
+gdb_exit
+
+set GDBFLAGS $saved_gdbflags
+exec kill -9 ${testpid}
+return 0
+@
+
+
+1.7
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@d128 1
+@
+
+
+1.6
+log
+@2012-12-10  Paul Koning  <paul_koning@@dell.com>
+
+	* gdb.base/charset.exp: Change print syntax for Python 3
+	compatibility.
+	* gdb.python/py-block.exp: Ditto.
+	* gdb.python/py-breakpoint.exp: Ditto.
+	* gdb.python/py-cmd.exp: Ditto.
+	* gdb.python/py-events.py: Ditto.
+	* gdb.python/py-finish-breakpoint.py: Ditto.
+	* gdb.python/py-finish-breakpoint2.exp: Ditto.
+	* gdb.python/py-finish-breakpoint2.py: Ditto.
+	* gdb.python/py-frame-inline.exp: Ditto.
+	* gdb.python/py-frame.exp: Ditto.
+	* gdb.python/py-infthread.exp: Ditto.
+	* gdb.python/py-objfile.exp: Ditto.
+	* gdb.python/py-parameter.exp: Ditto.
+	* gdb.python/py-progspace.exp: Ditto.
+	* gdb.python/py-prompt.exp: Ditto.
+	* gdb.python/py-symbol.exp: Ditto.
+	* gdb.python/py-symtab.exp: Ditto.
+	* gdb.python/py-template.exp: Ditto.
+	* gdb.python/py-value-cc.exp: Ditto.
+	* gdb.python/python.exp: Ditto.
+	* gdb.python/source2.py: Ditto.
+	* gdb.python/lib-types.exp: Change print syntax for Python 3
+	compatibility.
+	Use sorted() function rather than sort() method.
+	Accept either int or long values for enum values.
+	* gdb.python/py-events.exp: Use exec(open(...).read()) instead of
+	execfile for Python 3 compatibility.
+	* gdb.python/py-evsignal.exp: Ditto.
+	* gdb.python/py-evthreads.exp: Ditto.
+	* gdb.python/py-mi.exp: Ditto.
+	* gdb.python/py-pp-maint.exp: Ditto.
+	* gdb.python/py-prettyprint.exp: Ditto.
+	* gdb.python/py-finish-breakpoint.exp: Change print syntax for
+	Python 3 compatibility.
+	Skip tests for Python 2.4.
+	* gdb.python/py-inferior.exp: Change print syntax for
+	Python 3 compatibility.
+	Use byte string rather than character string in memory write test
+	if Python 3.
+	* gdb.python/py-pp-maint.py: Change class declarations to "new
+	class" syntax.
+	* gdb.python/py-prettyprint.py: Change iterator class to generator
+	function for Python 3 compatibility.
+	Make all classes "new style".
+	Fix indentation issue and stray semicolon.
+	* gdb.python/py-shared.expChange print syntax for Python 3
+	compatibility.
+	Define "long" if Python 3.
+	* gdb.python/py-type.exp: Change print syntax for Python 3
+	compatibility.
+	Accept either int or long values for enum values.
+	* gdb.python/py-value.exp: Change print syntax for Python 3
+	compatibility.
+	Skip "long" and "unicode" tests if Python 3.
+	Accept either "type" or "class" in type checks.
+	* lib/gdb.exp (gdb_py_is_py3k): New flag set if Python 3.
+	(gdb_py_is_py24): New flag set if Python 2.4 or 2.5.
+@
+text
+@d1 1
+a1 1
+# Copyright (C) 2011-2012 Free Software Foundation, Inc.
+@
+
+
+1.5
+log
+@	* gdb.python/lib-types.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.python/py-block.exp: Use standard_testfile.
+	* gdb.python/py-breakpoint.exp: Use standard_testfile.
+	* gdb.python/py-events.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.python/py-evsignal.exp: Use standard_testfile.
+	* gdb.python/py-evethreads.exp: Use standard_testfile.
+	* gdb.python/py-explore-cc.exp: Use standard_testfile.
+	* gdb.python/py-explore.exp: Use standard_testfile.
+	* gdb.python/py-finish-breakpoint.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.python/py-finish-breakpoint2.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.python/py-frame-inline.exp: Use standard_testfile.
+	* gdb.python/py-frame.exp: Use standard_testfile.
+	* gdb.python/py-inferior.exp: Use standard_testfile.
+	* gdb.python/py-infthread.exp: Use standard_testfile.
+	* gdb.python/py-mi.exp: Use standard_testfile.
+	* gdb.python/py-objfile-script.exp: Use standard_testfile,
+	build_executable.
+	* gdb.python/py-objfile.exp: Use standard_testfile.
+	* gdb.python/py-pp-maint.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.python/py-prettyprint.exp: Use standard_testfile.
+	* gdb.python/py-progspace.exp: Use standard_testfile,
+	build_executable.
+	* gdb.python/py-prompt.exp: Use standard_testfile,
+	build_executable.
+	* gdb.python/py-section-script.exp: Use standard_testfile,
+	build_executable.
+	* gdb.python/py-shared.exp: Use standard_testfile,
+	standard_output_file, clean_restart.
+	* gdb.python/py-symbol.exp: Use standard_output_file,
+	prepare_for_testing.
+	* gdb.python/py-symtab.exp: Use standard_output_file,
+	prepare_for_testing
+	* gdb.python/py-template.exp: Use standard_testfile.
+	* gdb.python/py-type.exp: Use standard_testfile.
+	* gdb.python/py-value-cc.exp: Use standard_testfile.
+	* gdb.python/py-value.exp: Use standard_testfile.
+	* gdb.python/python.exp: Use standard_testfile, build_executable.
+@
+text
+@d62 1
+a62 1
+gdb_test "python x = len(p); print gdb.execute(\"show prompt\", to_string = True)" \
+d65 1
+a65 1
+gdb_test "python print x, len(p)" "1 2" \
+d67 1
+a67 1
+gdb_test "python print \"'\" + str(p\[0\]) + \"'\"" "'$gdb_prompt_fail '" \
+d74 1
+a74 1
+gdb_test "python x = len(p); print gdb.execute(\"show prompt\", to_string = True)" \
+d77 1
+a77 1
+gdb_test "python print x, len(p)" "1 2" \
+d79 1
+a79 1
+gdb_test "python print \"'\" + str(p\[0\]) + \"'\"" "'$gdb_prompt_fail '" \
+d101 1
+a101 1
+gdb_test "python x = len(p); print gdb.execute(\"show prompt\", to_string = True)" \
+d104 1
+a104 1
+gdb_test "python print x, len(p)" "1 2" \
+d106 1
+a106 1
+gdb_test "python print \"'\" + str(p\[0\]) + \"'\"" "'$gdb_prompt_fail '" \
+d118 1
+a118 1
+gdb_test "python x = len(p); print gdb.execute(\"show prompt\", to_string = True)" \
+d121 1
+a121 1
+gdb_test "python print x, len(p)" "1 2" \
+d123 1
+a123 1
+gdb_test "python print \"'\" + str(p\[0\]) + \"'\"" "'$gdb_prompt_fail '" \
+@
+
+
+1.4
+log
+@	* gdb.python/py-prompt.exp: Quit if the target is remote.
+@
+text
+@d19 1
+a19 3
+set testfile "py-prompt"
+set srcfile ${testfile}.c
+set binfile ${objdir}/${subdir}/${testfile}
+d39 1
+a39 2
+if  { [gdb_compile "${srcdir}/${subdir}/${srcfile}" "${binfile}" executable {debug}] != "" } {
+    untested py-prompt.exp
+@
+
+
+1.3
+log
+@2012-01-16  Pedro Alves  <palves@@redhat.com>
+
+	Remove all calls to strace.
+@
+text
+@d23 4
+@
+
+
+1.2
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@a18 4
+if $tracelevel then {
+    strace $tracelevel
+}
+
+@
+
+
+1.1
+log
+@PR gdb/10720
+* event-top.c (cli_command_loop): Replace readline setup with
+direct call to display_gdb_prompt.
+(display_gdb_prompt): Do not call observer mechanism during
+synchronous execution.
+
+testsuite:
+* lib/prompt.exp: New file for testing the first prompt.
+* gdb.python/py-prompt.exp: Ditto.
+* gdb.python/py-prompt.c: Ditto (copy of ext-attach.c).
+@
+text
+@d1 1
+a1 1
+# Copyright (C) 2011 Free Software Foundation, Inc.
+@
+
+
+1.1.2.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d1 1
+a1 1
+# Copyright (C) 2011-2012 Free Software Foundation, Inc.
+@
+
+

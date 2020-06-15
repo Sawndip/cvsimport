@@ -1,0 +1,513 @@
+head	1.8;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.8
+	gdb_7_6-2013-04-26-release:1.8
+	gdb_7_6-branch:1.8.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.8
+	gdb_7_5_1-2012-11-29-release:1.7
+	gdb_7_5-2012-08-17-release:1.7
+	gdb_7_5-branch:1.7.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.7
+	gdb_7_4_1-2012-04-26-release:1.5.4.1
+	gdb_7_4-2012-01-24-release:1.5.4.1
+	gdb_7_4-branch:1.5.0.4
+	gdb_7_4-2011-12-13-branchpoint:1.5
+	gdb_7_3_1-2011-09-04-release:1.5
+	gdb_7_3-2011-07-26-release:1.5
+	gdb_7_3-branch:1.5.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.5
+	gdb_7_2-2010-09-02-release:1.4
+	gdb_7_2-branch:1.4.0.2
+	gdb_7_2-2010-07-07-branchpoint:1.4
+	gdb_7_1-2010-03-18-release:1.2
+	gdb_7_1-branch:1.2.0.2
+	gdb_7_1-2010-02-18-branchpoint:1.2
+	gdb_7_0_1-2009-12-22-release:1.1
+	gdb_7_0-2009-10-06-release:1.1
+	gdb_7_0-branch:1.1.0.4
+	gdb_7_0-2009-09-16-branchpoint:1.1
+	msnyder-checkpoint-072509-branch:1.1.0.2
+	msnyder-checkpoint-072509-branchpoint:1.1;
+locks; strict;
+comment	@# @;
+
+
+1.8
+date	2013.01.01.06.41.27;	author brobecke;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2012.06.26.19.23.20;	author tromey;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2012.01.04.08.27.55;	author brobecke;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2011.01.01.15.33.50;	author brobecke;	state Exp;
+branches
+	1.5.4.1;
+next	1.4;
+
+1.4
+date	2010.06.10.19.48.20;	author msnyder;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2010.06.02.21.53.28;	author msnyder;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2010.01.01.07.32.06;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2009.05.24.18.00.08;	author palves;	state Exp;
+branches;
+next	;
+
+1.5.4.1
+date	2012.01.06.04.54.28;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.8
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@# Copyright (C) 2009-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# There's no support for `set follow-fork-mode' in the remote
+# protocol.
+if { [is_remote target] } {
+    return 0
+}
+
+# Only GNU/Linux is known to support `set follow-fork-mode child'.
+#
+if { ! [istarget "*-*-linux*"] } {
+    return 0
+}
+
+standard_testfile
+
+if {[gdb_compile_pthreads "${srcdir}/${subdir}/${srcfile}" "${binfile}" executable {debug}] != "" } {
+    return -1
+}
+
+clean_restart ${binfile}
+
+if ![runto_main] then {
+   fail "Can't run to main"
+   return 0
+}
+
+gdb_test_no_output "set follow-fork-mode child" "1, set follow-fork-mode child"
+gdb_test "catch fork" "Catchpoint \[0-9\]* \\(fork\\)" "1, insert fork catchpoint"
+gdb_breakpoint "start" "" "1, set breakpoint at start"
+
+gdb_test "continue" "Catchpoint.*" "1, get to the fork event"
+
+gdb_test "info threads" " Thread .* Thread .* Thread .* Thread .*" "1, multiple threads found"
+
+gdb_test "thread 2" ".*" "1, switched away from event thread"
+
+gdb_test "continue" "Not resuming.*" "1, refused to resume"
+
+set test "1, followed to the child, found one thread"
+gdb_test_multiple "info threads" "metest" {
+    -re " Thread .* Thread .*$gdb_prompt $" {
+	fail "$test"
+    }
+    -re " Thread .*$gdb_prompt $" {
+	pass "$test"
+    }
+    -re "$gdb_prompt $" {
+	fail "$test (unknown output)"
+    }
+    timeout {
+	fail "$test (timeout)"
+    }
+}
+
+gdb_test "continue" "Breakpoint 3, start.*" "1, get to the spawned thread in fork child"
+
+set test "1, followed to the child, found two threads"
+gdb_test_multiple "info threads" "$test" {
+    -re " Thread .* Thread .* Thread .*$gdb_prompt $" {
+	fail "$test"
+    }
+    -re " Thread .* Thread .*$gdb_prompt $" {
+	pass "$test"
+    }
+    -re "$gdb_prompt $" {
+	fail "$test (unknown output)"
+    }
+    timeout {
+	fail "$test (timeout)"
+    }
+}
+
+# Start over, but this time, don't switch away from the fork event thread.
+
+gdb_exit
+gdb_start
+gdb_reinitialize_dir $srcdir/$subdir
+
+gdb_load ${binfile}
+if ![runto_main] then {
+   fail "Can't run to main"
+   return 0
+}
+
+gdb_test_no_output "set follow-fork-mode child" "2, set follow-fork-mode child"
+gdb_test "catch fork" "Catchpoint \[0-9\]* \\(fork\\)" "2, insert fork catchpoint"
+gdb_breakpoint "start"
+
+gdb_test "continue" "Catchpoint.*" "2, get to the fork event"
+
+gdb_test "info threads" " Thread .* Thread .* Thread .* Thread .*" "2, multiple threads found"
+
+gdb_test "continue" "Breakpoint 3, start.*" "2, get to the spawned thread in fork child"
+
+set test "2, followed to the child, found two threads"
+gdb_test_multiple "info threads" "$test" {
+    -re " Thread .* Thread .* Thread .*$gdb_prompt $" {
+	fail "$test"
+    }
+    -re " Thread .* Thread .*$gdb_prompt $" {
+	pass "$test"
+    }
+    -re "$gdb_prompt $" {
+	fail "$test (unknown output)"
+    }
+    timeout {
+	fail "$test (timeout)"
+    }
+}
+@
+
+
+1.7
+log
+@	* gdb.threads/watchpoint-fork.exp (test): Use
+	standard_output_file.  Don't declare objdir.
+	* gdb.threads/attach-into-signal.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.threads/attach-stopped.exp: Use standard_testfile.
+	* gdb.threads/bp_in_thread.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/corethreads.exp: Use standard_testfile.
+	* gdb.threads/execl.exp: Use standard_testfile,
+	standard_output_file, clean_restart.
+	* gdb.threads/fork-child-threads.exp: Use standard_testfile,
+	clean_restart.
+	* gdb.threads/fork-thread-pending.exp: Use standard_testfile,
+	clean_restart.
+	* gdb.threads/gcore-thread.exp: Use standard_testfile.  Remove
+	incdir.
+	* gdb.threads/hand-call-in-threads.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/ia64-sigill.exp: Use standard_testfile.
+	* gdb.threads/interrupted-hand-call.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/killed.exp: Use standard_testfile, clean_restart.
+	Remove incdir.
+	* gdb.threads/leader-exit.exp: Use standard_testfile.
+	* gdb.threads/linux-dp.exp: Use standard_testfile, clean_restart.
+	* gdb.threads/local-watch-wrong-thread.exp: Use standard_testfile,
+	clean_restart.
+	* gdb.threads/manythreads.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/multi-create.exp: Use standard_testfile,
+	clean_restart.
+	* gdb.threads/no-unwaited-for-left.exp: Use standard_testfile.
+	* gdb.threads/non-ldr-exc-1.exp: Use standard_testfile.
+	* gdb.threads/non-ldr-exc-2.exp: Use standard_testfile.
+	* gdb.threads/non-ldr-exc-3.exp: Use standard_testfile.
+	* gdb.threads/non-ldr-exc-4.exp: Use standard_testfile.
+	* gdb.threads/pending-step.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/print-threads.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/pthread_cond_wait.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/pthreads.exp: Use standard_testfile, clean_restart.
+	Remove incdir.
+	* gdb.threads/schedlock.exp: Use standard_testfile.  Remove
+	incdir.
+	* gdb.threads/sigthread.exp: Use standard_testfile,
+	clean_restart.
+	* gdb.threads/staticthreads.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/switch-threads.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/thread-execl.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/thread-find.exp: Use standard_testfile,
+	clean_restart.
+	* gdb.threads/thread-specific.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/thread-unwindonsignal.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/thread_check.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/thread_events.exp: Use standard_testfile.  Remove
+	incdir.
+	* gdb.threads/threadapply.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/threxit-hop-specific.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/tls-nodebug.exp: Use standard_testfile,
+	clean_restart.
+	* gdb.threads/tls-shared.exp: Use standard_testfile,
+	clean_restart, standard_output_file.
+	* gdb.threads/tls-var.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.threads/tls.exp: Use standard_testfile, clean_restart.
+	Remove incdir.
+	* gdb.threads/watchthreads-reorder.exp: Use standard_testfile.
+	* gdb.threads/watchthreads.exp: Use standard_testfile.  Remove
+	incdir.
+	* gdb.threads/watchthreads2.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+@
+text
+@d1 1
+a1 1
+# Copyright (C) 2009-2012 Free Software Foundation, Inc.
+@
+
+
+1.6
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d28 1
+a28 3
+set testfile fork-thread-pending
+set srcfile ${testfile}.c
+set binfile ${objdir}/${subdir}/${testfile}
+d34 1
+a34 3
+gdb_exit
+gdb_start
+gdb_reinitialize_dir $srcdir/$subdir
+a35 1
+gdb_load ${binfile}
+@
+
+
+1.5
+log
+@run copyright.sh for 2011.
+@
+text
+@d1 1
+a1 1
+# Copyright (C) 2009, 2010, 2011 Free Software Foundation, Inc.
+@
+
+
+1.5.4.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d1 1
+a1 1
+# Copyright (C) 2009-2012 Free Software Foundation, Inc.
+@
+
+
+1.4
+log
+@2010-06-08  Michael Snyder  <msnyder@@vmware.com>
+
+	* gdb.ada/assign_1.exp: Use ".*" instead of "" as wildcard regexp.
+	* gdb.ada/boolean_expr.exp:
+	* gdb.ada/frame_args.exp: Ditto.
+	* gdb.ada/lang_switch.exp: Ditto.
+	* gdb.ada/ptype_arith_binop.exp: Ditto.
+	* gdb.ada/ref_param.exp: Ditto.
+	* gdb.ada/type_coercion.exp:Ditto.
+
+	* gdb.asm/asm-source.exp: Ditto.
+
+	* gdb.base/attach.exp: Ditto.
+	* gdb.base/bitfields2.exp: Ditto.
+	* gdb.base/call-signal-resume.exp: Ditto.
+	* gdb.base/callfuncs.exp: Ditto.
+	* gdb.base/commands.exp: Ditto.
+	* gdb.base/dbx.exp: Ditto.
+	* gdb.base/default.exp: Ditto.
+	* gdb.base/dump.exp: Ditto.
+	* gdb.base/exprs.exp: Ditto.
+	* gdb.base/freebpcmd.exp: Ditto.
+	* gdb.base/interrupt.exp: Ditto.
+	* gdb.base/list.exp: Ditto.
+	* gdb.base/long_long.exp: Ditto.
+	* gdb.base/maint.exp: Ditto.
+	* gdb.base/ptype.exp: Ditto.
+	* gdb.base/return.exp: Ditto.
+	* gdb.base/setshow.exp: Ditto.
+	* gdb.base/sigbpt.exp: Ditto.
+	* gdb.base/sigrepeat.exp: Ditto.
+
+	* gdb.cp/classes.exp: Ditto.
+
+	* gdb.dwarf2/dw2-restore.exp: Ditto.
+
+	* gdb.gdb/selftest.exp: Ditto.
+
+	* gdb.multi/base.exp: Ditto.
+	* gdb.multi/bkpt-multi-exec.exp: Ditto.
+
+	* gdb.python/py-block.exp: Ditto.
+	* gdb.python/py-prettyprint.exp: Ditto.
+	* gdb.python/py-template.exp: Ditto.
+
+	* gdb.server/ext-attach.exp: Ditto.
+	* gdb.server/ext-run.exp: Ditto.
+	* gdb.server/server-mon.exp: Ditto.
+
+	* gdb.threads/fork-thread-pending.exp: Ditto.
+	* gdb.threads/hand-call-in-threads.exp: Ditto.
+	* gdb.threads/interrupted-hand-call.exp: Ditto.
+	* gdb.threads/linux-dp.exp: Ditto.
+	* gdb.threads/manythreads.exp: Ditto.
+	* gdb.threads/print-threads.exp: Ditto.
+	* gdb.threads/pthreads.exp: Ditto.
+	* gdb.threads/schedlock.exp: Ditto.
+	* gdb.threads/thread-unwindonsignal.exp: Ditto.
+	* gdb.threads/threadapply.exp: Ditto.
+@
+text
+@d1 1
+a1 1
+# Copyright (C) 2009, 2010 Free Software Foundation, Inc.
+@
+
+
+1.3
+log
+@2010-06-02  Michael Snyder  <msnyder@@vmware.com>
+
+	* gdb.threads/fork-thread-pending.exp: Use gdb_test_no_output.
+	* gdb.threads/hand-call-in-thraeds.exp: Ditto.
+	* gdb.threads/local-watch-wrong-thread.exp: Ditto.
+	* gdb.threads/manythreads.exp: Ditto.
+	* gdb.threads/print-threads.exp: Ditto.
+	* gdb.threads/pthreads.exp: Ditto.
+	* gdb.threads/schedlock.exp: Ditto.
+	* gdb.threads/staticthreads.exp: Ditto.
+	* gdb.threads/thread-specific.exp: Ditto.
+	* gdb.threads/thread-unwindonsignal.exp: Ditto.
+	* gdb.threads/threadapply.exp: Ditto.
+	* gdb.threads/watchthreads.exp: Ditto.
+	* gdb.threads/watchthreads2.exp: Ditto.
+@
+text
+@d54 1
+a54 1
+gdb_test "thread 2" "" "1, switched away from event thread"
+@
+
+
+1.2
+log
+@Update copyright year in most headers.
+
+Automatic update by copyright.sh.
+@
+text
+@d46 1
+a46 1
+gdb_test "set follow-fork-mode child" "" "1, set follow-fork-mode child"
+d104 1
+a104 1
+gdb_test "set follow-fork-mode child" "" "2, set follow-fork-mode child"
+@
+
+
+1.1
+log
+@gdb/
+	* gdbthread.h (struct thread_info): New `pending_follow' field.
+	* thread.c (new_thread): New function.
+	(add_thread_silent): Use it.
+	* breakpoint.c (internal_breakpoint_number): New global, moved
+	from inside...
+	(create_internal_breakpoint): ... this.
+	(clone_momentary_breakpoint): New.
+	* breakpoint.h (clone_momentary_breakpoint): Declare.
+	* infrun.c (nullify_last_target_wait_ptid): Move declaration
+	higher.
+	(pending_follow): Delete.
+	(follow_fork): Handle pending follow fork event here.  Moved the
+	preserving of thread stepping state here.
+	(resume): Don't handle pending follow fork events here.  Only
+	install the inferior's terminal modes if we're about to resume it.
+	(proceed): Handle possible pending follow fork events here.
+	(init_wait_for_inferior): No need to clear pending_follow anymore,
+	it's gone.
+	(handle_inferior_event): Adjust to per-thread `pending_follow'.
+	Call `follow_fork' to handle following the fork.  If the
+	follow-fork is cancelled, stop stepping.
+	* linux-nat.c (linux_child_follow_fork): Adjust to per-thread
+	`pending_follow' events.  Remove code that handled preserving the
+	thread stepping state.
+	* inf-ptrace.c (inf_ptrace_follow_fork): Ditto.
+	* inf-ttrace.c (inf_ttrace_follow_fork): Ditto.
+
+gdb/testsuite/
+	* gdb.threads/fork-thread-pending.c: New.
+	* gdb.threads/fork-thread-pending.exp: New.
+@
+text
+@d1 1
+a1 1
+# Copyright (C) 2009 Free Software Foundation, Inc.
+@
+

@@ -1,0 +1,650 @@
+head	1.5;
+access;
+symbols
+	cagney-unwind-20030108-branch:1.4.0.2
+	cagney-unwind-20030108-branchpoint:1.4
+	carlton_dictionary-20021223-merge:1.4
+	gdb_5_3-2002-12-12-release:1.2
+	carlton_dictionary-20021115-merge:1.3
+	kseitz_interps-20021105-merge:1.3
+	kseitz_interps-20021103-merge:1.3
+	drow-cplus-merge-20021020:1.3
+	drow-cplus-merge-20021025:1.3
+	carlton_dictionary-20021025-merge:1.3
+	carlton_dictionary-20021011-merge:1.3
+	drow-cplus-branch:1.3.0.4
+	drow-cplus-branchpoint:1.3
+	kseitz_interps-20020930-merge:1.3
+	carlton_dictionary-20020927-merge:1.3
+	tcltk840-20020924-branch:1.3.0.2
+	tcltk840-20020924-branchpoint:1.3
+	carlton_dictionary-branch:1.2.0.16
+	carlton_dictionary-20020920-branchpoint:1.2
+	sid-20020905-branchpoint:1.2
+	sid-20020905-branch:1.2.0.14
+	gdb_5_3-branch:1.2.0.12
+	gdb_5_3-2002-09-04-branchpoint:1.2
+	kseitz_interps-20020829-merge:1.2
+	cagney_sysregs-20020825-branch:1.2.0.10
+	cagney_sysregs-20020825-branchpoint:1.2
+	readline_4_3-import-branch:1.2.0.8
+	readline_4_3-import-branchpoint:1.2
+	gdb_5_2_1-2002-07-23-release:1.2
+	kseitz_interps-20020528-branch:1.2.0.6
+	kseitz_interps-20020528-branchpoint:1.2
+	cagney_regbuf-20020515-branch:1.2.0.4
+	cagney_regbuf-20020515-branchpoint:1.2
+	gdb_5_2-2002-04-29-release:1.2
+	gdb_5_2-branch:1.2.0.2
+	gdb_5_2-2002-03-03-branchpoint:1.2
+	cygnus_cvs_20020108_pre:1.2
+	TCL_8_3:1.1.1.1
+	NET:1.1.1;
+locks; strict;
+comment	@# @;
+expand	@o@;
+
+
+1.5
+date	2003.01.21.19.40.08;	author hunt;	state dead;
+branches;
+next	1.4;
+
+1.4
+date	2002.11.26.19.47.54;	author hunt;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2002.09.24.18.37.03;	author kseitz;	state Exp;
+branches
+	1.3.2.1
+	1.3.4.1;
+next	1.2;
+
+1.2
+date	2001.09.09.23.56.06;	author irox;	state Exp;
+branches
+	1.2.16.1;
+next	1.1;
+
+1.1
+date	2001.09.09.22.40.57;	author irox;	state Exp;
+branches
+	1.1.1.1;
+next	;
+
+1.1.1.1
+date	2001.09.09.22.40.57;	author irox;	state Exp;
+branches;
+next	1.1.1.2;
+
+1.1.1.2
+date	2002.09.25.01.43.15;	author kseitz;	state dead;
+branches;
+next	;
+
+1.2.16.1
+date	2003.02.07.19.18.15;	author carlton;	state dead;
+branches;
+next	;
+
+1.3.2.1
+date	2002.09.27.21.49.06;	author kseitz;	state dead;
+branches;
+next	;
+
+1.3.4.1
+date	2003.12.14.20.28.45;	author drow;	state dead;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.5
+log
+@Updated to tcl 8.4.1
+@
+text
+@# safeinit.tcl --
+#
+# This code runs in a master to manage a safe slave with Safe Tcl.
+# See the safe.n man page for details.
+#
+# Copyright (c) 1996-1997 Sun Microsystems, Inc.
+#
+# See the file "license.terms" for information on usage and redistribution
+# of this file, and for a DISCLAIMER OF ALL WARRANTIES.
+#
+# SCCS: @@(#) safeinit.tcl 1.38 97/06/20 12:57:39
+
+# This procedure creates a safe slave, initializes it with the
+# safe base and installs the aliases for the security policy mechanism.
+
+proc tcl_safeCreateInterp {slave} {
+    global auto_path
+
+    # Create the slave.
+    interp create -safe $slave
+
+    # Set its auto_path
+    interp eval $slave [list set auto_path $auto_path]
+
+    # And initialize it.
+    return [tcl_safeInitInterp $slave]
+}
+
+# This procedure applies the initializations to an already existing
+# interpreter. It is useful when you want to enable an interpreter
+# created with "interp create -safe" to use security policies.
+
+proc tcl_safeInitInterp {slave} {
+    upvar #0 tclSafe$slave state
+    global tcl_library tk_library auto_path tcl_platform
+
+    # These aliases let the slave load files to define new commands
+
+    interp alias $slave source {} tclSafeAliasSource $slave
+    interp alias $slave load {} tclSafeAliasLoad $slave
+
+    # This alias lets the slave have access to a subset of the 'file'
+    # command functionality.
+    tclAliasSubset $slave file file dir.* join root.* ext.* tail \
+	path.* split
+
+    # This alias interposes on the 'exit' command and cleanly terminates
+    # the slave.
+    interp alias $slave exit {} tcl_safeDeleteInterp $slave
+
+    # Source init.tcl into the slave, to get auto_load and other
+    # procedures defined:
+
+    if {$tcl_platform(platform) == "macintosh"} {
+	if {[catch {interp eval $slave [list source -rsrc Init]}]} {
+	    if {[catch {interp eval $slave \
+			[list source [file join $tcl_library init.tcl]]}]} {
+		error "can't source init.tcl into slave $slave"
+	    }
+	}
+    } else {
+	if {[catch {interp eval $slave \
+			[list source [file join $tcl_library init.tcl]]}]} {
+	    error "can't source init.tcl into slave $slave"
+	}
+    }
+
+    # Loading packages into slaves is handled by their master.
+    # This is overloaded to deal with regular packages and security policies
+
+    interp alias $slave tclPkgUnknown {} tclSafeAliasPkgUnknown $slave
+    interp eval $slave {package unknown tclPkgUnknown}
+
+    # We need a helper procedure to define a $dir variable and then
+    # do a source of the pkgIndex.tcl file
+    interp eval $slave \
+	[list proc tclPkgSource {dir args} {
+		if {[llength $args] == 2} {
+		    source [lindex $args 0] [lindex $args 1]
+		} else {
+		    source [lindex $args 0]
+		}
+	      }]
+
+    # Let the slave inherit a few variables
+    foreach varName \
+	{tcl_library tcl_version tcl_patchLevel \
+	 tcl_platform(platform) auto_path} {
+	upvar #0 $varName var
+	interp eval $slave [list set $varName $var]
+    }
+
+    # Other variables are predefined with set values
+    foreach {varName value} {
+	    auto_noexec 1
+	    errorCode {}
+	    errorInfo {}
+	    env() {}
+	    argv0 {}
+	    argv {}
+	    argc 0
+	    tcl_interactive 0
+	    } {
+	interp eval $slave [list set $varName $value]
+    }
+
+    # If auto_path is not set in the slave, set it to empty so it has
+    # a value and exists. Otherwise auto_loading and package require
+    # will complain.
+
+    interp eval $slave {
+	if {![info exists auto_path]} {
+	    set auto_path {}
+	}
+    }
+
+    # If we have Tk, make the slave have the same library as us:
+
+    if {[info exists tk_library]} {
+        interp eval $slave [list set tk_library $tk_library]
+    }
+
+    # Stub out auto-exec mechanism in slave
+    interp eval $slave [list proc auto_execok {name} {return {}}]
+
+    return $slave
+}
+
+# This procedure deletes a safe slave managed by Safe Tcl and
+# cleans up associated state:
+
+proc tcl_safeDeleteInterp {slave args} {
+    upvar #0 tclSafe$slave state
+
+    # If the slave has a policy loaded, clean it up now.
+    if {[info exists state(policyLoaded)]} {
+	set policy $state(policyLoaded)
+	set proc ${policy}_PolicyCleanup
+	if {[string compare [info proc $proc] $proc] == 0} {
+	    $proc $slave
+	}
+    }
+
+    # Discard the global array of state associated with the slave, and
+    # delete the interpreter.
+    catch {unset state}
+    catch {interp delete $slave}
+
+    return
+}
+
+# This procedure computes the global security policy search path.
+
+proc tclSafeComputePolicyPath {} {
+    global auto_path tclSafeAutoPathComputed tclSafePolicyPath
+
+    set recompute 0
+    if {(![info exists tclSafePolicyPath]) ||
+	    ("$tclSafePolicyPath" == "")} {
+	set tclSafePolicyPath ""
+	set tclSafeAutoPathComputed ""
+	set recompute 1
+    }
+    if {"$tclSafeAutoPathComputed" != "$auto_path"} {
+	set recompute 1
+	set tclSafeAutoPathComputed $auto_path
+    }
+    if {$recompute == 1} {
+	set tclSafePolicyPath ""
+	foreach i $auto_path {
+	    lappend tclSafePolicyPath [file join $i policies]
+	}
+    }
+    return $tclSafePolicyPath
+}
+
+# ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+
+# tclSafeAliasSource is the target of the "source" alias in safe interpreters.
+
+proc tclSafeAliasSource {slave args} {
+    global auto_path errorCode errorInfo
+
+    if {[llength $args] == 2} {
+	if {[string compare "-rsrc" [lindex $args 0]] != 0} {
+	    return -code error "incorrect arguments to source"
+	}
+	if {[catch {interp invokehidden $slave source -rsrc [lindex $args 1]} \
+		 msg]} {
+	    return -code error $msg
+	}
+    } else {
+	set file [lindex $args 0]
+	if {[catch {tclFileInPath $file $auto_path $slave} msg]} {
+	    return -code error "permission denied"
+	}
+	set errorInfo ""
+	if {[catch {interp invokehidden $slave source $file} msg]} {
+	    return -code error $msg
+	}
+    }
+    return $msg
+}
+
+# tclSafeAliasLoad is the target of the "load" alias in safe interpreters.
+
+proc tclSafeAliasLoad {slave file args} {
+    global auto_path
+
+    if {[llength $args] == 2} {
+	# Trying to load into another interpreter
+	# Allow this for a child of the slave, or itself
+	set other [lindex $args 1]
+	foreach x $slave y $other {
+	    if {[string length $x] == 0} {
+		break
+	    } elseif {[string compare $x $y] != 0} {
+		return -code error "permission denied"
+	    }
+	}
+	set slave $other
+    }
+
+    if {[string length $file] && \
+		[catch {tclFileInPath $file $auto_path $slave} msg]} {
+	return -code error "permission denied"
+    }
+    if {[catch {
+	switch [llength $args] {
+	    0 {
+		interp invokehidden $slave load $file
+	    }
+	    1 -
+	    2 {
+		interp invokehidden $slave load $file [lindex $args 0]
+	    }
+	    default {
+		error "too many arguments to load"
+	    }
+	}
+    } msg]} {
+	return -code error $msg
+    }
+    return $msg
+}
+
+# tclFileInPath raises an error if the file is not found in
+# the list of directories contained in path.
+
+proc tclFileInPath {file path slave} {
+    set realcheckpath [tclSafeCheckAutoPath $path $slave]
+    set pwd [pwd]
+    if {[file isdirectory $file]} {
+	error "$file: not found"
+    }
+    set parent [file dirname $file]
+    if {[catch {cd $parent} msg]} {
+	error "$file: not found"
+    }
+    set realfilepath [file split [pwd]]
+    foreach dir $realcheckpath {
+	set match 1
+	foreach a [file split $dir] b $realfilepath {
+	    if {[string length $a] == 0} {
+		break
+	    } elseif {[string compare $a $b] != 0} {
+		set match 0
+		break
+	    }
+	}
+	if {$match} {
+	    cd $pwd
+	    return 1
+	}
+    }
+    cd $pwd
+    error "$file: not found"
+}
+
+# This procedure computes our expanded copy of the path, as needed.
+# It returns the path after expanding out all aliases.
+
+proc tclSafeCheckAutoPath {path slave} {
+    global auto_path
+    upvar #0 tclSafe$slave state
+
+    if {![info exists state(expanded_auto_path)]} {
+	# Compute for the first time:
+	set state(cached_auto_path) $path
+    } elseif {"$state(cached_auto_path)" != "$path"} {
+	# The value of our path changed, so recompute:
+	set state(cached_auto_path) $path
+    } else {
+	# No change: no need to recompute.
+	return $state(expanded_auto_path)
+    }
+
+    set pwd [pwd]
+    set state(expanded_auto_path) ""
+    foreach dir $state(cached_auto_path) {
+	if {![catch {cd $dir}]} {
+	    lappend state(expanded_auto_path) [pwd]
+	}
+    }
+    cd $pwd
+    return $state(expanded_auto_path)
+}
+
+proc tclSafeAliasPkgUnknown {slave package version {exact {}}} {
+    tclSafeLoadPkg $slave $package $version $exact
+}
+
+proc tclSafeLoadPkg {slave package version exact} {
+    if {[string length $version] == 0} {
+	set version 1.0
+    }
+    tclSafeLoadPkgInternal $slave $package $version $exact 0
+}
+
+proc tclSafeLoadPkgInternal {slave package version exact round} {
+    global auto_path
+    upvar #0 tclSafe$slave state
+
+    # Search the policy path again; it might have changed in the meantime.
+
+    if {$round == 1} {
+	tclSafeResearchPolicyPath
+
+	if {[tclSafeLoadPolicy $slave $package $version]} {
+	    return
+	}
+    }
+
+    # Try to load as a policy.
+
+    if [tclSafeLoadPolicy $slave $package $version] {
+	return
+    }
+
+    # The package is not a security policy, so do the regular setup.
+
+    # Here we run tclPkgUnknown in the master, but we hijack
+    # the source command so the setup ends up happening in the slave.
+
+    rename source source.orig
+    proc source {args} "upvar dir dir
+	interp eval [list $slave] tclPkgSource \[list \$dir\] \$args"
+
+    if [catch {tclPkgUnknown $package $version $exact} err] {
+	global errorInfo
+
+	rename source {}
+	rename source.orig source
+
+	error "$err\n$errorInfo"
+    }
+    rename source {}
+    rename source.orig source
+
+    # If we are in the first round, check if the package
+    # is now known in the slave:
+
+    if {$round == 0} {
+        set ifneeded \
+		[interp eval $slave [list package ifneeded $package $version]]
+
+	if {"$ifneeded" == ""} {
+	    return [tclSafeLoadPkgInternal $slave $package $version $exact 1]
+	}
+    }
+}
+
+proc tclSafeResearchPolicyPath {} {
+    global tclSafePolicyPath auto_index auto_path
+
+    # If there was no change, do not search again.
+
+    if {![info exists tclSafePolicyPath]} {
+	set tclSafePolicyPath ""
+    }
+    set oldPolicyPath $tclSafePolicyPath
+    set newPolicyPath [tclSafeComputePolicyPath]
+    if {"$newPolicyPath" == "$oldPolicyPath"} {
+	return
+    }
+
+    # Loop through the path from back to front so early directories
+    # end up overriding later directories.  This code is like auto_load,
+    # but only new-style tclIndex files (version 2) are supported.
+
+    for {set i [expr [llength $newPolicyPath] - 1]} \
+	    {$i >= 0} \
+	    {incr i -1} {
+	set dir [lindex $newPolicyPath $i]
+        set file [file join $dir tclIndex]
+	if {[file exists $file]} {
+	    if {[catch {source $file} msg]} {
+		puts stderr "error sourcing $file: $msg"
+	    }
+	}
+	foreach file [lsort [glob -nocomplain [file join $dir *]]] {
+	    if {[file isdir $file]} {
+		set dir $file
+		set file [file join $file tclIndex]
+		if {[file exists $file]} {
+		    if {[catch {source $file} msg]} {
+			puts stderr "error sourcing $file: $msg"
+		    }
+		}
+	    }
+	}
+    }
+}
+
+proc tclSafeLoadPolicy {slave package version} {
+    upvar #0 tclSafe$slave state
+    global auto_index
+
+    set proc ${package}_PolicyInit
+
+    if {[info command $proc] == "$proc" ||
+	    [info exists auto_index($proc)]} {
+	if [info exists state(policyLoaded)] {
+	    error "security policy $state(policyLoaded) already loaded"
+	}	
+	$proc $slave $version
+	interp eval $slave [list package provide $package $version]
+	set state(policyLoaded) $package
+	return 1
+    } else {
+	return 0
+    }
+}
+# This procedure enables access from a safe interpreter to only a subset of
+# the subcommands of a command:
+
+proc tclSafeSubset {command okpat args} {
+    set subcommand [lindex $args 0]
+    if {[regexp $okpat $subcommand]} {
+	return [eval {$command $subcommand} [lrange $args 1 end]]
+    }
+    error "not allowed to invoke subcommand $subcommand of $command"
+}
+
+# This procedure installs an alias in a slave that invokes "safesubset"
+# in the master to execute allowed subcommands. It precomputes the pattern
+# of allowed subcommands; you can use wildcards in the pattern if you wish
+# to allow subcommand abbreviation.
+#
+# Syntax is: tclAliasSubset slave alias target subcommand1 subcommand2...
+
+proc tclAliasSubset {slave alias target args} {
+    set pat ^(; set sep ""
+    foreach sub $args {
+	append pat $sep$sub
+	set sep |
+    }
+    append pat )\$
+    interp alias $slave $alias {} tclSafeSubset $target $pat
+}
+@
+
+
+1.4
+log
+@touched all sources to ease next import
+@
+text
+@@
+
+
+1.3
+log
+@touched all sources to ease next import
+@
+text
+@@
+
+
+1.3.4.1
+log
+@Merge drow-cplus-branch to:
+  cvs rtag -D 2003-12-14 00:00:00 UTC drow-cplus-merge-20031214 gdb+dejagnu
+@
+text
+@@
+
+
+1.3.2.1
+log
+@Import Tcl 8.4.0 into mainline-like sources. Simplest Tcl build possible for
+cygwin.
+@
+text
+@@
+
+
+1.2
+log
+@touched all Tcl files to ease next import.
+@
+text
+@@
+
+
+1.2.16.1
+log
+@2003-02-07  David Carlton  <carlton@@math.stanford.edu>
+
+	* Merge with mainline; tag is carlton_dictionary-20030207-merge.
+@
+text
+@@
+
+
+1.1
+log
+@Initial revision
+@
+text
+@@
+
+
+1.1.1.1
+log
+@Tcl 8.3 upgrade
+@
+text
+@@
+
+
+1.1.1.2
+log
+@Remove bothced merge files and old files no longer in tcl distribution.
+@
+text
+@@
+

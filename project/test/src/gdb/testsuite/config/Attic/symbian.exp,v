@@ -1,0 +1,485 @@
+head	1.1;
+access;
+symbols
+	gdb-csl-symbian-6_4_50_20060226-12:1.1.2.5
+	gdb-csl-symbian-6_4_50_20060226-11:1.1.2.2
+	gdb-csl-symbian-20060226-branch:1.1.0.2;
+locks; strict;
+comment	@# @;
+
+
+1.1
+date	2006.08.17.14.47.26;	author drow;	state dead;
+branches
+	1.1.2.1;
+next	;
+
+1.1.2.1
+date	2006.08.17.14.47.26;	author drow;	state Exp;
+branches;
+next	1.1.2.2;
+
+1.1.2.2
+date	2006.08.23.17.24.07;	author drow;	state Exp;
+branches;
+next	1.1.2.3;
+
+1.1.2.3
+date	2006.09.15.16.01.57;	author drow;	state Exp;
+branches;
+next	1.1.2.4;
+
+1.1.2.4
+date	2006.09.15.18.52.15;	author drow;	state Exp;
+branches;
+next	1.1.2.5;
+
+1.1.2.5
+date	2006.09.28.20.18.16;	author drow;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.1
+log
+@file symbian.exp was initially added on branch gdb-csl-symbian-20060226-branch.
+@
+text
+@@
+
+
+1.1.2.1
+log
+@	* config/symbian.exp: New file.
+@
+text
+@a0 234
+load_lib gdb.exp
+
+proc epoc_run { outvar args } {
+    global env
+    global epocpaths
+
+    upvar $outvar output
+
+    set oldpath $env(PATH)
+    set env(PATH) "$epocpaths:$env(PATH)"
+
+    set result [catch { eval $args } output]
+
+    set env(PATH) $oldpath
+
+    return $result
+}
+
+proc symbian_compile { sources destfile type options } {
+    global object_map
+    global epocroot
+
+    if { $type == "object" } {
+	# We can't really do this.  Instead, queue up the objects
+	# for later.  Discard the options and hope the right ones
+	# are around later.
+
+	set object_map($destfile) $sources
+	return ""
+    }
+
+    if { $type == "preprocess" } {
+	# GDB just uses this for version information, so don't
+	# worry about getting the right compiler options.
+
+	# Hack: We're Cygwin, the SymbianOS GNU toolchain is mingw32.
+	# Modify sources.
+	set mysources ""
+	foreach source $sources {
+	    lappend mysources [exec cygpath -w "$source"]
+	}
+
+	epoc_run output default_target_compile $mysources $destfile $type $options
+	return $output
+    }
+
+    if { $type != "executable" } {
+	return "unsupported compile type: $type"
+    }
+
+    set mysources ""
+    foreach source $sources {
+	if { [info exists object_map($source)] } {
+	    lappend mysources $object_map($source)
+	    unset object_map($source)
+	} else {
+	    lappend mysources $source
+	}
+    }
+
+    # By default use the non-debuggable copy.
+    set reldir "urel"
+
+    set allflags ""
+    foreach option $options {
+	# send_user "option: $option\n"
+	if { $option == "debug" } {
+	    set reldir "udeb"
+	} elseif { [regexp -all {additional_flags=(.*)} $option dummy flags] } {
+	    append allflags " $flags"
+	} else {
+	    warning "Compilation option $option not supported"
+	}
+    }
+
+    set proj [file tail $destfile]
+
+    # Write out a new bld.inf.  Puts sticks a newline at the end
+    # of each string; we have extras because we want blank line
+    # separators.
+    set inffile [open "bld.inf" "w"]
+    puts $inffile "PRJ_PLATFORMS\n"
+    puts $inffile "BASEDEFAULT GCCE\n"
+    puts $inffile "PRJ_EXPORTS\n"
+    puts $inffile "PRJ_MMPFILES\n${proj}.mmp"
+    close $inffile
+
+    set bldfile [open "${proj}.mmp" "w"]
+    puts $bldfile "TARGET ${proj}.exe"
+    puts $bldfile "TARGETTYPE EXE"
+    puts $bldfile "SOURCEPATH \\."
+    foreach source $mysources {
+	set result [file native [file normalize $source]]
+	if { [string first "C:" $result] != -1 } {
+	    set result [string map {C: ""} $result]
+	} else {
+	    # This appears to be a Unix-thinking sort of TCL.
+	    set result "\\cygwin[string map {/ \\} $result]"
+	}
+	# send_user "orig source $source, new source $result\n"
+	puts $bldfile "SOURCE $result"
+    }
+    puts $bldfile "LIBRARY EUSER.LIB"
+    puts $bldfile "LIBRARY ESTLIB.LIB"
+    puts $bldfile "STATICLIBRARY MYECRT0.LIB"
+    puts $bldfile "SYSTEMINCLUDE \\EPOC32\\INCLUDE\\LIBC"
+    puts $bldfile "SYSTEMINCLUDE \\EPOC32\\INCLUDE"
+    # Request these capabilities to match ESTLIB.LIB; if we ask for
+    # ALL, SymbianOS will refuse to launch us.
+    puts $bldfile "CAPABILITY All -Tcb"
+    puts $bldfile "VENDORID 0x70000001"
+    if { $allflags != "" } {
+	puts $bldfile "OPTION GCCE $allflags"
+    }
+    close $bldfile
+
+    epoc_run output exec "bldmake.bat" "bldfiles" "GCCE"
+    # send_user "bldmake output: $output END\n"
+
+    epoc_run output exec "./ABLD.BAT" "REALLYCLEAN" "GCCE"
+    # send_user "abld clean output: $output END\n"
+
+    if { [file exists "$epocroot/epoc32/release/gcce/${reldir}/${proj}.exe"] } {
+	perror "abld reallyclean has failed to remove ${proj}.exe"
+    }
+
+    epoc_run output exec "./ABLD.BAT" "BUILD" "GCCE"
+    # send_user "abld build output: $output END\n"
+
+    if { ! [file exists "$epocroot/epoc32/release/gcce/${reldir}/${proj}.exe"] } {
+	# Build must have failed.  Exit codes appear to be useless
+	# for these tools.
+	return "$output"
+    }
+
+    file copy -force -- "$epocroot/epoc32/release/gcce/${reldir}/${proj}.exe" ${destfile}.exe
+    file copy -force -- "$epocroot/epoc32/release/gcce/${reldir}/${proj}.sym" ${destfile}
+
+    # file delete "bld.inf"
+    # file delete "${proj}.mmp"
+    epoc_run output exec "./ABLD.BAT" "REALLYCLEAN" "GCCE"
+    # send_user "abld clean output: $output END\n"
+
+    return ""
+}
+
+proc gdb_target_symbian {} {
+    global gdb_prompt
+    global timeout
+
+    if { [target_info exists baudrate] } {
+	gdb_test "set remotebaud [target_info baudrate]" "" ""
+    }
+
+    set prev_timeout $timeout
+    set timeout 60
+    verbose "Timeout is now $timeout seconds" 2
+    gdb_test_multiple "target extended-remote [target_info netport]" "" {
+        -re ".*\[Ee\]rror.*$gdb_prompt $" {
+            perror "Couldn't set target for remote board."
+            cleanup
+            gdb_exit
+        }
+        -re "Remote debugging using.*$gdb_prompt" {
+            verbose "Set target to [target_info netport]"
+        }
+        timeout {
+            perror "Couldn't set target for remote board."
+            cleanup
+            gdb_exit
+        }
+    }
+    set timeout $prev_timeout
+    verbose "Timeout is now $timeout seconds" 2
+
+    # TEMPORARY
+    # gdb_test "set debug remote 1" "" ""
+}
+
+proc infer_host_exec { } {
+    set host_exec ""
+
+    send_gdb "info files\n"
+    gdb_expect 30 {
+	-re "Symbols from \"(\[^\"\]+)\"" {
+	    set host_exec $expect_out(1,string)
+	    exp_continue
+	}
+	-re "Local exec file:\[\r\n\]+\[ \t\]*`(\[^'\]+)'," {
+	    set host_exec $expect_out(1,string)
+	    exp_continue
+	}
+	-re "$gdb_prompt $" { }
+    }
+
+    return $host_exec
+}
+
+set saved_host_exec ""
+
+proc gdb_load { arg } {
+    global exec_downloaded
+    global saved_host_exec
+
+    set board_exec [target_info exec_file]
+
+    gdb_target_symbian
+
+    gdb_test "kill" "" "" "Kill the program being debugged.*y or n. $" "y"
+
+    set quoted_board_exec [string map {\\ \\\\} $board_exec]
+    gdb_test "set remote exec-file \"$quoted_board_exec\"" "" ""
+
+    # If we weren't passed an explicit binary, try to reuse the current
+    # one.  If we were, be sure to redownload it.
+
+    if { $arg == "" && $saved_host_exec == "" } {
+	set saved_host_exec [infer_host_exec]
+    } elseif { $arg != "" } {
+        set saved_host_exec $arg
+        if [info exists exec_downloaded] { unset exec_downloaded }
+	if [gdb_file_cmd $arg] { return -1 }
+    }
+
+    if { ! [info exists exec_downloaded] } {
+	global timeout
+	set prev_timeout $timeout
+	set timeout 60
+	gdb_test "remote-download ${saved_host_exec}.exe $quoted_board_exec" "" ""
+	set timeout $prev_timeout
+
+	set exec_downloaded 1
+    }
+}
+@
+
+
+1.1.2.2
+log
+@        * config/symbian.exp (symbian_compile): Fail after unknown options.
+        Copy ELF files from the build tree.
+        * gdb.asm/asm-source.exp: Use untested.
+@
+text
+@a72 1
+	    return -1
+d137 1
+a137 13
+
+    # Don't look for a .sym file in that same directory; UDEB has one but
+    # UREL doesn't.  Grab the .exe from the temporary build directory instead.
+    # file copy -force -- "$epocroot/epoc32/release/gcce/${reldir}/${proj}.sym" ${destfile}
+
+    set result [file native [file normalize [pwd]]]
+    if { [string first "C:" $result] != -1 } {
+	set result [string map {C: ""} $result]
+    } else {
+	# This appears to be a Unix-thinking sort of TCL.
+	set result "/cygwin/$result"
+    }
+    file copy -force -- "$epocroot/epoc32/BUILD$result/${proj}/gcce/${reldir}/${proj}.exe" ${destfile}
+@
+
+
+1.1.2.3
+log
+@        gdb/testsuite/
+        * config/symbian.exp (infer_host_exec): Cope with MI.
+        (mi_target_gdb_load): New.
+        * lib/mi-support.exp: Use mi_target_gdb_load.
+@
+text
+@a193 3
+    global gdb_prompt
+    global mi_gdb_prompt
+
+a206 1
+	-re "$mi_gdb_prompt$" { }
+a247 44
+
+proc mi_target_gdb_load { arg } {
+    global exec_downloaded
+    global saved_host_exec
+
+    set board_exec [target_info exec_file]
+
+    if { [target_info exists baudrate] } {
+	mi_gdb_test "-gdb-set remotebaud [target_info baudrate]" "" ""
+    }
+
+    if { [mi_gdb_target_cmd "extended-remote" "[target_info netport]"] != 0 } {
+	return -1
+    }
+
+    # Kill if something is running, but prevent a failure if nothing is.
+    set none_re "&\"The program is not being run.\\\\n\"\[\r\n\]+"
+    mi_gdb_test "kill" "&\"kill\\\\n\"\[\r\n\]+($none_re)?\\^done" ""
+
+    set quoted_board_exec [string map {\\ \\\\} $board_exec]
+    mi_gdb_test "-gdb-set remote exec-file \"$quoted_board_exec\"" "" ""
+
+    # If we weren't passed an explicit binary, try to reuse the current
+    # one.  If we were, be sure to redownload it.
+
+    if { $arg == "" && $saved_host_exec == "" } {
+	set saved_host_exec [infer_host_exec]
+    } elseif { $arg != "" } {
+        set saved_host_exec $arg
+        if [info exists exec_downloaded] { unset exec_downloaded }
+    }
+
+    if { ! [info exists exec_downloaded] } {
+	global timeout
+	set prev_timeout $timeout
+	set timeout 60
+	mi_gdb_test "remote-download ${saved_host_exec}.exe $quoted_board_exec" "" ""
+	set timeout $prev_timeout
+
+	set exec_downloaded 1
+    }
+
+    return 0
+}
+@
+
+
+1.1.2.4
+log
+@        gdb/testsuite/
+        * config/symbian.exp (cyg_to_win): New.
+        (symbian_compile): Use it.  Handle c++ and incdir.
+@
+text
+@a18 11
+proc cyg_to_win { source } {
+    set result [file native [file normalize $source]]
+    if { [string first "C:" $result] != -1 } {
+	set result [string map {C: ""} $result]
+    } else {
+	# This appears to be a Unix-thinking sort of TCL.
+	set result "\\cygwin[string map {/ \\} $result]"
+    }
+    return $result
+}
+
+a64 1
+    set incdirs {}
+a68 2
+	} elseif { $option == "c++" } {
+	    # Nothing
+a70 2
+	} elseif { [regexp -all {incdir=(.*)} $option dummy value] } {
+	    lappend incdirs $value
+d94 7
+a100 1
+	set result [cyg_to_win $source]
+a103 3
+    foreach incdir $incdirs {
+	puts $bldfile "USERINCLUDE [cyg_to_win $incdir]"
+    }
+@
+
+
+1.1.2.5
+log
+@        gdb/
+        * buildsym.c, symtab.c: Add local hack for FILENAME_CMP testing.
+        * utils.c (cygwin_filename_cmp): New.
+
+        Backport:
+        2006-04-21  Frederic Riss  <frederic.riss@@st.com>
+        * dwarf2read.c (dwarf2_start_subfile): Change prototype to accept
+        compilation directory as last argument.
+        Always pass comp_dir as second argument to start_subfile and prepend
+        dirname to the filename when necessary.
+        Remove now superfluous search for pre-existing subfile.
+        (dwarf_decode_lines): Pass the compilation directory to
+        dwarf2_start_subfile.
+
+        gdb/testsuite/
+        * config/symbian.exp (gdb_target_symbian): Handle a running target.
+        (gdb_load): Add return value.
+
+        * gdb.base/completion.exp: Test arg rather than a.  Handle
+        very small lists of symbols.
+
+        * gdb.base/list.exp: Differentiate run behavior based on
+        use_gdb_stub.
+
+        * gdb.base/maint.exp: Accept local symbols.  Accept missing .data.
+
+        * gdb.base/remote.exp: Update packet limits.
+
+        * gdb.base/varargs.exp: Don't pass an empty list item.
+
+        * lib/gdb.exp (fullname_syntax): Recognize forward slashes in DOS
+        paths.
+
+        Backport:
+        2006-06-22  Daniel Jacobowitz  <dan@@codesourcery.com>
+        * gdb.base/gdb1555.exp: Use gdb_compile_shlib.  Skip if not
+        native.
+
+        2006-06-22  Daniel Jacobowitz  <dan@@codesourcery.com>
+        * gdb.stabs/exclfwd.exp: Skip the test if configure did not
+        enable stabs testing.
+
+        2006-05-06  Ulrich Weigand  <Ulrich.Weigand@@de.ibm.com>
+        * gdb.mi/mi-basics.exp: Add missing serial number to
+        expected output in some mi_gdb_test statements.
+        * gdb.mi/mi2-basics.exp: Likewise.
+@
+text
+@a192 5
+        -re "A program is being debugged already.*Kill it.*y or n. $" {
+            send_gdb "y\n"
+	    verbose "\t\tKilling previous program being debugged"
+            exp_continue
+        }
+a263 2
+
+    return 0
+@
+
+

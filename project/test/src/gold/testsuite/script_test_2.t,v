@@ -1,0 +1,403 @@
+head	1.5;
+access;
+symbols
+	binutils-2_24-branch:1.5.0.2
+	binutils-2_24-branchpoint:1.5
+	binutils-2_21_1:1.3
+	binutils-2_23_2:1.4
+	binutils-2_23_1:1.4
+	binutils-2_23:1.4
+	binutils-2_23-branch:1.4.0.2
+	binutils-2_23-branchpoint:1.4
+	binutils-2_22_branch:1.3.0.16
+	binutils-2_22:1.3
+	binutils-2_22-branch:1.3.0.14
+	binutils-2_22-branchpoint:1.3
+	binutils-2_21:1.3
+	binutils-2_21-branch:1.3.0.12
+	binutils-2_21-branchpoint:1.3
+	binutils-2_20_1:1.3
+	binutils-2_20:1.3
+	binutils-arc-20081103-branch:1.3.0.10
+	binutils-arc-20081103-branchpoint:1.3
+	binutils-2_20-branch:1.3.0.8
+	binutils-2_20-branchpoint:1.3
+	dje-cgen-play1-branch:1.3.0.6
+	dje-cgen-play1-branchpoint:1.3
+	arc-20081103-branch:1.3.0.4
+	arc-20081103-branchpoint:1.3
+	binutils-2_19_1:1.3
+	binutils-2_19:1.3
+	binutils-2_19-branch:1.3.0.2
+	binutils-2_19-branchpoint:1.3
+	binutils_latest_snapshot:1.5
+	added-to-binutils:1.2;
+locks; strict;
+comment	@# @;
+
+
+1.5
+date	2012.09.05.11.01.43;	author amodra;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2011.10.31.22.51.03;	author ccoutant;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2008.07.29.22.58.03;	author ian;	state Exp;
+branches
+	1.3.14.1;
+next	1.2;
+
+1.2
+date	2008.02.12.00.15.40;	author iant;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2008.02.04.05.43.05;	author iant;	state Exp;
+branches;
+next	;
+
+1.3.14.1
+date	2011.12.19.21.14.40;	author ian;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.5
+log
+@	* configure.ac (FN_PTRS_IN_SO_WITHOUT_PIC): False for powerpc.
+	* configure: Regenerate.
+	* testsuite/Makefile.am (final_layout.stdout): Pass --synthetic to nm.
+	(plugin_final_layout.stdout): Likewise.
+	(memory_test): Set page sizes to 0x1000.
+	* testsuite/Makefile.in: Regenerate.
+	* testsuite/discard_locals_test.sh: Add FIXME comment.
+	* testsuite/justsyms_exec.c: Disable function test for powerpc64.
+	* testsuite/pr14265.t: Add .got output section statement.
+	* testsuite/script_test_2.t: Likewise.
+	* testsuite/script_test_3.t: Likewise.
+	* testsuite/script_test_4.t: Likewise.
+	* testsuite/script_test_5.t: Likewise.
+	* testsuite/script_test_6.t: Likewise.
+	* testsuite/script_test_7.t: Likewise.
+	* testsuite/script_test_9.t: Likewise.
+@
+text
+@/* script_test_2.t -- linker script test 2 for gold
+
+   Copyright 2008 Free Software Foundation, Inc.
+   Written by Ian Lance Taylor <iant@@google.com>.
+
+   This file is part of gold.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+   MA 02110-1301, USA.  */
+
+test_addr_alias = test_addr;
+
+SECTIONS
+{
+  /* With luck this will work everywhere.  */
+  . = 0x10000000;
+
+  /* With luck this will be enough to get the program working.  */
+  .text : { *(.text) }
+  . += 0x100000;
+  . = ALIGN(0x100);
+  .data : { *(.data) }
+  .got : { *(.got .toc) }
+  .bss : { *(.bss) }
+
+  /* Now the real test.  */
+  . = 0x20000001;
+  start_test_area = .;
+  .gold_test ALIGN(16) : SUBALIGN(32) {
+    start_test_area_1 = .;
+
+    /* No sections should wind up here, because of the EXCLUDE_FILE.  */
+    *( EXCLUDE_FILE(script_test*) .gold_test)
+
+    /* This should match only script_test_2b.o.  */
+    script_test_2b.o(.gold_test)
+
+    /* This should match the remaining sections.  */
+    *(.gold_test)
+
+    . = 60;
+    start_data = .;
+    BYTE(1)
+    SHORT(2)
+    LONG(4)
+    QUAD(8)
+    end_data = .;
+
+    start_fill = .;
+    FILL(0x12345678);
+    . = . + 7;
+    BYTE(0)
+    end_fill = .;
+  }
+  end_test_area = .;
+  test_addr = ADDR(.gold_test);
+}
+@
+
+
+1.4
+log
+@	PR gold/13023
+	* expression.cc (Expression::eval_with_dot): Add
+	is_section_dot_assignment parameter.
+	(Expression::eval_maybe_dot): Likewise.  Adjust value when rhs is
+	absolute and assigning to dot within a section.
+	* script-sections.cc
+	(Output_section_element_assignment::set_section_addresses): Pass
+	dot_section to set_if_absolute.
+	(Output_section_element_dot_assignment::finalize_symbols): Pass TRUE
+	as is_section_dot_assignment flag to eval_with_dot.
+	(Output_section_element_dot_assignment::set_section_addresses):
+	Likewise.
+	* script.cc (Symbol_assignment::set_if_absolute): Add dot_section
+	parameter.  Also set value if relative to dot_section; set the
+	symbol's output_section.
+	* script.h (Expression::eval_with_dot): Add is_section_dot_assignment
+	parameter.  Adjust all callers.
+	(Expression::eval_maybe_dot): Likewise.
+	(Symbol_assignment::set_if_absolute): Add dot_section parameter.
+	Adjust all callers.
+	* testsuite/script_test_2.t: Test assignment of an absolute value
+	to dot within an output section element.
+@
+text
+@d35 1
+@
+
+
+1.3
+log
+@	* script.cc (Script_options::finalize_symbols): Finalize SECTIONS
+	symbols before other symbols.
+	* testsuite/script_test_2.cc (test_addr): Declare.
+	(test_addr_alias): Declare.
+	(main): Check that test_addr and test_addr_alias have the right
+	values.
+	* testsuite/script_test_2.t: Define test_addr_alias and
+	test_addr.
+@
+text
+@d52 1
+a52 1
+    . = . + 4;
+@
+
+
+1.3.14.1
+log
+@	Copy from mainline to binutils 2.22 branch:
+
+	2011-12-17  Cary Coutant  <ccoutant@@google.com>
+
+	* dwarf_reader.cc (Sized_dwarf_line_info::read_lines): Add casts.
+	* resolve.cc (Symbol_table::resolve): Likewise.
+	* i386.cc (Target_i386::do_code_fill): Use char constants for nop
+	arrays.
+	* x86_64.cc (Target_x86_64::do_code_fill): Likewise.
+
+	2011-10-31  Cary Coutant  <ccoutant@@google.com>
+
+	PR gold/13023
+	* expression.cc (Expression::eval_with_dot): Add
+	is_section_dot_assignment parameter.
+	(Expression::eval_maybe_dot): Likewise.  Adjust value when rhs is
+	absolute and assigning to dot within a section.
+	* script-sections.cc
+	(Output_section_element_assignment::set_section_addresses): Pass
+	dot_section to set_if_absolute.
+	(Output_section_element_dot_assignment::finalize_symbols): Pass TRUE
+	as is_section_dot_assignment flag to eval_with_dot.
+	(Output_section_element_dot_assignment::set_section_addresses):
+	Likewise.
+	* script.cc (Symbol_assignment::set_if_absolute): Add dot_section
+	parameter.  Also set value if relative to dot_section; set the
+	symbol's output_section.
+	* script.h (Expression::eval_with_dot): Add is_section_dot_assignment
+	parameter.  Adjust all callers.
+	(Expression::eval_maybe_dot): Likewise.
+	(Symbol_assignment::set_if_absolute): Add dot_section parameter.
+	Adjust all callers.
+	* testsuite/script_test_2.t: Test assignment of an absolute value
+	to dot within an output section element.
+
+	2011-10-31  Cary Coutant  <ccoutant@@google.com>
+
+	* options.h (class General_options): Add --[no-]gnu-unique options.
+	* symtab.cc (Symbol_table::sized_write_globals): Convert
+	STB_GNU_UNIQUE to STB_GLOBAL if --no-gnu-unique.
+
+	2011-10-31  Cary Coutant  <ccoutant@@google.com>
+
+	PR gold/13359
+	* i386.cc (Target_i386::Relocate::relocate_tls): Remove
+	unnecessary assertion.
+	* x86_64.cc (Target_x86_64::Relocate::relocate_tls): Likewise.
+
+	2011-10-31 Sriraman Tallam  <tmsriram@@google.com>
+
+	* symtab.h (Symbol_table::gc_mark_symbol_for_shlib): Rename to
+	gc_mark_symbol.
+	* symtab.cc (Symbol_table::gc_mark_symbol_for_shlib): Rename to
+	gc_mark_symbol.
+	Change to just keep the section associated with symbol.
+	(Symbol_table::add_from_relobj): Mark symbols as not garbage when
+	they are externally visible and --export-dynamic is turned on.
+	(Symbol_table::gc_mark_dyn_syms): Call gc_mark_symbol.
+
+	2011-10-19  Ian Lance Taylor  <iant@@google.com>
+
+	PR gold/13163
+	* script-sections.cc
+	(Output_section_element_dot_assignment::needs_output_section): New
+	function.
+
+	2011-10-19  Ian Lance Taylor  <iant@@google.com>
+
+	PR gold/13204
+	* layout.cc (Layout::segment_precedes): Don't assert failure if a
+	--section-start option was seen.
+	* options.h (General_options::any_section_start): New function.
+
+	2011-10-18  Cary Coutant  <ccoutant@@google.com>
+
+	* output.cc (posix_fallocate): Return 0 on success, errno on failure.
+	(Output_file::map_no_anonymous): Check for non-zero
+	return code from posix_fallocate.
+
+	2011-10-17  Cary Coutant  <ccoutant@@google.com>
+
+	PR gold/13245
+	* plugin.cc (is_visible_from_outside): Check for symbols
+	referenced from dynamic objects.
+	* resolve.cc (Symbol_table::resolve): Don't count references
+	from dynamic objects as references from real ELF files.
+	* testsuite/plugin_test_2.sh: Adjust expected result.
+
+	2011-10-17  Cary Coutant  <ccoutant@@google.com>
+
+	* readsyms.cc (Read_symbols::run): Don't queue an unblocker
+	task for members of lib groups.
+
+	2011-10-17  Cary Coutant  <ccoutant@@google.com>
+
+	PR gold/13288
+	* fileread.cc (File_read::find_view): Add assert.
+	(File_read::make_view): Move bounds check (replace with assert)...
+	(File_read::find_or_make_view): ... to here.
+
+	2011-10-12  Cary Coutant  <ccoutant@@google.com>
+
+	* output.cc (Output_file::open_base_file): Handle case where
+	::read returns less than requested size.
+
+	2011-10-10  Cary Coutant  <ccoutant@@google.com>
+
+	* incremental.cc (Sized_relobj_incr::Sized_relobj_incr):
+	Initialize defined_count_.
+	(Sized_relobj_incr::do_add_symbols): Count defined symbols.
+	(Sized_relobj_incr::do_get_global_symbol_counts): Rewrite.
+	(Sized_incr_dynobj::Sized_incr_dynobj): Initialize defined_count_.
+	(Sized_incr_dynobj::do_add_symbols): Count defined symbols.
+	(Sized_incr_dynobj::do_get_global_symbol_counts): Rewrite.
+	* incremental.h (Sized_relobj_incr::defined_count_): New data
+	member.
+	(Sized_incr_dynobj::defined_count_): New data member.
+	* plugin.cc (Sized_pluginobj::do_get_global_symbol_counts):
+	Return zeroes instead of internal error.
+
+	2011-10-10  Cary Coutant  <ccoutant@@google.com>
+
+	PR gold/13249
+	* output.cc (Output_reloc::Output_reloc): Add use_plt_offset flag.
+	(Output_reloc::symbol_value): Return PLT offset if flag is set.
+	* output.h (class Output_reloc): Add use_plt_offset flag.
+	(Output_reloc::type_): Adjust size of bit field.
+	(Output_reloc::use_plt_offset_): New bit field.
+	(class Output_data_reloc): Adjust all calls to Output_reloc_type.
+	(Output_data_reloc::add_local_relative): (RELA only) Add use_plt_offset
+	flag.  Adjust all callers.
+	* x86_64.cc (Target_x86_64::Scan::local): Check for IFUNC when
+	creating RELATIVE relocations.
+
+	2011-10-03   Diego Novillo  <dnovillo@@google.com>
+
+	* options.cc (parse_uint): Fix dereference of RETVAL.
+
+	2011-09-29  Cary Coutant  <ccoutant@@google.com>
+
+	* incremental.cc (Sized_incremental_binary::do_process_got_plt):
+	Check for NULL.
+	* symtab.cc (Symbol_table::add_from_relobj): Ignore version
+	symbols during incremental update.
+	(Symbol_table::add_from_dynobj): Likewise.
+
+	2011-09-26  Cary Coutant  <ccoutant@@google.com>
+
+	* gold.cc (queue_initial_tasks): Move option checks ...
+	* options.cc (General_options::finalize): ... to here. Disable
+	some options; make others fatal.
+
+	2011-09-23  Simon Baldwin  <simonb@@google.com>
+
+	* configure.ac: Add new --with-gold-ldadd and --with-gold-ldflags
+	configuration options.
+	* configure: Regenerate.
+	* Makefile.am: Handle GOLD_LDADD and GOLD_LDFLAGS.
+	* Makefile.in: Regenerate.
+	* testsuite/Makefile.in: Regenerate.
+@
+text
+@d52 1
+a52 1
+    . = 60;
+@
+
+
+1.2
+log
+@Force different sections to different pages for better results on
+x86_64 Linux.
+@
+text
+@d23 2
+d67 1
+@
+
+
+1.1
+log
+@Fully implement the SECTIONS clause.
+@
+text
+@d30 2
+@
+

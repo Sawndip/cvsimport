@@ -1,0 +1,172 @@
+head	1.2;
+access;
+symbols
+	binutils-2_24-branch:1.2.0.2
+	binutils-2_24-branchpoint:1.2
+	binutils_latest_snapshot:1.2;
+locks; strict;
+comment	@ * @;
+
+
+1.2
+date	2012.10.30.12.44.54;	author nickc;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2012.08.16.20.31.34;	author hjl;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@
+bfd:
+        * elf32-arm.c (elf32_arm_print_private_bfd_data): Recognise and
+        display the new ARM hard-float/soft-float ABI flags for EABI_VER5
+        (elf32_arm_post_process_headers): Add the hard-float/soft-float
+        ABI flag as appropriate for ET_DYN/ET_EXEC in EABI_VER5.
+
+binutils:
+        * readelf.c (decode_ARM_machine_flags): Recognise and display the
+        new ARM hard-float/soft-float ABI flags for EABI_VER5. Split out
+        the code for EABI_VER4 and EABI_VER5 to allow this.
+
+elfcpp:
+        * arm.h: New enum for EABI soft- and hard-float flags.
+
+gold:
+        * gold.cc (Target_arm::do_adjust_elf_header): Add the
+        hard-float/soft-float ABI flag as appropriate for ET_DYN/ET_EXEC
+        in EABI_VER5.
+
+include:
+        * elf/arm.h (EF_ARM_ABI_FLOAT_SOFT): New define.
+        (EF_ARM_ABI_FLOAT_HARD): Likewise.
+
+ld/testsuite:
+        * ld-arm/eabi-hard-float.s: New test source.
+        * ld-arm/eabi-soft-float.s: New test source.
+        * ld-arm/eabi-hard-float.d: New test.
+        * ld-arm/eabi-soft-float.d: New test.
+        * ld-arm/eabi-soft-float-ABI4.d: New test.
+        * ld-arm/eabi-soft-float-r.d: New test.
+        * ld-arm/arm-elf.xp: Use the new tests.
+
+binutils:
+	PR binutils/14779
+	* configure.in: Add checks for wchar.h and mbstate_t.
+	* config.in: Regenerate.
+	* configure: Regenerate.
+	* readelf.c: Conditionally include wchar.h.
+	(print_symbol): Conditionally use mbstate_t.
+@
+text
+@/* A program to test BFD.
+   Copyright 2012 Free Software Foundation, Inc.
+
+   This file is part of the GNU Binutils.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+   MA 02110-1301, USA.  */
+
+#include "sysdep.h"
+#include "bfd.h"
+
+static void
+die (const char *s)
+{
+  printf ("oops: %s\n", s);
+  exit (1);
+}
+
+int
+main (int argc, char **argv)
+{
+  bfd *archive;
+  bfd *last, *next;
+
+  if (argc != 2)
+    die ("usage: bfdtest1 <archive>");
+
+  archive = bfd_openr (argv[1], NULL);
+  if (archive == NULL)
+    die ("no such archive");
+
+  if (!bfd_check_format (archive, bfd_archive))
+    {
+      bfd_close (archive);
+      die ("bfd_check_format");
+    }
+
+  for (last = bfd_openr_next_archived_file (archive, NULL);
+       last;
+       last = next)
+    {
+      next = bfd_openr_next_archived_file (archive, last);
+      bfd_close (last);
+    }
+
+  for (last = bfd_openr_next_archived_file (archive, NULL);
+       last;
+       last = next)
+    {
+      next = bfd_openr_next_archived_file (archive, last);
+      bfd_close (last);
+    }
+
+  if (!bfd_close (archive))
+    die ("bfd_close");
+
+  return 0;
+}
+@
+
+
+1.1
+log
+@Add a testcase for PR binutils/14481
+
+binutils/
+
+	PR binutils/14481
+	* Makefile.am (BFDTEST1_PROG): New.
+	(TEST_PROGS): Likewise.
+	(bfdtest1_DEPENDENCIES): Likewise.
+	(noinst_PROGRAMS): Add $(TEST_PROGS).
+	* Makefile.in: Regenerated.
+
+	* bfdtest1.c: New file.
+
+binutils/testsuite/
+
+	PR binutils/14481
+	* ar.exp (bfdtest1): New.
+	(long_filenames): Run bfdtest1.
+	(thin_archive): Likewise.
+	(thin_archive_with_nested): Likewise.
+@
+text
+@d38 1
+a38 1
+    die ("bad usage");
+d41 2
+@
+

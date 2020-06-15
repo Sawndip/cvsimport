@@ -1,0 +1,323 @@
+head	1.5;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.4
+	gdb_7_6-2013-04-26-release:1.4
+	gdb_7_6-branch:1.4.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.4
+	gdb_7_5_1-2012-11-29-release:1.3
+	gdb_7_5-2012-08-17-release:1.3
+	gdb_7_5-branch:1.3.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.3
+	gdb_7_4_1-2012-04-26-release:1.1.4.1
+	gdb_7_4-2012-01-24-release:1.1.4.1
+	gdb_7_4-branch:1.1.0.4
+	gdb_7_4-2011-12-13-branchpoint:1.1
+	gdb_7_3_1-2011-09-04-release:1.1.2.1
+	gdb_7_3-2011-07-26-release:1.1.2.1
+	gdb_7_3-branch:1.1.0.2;
+locks; strict;
+comment	@# @;
+
+
+1.5
+date	2013.09.20.21.47.05;	author devans;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2013.01.01.06.41.22;	author brobecke;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2012.06.27.17.00.09;	author tromey;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2012.01.04.08.17.51;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2011.05.06.15.06.49;	author jkratoch;	state Exp;
+branches
+	1.1.2.1
+	1.1.4.1;
+next	;
+
+1.1.2.1
+date	2011.05.06.15.13.38;	author jkratoch;	state Exp;
+branches;
+next	;
+
+1.1.4.1
+date	2012.01.06.04.44.06;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.5
+log
+@	* lib/future.exp (gdb_find_objcopy, gdb_find_readelf): New procs.
+	* lib/gdb.exp (build_id_debug_filename_get): Update to use them.
+	(gdb_gnu_strip_debug): Ditto.
+	* lib/prelink-support.exp (section_get, prelink_no): Ditto.
+	* gdb.arch/altivec-abi.exp: Ditto.
+	* gdb.base/attach-pie-misread.exp: Ditto.
+	* gdb.base/comprdebug.exp: Ditto.
+	* gdb.base/dup-sect.exp: Ditto.
+	* gdb.base/gnu-debugdata.exp: Ditto.
+	* gdb.base/step-symless.exp: Ditto.
+	* gdb.dwarf2/dw2-inline-param.exp: Ditto.
+	* gdb.dwarf2/dw2-skip-prologue.exp: Ditto.
+	* gdb.dwarf2/gdb-index.exp: Ditto.
+@
+text
+@# Copyright 2011-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+load_lib dwarf.exp
+
+# Test multiple location breakpoints vs. prologue analysis on -O2 -g code.
+# when the first statement of a function is an inlined function GDB could
+# crash.  Map of this testcase:
+# 
+# File name                            Line number    Starting address
+# main.c                                         5    func_start
+# other.c                                        1    func0
+# 	`inlined' called at main.c line 8
+# main.c                                         9    func1
+# 	func1 = Breakpoint location 1
+# other.c                                        1    func2
+# 	`inlined2' called at main.c line 11
+# main.c                                         9    func3
+# 	func3 = Breakpoint location 2
+# 	`otherinline' called at main.c line 9
+# end of main                                         func_end
+
+# This test can only be run on targets which support DWARF-2 and use gas.
+if {![dwarf2_support]} {
+    return 0  
+}
+
+standard_testfile
+set executable ${testfile}
+
+if {[build_executable ${testfile}.exp ${executable} "${testfile}.c ${testfile}.S" {additional_flags=-DINLINED}] == -1} {
+    return -1
+}
+
+# We need those symbols global to access them from the .S file.
+set test "strip stub symbols"
+set objcopy_program [gdb_find_objcopy]
+set result [catch "exec $objcopy_program							\
+			-N func0 -N func1 -N func2 -N func3         -N func_start -N func_end	\
+			-N fund0 -N fund1 -N fund2 -N fund3 -N fund -N fund_start		\
+			${binfile}" output]
+verbose "result is $result"
+verbose "output is $output"
+if {$result != 0} {
+    fail $test
+    return
+}
+pass $test
+
+clean_restart $executable
+
+if ![runto_main] {
+    return -1
+}
+
+gdb_breakpoint "func"
+gdb_continue_to_breakpoint "func"
+
+# Sanity check GDB has really found 2 locations
+gdb_test {info break $bpnum} "\r\n2\\.1\[ \t\]\[^\n\]*\r\n2\\.2\[ \t\]\[^\n\]*" "2 locations found"
+
+gdb_test "p v" " = 0" "no statement got executed"
+@
+
+
+1.4
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@d48 1
+a48 1
+set objcopy_program [transform objcopy]
+@
+
+
+1.3
+log
+@	* gdb.dwarf2/pr10770.exp: Use standard_testfile.
+	* gdb.dwarf2/dw2-var-zero-addr.exp: Use standard_testfile.
+	* gdb.dwarf2/dw2-param-error.exp: Use standard_testfile.
+	* gdb.dwarf2/dw2-op-call.exp: Use standard_testfile.
+	* gdb.dwarf2/dw2-inline-param.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.dwarf2/dw2-inline-break.exp: Use standard_testfile.
+	* gdb.dwarf2/dw2-ifort-parameter.exp: Use standard_testfile.
+	* gdb.dwarf2/dw2-cp-infcall-ref-static.exp: Use
+	standard_testfile.
+	* gdb.dwarf2/dw2-case-insensitive.exp: Use standard_testfile.
+	* gdb.dwarf2/dw4-sig-types.exp: Use standard_testfile.
+	* gdb.dwarf2/dw2-objfile-overlap.exp: Use standard_testfile.
+	* gdb.dwarf2/callframecfa.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.dwarf2/dup-psym.exp: Use standard_testfile.
+	* gdb.dwarf2/dw2-ada-ffffffff.exp: Use standard_testfile.
+	* gdb.dwarf2/dw2-anonymous-func.exp: Use standard_testfile.
+	* gdb.dwarf2/dw2-bad-parameter-type.exp: Use standard_testfile.
+	* gdb.dwarf2/dw2-basic.exp: Use standard_testfile.
+	* gdb.dwarf2/dw2-compressed.exp: Use standard_testfile.
+	* gdb.dwarf2/dw2-const.exp: Use standard_testfile.
+	* gdb.dwarf2/dw2-cu-size.exp: Use standard_testfile.
+	* gdb.dwarf2/dw2-double-set-die-type.exp: Use standard_testfile.
+	* gdb.dwarf2/dw2-empty-namespace.exp: Use standard_testfile.
+	* gdb.dwarf2/dw2-empty-pc-range.exp: Use standard_testfile.
+	* gdb.dwarf2/dw2-filename.exp: Use standard_testfile.
+	* gdb.dwarf2/dw2-icc-opaque.exp: Use standard_testfile.
+	* gdb.dwarf2/dw2-inheritance.exp: Use standard_testfile.
+	* gdb.dwarf2/dw2-intercu.exp: Use standard_testfile.
+	* gdb.dwarf2/dw2-intermix.exp: Use standard_testfile.
+	* gdb.dwarf2/dw2-linkage-name-trust.exp: Use standard_testfile.
+	* gdb.dwarf2/dw2-modula2-self-type.exp: Use standard_testfile.
+	* gdb.dwarf2/dw2-namespaceless-anonymous.exp: Use standard_testfile.
+	* gdb.dwarf2/dw2-op-stack-value.exp: Use standard_testfile.
+	* gdb.dwarf2/dw2-producer.exp: Use standard_testfile.
+	* gdb.dwarf2/dw2-ranges.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.dwarf2/dw2-ref-missing-frame.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.dwarf2/dw2-restore.exp: Use standard_testfile.
+	* gdb.dwarf2/dw2-simple-locdesc.exp: Use standard_testfile.
+	* gdb.dwarf2/dw2-skip-prologue.exp: Use standard_testfile.
+	* gdb.dwarf2/dw2-stack-boundary.exp: Use standard_testfile.
+	* gdb.dwarf2/dw2-strp.exp: Use standard_testfile.
+	* gdb.dwarf2/dw4-sig-type-unused.exp: Use standard_testfile.
+	* gdb.dwarf2/implptr-64bit.exp: Use standard_testfile.
+	* gdb.dwarf2/implptr-optimized-out.exp: Use standard_testfile.
+	* gdb.dwarf2/implptr.exp: Use standard_testfile.
+	* gdb.dwarf2/mac-fileno.exp: Use standard_testfile.
+	* gdb.dwarf2/member-ptr-forwardref.exp: Use standard_testfile.
+	* gdb.dwarf2/pieces.exp: Use standard_testfile.
+	* gdb.dwarf2/pr11465.exp: Use standard_testfile.
+	* gdb.dwarf2/pr13961.exp: Use standard_testfile.
+	* gdb.dwarf2/valop.exp: Use standard_testfile,
+	prepare_for_testing.
+@
+text
+@d1 1
+a1 1
+# Copyright 2011-2012 Free Software Foundation, Inc.
+@
+
+
+1.2
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d39 1
+a39 1
+set testfile "dw2-skip-prologue"
+a40 1
+set binfile ${objdir}/${subdir}/${executable}
+@
+
+
+1.1
+log
+@gdb/
+	PR 12573
+	* dwarf2read.c (struct dwarf2_cu): New field has_loclist.
+	(producer_is_gcc_ge_4_0): New function.
+	(process_full_comp_unit): Set also symtab->locations_valid.  Move the
+	symtab->language code.
+	(var_decode_location): Set cu->has_loclist.
+	* symtab.c (skip_prologue_sal): New variables saved_pc, force_skip and
+	skip.  Intialize force_skip from locations_valid.  Move the prologue
+	skipping code into two passes.
+	* symtab.h (struct symtab): Make the primary field a bitfield.  New
+	field locations_valid.
+
+gdb/testsuite/
+	PR 12573
+	* gdb.dwarf2/dw2-skip-prologue.S: New file.
+	* gdb.dwarf2/dw2-skip-prologue.c: New file.
+	* gdb.dwarf2/dw2-skip-prologue.exp: New file.
+@
+text
+@d1 1
+a1 1
+# Copyright 2011 Free Software Foundation, Inc.
+@
+
+
+1.1.4.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d1 1
+a1 1
+# Copyright 2011-2012 Free Software Foundation, Inc.
+@
+
+
+1.1.2.1
+log
+@gdb/
+	PR 12573
+	* dwarf2read.c (struct dwarf2_cu): New field has_loclist.
+	(producer_is_gcc_ge_4_0): New function.
+	(process_full_comp_unit): Set also symtab->locations_valid.  Move the
+	symtab->language code.
+	(var_decode_location): Set cu->has_loclist.
+	* symtab.c (skip_prologue_sal): New variables saved_pc, force_skip and
+	skip.  Intialize force_skip from locations_valid.  Move the prologue
+	skipping code into two passes.
+	* symtab.h (struct symtab): Make the primary field a bitfield.  New
+	field locations_valid.
+
+gdb/testsuite/
+	PR 12573
+	* gdb.dwarf2/dw2-skip-prologue.S: New file.
+	* gdb.dwarf2/dw2-skip-prologue.c: New file.
+	* gdb.dwarf2/dw2-skip-prologue.exp: New file.
+@
+text
+@@
+

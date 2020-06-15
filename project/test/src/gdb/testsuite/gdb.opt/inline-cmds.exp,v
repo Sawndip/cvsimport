@@ -1,0 +1,869 @@
+head	1.9;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.9
+	gdb_7_6-2013-04-26-release:1.9
+	gdb_7_6-branch:1.9.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.9
+	gdb_7_5_1-2012-11-29-release:1.8
+	gdb_7_5-2012-08-17-release:1.8
+	gdb_7_5-branch:1.8.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.8
+	gdb_7_4_1-2012-04-26-release:1.5.2.1
+	gdb_7_4-2012-01-24-release:1.5.2.1
+	gdb_7_4-branch:1.5.0.2
+	gdb_7_4-2011-12-13-branchpoint:1.5
+	gdb_7_3_1-2011-09-04-release:1.4
+	gdb_7_3-2011-07-26-release:1.4
+	gdb_7_3-branch:1.4.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.4
+	gdb_7_2-2010-09-02-release:1.3
+	gdb_7_2-branch:1.3.0.2
+	gdb_7_2-2010-07-07-branchpoint:1.3
+	gdb_7_1-2010-03-18-release:1.2
+	gdb_7_1-branch:1.2.0.2
+	gdb_7_1-2010-02-18-branchpoint:1.2
+	gdb_7_0_1-2009-12-22-release:1.1
+	gdb_7_0-2009-10-06-release:1.1
+	gdb_7_0-branch:1.1.0.4
+	gdb_7_0-2009-09-16-branchpoint:1.1
+	msnyder-checkpoint-072509-branch:1.1.0.2
+	msnyder-checkpoint-072509-branchpoint:1.1;
+locks; strict;
+comment	@# @;
+
+
+1.9
+date	2013.01.01.06.41.25;	author brobecke;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2012.06.25.20.24.57;	author tromey;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2012.06.21.20.46.24;	author tromey;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2012.01.04.08.17.55;	author brobecke;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2011.05.02.17.07.10;	author emachado;	state Exp;
+branches
+	1.5.2.1;
+next	1.4;
+
+1.4
+date	2011.01.01.15.33.48;	author brobecke;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2010.06.02.21.46.45;	author msnyder;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2010.01.01.07.32.04;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2009.06.28.00.20.24;	author drow;	state Exp;
+branches;
+next	;
+
+1.5.2.1
+date	2012.01.06.04.44.10;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.9
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@# Copyright 2008-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+standard_testfile .c inline-markers.c
+
+if {[prepare_for_testing $testfile.exp $testfile \
+	 [list $srcfile $srcfile2] {debug optimize=-O2}]} {
+    return -1
+}
+
+gdb_test_no_output "set listsize 1"
+
+runto_main
+
+get_compiler_info
+get_debug_format
+if { [skip_inline_frame_tests] } {
+    untested inline-cmds.exp
+    return
+}
+
+# First, check that the things we expected to be inlined really were,
+# and those that shouldn't be weren't.
+set line1 [gdb_get_line_number "set breakpoint 1 here" ${srcfile2}]
+gdb_breakpoint $srcfile2:$line1
+set line2 [gdb_get_line_number "set breakpoint 2 here" ${srcfile2}]
+gdb_breakpoint $srcfile2:$line2
+
+gdb_test "continue" ".*set breakpoint 1 here.*" "continue to bar (1)"
+gdb_test "backtrace" "#0  bar.*#1  .*func1.*#2  .*main.*" \
+    "backtrace from bar (1)"
+gdb_test "up" "#1  .*func1.*" "up from bar (1)"
+gdb_test "info frame" ".*inlined into frame.*" "func1 inlined (1)"
+
+gdb_test "continue" ".*set breakpoint 1 here.*" "continue to bar (2)"
+gdb_test "backtrace" "#0  bar.*#1  .*func1.*#2  .*func2.*#3  .*main.*" \
+    "backtrace from bar (2)"
+gdb_test "up" "#1  .*func1.*" "up from bar (2)"
+gdb_test "info frame" ".*inlined into frame.*" "func1 inlined (2)"
+gdb_test "up" "#2  .*func2.*" "up from func1 (2)"
+gdb_test "info frame" ".*inlined into frame.*" "func2 inlined (2)"
+
+gdb_test "continue" ".*set breakpoint 2 here.*" "continue to marker"
+gdb_test "backtrace" "#0  marker.*#1  .*main.*" "backtrace from marker"
+gdb_test "info frame" ".*called by frame.*" "marker not inlined"
+
+# Next, check that we can next over inlined functions.  We should not end up
+# inside any of them.
+delete_breakpoints
+runto_main
+
+# The lines before the first inlined call.
+set first "x = 7|y = 8"
+
+# Some extra lines that end up in our stepping due to code motion.
+set opt "start of main|result = 0"
+
+# We start this test with a "list" instead of a "next", in case the
+# first non-prologue instruction in main comes from the inlined function.
+set msg "next over inlined functions"
+gdb_test_multiple "list" $msg {
+    -re "($first|result = func1|result = func2|$opt).*$gdb_prompt $" {
+	send_gdb "next\r"
+	exp_continue
+    }
+    -re "marker \\\(\\\);\r\n$gdb_prompt $" {
+	pass $msg
+    }
+}
+
+# Check that when next shows the call of func1, it has not happened yet.
+runto_main
+
+# Like the return value of gdb_test: -1 something is wrong, 0 passed, 1 failed.
+set bt_test -1
+set x_test -1
+set func1_step -1
+
+set last_was_func1_call 0
+set msg "next past inlined func1"
+gdb_test_multiple "list" $msg {
+    -re "($first|$opt).*$gdb_prompt $" {
+	set last_was_func1_call 0
+	send_gdb "next\r"
+	exp_continue
+    }
+    -re "result = func1 \\\(\\\);\r\n$gdb_prompt $" {
+	# Check whether x has been set.  If 0, we may be doing something
+	# else associated with this line besides the inlined call - e.g.
+	# loading the address of result.  If 7, we may be at the call site.
+	# If 15, though, we might be past the call and back at the store to
+	# result - that's OK, as long as we weren't just here (see
+	# func1_step above).
+	set x_val -1
+	gdb_test_multiple "print x" "" {
+	    -re "\\\$$decimal = (\[0-9\]*)\r\n$gdb_prompt $" {
+		set x_val $expect_out(1,string)
+	    }
+	    -re "$gdb_prompt $" { }
+	}
+	if { $x_val == 0 || $x_val == 7 } {
+	    if { $x_test != 1 } {
+		set x_test 0
+	    }
+	} elseif { $x_val == 15 } {
+	    if { $func1_step == -1 } {
+		# We passed func1 without stopping at the call site.
+		set x_test 1
+	    }
+	} else {
+	    set x_test 1
+	}
+
+	# func1 should not show up on backtraces if we are at its call
+	# site.
+	if { $bt_test != 1 } {
+	    set bt_test [gdb_test "backtrace" "#0  \[^#]*main.*" ""]
+	}
+
+	# When we next over func1, we should not return to the same
+	# line.  But we might go past the line, according to source
+	# code order, and then come back.  A valid but odd layout is
+	# body of func1, load result's address into a register using
+	# the source location of "result = 0" several lines down, and
+	# then return to this line for the store.  GCC 4.3 does that
+	# on ARM.
+	if { $last_was_func1_call } {
+	    set func1_step 1
+	} elseif { $func1_step == -1 } {
+	    set func1_step 0
+	}
+	set last_was_func1_call 1
+
+	send_gdb "next\r"
+	exp_continue
+    }
+
+    -re "result = func2 \\\(\\\);\r\n$gdb_prompt $" {
+	pass $msg
+    }
+}
+
+if { $x_test == 0 } {
+    pass "print x before func1"
+} else {
+    fail "print x before func1"
+}
+
+if { $bt_test == 0 } {
+    pass "backtrace does not include func1"
+} else {
+    fail "backtrace does not include func1"
+}
+
+if { $bt_test == 0 } {
+    pass "stepped over call to func1"
+} else {
+    fail "stepped over call to func1"
+}
+
+# Next, check that we can single step into inlined functions.  We should always
+# "stop" at the call sites before entering them.
+runto_main
+
+set msg "step into func1"
+set saw_call_site 0
+gdb_test_multiple "list" $msg {
+    -re "($first|$opt).*$gdb_prompt $" {
+	send_gdb "step\r"
+	exp_continue
+    }
+    -re "result = func1.*$gdb_prompt $" {
+	set saw_call_site 1
+	send_gdb "step\r"
+	exp_continue
+    }
+    -re "func1 \\\(\\\) at .*\r\n$decimal.*bar \\\(\\\);\r\n$gdb_prompt $" {
+	if { $saw_call_site } {
+	    pass $msg
+	} else {
+	    fail $msg
+	}
+    }
+}
+
+# Check finish out of an inlined function.
+set msg "finish from func1"
+gdb_test_multiple "finish" $msg {
+    -re "result = func1 \\\(\\\);\r\n$gdb_prompt $" {
+	pass $msg
+    }
+    -re "($first|$opt).*$gdb_prompt $" {
+	# Whoops.  We finished, but ended up back at an earlier line.  Keep
+	# trying.
+	send_gdb "step\r"
+	exp_continue
+    }
+    -re "func1 \\\(\\\) at .*\r\n$decimal.*bar \\\(\\\);\r\n$gdb_prompt $" {
+	send_gdb "finish\r"
+	exp_continue
+    }
+}
+
+# Test some corner cases involving consecutive inlined functions.
+set line3 [gdb_get_line_number "set breakpoint 3 here"]
+gdb_breakpoint $line3
+gdb_continue_to_breakpoint "consecutive func1"
+
+gdb_test "next" ".*func1 .*first call.*" "next to first func1"
+set msg "next to second func1"
+gdb_test_multiple "next" $msg {
+    -re ".*func1 .*second call.*$gdb_prompt $" {
+	pass $msg
+    }
+    -re ".*marker .*$gdb_prompt $" {
+	# This assembles to two consecutive call instructions.
+	# Both appear to be at the same line, because they're
+	# in the body of the same inlined function.  This is
+	# reasonable for the line table.  GDB should take the
+	# containing block and/or function into account when
+	# deciding how far to step.  The single line table entry
+	# is actually two consecutive instances of the same line.
+	kfail gdb/NNNN $msg
+    }
+}
+
+# It is easier when the two inlined functions are not on the same line.
+set line4 [gdb_get_line_number "set breakpoint 4 here"]
+gdb_breakpoint $line4
+gdb_continue_to_breakpoint "func1 then func3"
+
+gdb_test "next" ".*func1 \\\(\\\);" "next to func1 before func3"
+gdb_test "next" ".*func3 \\\(\\\);" "next to func3"
+
+# Test finishing out of one thing and into another.
+set line5 [gdb_get_line_number "set breakpoint 5 here"]
+gdb_breakpoint $line5
+gdb_continue_to_breakpoint "finish into func1"
+
+gdb_test "next" ".*marker \\\(\\\);" "next to finish marker"
+gdb_test "step" ".*set breakpoint 2 here.*" "step into finish marker"
+
+# Some architectures will have one or more instructions after
+# the call instruction which still are part of the call sequence,
+# so it should be expected to return to the caller line after issue 
+# a 'finish' command.
+gdb_test_multiple "finish" "finish from marker" {
+    -re "func1 \\\(\\\);.*\r\n$gdb_prompt $" {
+	pass "finish from marker to func1"
+    }
+    -re "marker \\\(\\\);.*\r\n$gdb_prompt $" {
+	pass "finish from marker"
+	gdb_test "step" "func1 \\\(\\\);.*" "step after marker to reach func1"
+    }
+}
+
+gdb_test "step" "bar \\\(\\\);" "step into func1 for finish"
+gdb_test "finish" "func3 \\\(\\\);" "finish from func1 to func3"
+
+# Test a deeper call stack.
+set line6 [gdb_get_line_number "set breakpoint 6 here"]
+gdb_breakpoint $line6
+gdb_continue_to_breakpoint "before the outer_inline call"
+gdb_test "step" "marker \\\(\\\) at .*" "reach 1 the outer_inline call"
+gdb_test_multiple "finish" "finish from marker" {
+    -re "main \\\(\\\) at .*outer_inline2 \\\(\\\);.*\r\n$gdb_prompt $" {
+	pass "reach outer_inline2"
+    }
+    -re "main \\\(\\\) at .*marker \\\(\\\);.*\r\n$gdb_prompt $" {
+	pass "finish from marker"
+	gdb_test "step" "outer_inline2 \\\(\\\);.*" "step after marker to reach outer_inline2"
+    }
+}
+gdb_test "bt" "#0  main.*" "backtrace at main of outer_inline"
+gdb_test "step" "outer_inline2 \\\(\\\) at .*" "enter outer_inline2"
+gdb_test "bt" "#0  outer_inline2.*#1  main.*" "backtrace at outer_inline2"
+gdb_test "step" "outer_inline1 \\\(\\\) at .*" "enter outer_inline1 from outer_inline2"
+
+set msg "backtrace at outer_inline1"
+gdb_test_multiple "bt" $msg {
+    -re "#0  outer_inline1.*#1  outer_inline2.*#2  main.*$gdb_prompt $" {
+	pass $msg
+    }
+    -re "#0  $hex in outer_inline1.*#1  outer_inline2.*#2  main.*$gdb_prompt $" {
+	# Binutils PR gas/6717.  Gas moves .loc past .p2align and the
+	# leading nop of the inlined call appears to be on the same line
+	# as main's call to marker.
+	xfail $msg
+	gdb_test "step" "noinline \\\(\\\);" "step to call of noinline"
+    }
+}
+
+gdb_test "step" "noinline \\\(\\\) at .*" "enter noinline from outer_inline1"
+gdb_test "bt" "#0  noinline.*#1  .*outer_inline1.*#2  .*outer_inline2.*#3  main.*" "backtrace at noinline from outer_inline1"
+gdb_test "step" "inlined_fn \\\(\\\) at .*" "enter inlined_fn from noinline"
+gdb_test "bt" "#0  inlined_fn.*#1  noinline.*#2  .*outer_inline1.*#3  .*outer_inline2.*#4  main.*" "backtrace at inlined_fn from noinline"
+gdb_test "info frame" ".*inlined into frame.*" "inlined_fn from noinline inlined"
+gdb_test "up" "#1  noinline.*" "up to noinline"
+gdb_test "info frame" ".*\n called by frame.*" "noinline from outer_inline1 not inlined"
+gdb_test "up" "#2  .*outer_inline1.*" "up to outer_inline1"
+gdb_test "info frame" ".*inlined into frame.*" "outer_inline1 inlined"
+gdb_test "up" "#3  .*outer_inline2.*" "up to outer_inline2"
+gdb_test "info frame" ".*inlined into frame.*" "outer_inline2 inlined"
+gdb_test "up" "#4  main.*" "up from outer_inline2"
+gdb_test "info frame" ".*\n caller of frame.*" "main not inlined"
+@
+
+
+1.8
+log
+@	* gdb.opt/clobbered-registers-O2.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.opt/inline-break.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.opt/inline-bt.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.opt/inline-cmds.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.opt/inline-locals.exp: Use standard_testfile,
+	prepare_for_testing.
+@
+text
+@d1 1
+a1 1
+# Copyright 2008, 2010-2012 Free Software Foundation, Inc.
+@
+
+
+1.7
+log
+@	* lib/gdb.exp (skip_altivec_tests, skip_vsx_tests)
+	(build_executable): Update.
+	(get_compiler_info): Remove 'binfile' argument.
+	* gdb.ada/arrayidx.exp: Update.
+	* gdb.ada/null_array.exp: Update.
+	* gdb.arch/altivec-abi.exp: Update.
+	* gdb.arch/altivec-regs.exp: Update.
+	* gdb.arch/amd64-byte.exp: Update.
+	* gdb.arch/amd64-dword.exp: Update.
+	* gdb.arch/amd64-word.exp: Update.
+	* gdb.arch/i386-avx.exp: Update.
+	* gdb.arch/i386-byte.exp: Update.
+	* gdb.arch/i386-sse.exp: Update.
+	* gdb.arch/i386-word.exp: Update.
+	* gdb.arch/ppc-dfp.exp: Update.
+	* gdb.arch/ppc-fp.exp: Update.
+	* gdb.arch/vsx-regs.exp: Update.
+	* gdb.base/all-bin.exp: Update.
+	* gdb.base/annota1.exp: Update.
+	* gdb.base/async.exp: Update.
+	* gdb.base/attach.exp: Update.
+	* gdb.base/break-interp.exp: Update.
+	* gdb.base/call-ar-st.exp: Update.
+	* gdb.base/call-rt-st.exp: Update.
+	* gdb.base/call-sc.exp: Update.
+	* gdb.base/callfuncs.exp: Update.
+	* gdb.base/catch-load.exp: Update.
+	* gdb.base/completion.exp: Update.
+	* gdb.base/complex.exp: Update.
+	* gdb.base/condbreak.exp: Update.
+	* gdb.base/consecutive.exp: Update.
+	* gdb.base/constvars.exp: Update.
+	* gdb.base/corefile.exp: Update.
+	* gdb.base/eval-skip.exp: Update.
+	* gdb.base/expand-psymtabs.exp: Update.
+	* gdb.base/exprs.exp: Update.
+	* gdb.base/fileio.exp: Update.
+	* gdb.base/fixsection.exp: Update.
+	* gdb.base/funcargs.exp: Update.
+	* gdb.base/gdb11530.exp: Update.
+	* gdb.base/gdb1555.exp: Update.
+	* gdb.base/gnu-ifunc.exp: Update.
+	* gdb.base/gnu_vector.exp: Update.
+	* gdb.base/info-macros.exp: Update.
+	* gdb.base/jit-simple.exp: Update.
+	* gdb.base/jit-so.exp: Update.
+	* gdb.base/jit.exp: Update.
+	* gdb.base/langs.exp: Update.
+	* gdb.base/list.exp: Update.
+	* gdb.base/logical.exp: Update.
+	* gdb.base/long_long.exp: Update.
+	* gdb.base/longjmp.exp: Update.
+	* gdb.base/macscp.exp: Update.
+	* gdb.base/mips_pro.exp: Update.
+	* gdb.base/miscexprs.exp: Update.
+	* gdb.base/morestack.exp: Update.
+	* gdb.base/nodebug.exp: Update.
+	* gdb.base/opaque.exp: Update.
+	* gdb.base/pc-fp.exp: Update.
+	* gdb.base/pending.exp: Update.
+	* gdb.base/permissions.exp: Update.
+	* gdb.base/pointers.exp: Update.
+	* gdb.base/prelink.exp: Update.
+	* gdb.base/printcmds.exp: Update.
+	* gdb.base/psymtab.exp: Update.
+	* gdb.base/ptype.exp: Update.
+	* gdb.base/relational.exp: Update.
+	* gdb.base/scope.exp: Update.
+	* gdb.base/setvar.exp: Update.
+	* gdb.base/shlib-call.exp: Update.
+	* gdb.base/shreloc.exp: Update.
+	* gdb.base/signals.exp: Update.
+	* gdb.base/sizeof.exp: Update.
+	* gdb.base/so-impl-ld.exp: Update.
+	* gdb.base/so-indr-cl.exp: Update.
+	* gdb.base/solib-disc.exp: Update.
+	* gdb.base/solib-display.exp: Update.
+	* gdb.base/solib-nodir.exp: Update.
+	* gdb.base/solib-overlap.exp: Update.
+	* gdb.base/solib-symbol.exp: Update.
+	* gdb.base/solib-weak.exp: Update.
+	* gdb.base/solib.exp: Update.
+	* gdb.base/store.exp: Update.
+	* gdb.base/structs.exp: Update.
+	* gdb.base/structs2.exp: Update.
+	* gdb.base/type-opaque.exp: Update.
+	* gdb.base/unload.exp: Update.
+	* gdb.base/varargs.exp: Update.
+	* gdb.base/volatile.exp: Update.
+	* gdb.base/watch_thread_num.exp: Update.
+	* gdb.base/watchpoint-solib.exp: Update.
+	* gdb.base/watchpoint.exp: Update.
+	* gdb.base/watchpoints.exp: Update.
+	* gdb.base/whatis.exp: Update.
+	* gdb.cell/arch.exp: Update.
+	* gdb.cell/break.exp: Update.
+	* gdb.cell/bt.exp: Update.
+	* gdb.cell/core.exp: Update.
+	* gdb.cell/data.exp: Update.
+	* gdb.cell/ea-cache.exp: Update.
+	* gdb.cell/f-regs.exp: Update.
+	* gdb.cell/fork.exp: Update.
+	* gdb.cell/gcore.exp: Update.
+	* gdb.cell/mem-access.exp: Update.
+	* gdb.cell/ptype.exp: Update.
+	* gdb.cell/registers.exp: Update.
+	* gdb.cell/sizeof.exp: Update.
+	* gdb.cell/solib-symbol.exp: Update.
+	* gdb.cell/solib.exp: Update.
+	* gdb.cp/ambiguous.exp: Update.
+	* gdb.cp/breakpoint.exp: Update.
+	* gdb.cp/bs15503.exp: Update.
+	* gdb.cp/casts.exp: Update.
+	* gdb.cp/class2.exp: Update.
+	* gdb.cp/cpexprs.exp: Update.
+	* gdb.cp/cplusfuncs.exp: Update.
+	* gdb.cp/ctti.exp: Update.
+	* gdb.cp/dispcxx.exp: Update.
+	* gdb.cp/gdb1355.exp: Update.
+	* gdb.cp/gdb2384.exp: Update.
+	* gdb.cp/gdb2495.exp: Update.
+	* gdb.cp/infcall-dlopen.exp: Update.
+	* gdb.cp/local.exp: Update.
+	* gdb.cp/m-data.exp: Update.
+	* gdb.cp/m-static.exp: Update.
+	* gdb.cp/mb-ctor.exp: Update.
+	* gdb.cp/mb-inline.exp: Update.
+	* gdb.cp/mb-templates.exp: Update.
+	* gdb.cp/member-ptr.exp: Update.
+	* gdb.cp/method.exp: Update.
+	* gdb.cp/namespace.exp: Update.
+	* gdb.cp/nextoverthrow.exp: Update.
+	* gdb.cp/nsdecl.exp: Update.
+	* gdb.cp/nsrecurs.exp: Update.
+	* gdb.cp/nsstress.exp: Update.
+	* gdb.cp/nsusing.exp: Update.
+	* gdb.cp/pr-1023.exp: Update.
+	* gdb.cp/pr-1210.exp: Update.
+	* gdb.cp/pr-574.exp: Update.
+	* gdb.cp/pr9631.exp: Update.
+	* gdb.cp/printmethod.exp: Update.
+	* gdb.cp/psmang.exp: Update.
+	* gdb.cp/re-set-overloaded.exp: Update.
+	* gdb.cp/rtti.exp: Update.
+	* gdb.cp/shadow.exp: Update.
+	* gdb.cp/templates.exp: Update.
+	* gdb.cp/try_catch.exp: Update.
+	* gdb.dwarf2/dw2-ranges.exp: Update.
+	* gdb.dwarf2/pr10770.exp: Update.
+	* gdb.fortran/library-module.exp: Update.
+	* gdb.hp/gdb.aCC/optimize.exp: Update.
+	* gdb.hp/gdb.aCC/watch-cmd.exp: Update.
+	* gdb.hp/gdb.base-hp/callfwmall.exp: Update.
+	* gdb.hp/gdb.base-hp/hwwatchbus.exp: Update.
+	* gdb.hp/gdb.base-hp/pxdb.exp: Update.
+	* gdb.hp/gdb.base-hp/sized-enum.exp: Update.
+	* gdb.hp/gdb.base-hp/so-thresh.exp: Update.
+	* gdb.hp/gdb.compat/xdb1.exp: Update.
+	* gdb.hp/gdb.compat/xdb2.exp: Update.
+	* gdb.hp/gdb.compat/xdb3.exp: Update.
+	* gdb.hp/gdb.defects/bs14602.exp: Update.
+	* gdb.hp/gdb.defects/solib-d.exp: Update.
+	* gdb.hp/gdb.objdbg/objdbg01.exp: Update.
+	* gdb.hp/gdb.objdbg/objdbg02.exp: Update.
+	* gdb.hp/gdb.objdbg/objdbg03.exp: Update.
+	* gdb.hp/gdb.objdbg/objdbg04.exp: Update.
+	* gdb.mi/gdb792.exp: Update.
+	* gdb.mi/mi-pending.exp: Update.
+	* gdb.mi/mi-solib.exp: Update.
+	* gdb.mi/mi-var-cp.exp: Update.
+	* gdb.opt/clobbered-registers-O2.exp: Update.
+	* gdb.opt/inline-bt.exp: Update.
+	* gdb.opt/inline-cmds.exp: Update.
+	* gdb.opt/inline-locals.exp: Update.
+	* gdb.python/py-events.exp: Update.
+	* gdb.python/py-finish-breakpoint.exp: Update.
+	* gdb.python/py-type.exp: Update.
+	* gdb.reverse/solib-precsave.exp: Update.
+	* gdb.reverse/solib-reverse.exp: Update.
+	* gdb.server/solib-list.exp: Update.
+	* gdb.stabs/weird.exp: Update.
+	* gdb.threads/attach-into-signal.exp: Update.
+	* gdb.threads/attach-stopped.exp: Update.
+	* gdb.threads/tls-shared.exp: Update.
+	* gdb.trace/change-loc.exp: Update.
+	* gdb.trace/strace.exp: Update.
+@
+text
+@d16 1
+a16 7
+set testfile "inline-cmds"
+set srcfile "${testfile}.c"
+set srcfile2 "inline-markers.c"
+set fullsrcfile "${srcdir}/${subdir}/${srcfile}"
+set fullsrcfile2 "${srcdir}/${subdir}/${srcfile2}"
+set sources [list ${fullsrcfile} ${fullsrcfile2}]
+set binfile ${objdir}/${subdir}/${testfile}
+d18 2
+a19 3
+if  { [gdb_compile $sources ${binfile} \
+	   executable {debug optimize=-O2}] != "" } {
+    untested inline-cmds.exp
+a22 5
+gdb_exit
+gdb_start
+gdb_reinitialize_dir $srcdir/$subdir
+gdb_load ${binfile}
+
+@
+
+
+1.6
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d39 1
+a39 1
+get_compiler_info $binfile
+@
+
+
+1.5
+log
+@* gdb.opt/inline-cmds.exp: Adjust checks with "finish" command to
+accept to show the caller line again as well as the line after.
+@
+text
+@d1 1
+a1 1
+# Copyright 2008, 2010, 2011 Free Software Foundation, Inc.
+@
+
+
+1.5.2.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d1 1
+a1 1
+# Copyright 2008, 2010-2012 Free Software Foundation, Inc.
+@
+
+
+1.4
+log
+@run copyright.sh for 2011.
+@
+text
+@d266 14
+a279 1
+gdb_test "finish" "func1 \\\(\\\);" "finish from marker to func1"
+d289 9
+a297 1
+gdb_test "finish" "main \\\(\\\) at .*outer_inline2 \\\(\\\);" "reach outer_inline2"
+@
+
+
+1.3
+log
+@2010-06-02  Michael Snyder  <msnyder@@vmware.com>
+
+	* gdb.dwarf2/dw2-basic.exp: Use gdb_test_no_output.
+	* gdb.dwarf2/dw2-compressed.exp: Ditto.
+	* gdb.dwarf2/dw2-intercu.exp: Ditto.
+	* gdb.dwarf2/dw2-intermix.exp: Ditto.
+	* gdb.dwarf2/dw2-producer.exp: Ditto.
+	* gdb.dwarf2/mac-fileno.exp: Ditto.
+
+	* gdb.gdb/observer.exp: Use gdb_test_no_output.
+	* gdb.gdb/selftest.exp: Ditto.
+
+	* gdb.multi/base.exp: Use gdb_test_no_output.
+
+	* gdb.opt/inline-cmds.exp: Use gdb_test_no_output.
+@
+text
+@d1 1
+a1 1
+# Copyright 2008, 2010 Free Software Foundation, Inc.
+@
+
+
+1.2
+log
+@Update copyright year in most headers.
+
+Automatic update by copyright.sh.
+@
+text
+@d35 1
+a35 1
+gdb_test "set listsize 1" ""
+@
+
+
+1.1
+log
+@	gdb/
+	* NEWS: Document inlined function support.
+	* Makefile.in (SFILES): Add inline-frame.c.
+	(COMMON_OBS): Add inline-frame.o.
+	* block.c (contained_in): Rewrite to use lexical nesting.
+	(block_linkage_function): Skip inlined function blocks.
+	(block_inlined_p): New.
+	* block.h (struct block): Update comment.
+	(block_inlined_p): New prototype.
+	* blockframe.c (get_frame_block): Handle inlined functions.
+	(get_frame_function): Do not use block_linkage_function.
+	(block_innermost_frame): Use get_frame_block and contained_in.
+	* breakpoint.c (watchpoint_check): Remove extra reinit_frame_cache.
+	Skip over inlined functions.  Simplify epilogue check.
+	(bpstat_check_breakpoint_conditions): Use get_stack_frame_id.
+	Update comments.
+	(set_momentary_breakpoint): Only accept non-inlined frames.
+	(watch_command_1): Use frame_unwind_caller_pc and
+	frame_unwind_caller_id instead of get_prev_frame.
+	(until_break_command): Likewise.  Use get_stack_frame_id.
+	* buildsym.c (end_symtab): Set SYMBOL_SYMTAB for block functions.
+	* dwarf2loc.c (dwarf_expr_frame_base): Use block_linkage_function.
+	* dwarf2read.c (process_die): Handle DW_TAG_inlined_subroutine.
+	(read_func_scope, new_symbol): Likewise.  Handle arguments specially
+	for inlined functions without call site information.
+	(inherit_abstract_dies): Allow tag mismatch for inlined subroutines.
+	(die_specification): Treat DW_AT_abstract_origin as a specification.
+	(read_type_die): Handle DW_TAG_inlined_subroutine.
+	* frame-unwind.c (frame_unwind_init): Add inline_frame_unwind.
+	* frame.c (fprint_frame_id): Print inline depth.
+	(fprint_frame_type): Handle INLINE_FRAME and SENTINEL_FRAME.
+	(skip_inlined_frames, get_stack_frame_id): New.
+	(frame_unwind_caller_id): Use skip_inlined_frames.
+	(frame_id_inlined_p): New.
+	(frame_id_eq): Make the logic match the comments.  Add inline_depth
+	check.
+	(frame_id_inner): Handle inlined functions.
+	(frame_unwind_pc): New function, copied from frame_unwind_caller_pc.
+	(frame_unwind_caller_pc): Use skip_inlined_frames and frame_unwind_pc.
+	(get_prev_frame_1): Check for inline frames.  Split out frame
+	allocation to get_prev_frame_raw.
+	(get_prev_frame_raw): New function.
+	(get_prev_frame): Handle inline frames.
+	(get_frame_pc): Use frame_unwind_pc.
+	(get_frame_address_in_block): Skip inlined frames on both sides.
+	(pc_notcurrent): Delete.
+	(find_frame_sal): Rewrite to handle inline call sites.  Use
+	get_frame_address_in_block.
+	(deprecated_update_frame_pc_hack): Make static.
+	* frame.h: Update comments.
+	(struct frame_id): Add inline_depth.
+	(enum frame_type): Add INLINE_FRAME.
+	(frame_id_inlined_p, get_stack_frame_id): New prototypes.
+	* gdbthread.h (struct thread_info): Add step_stack_frame_id field.
+	* infcmd.c (set_step_frame): New function.
+	(step_once): Use set_step_frame.  Handle inlined functions.
+	(until_next_command): Use set_step_frame.
+	(finish_backward), finish_forward): Use get_stack_frame_id.
+	(finish_command): Support inlined functions.
+	* inferior.h (set_step_info): New prototype.
+	* infrun.c (RESUME_ALL): Use minus_one_ptid.
+	(clear_proceed_status): Clear step_stack_frame_id.
+	(init_wait_for_inferior): Call clear_inline_frame_state.
+	(init_execution_control_state): Make static.
+	(set_step_info): New function.
+	(init_thread_stepping_state): Do not set the symtab or line here.
+	(stepped_in_from): New function.
+	(handle_inferior_event): Handle inlined functions.  Use set_step_info.
+	(insert_step_resume_breakpoint_at_frame): Use get_stack_frame_id.
+	(struct inferior_status): Add step_stack_frame_id.
+	(save_inferior_status, restore_inferior_status): Save and restore
+	step_stack_frame_id.
+	* inline-frame.c, inline-frame.h: New files.
+	* minsyms.c (prim_record_minimal_symbol_and_info): Use XCALLOC.
+	* regcache.c (regcache_write_pc): Call reinit_frame_cache.
+	* s390-tdep.c (s390_prologue_frame_unwind_cache): Handle INLINE_FRAME.
+	* stack.c (frame_show_address): New.
+	(print_frame_info, print_frame): Use it.
+	(find_frame_funname): Use get_frame_function.  Handle inlined blocks.
+	(frame_info): Mark inlined functions.
+	(backtrace_command_1): Use get_current_user_frame.
+	(print_frame_local_vars, print_frame_label_vars): Update comments.
+	(return_command): Refuse inlined functions.
+	* symtab.c (lookup_symbol_aux_local): Stop at inlined function
+	boundaries.
+	(find_function_start_sal): Avoid inlined functions.
+	(completion_list_add_fields): New function.
+	(default_make_symbol_completion_list): Use it.  Use block_static_block
+	and block_global_block.  Check for inlined functions.
+	(skip_prologue_using_sal): Avoid line number comparison across
+	inlining.
+	* symtab.h (struct symbol): Add is_inlined.
+	(SYMBOL_INLINED): New.
+	* target.c (target_resume): Call clear_inline_frame_state.
+	* valops.c (value_of_variable): Check block_inlined_p.
+
+	gdb/doc/
+	* gdb.texinfo (Debugging Optimized Code): New chapter.
+	(Compiling for Debugging): Reference it.  Move some
+	text to the new section.
+
+	gdb/testsuite/
+	* gdb.base/break.exp: Add an XFAIL for gcc/36748.
+	* gdb.cp/annota2.exp: Accept frames-invalid in more places.
+	* gdb.opt/Makefile.in (EXECUTABLES): Update.
+	* gdb.opt/clobbered-registers-O2.exp: Update to GPL v3.
+	* gdb.opt/inline-bt.c, gdb.opt/inline-bt.exp,
+	gdb.opt/inline-cmds.c, gdb.opt/inline-cmds.exp,
+	gdb.opt/inline-locals.c, gdb.opt/inline-locals.exp,
+	gdb.opt/inline-markers.c: New files.
+	* lib/gdb.exp (skip_inline_frame_tests): New function.
+	(skip_inline_var_tests): New function.
+@
+text
+@d1 1
+a1 1
+# Copyright 2008 Free Software Foundation, Inc.
+@
+

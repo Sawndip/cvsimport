@@ -1,0 +1,594 @@
+head	1.11;
+access;
+symbols
+	cr-0x3b58:1.10.0.2
+	cr-0x9e:1.7.0.10
+	cr-0x9d:1.7.0.8
+	corinna-01:1.7
+	cr-0x9c:1.7.0.6
+	cr-0x9b:1.7.0.4
+	cr-0x99:1.7
+	Z-emcb-cygwin_daemon:1.7.0.2
+	w32api-2_2:1.7
+	mingw-runtime-2_4:1.7
+	cygnus_cvs_20020108_pre:1.6
+	Z-cygwin_daemon_merge-new_HEAD:1.6
+	Z-cygwin_daemon_merge_HEAD:1.6
+	cygwin_daemon:1.6.0.8;
+locks; strict;
+comment	@# @;
+
+
+1.11
+date	2006.01.19.02.44.17;	author joshuadfranklin;	state dead;
+branches;
+next	1.10;
+
+1.10
+date	2005.03.03.16.36.08;	author joshuadfranklin;	state Exp;
+branches;
+next	1.9;
+
+1.9
+date	2005.01.22.19.12.33;	author joshuadfranklin;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2004.06.14.02.42.05;	author joshuadfranklin;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2002.08.30.00.42.19;	author cgf;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2001.03.17.16.18.01;	author davidsb;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2001.03.02.12.05.31;	author corinna;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2001.02.24.23.25.30;	author cgf;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2000.12.13.15.43.32;	author davidsb;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2000.11.20.14.37.37;	author davidsb;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2000.09.13.15.13.17;	author davidsb;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.11
+log
+@Remove references to and files from old texinfo FAQ.
+@
+text
+@@@section Cygwin API Questions
+
+@@subsection How does everything work?
+
+There's a C library which provides a Unix-style API.  The
+applications are linked with it and voila - they run on Windows.
+
+The aim is to add all the goop necessary to make your apps run on
+Windows into the C library.  Then your apps should run on Unix and
+Windows with no changes at the source level.
+
+The C library is in a DLL, which makes basic applications quite small.
+And it allows relatively easy upgrades to the Win32/Unix translation
+layer, providing that DLL changes stay backward-compatible.
+
+For a good overview of Cygwin, you may want to read the paper on Cygwin
+published by the Usenix Association in conjunction with the 2d Usenix NT
+Symposium in August 1998.  It is available in HTML format on the project
+WWW site.
+
+@@subsection Are development snapshots for the Cygwin library available?
+
+Yes.  They're made whenever anything interesting happens inside the
+Cygwin library (usually roughly on a nightly basis, depending on how much
+is going on).  They are only intended for those people who wish to
+contribute code to the project.  If you aren't going to be happy
+debugging problems in a buggy snapshot, avoid these and wait for a real
+release.  The snapshots are available from
+@@file{http://cygwin.com/snapshots/}.
+
+@@subsection How is the DOS/Unix CR/LF thing handled?
+
+Let's start with some background.
+
+In UNIX, a file is a file and what the file contains is whatever the
+program/programmer/user told it to put into it.  In Windows, a file is
+also a file and what the file contains depends not only on the
+program/programmer/user but also the file processing mode.
+
+When processing in text mode, certain values of data are treated
+specially.  A \n (new line) written to the file will prepend a \r
+(carriage return) so that if you `printf("Hello\n") you in fact get
+"Hello\r\n".  Upon reading this combination, the \r is removed and the
+number of bytes returned by the read is 1 less than was actually read.
+This tends to confuse programs dependent on ftell() and fseek().  A
+Ctrl-Z encountered while reading a file sets the End Of File flags even
+though it truly isn't the end of file.
+
+One of Cygwin's goals is to make it possible to easily mix Cygwin-ported
+Unix programs with generic Windows programs.  As a result, Cygwin opens
+files in text mode as is normal under Windows.  In the accompanying
+tools, tools that deal with binaries (e.g. objdump) operate in Unix
+binary mode and tools that deal with text files (e.g. bash) operate in
+text mode.
+
+Some people push the notion of globally setting the default processing
+mode to binary via mount point options or by setting the CYGWIN
+environment variable.  But that creates a different problem.  In
+binary mode, the program receives all of the data in the file, including
+a \r.  Since the programs will no longer deal with these properly for
+you, you would have to remove the \r from the relevant text files,
+especially scripts and startup resource files.  This is a porter "cop
+out", forcing the user to deal with the \r for the porter.
+
+It is rather easy for the porter to fix the source code by supplying the
+appropriate file processing mode switches to the open/fopen functions.
+Treat all text files as text and treat all binary files as binary.
+To be specific, you can select binary mode by adding @@code{O_BINARY} to
+the second argument of an @@code{open} call, or @@code{"b"} to second
+argument of an @@code{fopen} call.  You can also call @@code{setmode (fd,
+O_BINARY)}.
+
+Note that because the open/fopen switches are defined by ANSI, they
+exist under most flavors of Unix; open/fopen will just ignore the switch
+since they have no meaning to UNIX.
+
+Explanation adapted from mailing list email by Earnie Boyd
+<earnie_boyd@@@@yahoo.com>.
+
+@@subsection Is the Cygwin library multi-thread-safe?
+
+Yes.
+
+There is also extensive support for 'POSIX threads', see the file
+@@code{cygwin.din} for the list of POSIX thread functions provided.
+
+@@subsection Why is some functionality only supported in Windows NT?
+
+Windows 9x: n.
+32 bit extensions and a graphical shell for a 16 bit patch to an
+8 bit operating system originally coded for a 4 bit microprocessor,
+written by a 2 bit company that can't stand 1 bit of competition.
+
+But seriously, Windows 9x lacks most of the security-related calls and
+has several other deficiencies with respect to its version of the Win32
+API.  See the calls.texinfo document for more information as to what
+is not supported in Win 9x.
+
+@@subsection How is fork() implemented?
+
+Cygwin fork() essentially works like a non-copy on write version
+of fork() (like old Unix versions used to do).  Because of this it
+can be a little slow.  In most cases, you are better off using the
+spawn family of calls if possible.
+
+Here's how it works:
+
+Parent initializes a space in the Cygwin process table for child.
+Parent creates child suspended using Win32 CreateProcess call, giving
+the same path it was invoked with itself.  Parent calls setjmp to save
+its own context and then sets a pointer to this in the Cygwin shared
+memory area (shared among all Cygwin tasks).  Parent fills in the child's
+.data and .bss subsections by copying from its own address space into
+the suspended child's address space.  Parent then starts the child.
+Parent waits on mutex for child to get to safe point.  Child starts and
+discovers if has been forked and then longjumps using the saved jump
+buffer.  Child sets mutex parent is waiting on and then blocks on
+another mutex waiting for parent to fill in its stack and heap.  Parent
+notices child is in safe area, copies stack and heap from itself into
+child, releases the mutex the child is waiting on and returns from the
+fork call.  Child wakes from blocking on mutex, recreates any mmapped
+areas passed to it via shared area and then returns from fork itself.
+
+@@subsection How does wildcarding (globbing) work?
+
+If the DLL thinks it was invoked from a DOS style prompt, it runs a
+`globber' over the arguments provided on the command line.  This means
+that if you type @@code{LS *.EXE} from DOS, it will do what you might
+expect.
+
+Beware: globbing uses @@code{malloc}.  If your application defines
+@@code{malloc}, that will get used.  This may do horrible things to you.
+
+@@subsection How do symbolic links work?
+
+Cygwin knows of two ways to create symlinks.
+
+The old method is the only valid one up to but not including version 1.3.0.
+If it's enabled (from 1.3.0 on by setting `nowinsymlinks' in the environment
+variable CYGWIN) Cygwin generates link files with a magic header.  When you
+open a file or directory that is a link to somewhere else, it opens the file
+or directory listed in the magic header.  Because we don't want to have to
+open every referenced file to check symlink status, Cygwin marks symlinks
+with the system attribute.  Files without the system attribute are not
+checked.  Because remote samba filesystems do not enable the system
+attribute by default, symlinks do not work on network drives unless you
+explicitly enable this attribute.
+
+The new method which is introduced with Cygwin version 1.3.0 is enabled
+by default or if `winsymlinks' is set in the environment variable CYGWIN.
+Using this method, Cygwin generates symlinks by creating Windows shortcuts.
+Cygwin created shortcuts have a special header (which is in that way never
+created by Explorer) and the R/O attribute set.  A DOS path is stored in
+the shortcut as usual and the description entry is used to store the POSIX
+path.  While the POSIX path is stored as is, the DOS path has perhaps to be
+rearranged to result in a valid path.  This may result in a divergence
+between the DOS and the POSIX path when symlinks are moved crossing mount
+points.  When a user changes the shortcut, this will be detected by Cygwin
+and it will only use the DOS path then.  While Cygwin shortcuts are shown
+without the ".lnk" suffix in `ls' output, non-Cygwin shortcuts are shown
+with the suffix.  However, both are treated as symlinks.
+
+Both, the old and the new symlinks can live peacefully together since Cygwin
+treats both as symlinks regardless of the setting of `(no)winsymlinks' in
+the environment variable CYGWIN.
+
+@@subsection Why do some files, which are not executables have the 'x' type.
+
+When working out the Unix-style attribute bits on a file, the library
+has to fill out some information not provided by the WIN32 API.  
+
+It guesses that files ending in .exe and .bat are executable, as are
+ones which have a "#!" as their first characters.
+
+@@subsection How secure is Cygwin in a multi-user environment?
+
+As of version 1.5.13, the Cygwin developers are not aware of any feature
+in the cygwin dll that would allow users to gain privileges or to access
+objects to which they have no rights under Windows. However there is no
+guarantee that Cygwin is as secure as the Windows it runs on.  Cygwin
+processes share some variables and are thus easier targets of denial of
+service type of attacks.
+
+@@subsection How do the net-related functions work?
+
+@@strong{(Please note: This section has not yet been updated for the latest
+net release.)}
+
+The network support in Cygwin is supposed to provide the Unix API, not
+the Winsock API.
+
+There are differences between the semantics of functions with the same
+name under the API.
+
+E.g., the select system call on Unix can wait on a standard file handles
+and handles to sockets.  The select call in Winsock can only wait on
+sockets.  Because of this, cygwin.dll does a lot of nasty stuff behind
+the scenes, trying to persuade various Winsock/win32 functions to do what
+a Unix select would do.
+
+If you are porting an application which already uses Winsock, then
+using the net support in Cygwin is wrong.
+
+But you can still use native Winsock, and use Cygwin.  The functions
+which cygwin.dll exports are called 'cygwin_<name>'.  There
+are a load of defines which map the standard Unix names to the names
+exported by the DLL-- check out include/netdb.h:
+
+@@example
+..etc..
+void		cygwin_setprotoent (int);
+void		cygwin_setservent (int);
+void		cygwin_setrpcent (int);
+..etc..
+#ifndef __INSIDE_CYGWIN_NET__
+#define endprotoent cygwin_endprotoent 
+#define endservent cygwin_endservent 
+#define endrpcent  cygwin_endrpcent  
+..etc..
+@@end example
+
+The idea is that you'll get the Unix->Cygwin mapping if you include
+the standard Unix header files.  If you use this, you won't need to
+link with libwinsock.a - all the net stuff is inside the DLL.
+
+The mywinsock.h file is a standard winsock.h which has been hacked to
+remove the bits which conflict with the standard Unix API, or are
+defined in other headers.  E.g., in mywinsock.h, the definition of
+struct hostent is removed.  This is because on a Unix box, it lives in
+netdb.  It isn't a good idea to use it in your applications.
+
+As of the b19 release, this information may be slightly out of date.
+
+@@subsection I don't want Unix sockets, how do I use normal Win32 winsock?
+
+@@strong{(Please note: This section has not yet been updated for the latest
+net release.)}
+
+To use the vanilla Win32 winsock, you just need to #define Win32_Winsock
+and #include "windows.h" at the top of your source file(s).  You'll also
+want to add -lwsock32 to the compiler's command line so you link against
+libwsock32.a.
+
+@@subsection What version numbers are associated with Cygwin?
+
+Cygwin versioning is relatively complicated because of its status as a
+shared library.  First of all, since October 1998 every Cygwin DLL has
+been named @@code{cygwin1.dll} and has a 1 in the release name.
+Additionally, there are DLL major and minor numbers that correspond to
+the name of the release, and a release number. In other words,
+cygwin-1.5.10-2 is @@code{cygwin1.dll}, major version 5, minor version
+10, release 2.
+
+The @@code{cygwin1.dll} major version number gets incremented only when a
+change is made that makes existing software incompatible. For example,
+the first major version 5 release, cygwin-1.5.0-1, added 64-bit file I/O
+operations, which required many libraries to be recompiled and relinked.
+The minor version changes every time we make a new backward compatible
+Cygwin release available.  There is also a @@code{cygwin1.dll} release
+version number.  The release number is only incremented if we update an
+existing release in a way that does not effect the DLL (like a missing
+header file).
+
+There are also Cygwin API major and minor numbers.  The major number
+tracks important non-backward-compatible interface changes to the API.
+An executable linked with an earlier major number will not be compatible
+with the latest DLL.  The minor number tracks significant API additions
+or changes that will not break older executables but may be required by
+newly compiled ones.
+
+Then there is a shared memory region compatibility version number.  It is
+incremented when incompatible changes are made to the shared memory
+region or to any named shared mutexes, semaphores, etc.  Finally there
+is a mount point registry version number which keeps track
+of non-backwards-compatible changes to the registry mount table layout.
+This has been @@code{mounts v2} for a long time. For more exciting Cygwin
+version number details, check out the @@code{/usr/include/cygwin/version.h}
+file.
+
+@@subsection Why isn't _timezone set correctly?
+
+@@strong{(Please note: This section has not yet been updated for the latest
+net release.)}
+
+Did you explicitly call tzset() before checking the value of _timezone?
+If not, you must do so.
+
+@@subsection Is there a mouse interface?
+
+There is no way to capture mouse events from Cygwin.  There are
+currently no plans to add support for this.
+
+@
+
+
+1.10
+log
+@Add Pierre's security text.
+@
+text
+@@
+
+
+1.9
+log
+@
+* how-programming.texinfo: Add details about building a debugging version of the DLL.
+* how-using.texinfo: Correct rxvt README location.
+* install.texinfo: Add mount -m note to uninstall instructions.
+@
+text
+@d177 6
+a182 11
+Cygwin is not secure in a multi-user environment.  For
+example if you have a long running daemon such as "inetd"
+running as admin while ordinary users are logged in, or if
+you have a user logged in remotely while another user is logged
+into the console, one cygwin client can trick another into
+running code for it.  In this way one user may gain the
+privilege of another cygwin program running on the machine.
+This is because cygwin has shared state that is accessible by 
+all processes.
+
+(Thanks to Tim Newsham (newsham@@@@lava.net) for this explanation).
+@
+
+
+1.8
+log
+@
+2004-06-13  Joshua Daniel Franklin  <joshuadfranklin@@yahoo.com>
+
+	* faq.texinfo: Move outdated calls.texinfo to readme.texinfo.
+	* how-api.texinfo: Fix typos.
+	* how-programming.texinfo: Fix typos.
+	* how-resources.texinfo: Fix typos.
+	* how-using.texinfo: Fix typos.
+	* install.texinfo: Fix typos.
+	* readme.texinfo: Move outdated calls.texinfo to readme.texinfo.
+@
+text
+@d29 1
+a29 2
+http://cygwin.com/snapshots/
+
+@
+
+
+1.7
+log
+@* how-api.texinfo: Remove a line from the CRLF discussion about lseek not
+working.  Answer thread safe question more simply.
+@
+text
+@d14 1
+a14 1
+layer, providing that dll changes stay backward-compatible.
+d18 1
+a18 1
+Symposium in August 1998.  It is available in html format on the project
+d46 1
+a46 1
+This tends to confuse programs dependant on ftell() and fseek().  A
+d53 1
+a53 1
+tools, tools that deal with binaries (e.g. objdump) operate in unix
+d113 1
+a113 1
+memory area (shared among all Cygwin tasks).  Parent fills in the childs
+d170 1
+a170 1
+When working out the unix-style attribute bits on a file, the library
+d184 1
+a184 1
+priveledge of another cygwin program running on the machine.
+d202 1
+a202 1
+and handles to sockets.  The select call in winsock can only wait on
+d204 1
+a204 1
+the scenes, trying to persuade various winsock/win32 functions to do what
+d213 1
+a213 1
+exported by the dll -- check out include/netdb.h:
+d230 1
+a230 1
+link with libwinsock.a - all the net stuff is inside the dll.
+d252 17
+a268 9
+@@strong{(Please note: This section has not yet been updated for the latest
+net release.)}
+
+There is a cygwin.dll major version number that gets incremented
+every time we make a new Cygwin release available.  This
+corresponds to the name of the release (e.g. beta 19's major
+number is "19").  There is also a cygwin.dll minor version number.  If
+we release an update of the library for an existing release, the minor
+number would be incremented.
+d277 1
+a277 1
+Then there is a shared memory region compatibity version number.  It is
+d279 2
+a280 3
+region or to any named shared mutexes, semaphores, etc.
+
+Finally there is a mount point registry version number which keeps track
+d282 3
+a284 1
+This has been "B15.0" since the beta 15 release.
+@
+
+
+1.6
+log
+@Remove "not yet updated" caveat from entry:
+	"How is the DOS/Unix CR/LF thing handled?"
+@
+text
+@a77 2
+Also note that @@code{lseek} only works in binary mode.
+
+d83 1
+a83 3
+Multi-thread-safe support is turned on by default in 1.1.x releases
+(i.e., in the latest net release).  That does not mean that it is bug
+free!
+d85 1
+a85 1
+There is also limited support for 'POSIX threads', see the file
+@
+
+
+1.5
+log
+@        * cygwinenv.sgml: Add text for `winsymlinks' option.
+        * how-api.texinfo: Add text to explain new symlinks==shortcuts
+        and the CYGWIN setting `(no)winsymlinks'.
+        * how-using.texinfo: Add text that Cygwin now treats shortcuts
+        as symlinks.
+@
+text
+@a33 3
+@@strong{(Please note: This section has not yet been updated for the latest
+net release.)}
+
+@
+
+
+1.4
+log
+@CYGWIN32 -> CYGWIN.
+@
+text
+@d144 30
+a173 9
+Cygwin generates link files with a magic header.  When
+you open a file or directory that is a link to somewhere else, it
+opens the file or directory listed in the magic header.  Because we
+don't want to have to open every referenced file to check symlink
+status, Cygwin marks symlinks with the system attribute.  Files
+without the system attribute are not checked.  Because remote samba
+filesystems do not enable the system attribute by default, symlinks do
+not work on network drives unless you explicitly enable this
+attribute.
+@
+
+
+1.3
+log
+@update globbing entry
+@
+text
+@d61 1
+a61 1
+mode to binary via mount point options or by setting the CYGWIN32
+@
+
+
+1.2
+log
+@sources.redhat.com -> cygwin.com where appropriate
+@
+text
+@d134 1
+a134 10
+@@strong{(Please note: This section has not yet been updated for the latest
+net release.)}
+
+If an application using CYGWIN.DLL starts up, and can't find the
+@@code{PID} environment variable, it assumes that it has been started
+from the a DOS style command prompt.  This is pretty safe, since the
+rest of the tools (including bash) set PID so that a new process knows
+what PID it has when it starts up.
+
+If the DLL thinks it has come from a DOS style prompt, it runs a
+@
+
+
+1.1
+log
+@New files, contents of how.texinfo has been split into these.
+@
+text
+@d29 1
+a29 1
+http://sources.redhat.com/cygwin/snapshots/
+@
+

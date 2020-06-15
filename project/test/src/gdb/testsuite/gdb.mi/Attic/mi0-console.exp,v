@@ -1,0 +1,307 @@
+head	1.7;
+access;
+symbols
+	gdb_5_3-2002-12-12-release:1.5
+	carlton_dictionary-20020927-merge:1.6
+	carlton_dictionary-branch:1.6.0.2
+	carlton_dictionary-20020920-branchpoint:1.6
+	gdb_5_3-branch:1.5.0.14
+	gdb_5_3-2002-09-04-branchpoint:1.5
+	kseitz_interps-20020829-merge:1.5
+	cagney_sysregs-20020825-branch:1.5.0.12
+	cagney_sysregs-20020825-branchpoint:1.5
+	readline_4_3-import-branch:1.5.0.10
+	readline_4_3-import-branchpoint:1.5
+	gdb_5_2_1-2002-07-23-release:1.5
+	kseitz_interps-20020528-branch:1.5.0.8
+	kseitz_interps-20020528-branchpoint:1.5
+	cagney_regbuf-20020515-branch:1.5.0.6
+	cagney_regbuf-20020515-branchpoint:1.5
+	jimb-macro-020506-branch:1.5.0.4
+	jimb-macro-020506-branchpoint:1.5
+	gdb_5_2-2002-04-29-release:1.5
+	gdb_5_2-branch:1.5.0.2
+	gdb_5_2-2002-03-03-branchpoint:1.5
+	gdb_5_1_1-2002-01-24-release:1.3
+	gdb_5_1_0_1-2002-01-03-release:1.3
+	cygnus_cvs_20020108_pre:1.5
+	gdb_5_1_0_1-2002-01-03-branch:1.3.0.8
+	gdb_5_1_0_1-2002-01-03-branchpoint:1.3
+	gdb_5_1-2001-11-21-release:1.3
+	gdb_s390-2001-09-26-branch:1.3.0.6
+	gdb_s390-2001-09-26-branchpoint:1.3
+	gdb_5_1-2001-07-29-branch:1.3.0.4
+	gdb_5_1-2001-07-29-branchpoint:1.3
+	dberlin-typesystem-branch:1.3.0.2
+	dberlin-typesystem-branchpoint:1.3;
+locks; strict;
+comment	@# @;
+
+
+1.7
+date	2002.09.29.14.20.31;	author cagney;	state dead;
+branches;
+next	1.6;
+
+1.6
+date	2002.09.17.20.30.24;	author kseitz;	state Exp;
+branches
+	1.6.2.1;
+next	1.5;
+
+1.5
+date	2001.08.19.01.23.43;	author cagney;	state Exp;
+branches
+	1.5.8.1;
+next	1.4;
+
+1.4
+date	2001.08.19.00.37.28;	author cagney;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2001.06.23.21.47.09;	author cagney;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2001.06.18.17.57.42;	author cagney;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2001.06.18.12.55.06;	author cagney;	state Exp;
+branches;
+next	;
+
+1.5.8.1
+date	2002.10.01.00.46.31;	author kseitz;	state dead;
+branches;
+next	;
+
+1.6.2.1
+date	2002.10.11.22.23.02;	author carlton;	state dead;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.7
+log
+@Delete no-longer-needed tests.
+@
+text
+@# Copyright 1999, 2000, 2001, 2002 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+# 
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  
+
+# Please email any bugs, comments, and/or additions to this file to:
+# bug-gdb@@prep.ai.mit.edu
+
+#
+# Test essential Machine interface (MI) operations
+#
+# Verify that, using the MI, we can run a simple program and perform basic
+# debugging activities like: insert breakpoints, run the program,
+# step, next, continue until it ends and, last but not least, quit.
+#
+# The goal is not to test gdb functionality, which is done by other tests,
+# but to verify the correct output response to MI operations.
+#
+
+# This test only works when talking to a target that routes its output
+# through GDB.  Check that we're either talking to a simulator or a
+# remote target.
+
+load_lib mi-support.exp
+set MIFLAGS "-i=mi0"
+
+gdb_exit
+if [mi_gdb_start] {
+    continue
+}
+
+set testfile "mi-console"
+set srcfile ${testfile}.c
+set binfile ${objdir}/${subdir}/${testfile}
+if  { [gdb_compile "${srcdir}/${subdir}/${srcfile}" "${binfile}" executable {debug additional_flags=-DFAKEARGV}] != "" } {
+     gdb_suppress_entire_file "Testcase compile failed, so all tests in this file will automatically fail."
+}
+
+mi_delete_breakpoints
+mi_gdb_reinitialize_dir $srcdir/$subdir
+mi_gdb_load ${binfile}
+
+# Halt in main
+mi_gdb_test "200-break-insert main" \
+	"200\\^done,bkpt=\{number=\"1\",type=\"breakpoint\",disp=\"keep\",enabled=\"y\",addr=\"$hex\",func=\"main\",file=\".*mi-console.c\",line=\"13\",times=\"0\"\}" \
+	"break-insert operation"
+mi_run_cmd
+gdb_expect {
+    -re "000\\*stopped,reason=\"breakpoint-hit\",bkptno=\"1\",thread-id=\"\[01\]\",frame=\{addr=\"$hex\",func=\"main\",args=\{\},file=\".*mi-console.c\",line=\"13\"\}\r\n$mi_gdb_prompt$" {
+	    pass "run to main"
+    }
+    -re ".*$mi_gdb_prompt$" {
+	fail "run to main (2)"
+    }
+    timeout {
+	fail "run to main (timeout)"
+    }
+}
+
+# Next over the hello() call which will produce lots of output
+send_gdb "47-exec-next\n"
+gdb_expect {
+    -re "47\\^running\r\n$mi_gdb_prompt" {
+	pass "Started step over hello"
+    }
+    timeout {
+	fail "Started step over hello (timeout)"
+    }
+}
+
+gdb_expect {
+    -re "@@\"H\"\r\n.*@@\"e\"\r\n.*@@\"l\"\r\n.*@@\"l\"\r\n.*@@\"o\"\r\n.*@@\" \"\r\n.*@@\"\\\\\\\\\"\r\n.*@@\"\\\\\"\"\r\n.*@@\"!\"\r\n.*@@\"\\\\r\"\r\n.*@@\"\\\\n\"\r\n" {
+	pass "Hello message"
+    }
+    -re "Hello" {
+
+	# Probably a native system where GDB doesn't have direct
+	# control over the inferior console.
+	# For this to work, GDB would need to run the inferior process
+	# under a PTY and then use the even-loops ability to wait on
+	# multiple event sources to channel the output back through the
+	# MI.
+
+	fail "Hello message (known bug)"
+    }
+    timeout {
+	fail "Hello message (timeout)"
+    }
+}
+    
+gdb_expect {
+    -re "47\\*stopped.*$mi_gdb_prompt$" {
+	pass "Finished step over hello"
+    }
+    timeout {
+	fail "Finished step over hello (timeout)"
+    }
+}
+
+mi_gdb_exit
+return 0
+@
+
+
+1.6
+log
+@        * mi-console.exp: Update copyright.
+        * mi-var-block.exp: Likewise.
+        * mi-var-cmd.exp: Likewise.
+        * mi-var-display.exp: Likewise.
+        * mi0-console.exp: Likewise.
+        * mi0-var-child.exp: Likewise.
+        * mi0-var-cmd.exp: Likewise.
+        * mi0-var-display.exp: Likewise.
+@
+text
+@@
+
+
+1.6.2.1
+log
+@Merge with mainline; merge tag carlton_dictionary-20021011-merge.
+@
+text
+@@
+
+
+1.5
+log
+@* mi0-var-block.exp, mi0-stack.exp, mi0-simplerun.exp,
+mi0-regs.exp, mi0-watch.exp, mi0-stepi.exp, mi0-until.exp,
+mi0-return.exp, mi0-read-memory.exp, mi0-eval.exp,
+mi0-disassemble.exp, mi0-console.exp, mi-watch.exp,
+mi-var-display.exp, mi-var-cmd.exp, mi-var-child.exp,
+mi-until.exp, mi-var-block.exp, mi-stepi.exp, mi-stack.exp,
+mi-simplerun.exp, mi-return.exp, mi-regs.exp, mi-read-memory.exp,
+mi-disassemble.exp, mi-eval.exp, mi-console.exp: Replace pattern
+matching thread=0 with one to also match thread=1.
+Fix PR gdb/190.
+@
+text
+@d1 1
+a1 1
+# Copyright 1999, 2000, 2001 Cygnus Solutions.
+@
+
+
+1.5.8.1
+log
+@Merge with kseitz_interps-20020930-merge.
+@
+text
+@@
+
+
+1.4
+log
+@* mi0-until.exp, mi-until.exp, mi0-stepi.exp, mi-stepi.exp,
+mi-simplerun.exp, mi0-simplerun.exp, mi0-return.exp,
+mi-return.exp, mi0-console.exp, mi-console.exp: Recognize an
+unexpected run-to-main response. Report as a fail.
+@
+text
+@d60 1
+a60 1
+    -re "000\\*stopped,reason=\"breakpoint-hit\",bkptno=\"1\",thread-id=\"0\",frame=\{addr=\"$hex\",func=\"main\",args=\{\},file=\".*mi-console.c\",line=\"13\"\}\r\n$mi_gdb_prompt$" {
+@
+
+
+1.3
+log
+@Rename gdb.mi/ChangeLog-mi to gdb.mi/ChangeLog.  Update everything.
+@
+text
+@d63 3
+@
+
+
+1.2
+log
+@Recognize -i=mi0, -i=mi1 and -i=mi.
+@
+text
+@a109 4
+
+# Local variables: 
+# change-log-default-name: "ChangeLog-mi"
+# End: 
+@
+
+
+1.1
+log
+@Clone the mi-*.exp tests into mi0-*.exp.
+@
+text
+@d36 1
+@
+

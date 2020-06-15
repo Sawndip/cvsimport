@@ -1,0 +1,474 @@
+head	1.6;
+access;
+symbols
+	binutils-2_24-branch:1.6.0.2
+	binutils-2_24-branchpoint:1.6
+	binutils-2_21_1:1.5
+	binutils-2_23_2:1.5
+	binutils-2_23_1:1.5
+	binutils-2_23:1.5
+	binutils-2_23-branch:1.5.0.12
+	binutils-2_23-branchpoint:1.5
+	binutils-2_22_branch:1.5.0.10
+	binutils-2_22:1.5
+	binutils-2_22-branch:1.5.0.8
+	binutils-2_22-branchpoint:1.5
+	binutils-2_21:1.5
+	binutils-2_21-branch:1.5.0.6
+	binutils-2_21-branchpoint:1.5
+	binutils-2_20_1:1.5
+	binutils-2_20:1.5
+	binutils-arc-20081103-branch:1.2.0.4
+	binutils-arc-20081103-branchpoint:1.2
+	binutils-2_20-branch:1.5.0.4
+	binutils-2_20-branchpoint:1.5
+	dje-cgen-play1-branch:1.5.0.2
+	dje-cgen-play1-branchpoint:1.5
+	arc-20081103-branch:1.2.0.2
+	arc-20081103-branchpoint:1.2
+	binutils-2_19_1:1.1
+	binutils-2_19:1.1
+	binutils-2_19-branch:1.1.0.2
+	binutils-2_19-branchpoint:1.1
+	binutils_latest_snapshot:1.6;
+locks; strict;
+comment	@ * @;
+
+
+1.6
+date	2013.02.11.16.12.59;	author ian;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2009.03.24.04.50.32;	author ian;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2009.02.28.03.05.08;	author ian;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2009.01.15.01.29.25;	author ccoutant;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2008.09.19.22.54.57;	author ccoutant;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2008.07.25.04.25.49;	author ian;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.6
+log
+@	* descriptors.cc (Descriptors::close_all): New function.
+	* descriptors.h (class Descriptors): Declare close_all.
+	(close_all_descriptors): New inline function.
+	* plugin.cc: Include "descriptors.h".
+	(Plugin_manager::cleanup): Call close_all_descriptors.
+@
+text
+@// descriptors.h -- manage file descriptors for gold   -*- C++ -*-
+
+// Copyright 2008, 2009, 2010, 2011, 2012, 2013 Free Software Foundation, Inc.
+// Written by Ian Lance Taylor <iant@@google.com>.
+
+// This file is part of gold.
+
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 3 of the License, or
+// (at your option) any later version.
+
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+// MA 02110-1301, USA.
+
+#ifndef GOLD_DESCRIPTORS_H
+#define GOLD_DESCRIPTORS_H
+
+#include <vector>
+
+#include "gold-threads.h"
+
+namespace gold
+{
+
+// This class manages file descriptors for gold.
+
+class Descriptors
+{
+ public:
+  Descriptors();
+
+  // Get a file descriptor for a file.  The DESCRIPTOR parameter is
+  // the descriptor the last time the file was used; this will be -1
+  // if this is the first time the file is being opened.  The NAME,
+  // FLAGS, and MODE parameters are as for ::open.  NAME must be in
+  // permanent storage.  This returns the descriptor to use, which may
+  // or may not be the same as DESCRIPTOR.  If there is an error
+  // opening the file, this will return -1 with errno set
+  // appropriately.
+  int
+  open(int descriptor, const char* name, int flags, int mode = 0);
+
+  // Release the file descriptor DESCRIPTOR.  If PERMANENT is true, it
+  // will be closed, and the caller may not reopen it.  If PERMANENT
+  // is false this doesn't necessarily close the descriptor, but it
+  // makes it available to be closed; the descriptor must not be used
+  // again except as an argument to Descriptor::open.
+  void
+  release(int descriptor, bool permanent);
+
+  // Close all the descriptors open for reading.
+  void
+  close_all();
+
+ private:
+  // Information kept for a descriptor.
+  struct Open_descriptor
+  {
+    // File name currently associated with descriptor.  This is empty
+    // if none.
+    const char* name;
+    // Index of next descriptor on stack of released descriptors.
+    int stack_next;
+    // Whether the descriptor is currently in use.
+    bool inuse;
+    // Whether this is a write descriptor.
+    bool is_write;
+    // Whether the descriptor is on the stack.
+    bool is_on_stack;
+  };
+
+  bool
+  close_some_descriptor();
+
+  // We need to lock before accessing any fields.
+  Lock* lock_;
+  // Used to initialize the lock_ field exactly once.
+  Initialize_lock initialize_lock_;
+  // Information for descriptors.
+  std::vector<Open_descriptor> open_descriptors_;
+  // Top of stack.
+  int stack_top_;
+  // The current number of file descriptors open.
+  int current_;
+  // The maximum number of file descriptors we open.
+  int limit_;
+};
+
+// File descriptors are a centralized data structure, and we use a
+// global variable rather than passing the data structure into every
+// routine that does file I/O.
+
+extern Descriptors descriptors;
+
+inline int
+open_descriptor(int descriptor, const char* name, int flags, int mode = 0)
+{ return descriptors.open(descriptor, name, flags, mode); }
+
+inline void
+release_descriptor(int descriptor, bool permanent)
+{ descriptors.release(descriptor, permanent); }
+
+inline void
+close_all_descriptors()
+{ descriptors.close_all(); }
+
+} // End namespace gold.
+
+#endif // !defined(GOLD_DESCRIPTORS_H)
+@
+
+
+1.5
+log
+@2009-03-23  Ian Lance Taylor  <iant@@google.com>
+
+	* gold-threads.h (class Initialize_lock): Define.
+	* gold-threads.cc (class Initialize_lock_once): Define.
+	(initialize_lock_control): New static variable.
+	(initialize_lock_pointer): New static variable.
+	(initialize_lock_once): New static function.
+	(Initialize_lock::Initialize_lock): Define.
+	(Initialize_lock::initialize): Define.
+	* target-select.h: Include "gold-threads.h".
+	(class Target_selector): Add lock_ and initialize_lock_ fields.
+	Don't define instantiate_target, just declare it.
+	* target-select.cc (Target_selector::Target_selector): Initialize
+	new fields.
+	(Target_selector::instantiate_target): Define.
+	* descriptors.h: Include "gold-threads.h".
+	(class Descriptors): Add initialize_lock_ field.
+	* descriptors.cc (Descriptors::Descriptors): Initialize new
+	field.
+	(Descriptors::open): Use initialize_lock_ field
+	* errors.h (class Errors): Add initialize_lock_ field.
+	* errors.cc (Errors::Errors): Initialize new field.
+	(Errors::initialize_lock): Use initialize_lock_ field.
+	* powerpc.cc (class Target_selector_powerpc): Remove
+	instantiated_target_ field.  In do_recognize call
+	instantiate_target rather than do_instantiate_target.  In
+	do_instantiate_target just allocate a new target.
+	* sparc.cc (class Target_selector_sparc): Likewise.
+@
+text
+@d3 1
+a3 1
+// Copyright 2008, 2009 Free Software Foundation, Inc.
+d59 4
+d111 4
+@
+
+
+1.4
+log
+@	PR 5990
+	* descriptors.h (Open_descriptor): Add is_on_stack field.
+	* descriptors.cc (Descriptors::open): If the descriptor is on the
+	top of the stack, remove it.  Initialize is_on_stack field.
+	(Descriptors::release): Only add pod to stack if it is not on the
+	stack already.
+	(Descriptors::close_some_descriptor): Clear stack_next and
+	is_on_stack fields.
+@
+text
+@d28 2
+a32 2
+class Lock;
+
+d81 2
+@
+
+
+1.3
+log
+@	* archive.cc (Archive::get_elf_object_for_member): Remove call
+	to File_read::claim_for_plugin.
+	* descriptors.cc (Descriptors::open): Remove reference to
+	is_claimed.
+	(Descriptors::claim_for_plugin): Remove.
+	* descriptors.h (Descriptors::claim_for_plugin): Remove.
+	(Descriptors::is_claimed): Remove.
+	(claim_descriptor_for_plugin): Remove.
+	* fileread.cc (File_read::claim_for_plugin): Remove.
+	* fileread.h (File_read::claim_for_plugin): Remove.
+	(File_read::descriptor): Reopen descriptor if necessary.
+	* plugin.cc  (Plugin::load): Add two new APIs to transfer vector.
+	(Plugin_manager::all_symbols_read): Add task parameter. Change
+	all callers.
+	(Plugin_manager::get_input_file): New function.
+	(Plugin_manager::release_input_file): New function.
+	(Pluginobj::Pluginobj): Add filesize parameter and initialize
+	corresponding data member.
+	(Sized_pluginobj::Sized_pluginobj): Add filesize parameter
+	and pass to base constructor. Change all callers.
+	(get_input_file, release_input_file): New functions.
+	(make_sized_plugin_object): Add filesize parameter. Change all callers.
+	* plugin.h (Plugin_manager::Plugin_manager): Initialize task_ member.
+	(Plugin_manager::all_symbols_read): Add task parameter.
+	(Plugin_manager::get_input_file): New function.
+	(Plugin_manager::release_input_file): New function.
+	(Plugin_manager::task_): New data member.
+	(Pluginobj::Pluginobj): Add filesize parameter.
+	(Pluginobj::filename): New function.
+	(Pluginobj::descriptor): New function.
+	(Pluginobj::filesize): New function.
+	(Pluginobj::filesize_): New data member.
+	(Sized_pluginobj::Sized_pluginobj): Add filesize parameter.
+	* readsyms.cc (Read_symbols::do_read_symbols): Remove call to
+	File_read::claim_for_plugin; use Object::unlock to unlock the file.
+
+	* testsuite/Makefile.am (plugin_test_4): New test case for plugins
+	with archive libraries.
+	* testsuite/Makefile.in: Regenerate.
+	* testsuite/plugin_test.c (struct sym_info): New type.
+	(get_input_file, release_input_file): New static variables.
+	(onload): Capture new transfer vector entries.
+	(claim_file_hook): Stop reading at end of file according to filesize.
+	Factor out parsing of readelf output into separate function.
+	(all_symbols_read_hook): Exercise get_input_file and release_input_file
+	APIs and get the source file name from the symbol table.  Convert
+	source file name to corresponding object file name.  Print info
+	message when adding new input files.
+	(parse_readelf_line): New function.
+	* testsuite/plugin_test_1.sh: Add checks for new info messages.
+	* testsuite/plugin_test_2.sh: Likewise.
+	* testsuite/plugin_test_3.sh: Likewise.
+	* testsuite/plugin_test_4.sh: New test case.
+@
+text
+@d72 2
+@
+
+
+1.2
+log
+@Add plugin functionality for link-time optimization (LTO).
+
+include/:
+	* plugin-api.h: New file.
+
+gold/:
+	* configure.ac (plugins): Add --enable-plugins option.
+	* configure: Regenerate.
+	* config.in: Regenerate.
+	* Makefile.am (LIBDL): New variable.
+	(CCFILES): Add plugin.cc.
+	(HFILES): Add plugin.h.
+	(ldadd_var): Add LIBDL.
+	* Makefile.in: Regenerate.
+
+	* archive.cc: Include "plugin.h".
+	(Archive::setup): Don't preread archive symbols when using a plugin.
+	(Archive::get_file_and_offset): Add memsize parameter.  Change callers.
+	(Archive::get_elf_object_for_member): Call plugin hooks for claiming
+	files.
+	(Archive::include_member): Add symbols from plugin objects.
+	* archive.h (Archive::get_file_and_offset): Add memsize parameter.
+	* descriptors.cc (Descriptors::open): Check for file descriptors
+	abandoned by plugins.
+	(Descriptors::claim_for_plugin): New function.
+	* descriptors.h (Descriptors::claim_for_plugin): New function.
+	(Open_descriptor::is_claimed): New field.
+	(claim_descriptor_for_plugin): New function.
+	* fileread.cc (File_read::claim_for_plugin): New function.
+	* fileread.h (File_read::claim_for_plugin): New function.
+	(File_read::descriptor): New function.
+	* gold.cc: Include "plugin.h".
+	(queue_initial_tasks): Add task to call plugin hooks for generating
+	new object files.
+	* main.cc: Include "plugin.h".
+	(main): Load plugin libraries.
+	* object.h (Pluginobj): Declare.
+	(Object::pluginobj): New function.
+	(Object::do_pluginobj): New function.
+	(Object::set_target): New function.
+	* options.cc: Include "plugin.h".
+	(General_options::parse_plugin): New function.
+	(General_options::General_options): Initialize plugins_ field.
+	(General_options::add_plugin): New function.
+	* options.h (Plugin_manager): Declare.
+	(General_options): Add --plugin option.
+	(General_options::has_plugins): New function.
+	(General_options::plugins): New function.
+	(General_options::add_plugin): New function.
+	(General_options::plugins_): New field.
+	* plugin.cc: New file.
+	* plugin.h: New file.
+	* readsyms.cc: Include "plugin.h".
+	(Read_symbols::do_read_symbols): Check for archive before checking
+	for ELF file.  Call plugin hooks to claim files.
+	* resolve.cc (Symbol_table::resolve): Record when symbol is referenced
+	from a real object file; force override when processing replacement
+	files.
+	* symtab.cc (Symbol::init_fields): Initialize in_real_elf_ field.
+	(Symbol::init_base_object): Likewise.
+	(Symbol::init_base_output_data): Likewise.
+	(Symbol::init_base_output_segment): Likewise.
+	(Symbol::init_base_constant): Likewise.
+	(Symbol::init_base_undefined): Likewise.
+	(Symbol::output_section): Assert that object is not a plugin.
+	(Symbol_table::add_from_pluginobj): New function.
+	(Symbol_table::sized_finalize_symbol): Treat symbols from plugins as
+	undefined.
+	(Symbol_table::sized_write_globals): Likewise.
+	(Symbol_table::add_from_pluginobj): Instantiate template.
+	* symtab.h (Sized_pluginobj): Declare.
+	(Symbol::in_real_elf): New function.
+	(Symbol::set_in_real_elf): New function.
+	(Symbol::in_real_elf_): New field.
+	(Symbol_table::add_from_pluginobj): New function.
+
+	* testsuite/Makefile.am (AM_CFLAGS): New variable.
+	(LIBDL): New variable.
+	(LDADD): Add LIBDL.
+	(check_PROGRAMS): Add plugin_test_1 and plugin_test_2.
+	(check_SCRIPTS): Add plugin_test_1.sh and plugin_test_2.sh.
+	(check_DATA): Add plugin_test_1.err and plugin_test_2.err.
+	(MOSTLYCLEANFILES): Likewise.
+	* testsuite/Makefile.in: Regenerate.
+	* testsuite/plugin_test.c: New file.
+	* testsuite/plugin_test_1.sh: New file.
+	* testsuite/plugin_test_2.sh: New file.
+@
+text
+@d3 1
+a3 1
+// Copyright 2008 Free Software Foundation, Inc.
+a58 6
+  // Claim the file descriptor DESCRIPTOR for a plugin.  This effectively
+  // removes the descriptor from the pool of linker-managed descriptors,
+  // as the plugin will assume responsibility for closing it.
+  void
+  claim_for_plugin(int descriptor);
+
+a71 2
+    // Whether the descriptor has been claimed for a plugin.
+    bool is_claimed;
+a102 4
+inline void
+claim_descriptor_for_plugin(int descriptor)
+{ descriptors.claim_for_plugin(descriptor); }
+
+@
+
+
+1.1
+log
+@	PR 5990
+	* descriptors.cc: New file.
+	* descriptors.h: New file.
+	* gold-threads.h (class Hold_optional_lock): New class.
+	* fileread.cc: Include "descriptors.h".
+	(File_read::~File_read): Release descriptor rather than closing
+	it.
+	(File_read::open) [file]: Call open_descriptor rather than open.
+	Set is_descriptor_opened_.
+	(File_read::open) [memory]: Assert that descriptor is not open.
+	(File_read::reopen_descriptor): New function.
+	(File_read::release): Release descriptor.
+	(File_read::do_read): Make non-const.  Reopen descriptor.
+	(File_read::read): Make non-const.
+	(File_read::make_view): Reopen descriptor.
+	(File_read::do_readv): Likewise.
+	* fileread.h (class File_read): Add is_descriptor_opened_ field.
+	Update declarations.
+	* layout.cc: Include "descriptors.h".
+	(Layout::create_build_id): Use open_descriptor rather than open.
+	* output.cc: Include "descriptors.h".
+	(Output_file::open): Use open_descriptor rather than open.
+	* archive.cc (Archive::const_iterator): Change Archive to be
+	non-const.
+	(Archive::begin, Archive::end): Make non-const.
+	(Archive::count_members): Likewise.
+	* archive.h (class Archive): Update declarations.
+	* object.h (Object::read): Make non-const.
+	* Makefile.am (CCFILES): Add descriptors.cc.
+	(HFILES): Add descriptors.h.
+	* Makefile.in: Rebuild.
+@
+text
+@d59 6
+d78 2
+d111 4
+@
+

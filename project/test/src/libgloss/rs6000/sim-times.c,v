@@ -1,0 +1,70 @@
+head	1.1;
+access;
+symbols
+	newlib-2_2_0:1.1.0.2
+	newlib-2_1_0:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.1
+date	2013.05.30.22.44.04;	author jjohnstn;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.1
+log
+@
+2013-05-30  Jeff Johnston  <jjohnstn@@redhat.com>
+
+        * rs6000/Makefile.in: Add sim-times support.  This file has been
+        moved from newlib/libc/machine/powerpc and renamed.
+        * rs6000/sim-times.c: New file.
+@
+text
+@/* sim-times.c - times support routines for PowerPC.
+ *
+ * Written by Aldy Hernandez.
+ *
+ * This file is licensed with the default Red Hat license
+ * found in COPYING.NEWLIB.
+ * http://sourceware.org/cgi-bin/cvsweb.cgi/src/COPYING.NEWLIB?rev=1.32&content-type=text/x-cvsweb-markup&cvsroot=src
+ */
+
+#include <_ansi.h>
+#include <reent.h>
+#include <sys/time.h>
+#include <sys/times.h>
+#include <sys/resource.h>
+
+clock_t
+times (struct tms *tp)
+{
+  struct rusage usage;
+  union {
+    struct rusage r;
+    /* Newlib's rusage has only 2 fields.  We need to make room for
+       when we call the system's rusage.  This should be enough.  */
+    int filler[32];
+  } host_ru;
+
+  getrusage (RUSAGE_SELF, (void *)&host_ru);
+
+  if (tp)
+    {
+      tp->tms_utime = host_ru.r.ru_utime.tv_sec * 1000
+	+ host_ru.r.ru_utime.tv_usec;
+      tp->tms_stime = host_ru.r.ru_stime.tv_sec * 1000
+	+ host_ru.r.ru_stime.tv_usec;
+      tp->tms_cutime = 0;	/* user time, children */
+      tp->tms_cstime = 0;	/* system time, children */
+    }
+
+  return tp->tms_utime;
+}
+@

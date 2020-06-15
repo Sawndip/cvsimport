@@ -1,0 +1,209 @@
+head     1.1;
+branch   1.1.1;
+access   ;
+symbols  win32-x11-2001-03-26:1.1.1.1 SNAPSHOT:1.1.1;
+locks    ; strict;
+comment  @# @;
+expand   @o@;
+
+
+1.1
+date     2001.03.25.19.36.48;  author ssiddiqi;  state Exp;
+branches 1.1.1.1;
+next     ;
+
+1.1.1.1
+date     2001.03.25.19.36.48;  author ssiddiqi;  state Exp;
+branches ;
+next     ;
+
+
+desc
+@@
+
+
+
+1.1
+log
+@Initial revision
+@
+text
+@XCOMM $XConsortium: mingw32.rules /main/12 1996/01/03 14:51:18 kaleb $
+
+/*
+ * Cygwin shared library rules (DLL versions)
+ */
+#define HasSharedLibraries YES
+#define NeedLibInsideFlag YES
+#define ForceNormalLib NO
+#define SharedLibXaw NO
+#define SharedLibXmu NO
+#define SharedLibXt NO
+#define SharedLibSM YES
+#define SharedLibICE YES
+#define SharedLibXext YES
+#define SharedLibXie YES
+#define SharedLibXi YES
+#define SharedLibPex YES
+#define SharedLibXtst YES
+#define SharedOldX YES
+#define SharedLibXp YES
+
+
+#ifndef SharedDataSeparation
+#define SharedDataSeparation NO
+#endif
+#ifndef SharedCodeDef
+#define SharedCodeDef /**/
+#endif
+#ifndef SharedLibraryDef
+#define SharedLibraryDef /**/
+#endif
+#ifndef ShLibIncludeFile
+#define ShLibIncludeFile <mingw32.tmpl>
+#endif
+#ifndef SharedLibraryLoadFlags
+#define SharedLibraryLoadFlags /**/
+#endif
+/*
+ * SharedLibraryDataTarget - generate rules to create shared data file
+ */
+#ifndef SharedLibraryDataTarget
+#define SharedLibraryDataTarget(libname,rev,salist)
+#endif
+/*
+ * InstallSharedLibraryData - generate rules to install the shared library data
+ */
+#ifndef InstallSharedLibraryData
+#define InstallSharedLibraryData(libname,rev,dest)
+#endif /* InstallSharedLibraryData */
+
+BASE_COUNTER=/tmp/DLL_BASE_COUNTER
+
+#define MakeDLL(libname,solist)					@@@@\
+	if [ -f $(BASE_COUNTER) ]; then true; \			@@@@\
+	else echo 0x67000000 > $(BASE_COUNTER); fi		@@@@\
+	dllwrap -s --def libname.def --output-lib Concat3(lib,libname,.a) -o Concat3(lib,libname,.dll) solist junk.o $(REQUIREDLIBS) -image-base `cat $(BASE_COUNTER)`	@@@@\
+	IMAGE_LENGTH=`objdump -x Concat3(lib,libname,.dll) |awk '/SizeOfImage/ {print "0x"$$2}'`; \ @@@@\
+	export IMAGE_LENGTH=`expr '(' \`printf %u $$IMAGE_LENGTH\` / 65536 + 1 ')' '*' 65536` ; \ @@@@\
+	export IMAGE_BASE=`cat $(BASE_COUNTER)`; \			@@@@\
+	printf 0x%x `expr \`printf %u $$IMAGE_BASE\` + $$IMAGE_LENGTH` > $(BASE_COUNTER)
+
+
+#define SharedLibraryTarget(libname,rev,solist,down,up)                 @@@@\
+AllTarget(Concat3(lib,libname,.dll))                                    @@@@\
+									@@@@\
+CppFileTarget(libname.def,libname-def.cpp,-DLIBRARY_VERSION=rev,$(ICONFIGFILES)) @@@@\
+									@@@@\
+                                                                        @@@@\
+junk.c:                                                                                 @@@@\
+	echo "#define WIN32_LEAN_AND_MEAN"		>junk.c		@@@@\
+	echo "#include <windows.h>"		>>junk.c	@@@@\
+	echo "#undef WIN32_LEAN_AND_MEAN"		>>junk.c	@@@@\
+	echo "#include <stdio.h>"		>>junk.c	@@@@\
+	echo "BOOL APIENTRY DllMain (HINSTANCE hInst, DWORD reason, 
+                       LPVOID reserved /* Not used. */ );" >>junk.c  @@@@\
+	echo "{ return 1; }"				>>junk.c	@@@@\
+Concat3(lib,libname,.dll): solist junk.o libname.def			@@@@\
+	RemoveFile(LibraryTargetName(libname))				@@@@\
+	RemoveFile(Concat3(lib,libname,.dll))				@@@@\
+	MakeDLL(libname,solist)						@@@@\
+	LinkBuildLibrary(Concat3(lib,libname,.a))			@@@@\
+clean::									@@@@\
+	RemoveFile(LibraryTargetName(libname))				@@@@\
+	RemoveFile(Concat3(lib,libname,.dll))				@@@@\
+	RemoveFile(junk.o)						@@@@\
+	RemoveFile(junk.c)						@@@@\
+	RemoveFile($(BASE_COUNTER))
+
+#define InstallSharedLibrary(libname,rev,dest)                          @@@@\
+InstallTarget(install,LibraryTargetName(libname),$(INSTLIBFLAGS),$(USRLIBDIR)) @@@@\
+InstallTarget(install,Concat3(lib,libname,.dll),$(INSTLIBFLAGS),$(BINDIR))
+
+#define ProgramTargetName(target)target.exe
+
+#define NormalProgramTarget(program,objects,deplibs,locallibs,syslibs)  @@@@\
+AllTarget(ProgramTargetName(program))					@@@@\
+ProgramTargetName(program): objects deplibs				@@@@\
+	RemoveTargetProgram($@@)						@@@@\
+	LinkRule($@@,$(LDOPTIONS),objects,locallibs $(LDLIBS) syslibs)	@@@@\
+									@@@@\
+clean::									@@@@\
+	RemoveFile(ProgramTargetName(program))
+
+#define ProgramTargetHelper(program,srcs,objs,deplib,locallib,syslib)	@@@@\
+ProgramTargetName(program): $(objs) $(deplib)				@@@@\
+	RemoveTargetProgram($@@)						@@@@\
+	LinkRule($@@,$(LDOPTIONS),$(objs),locallib $(LDLIBS) syslib)	@@@@\
+									@@@@\
+InstallProgram(program,$(BINDIR))					@@@@\
+InstallManPage(program,$(MANDIR))
+
+#define ComplexProgramTarget(program)					@@@@\
+AllTarget(ProgramTargetName(program))					@@@@\
+									@@@@\
+ProgramTargetHelper(program,SRCS,OBJS,DEPLIBS,$(LOCAL_LIBRARIES),NullParameter) @@@@\
+									@@@@\
+DependTarget()								@@@@\
+LintTarget()								@@@@\
+									@@@@\
+clean::									@@@@\
+	RemoveFile(ProgramTargetName(program))
+
+#define ComplexProgramTarget_1(program,locallib,syslib)			@@@@\
+        OBJS = $(OBJS1) $(OBJS2) $(OBJS3)				@@@@\
+        SRCS = $(SRCS1) $(SRCS2) $(SRCS3)				@@@@\
+        PROGRAM1 = ProgramTargetName(program)				@@@@\
+									@@@@\
+AllTarget($(PROGRAM1) $(PROGRAM2) $(PROGRAM3))				@@@@\
+									@@@@\
+ProgramTargetHelper(program,SRCS1,OBJS1,DEPLIBS1,locallib,syslib)	@@@@\
+									@@@@\
+DependTarget()								@@@@\
+LintTarget()								@@@@\
+									@@@@\
+clean::									@@@@\
+	for i in $(PROGRAMS); do $(RM) ProgramTargetName($$i); done
+
+#define ComplexProgramTarget_2(program,locallib,syslib)			@@@@\
+        PROGRAM2 = ProgramTargetName(program)				@@@@\
+									@@@@\
+ProgramTargetHelper(program,SRCS2,OBJS2,DEPLIBS2,locallib,syslib)
+
+#define ComplexProgramTarget_3(program,locallib,syslib)			@@@@\
+        PROGRAM3 = ProgramTargetName(program)				@@@@\
+									@@@@\
+ProgramTargetHelper(program,SRCS3,OBJS3,DEPLIBS3,locallib,syslib)
+
+#define ServerTargetWithFlags(server,subdirs,objects,libs,syslibs,flags) @@@@\
+AllTarget(ProgramTargetName(server))					@@@@\
+ProgramTargetName(server): subdirs objects libs				@@@@\
+	MoveToBakFile($@@)						@@@@\
+	LinkRule($@@,$(LDOPTIONS),objects,libs $(LDLIBS) syslibs)	@@@@\
+									@@@@\
+Concat(load,server):							@@@@\
+	MoveToBakFile(ProgramTargetName(server))			@@@@\
+	LinkRule(ProgramTargetName(server),$(LDOPTIONS),objects,libs $(LDLIBS) syslibs) @@@@\
+									@@@@\
+loadX:: Concat(load,server)						@@@@\
+									@@@@\
+SentinelProgramTarget(server,subdirs objects libs,objects libs $(LDLIBS) syslibs) @@@@\
+SentinelLinkTarget(Concat(load,server),server,objects libs $(LDLIBS) syslibs) @@@@\
+PurifyProgramTarget(server,subdirs objects libs,objects libs $(LDLIBS) syslibs) @@@@\
+PurifyLinkTarget(Concat(load,server),server,objects libs $(LDLIBS) syslibs) @@@@\
+ProofProgramTarget(server,subdirs objects libs,objects libs $(LDLIBS) syslibs) @@@@\
+ProofLinkTarget(Concat(load,server),server,objects libs $(LDLIBS) syslibs) @@@@\
+									@@@@\
+InstallProgramWithFlags(server,$(BINDIR),flags)				@@@@\
+									@@@@\
+clean::									@@@@\
+	RemoveFile(ProgramTargetName(server))
+@
+
+
+1.1.1.1
+log
+@win32-x11 source tree update March 26, 2001
+@
+text
+@@

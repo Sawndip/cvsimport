@@ -1,0 +1,399 @@
+head	1.8;
+access;
+symbols
+	gdb_7_4_1-2012-04-26-release:1.5
+	gdb_7_4-2012-01-24-release:1.5
+	gdb_7_4-branch:1.5.0.4
+	gdb_7_4-2011-12-13-branchpoint:1.5
+	gdb_7_3_1-2011-09-04-release:1.5
+	gdb_7_3-2011-07-26-release:1.5
+	gdb_7_3-branch:1.5.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.5
+	gdb_7_2-2010-09-02-release:1.4
+	gdb_7_2-branch:1.4.0.2
+	gdb_7_2-2010-07-07-branchpoint:1.4
+	gdb_7_1-2010-03-18-release:1.3
+	gdb_7_1-branch:1.3.0.2
+	gdb_7_1-2010-02-18-branchpoint:1.3
+	gdb_7_0_1-2009-12-22-release:1.2
+	gdb_7_0-2009-10-06-release:1.2
+	gdb_7_0-branch:1.2.0.4
+	gdb_7_0-2009-09-16-branchpoint:1.2
+	msnyder-checkpoint-072509-branch:1.2.0.2
+	msnyder-checkpoint-072509-branchpoint:1.2
+	reverse-20081226-branch:1.1.0.10
+	reverse-20081226-branchpoint:1.1
+	multiprocess-20081120-branch:1.1.0.8
+	multiprocess-20081120-branchpoint:1.1
+	reverse-20080930-branch:1.1.0.6
+	reverse-20080930-branchpoint:1.1
+	reverse-20080717-branch:1.1.0.4
+	reverse-20080717-branchpoint:1.1
+	msnyder-reverse-20080609-branch:1.1.0.2
+	msnyder-reverse-20080609-branchpoint:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.8
+date	2012.04.19.15.27.49;	author palves;	state dead;
+branches;
+next	1.7;
+
+1.7
+date	2012.04.18.20.45.17;	author palves;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2012.04.18.12.09.39;	author palves;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2011.01.01.15.33.24;	author brobecke;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2010.05.23.00.57.01;	author palves;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2010.01.01.07.31.50;	author brobecke;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2009.01.03.05.57.57;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2008.04.14.18.05.12;	author drow;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.8
+log
+@2012-04-19  Pedro Alves  <palves@@redhat.com>
+
+	gdb/
+	* gnulib/: Move whole directory ...
+	* gnulib/import/: ... here, and re-rerun gnulib-tool to adjust.
+	* Makefile.in (LIBGNU, INCGNU, GNULIB_H, CLEANDIRS)
+	(REQUIRED_SUBDIRS, all-lib, gnulib/Makefile, ACLOCAL_AMFLAGS)
+	(aclocal_m4_deps): Adjust.
+	* aclocal.m4: Regenerate.
+	* configure: Regenerate.
+	* configure.ac: Adjust AC_OUTPUT output.
+
+	gdbserver/
+	* Makefile.in (LIBGNU, INCGNU): Adjust.
+	(GNULIB_FLAGS_TO_PASS, GNULIB_H): Adjust.
+	(all, install-only, uninstall, clean-info, all-lib, clean)
+	(maintainer-clean, Makefile, gnulib/Makefile): Adjust.
+	* configure.ac: Adjust AC_OUTPUT output.
+	* aclocal.m4: Regenerate.
+	* configure: Regenerate.
+@
+text
+@/* Copyright (C) 1991-1994, 1996-1998, 2000, 2004, 2007-2012 Free Software
+   Foundation, Inc.
+   This file is part of the GNU C Library.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3, or (at your option)
+   any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License along
+   with this program; if not, see <http://www.gnu.org/licenses/>.  */
+
+/* This particular implementation was written by Eric Blake, 2008.  */
+
+#ifndef _LIBC
+# include <config.h>
+#endif
+
+/* Specification of memmem.  */
+#include <string.h>
+
+#ifndef _LIBC
+# define __builtin_expect(expr, val)   (expr)
+#endif
+
+#define RETURN_TYPE void *
+#define AVAILABLE(h, h_l, j, n_l) ((j) <= (h_l) - (n_l))
+#include "str-two-way.h"
+
+/* Return the first occurrence of NEEDLE in HAYSTACK.  Return HAYSTACK
+   if NEEDLE_LEN is 0, otherwise NULL if NEEDLE is not found in
+   HAYSTACK.  */
+void *
+memmem (const void *haystack_start, size_t haystack_len,
+        const void *needle_start, size_t needle_len)
+{
+  /* Abstract memory is considered to be an array of 'unsigned char' values,
+     not an array of 'char' values.  See ISO C 99 section 6.2.6.1.  */
+  const unsigned char *haystack = (const unsigned char *) haystack_start;
+  const unsigned char *needle = (const unsigned char *) needle_start;
+
+  if (needle_len == 0)
+    /* The first occurrence of the empty string is deemed to occur at
+       the beginning of the string.  */
+    return (void *) haystack;
+
+  /* Sanity check, otherwise the loop might search through the whole
+     memory.  */
+  if (__builtin_expect (haystack_len < needle_len, 0))
+    return NULL;
+
+  /* Use optimizations in memchr when possible, to reduce the search
+     size of haystack using a linear algorithm with a smaller
+     coefficient.  However, avoid memchr for long needles, since we
+     can often achieve sublinear performance.  */
+  if (needle_len < LONG_NEEDLE_THRESHOLD)
+    {
+      haystack = memchr (haystack, *needle, haystack_len);
+      if (!haystack || __builtin_expect (needle_len == 1, 0))
+        return (void *) haystack;
+      haystack_len -= haystack - (const unsigned char *) haystack_start;
+      if (haystack_len < needle_len)
+        return NULL;
+      return two_way_short_needle (haystack, haystack_len, needle, needle_len);
+    }
+  else
+    return two_way_long_needle (haystack, haystack_len, needle, needle_len);
+}
+
+#undef LONG_NEEDLE_THRESHOLD
+@
+
+
+1.7
+log
+@2012-04-18  Pedro Alves  <palves@@redhat.com>
+
+	Update gnulib from latest git.
+	(639ea5ae15e39fe48d43e04864b2997301e4b969)
+
+	* gnulib/Makefile.am: Update.
+	* gnulib/dummy.c: Update.
+	* gnulib/extra/arg-nonnull.h: Update.
+	* gnulib/extra/c++defs.h: Update.
+	* gnulib/extra/update-copyright: Update.
+	* gnulib/extra/warn-on-use.h: Update.
+	* gnulib/inttypes.in.h: Update.
+	* gnulib/m4/00gnulib.m4: Update.
+	* gnulib/m4/extensions.m4: Update.
+	* gnulib/m4/gnulib-cache.m4: Update.
+	* gnulib/m4/gnulib-common.m4: Update.
+	* gnulib/m4/gnulib-comp.m4: Update.
+	* gnulib/m4/gnulib-tool.m4: Update.
+	* gnulib/m4/include_next.m4: Update.
+	* gnulib/m4/inttypes-pri.m4: Update.
+	* gnulib/m4/inttypes.m4: Update.
+	* gnulib/m4/longlong.m4: Update.
+	* gnulib/m4/memchr.m4: Update.
+	* gnulib/m4/memmem.m4: Update.
+	* gnulib/m4/mmap-anon.m4: Update.
+	* gnulib/m4/multiarch.m4: Update.
+	* gnulib/m4/onceonly.m4: Update.
+	* gnulib/m4/stddef_h.m4: Update.
+	* gnulib/m4/stdint.m4: Update.
+	* gnulib/m4/string_h.m4: Update.
+	* gnulib/m4/warn-on-use.m4: Update.
+	* gnulib/m4/wchar_h.m4: Update.
+	* gnulib/m4/wchar_t.m4: Update.
+	* gnulib/m4/wint_t.m4: Update.
+	* gnulib/memchr.c: Update.
+	* gnulib/memmem.c: Update.
+	* gnulib/stddef.in.h: Update.
+	* gnulib/stdint.in.h: Update.
+	* gnulib/str-two-way.h: Update.
+	* gnulib/string.in.h: Update.
+	* gnulib/wchar.in.h: Update.
+
+	* gnulib/extra/arg-nonnull.h: Delete.
+	* gnulib/extra/c++defs.h: Delete.
+	* gnulib/extra/warn-on-use.h: Delete.
+	* gnulib/m4/wchar_h.m4: Delete.
+	* gnulib/m4/wint_t.m4: Delete.
+	* gnulib/wchar.in.h: Delete.
+
+	* gnulib/extra/snippets/arg-nonnull.h: New.
+	* gnulib/extra/snippets/c++defs.h: New.
+	* gnulib/extra/snippets/warn-on-use.h: New.
+
+	* aclocal.m4: Regenerate.
+	* config.in: Regenerate.
+	* configure: Regenerate.
+	* gnulib/Makefile.in: Regenerate.
+
+	* gdbserver/aclocal.m4: Regenerate.
+	* gdbserver/config.in: Regenerate.
+	* gdbserver/configure: Regenerate.
+@
+text
+@@
+
+
+1.6
+log
+@2012-04-18  Pedro Alves  <palves@@redhat.com>
+
+	Revert gnulib/ part of:
+	2011-01-01  Joel Brobecker  <brobecker@@adacore.com>
+	Copyright year update in most files (performed by copyright.sh).
+@
+text
+@d1 2
+a2 2
+/* Copyright (C) 1991, 1992, 1993, 1994, 1996, 1997, 1998, 2000, 2004, 2007,
+   2008, 2009, 2010 Free Software Foundation, Inc.
+d16 1
+a16 2
+   with this program; if not, write to the Free Software Foundation,
+   Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.  */
+@
+
+
+1.5
+log
+@run copyright.sh for 2011.
+@
+text
+@d2 1
+a2 1
+   2008, 2009, 2010, 2011 Free Software Foundation, Inc.
+@
+
+
+1.4
+log
+@gdb/
+2010-05-23  Pedro Alves  <pedro@@codesourcery.com>
+
+	Update gnulib from latest git.
+	(250b80067c1e1d8faa0c42fb572f721975b929c5)
+
+	* gnulib/memcmp.c: Removed.
+	* gnulib/memchr.valgrind: New.
+	* gnulib/stddef.in.h: New.
+	* gnulib/Makefile.am: Updated.
+	* gnulib/memchr.c: Updated.
+	* gnulib/memmem.c: Updated.
+	* gnulib/stdint.in.h: Updated.
+	* gnulib/str-two-way.h: Updated.
+	* gnulib/string.in.h: Updated.
+	* gnulib/wchar.in.h: Updated.
+
+	* gnulib/extra/link-warning.h: Removed.
+	* gnulib/extra/c++defs.h: New.
+	* gnulib/extra/warn-on-use.h: New.
+	* gnulib/extra/arg-nonnull.h: Updated.
+
+	* gnulib/m4/extensions.m4: Updated.
+	* gnulib/m4/gnulib-cache.m4: Updated.
+	* gnulib/m4/gnulib-common.m4: Updated.
+	* gnulib/m4/gnulib-comp.m4: Updated.
+	* gnulib/m4/gnulib-tool.m4: Updated.
+	* gnulib/m4/include_next.m4: Updated.
+	* gnulib/m4/longlong.m4: Updated.
+	* gnulib/m4/memchr.m4: Updated.
+	* gnulib/m4/memmem.m4: Updated.
+	* gnulib/m4/stdint.m4: Updated.
+	* gnulib/m4/string_h.m4: Updated.
+	* gnulib/m4/memcmp.m4: Removed.
+	* gnulib/m4/onceonly_2_57.m4: Removed.
+	* gnulib/m4/00gnulib.m4: New.
+	* gnulib/m4/mmap-anon.m4: New.
+	* gnulib/m4/multiarch.m4: New.
+	* gnulib/m4/onceonly.m4: New.
+	* gnulib/m4/stddef_h.m4: New.
+	* gnulib/m4/warn-on-use.m4: New.
+	* gnulib/m4/wchar.m4: Removed.
+	* gnulib/m4/wchar_h.m4: New.
+	* gnulib/m4/wchar_t.m4: New.
+	* gnulib/m4/wint_t.m4: New.
+
+	* aclocal.m4: Regenerate.
+	* config.in: Likewise.
+	* configure: Likewise.
+	* gnulib/Makefile.in: Likewise.
+
+gdb/gdbserver/
+2010-05-23  Pedro Alves  <pedro@@codesourcery.com>
+
+	* config.h, configure: Regenerate.
+@
+text
+@d2 1
+a2 1
+   2008, 2009, 2010 Free Software Foundation, Inc.
+@
+
+
+1.3
+log
+@Update copyright year in most headers.
+
+Automatic update by copyright.sh.
+@
+text
+@d1 2
+a2 2
+/* Copyright (C) 1991,92,93,94,96,97,98,2000,2004,2007,2008,2009,2010
+Free Software Foundation, Inc.
+d41 1
+a41 1
+	const void *needle_start, size_t needle_len)
+d66 1
+a66 1
+	return (void *) haystack;
+d69 1
+a69 1
+	return NULL;
+@
+
+
+1.2
+log
+@        Updated copyright notices for most files.
+@
+text
+@d1 1
+a1 1
+/* Copyright (C) 1991,92,93,94,96,97,98,2000,2004,2007,2008,2009
+d7 1
+a7 1
+   the Free Software Foundation; either version 2, or (at your option)
+@
+
+
+1.1
+log
+@Add missed files from last commit.
+@
+text
+@d1 2
+a2 2
+/* Copyright (C) 1991,92,93,94,96,97,98,2000,2004,2007,2008 Free Software
+   Foundation, Inc.
+d7 1
+a7 1
+   the Free Software Foundation; either version 3, or (at your option)
+@
+

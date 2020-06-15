@@ -1,0 +1,489 @@
+head	1.9;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.9
+	gdb_7_6-2013-04-26-release:1.9
+	gdb_7_6-branch:1.9.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.9
+	gdb_7_5_1-2012-11-29-release:1.8
+	gdb_7_5-2012-08-17-release:1.8
+	gdb_7_5-branch:1.8.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.8
+	gdb_7_4_1-2012-04-26-release:1.6.4.1
+	gdb_7_4-2012-01-24-release:1.6.4.1
+	gdb_7_4-branch:1.6.0.4
+	gdb_7_4-2011-12-13-branchpoint:1.6
+	gdb_7_3_1-2011-09-04-release:1.6
+	gdb_7_3-2011-07-26-release:1.6
+	gdb_7_3-branch:1.6.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.6
+	gdb_7_2-2010-09-02-release:1.4
+	gdb_7_2-branch:1.4.0.2
+	gdb_7_2-2010-07-07-branchpoint:1.4
+	gdb_7_1-2010-03-18-release:1.2
+	gdb_7_1-branch:1.2.0.2
+	gdb_7_1-2010-02-18-branchpoint:1.2;
+locks; strict;
+comment	@# @;
+
+
+1.9
+date	2013.01.01.06.41.27;	author brobecke;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2012.06.26.19.23.20;	author tromey;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2012.01.04.08.27.55;	author brobecke;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2011.02.21.14.57.38;	author uweigand;	state Exp;
+branches
+	1.6.4.1;
+next	1.5;
+
+1.5
+date	2011.01.01.15.33.50;	author brobecke;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2010.06.03.23.54.18;	author msnyder;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2010.06.02.21.53.28;	author msnyder;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2010.01.01.07.32.06;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2009.11.21.21.17.17;	author palves;	state Exp;
+branches;
+next	;
+
+1.6.4.1
+date	2012.01.06.04.54.29;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.9
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@# This testcase is part of GDB, the GNU debugger.
+
+# Copyright 2009-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# This test verifies that a local watchpoint isn't deleted when a
+# thread other than the thread the local watchpoint was set in stops
+# for a breakpoint.
+
+if {[skip_hw_watchpoint_multi_tests]} {
+    return 0
+}
+
+standard_testfile
+if {[gdb_compile_pthreads \
+	 "${srcdir}/${subdir}/${srcfile}" \
+	 "${binfile}" executable {debug} ] != "" } {
+    return -1
+}
+
+clean_restart ${binfile}
+
+gdb_test_no_output "set can-use-hw-watchpoints 1" ""
+
+if ![runto_main] then {
+    fail "Can't run to main"
+    return
+}
+
+set inc_line_1 [gdb_get_line_number "Loop increment 1"]
+set inc_line_2 [gdb_get_line_number "Loop increment 2"]
+set bkpt_here [gdb_get_line_number "set breakpoint here"]
+
+# Run to the loop within thread_function0, so we can set our local
+# watchpoint.
+gdb_test "break ${srcfile}:${inc_line_1}" \
+    "Breakpoint 2 at .*: file .*${srcfile}, line .*" \
+    "breakpoint on thread_function0"
+
+gdb_test "continue" \
+    ".*Breakpoint 2.*thread_function0.*" \
+    "continue to thread_function0"
+
+delete_breakpoints
+
+# Set the local watchpoint, and confirm that it traps as expected.
+gdb_test "watch *myp" \
+    "Hardware watchpoint 3\: \\*myp.*" \
+    "set local watchpoint on *myp"
+
+gdb_test "continue" \
+    "Hardware watchpoint.*Old value.*New value.*thread_function0.*" \
+    "local watchpoint triggers"
+
+delete_breakpoints
+
+# Recreate the watchpoint, but this time with a condition we know
+# won't trigger.  This is so the watchpoint is inserted, and the
+# target reports events, but GDB doesn't stop for them.  We want to
+# hit the breakpoints on the other thread, and make sure this
+# watchpoint isn't deleted then.
+gdb_test "watch *myp if trigger != 0" \
+    "Hardware watchpoint 4\: \\*myp.*" \
+    "set local watchpoint on *myp, with false conditional"
+
+# Run to a breakpoint on a different thread.  The previous local
+# watchpoint should not be deleted with the standard 'the program has
+# left the block in which its expression is valid', because the
+# thread_function0 thread should still be running in the loop.
+gdb_test "break ${srcfile}:${inc_line_2}" \
+    "Breakpoint 5 at .*: file .*${srcfile}, line .*" \
+    "breakpoint on the other thread"
+
+gdb_test "continue" \
+    "Breakpoint 5, thread_function1.*" \
+    "the other thread stopped on breakpoint"
+
+# Delete the new breakpoint, we don't need it anymore.
+gdb_test_no_output "delete 5" ""
+
+# Check if the local watchpoint hasn't been deleted (is still listed).
+# This is simpler to check than expecting 'the program has left ...',
+# and, is immune to string changes in that warning.
+gdb_test "info breakpoints" \
+    ".*4.*hw watchpoint.*keep.*y.*\\*myp.*" \
+    "local watchpoint is still in breakpoint list"
+
+# Make the watchpoint condition eval true.
+gdb_test_no_output "set trigger=1" "let local watchpoint trigger"
+
+gdb_test "continue" \
+    "Hardware watchpoint.*Old value.*New value.*thread_function0.*" \
+    "local watchpoint still triggers"
+
+# Confirm that the local watchpoint is indeed deleted when
+# thread_function0 returns.
+gdb_test_no_output "set *myp=0" "let thread_function0 return"
+
+gdb_test "break ${srcfile}:${bkpt_here}" \
+    "Breakpoint 6 at .*: file .*${srcfile}, line .*" \
+    "breakpoint on thread_function0's caller"
+
+gdb_test "continue" \
+    ".*Watchpoint.*deleted.*" \
+    "local watchpoint automatically deleted"
+@
+
+
+1.8
+log
+@	* gdb.threads/watchpoint-fork.exp (test): Use
+	standard_output_file.  Don't declare objdir.
+	* gdb.threads/attach-into-signal.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.threads/attach-stopped.exp: Use standard_testfile.
+	* gdb.threads/bp_in_thread.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/corethreads.exp: Use standard_testfile.
+	* gdb.threads/execl.exp: Use standard_testfile,
+	standard_output_file, clean_restart.
+	* gdb.threads/fork-child-threads.exp: Use standard_testfile,
+	clean_restart.
+	* gdb.threads/fork-thread-pending.exp: Use standard_testfile,
+	clean_restart.
+	* gdb.threads/gcore-thread.exp: Use standard_testfile.  Remove
+	incdir.
+	* gdb.threads/hand-call-in-threads.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/ia64-sigill.exp: Use standard_testfile.
+	* gdb.threads/interrupted-hand-call.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/killed.exp: Use standard_testfile, clean_restart.
+	Remove incdir.
+	* gdb.threads/leader-exit.exp: Use standard_testfile.
+	* gdb.threads/linux-dp.exp: Use standard_testfile, clean_restart.
+	* gdb.threads/local-watch-wrong-thread.exp: Use standard_testfile,
+	clean_restart.
+	* gdb.threads/manythreads.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/multi-create.exp: Use standard_testfile,
+	clean_restart.
+	* gdb.threads/no-unwaited-for-left.exp: Use standard_testfile.
+	* gdb.threads/non-ldr-exc-1.exp: Use standard_testfile.
+	* gdb.threads/non-ldr-exc-2.exp: Use standard_testfile.
+	* gdb.threads/non-ldr-exc-3.exp: Use standard_testfile.
+	* gdb.threads/non-ldr-exc-4.exp: Use standard_testfile.
+	* gdb.threads/pending-step.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/print-threads.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/pthread_cond_wait.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/pthreads.exp: Use standard_testfile, clean_restart.
+	Remove incdir.
+	* gdb.threads/schedlock.exp: Use standard_testfile.  Remove
+	incdir.
+	* gdb.threads/sigthread.exp: Use standard_testfile,
+	clean_restart.
+	* gdb.threads/staticthreads.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/switch-threads.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/thread-execl.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/thread-find.exp: Use standard_testfile,
+	clean_restart.
+	* gdb.threads/thread-specific.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/thread-unwindonsignal.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/thread_check.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/thread_events.exp: Use standard_testfile.  Remove
+	incdir.
+	* gdb.threads/threadapply.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/threxit-hop-specific.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/tls-nodebug.exp: Use standard_testfile,
+	clean_restart.
+	* gdb.threads/tls-shared.exp: Use standard_testfile,
+	clean_restart, standard_output_file.
+	* gdb.threads/tls-var.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.threads/tls.exp: Use standard_testfile, clean_restart.
+	Remove incdir.
+	* gdb.threads/watchthreads-reorder.exp: Use standard_testfile.
+	* gdb.threads/watchthreads.exp: Use standard_testfile.  Remove
+	incdir.
+	* gdb.threads/watchthreads2.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+@
+text
+@d3 1
+a3 1
+# Copyright 2009-2012 Free Software Foundation, Inc.
+@
+
+
+1.7
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d26 1
+a26 3
+set testfile "local-watch-wrong-thread"
+set srcfile ${testfile}.c
+set binfile ${objdir}/${subdir}/${testfile}
+d33 1
+a33 4
+gdb_exit
+gdb_start
+gdb_reinitialize_dir $srcdir/$subdir
+gdb_load ${binfile}
+@
+
+
+1.6
+log
+@	* lib/gdb.exp (skip_hw_breakpoint_tests): New procedure.
+	(skip_hw_watchpoint_tests): Likewise.
+	(skip_hw_watchpoint_multi_tests): Likewise.
+	(skip_hw_watchpoint_access_tests): Likewise.
+
+	* gdb.base/hbreak.exp: Use appropriate skip_hw_..._tests checks.
+	* gdb.base/pr11022.exp: Likewise.
+	* gdb.base/watch-read.exp: Likewise.
+	* gdb.base/watch_thread_num.exp: Likewise.
+	* gdb.base/watchpoint-hw-hit-once.exp: Likewise.
+	* gdb.base/watchpoint-hw.exp: Likewise.
+	* gdb.base/watchpoint.exp: Likewise.
+	* gdb.threads/local-watch-wrong-thread.exp: Likewise.
+	* gdb.threads/watchthreads-reorder.exp: Likewise.
+	* gdb.threads/watchthreads.exp: Likewise.
+	* gdb.threads/watchthreads2.exp: Likewise.
+@
+text
+@d3 1
+a3 1
+# Copyright 2009, 2010, 2011 Free Software Foundation, Inc.
+@
+
+
+1.6.4.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d3 1
+a3 1
+# Copyright 2009-2012 Free Software Foundation, Inc.
+@
+
+
+1.5
+log
+@run copyright.sh for 2011.
+@
+text
+@d22 2
+a23 2
+if [target_info exists gdb,no_hardware_watchpoints] {
+    return 0;
+@
+
+
+1.4
+log
+@2010-06-03  Michael Snyder  <msnyder@@vmware.com>
+
+	* gdb.base/commands.exp: Replace gdb_test with gdb_test_no_output.
+	* gdb.base/display.exp: Ditto.
+	* gdb.base/find.exp: Ditto.
+	* gdb.base/ifelse.exp: Ditto.
+	* gdb.base/multi-forks.exp: Ditto.
+	* gdb.base/recurse.exp: Ditto.
+	* gdb.base/setshow.exp: Ditto.
+	* gdb.base/value-double-free.exp: Ditto.
+	* gdb.base/watch-vfork.exp: Ditto.
+	* gdb.base/watch_thread_num.exp: Ditto.
+	* gdb.base/watchpoint-solib.exp: Ditto.
+	* gdb.base/watchpoint.exp: Ditto.
+	* gdb.base/watchpoints.exp: Ditto.
+
+	* gdb.cp/classes.exp: Replace gdb_test with gdb_test_no_output.
+	* gdb.cp/overload.exp: Ditto.
+	* gdb.cp/virtfunc.exp: Ditto.
+
+	* gdb.python/py-value.exp: Replace gdb_test with gdb_test_no_output.
+
+	* gdb.reverse/watch-precsave.exp:
+	Replace gdb_test with gdb_test_no_output.
+
+	* gdb.threads/attach-into-signal.exp:
+	Replace gdb_test with gdb_test_no_output.
+	* gdb.threads/local-watch-wrong-thread.exp: Ditto.
+	* gdb.threads/watchthreads.exp: Ditto.
+	* gdb.threads/watchthreads2.exp: Ditto.
+
+	* gdb.trace/deltrace.exp: Replace gdb_test with gdb_test_no_output.
+	* gdb.trace/tfind.exp: Ditto.
+@
+text
+@d3 1
+a3 1
+# Copyright 2009, 2010 Free Software Foundation, Inc.
+@
+
+
+1.3
+log
+@2010-06-02  Michael Snyder  <msnyder@@vmware.com>
+
+	* gdb.threads/fork-thread-pending.exp: Use gdb_test_no_output.
+	* gdb.threads/hand-call-in-thraeds.exp: Ditto.
+	* gdb.threads/local-watch-wrong-thread.exp: Ditto.
+	* gdb.threads/manythreads.exp: Ditto.
+	* gdb.threads/print-threads.exp: Ditto.
+	* gdb.threads/pthreads.exp: Ditto.
+	* gdb.threads/schedlock.exp: Ditto.
+	* gdb.threads/staticthreads.exp: Ditto.
+	* gdb.threads/thread-specific.exp: Ditto.
+	* gdb.threads/thread-unwindonsignal.exp: Ditto.
+	* gdb.threads/threadapply.exp: Ditto.
+	* gdb.threads/watchthreads.exp: Ditto.
+	* gdb.threads/watchthreads2.exp: Ditto.
+@
+text
+@d40 1
+a40 1
+gdb_test "set can-use-hw-watchpoints 1" "" ""
+d96 1
+a96 1
+gdb_test "delete 5" "" ""
+@
+
+
+1.2
+log
+@Update copyright year in most headers.
+
+Automatic update by copyright.sh.
+@
+text
+@d106 1
+a106 1
+gdb_test "set trigger=1" "" "let local watchpoint trigger"
+d114 1
+a114 1
+gdb_test "set *myp=0" "" "let thread_function0 return"
+@
+
+
+1.1
+log
+@	gdb/
+	* breakpoint.h (struct breakpoint) <watchpoint_thread>: New field.
+	* breakpoint.c (watchpoint_in_thread_scope): New.
+	(update_watchpoint): Skip if the local watchpoint's thread doesn't
+	match the current thread, or if the current thread is running.
+	(watchpoint_check): Ditto.
+	(watch_command_1): Set the watchpoint's watchpoint_thread field.
+
+	gdb/testsuite/
+	* gdb.threads/local-watch-wrong-thread.c,
+	gdb.threads/local-watch-wrong-thread.exp: New files.
+@
+text
+@d3 1
+a3 1
+# Copyright 2009 Free Software Foundation, Inc.
+@
+

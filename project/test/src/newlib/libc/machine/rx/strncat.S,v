@@ -1,0 +1,139 @@
+head	1.2;
+access;
+symbols
+	cygwin-1_7_35-release:1.2
+	cygwin-1_7_34-release:1.2
+	newlib-2_2_0:1.2.0.6
+	cygwin-1_7_33-release:1.2
+	cygwin-1_7_32-release:1.2
+	cygwin-1_7_31-release:1.2
+	cygwin-1_7_30-release:1.2
+	cygwin-1_7_29-release:1.2
+	cygwin-1_7_28-release:1.2
+	newlib-2_1_0:1.2
+	cygwin-1_7_27-release:1.2
+	cygwin-1_7_26-release:1.2
+	cygwin-1_7_25-release:1.2
+	cygwin-1_7_24-release:1.2
+	cygwin-1_7_23-release:1.2
+	cygwin-1_7_22-release:1.2
+	cygwin-1_7_21-release:1.2
+	cygwin-1_7_20-release:1.2
+	cygwin-1_7_19-release:1.2
+	cygwin-64bit-postmerge:1.2
+	cygwin-64bit-premerge-branch:1.2.0.4
+	cygwin-64bit-premerge:1.2
+	cygwin-1_7_18-release:1.2
+	newlib-2_0_0:1.2
+	cygwin-1_7_17-release:1.2
+	cygwin-64bit-branch:1.2.0.2
+	cygwin-1_7_16-release:1.2
+	cygwin-1_7_15-release:1.2
+	cygwin-1_7_14_2-release:1.2
+	cygwin-1_7_14-release:1.2
+	cygwin-1_7_12-release:1.2
+	cygwin-1_7_11-release:1.2
+	cygwin-1_7_10-release:1.2
+	newlib-1_20_0:1.2
+	cygwin-1_7_9-release:1.2
+	newlib-1_19_0:1.2
+	cygwin-1_7_5-release:1.2
+	cygwin-1_7_4-release:1.2
+	cygwin-1_7_3-release:1.2
+	cygwin-1_7_2-release:1.2
+	newlib-1_18_0:1.2;
+locks; strict;
+comment	@# @;
+
+
+1.2
+date	2009.11.20.12.54.29;	author nickc;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2009.10.26.10.05.23;	author nickc;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@        * libc/machine/rx/strncat.S (_strncat): Replace use of r6
+        (call-saved) with r14 (call-used).
+@
+text
+@	.file	"strncat.S"
+
+	.section .text
+	.global  _strncat
+	.type	 _strncat,@@function
+_strncat:
+	;; On entry: r1 => Destination
+	;;           r2 => Source
+	;; 	     r3 => Max number of bytes to copy
+	
+	mov 	r1, r4		; Save a copy of the dest pointer.
+	mov 	r2, r5		; Save a copy of the source pointer.
+	mov 	r3, r14		; Save a copy of the byte count.
+	
+	mov	#0,  r2		; Search for the NUL byte.
+	mov 	#-1, r3		; Search until we run out of memory.
+	suntil.b		; Find the end of the destination string.
+	sub	#1, r1		; suntil.b leaves r1 pointing to the byte beyond the NUL.
+
+	mov	r14, r3		; Restore the limit on the number of bytes copied.
+	mov	r5, r2		; Restore the source pointer.
+	mov	r1, r5		; Save a copy of the dest pointer.
+	smovu			; Copy source to destination.
+
+	add	#0, r14, r3	; Restore the number of bytes to copy (again), but this time set the Z flag as well.
+	beq	1f  		; If we copied 0 bytes then we already know that the dest string is NUL terminated, so we do not have to do anything.
+	mov	#0, r2		; Otherwise we must check to see if a NUL byte
+	mov	r5, r1		;  was included in the bytes that were copied.
+	suntil.b
+	beq	1f		; Z flag is set if a match was found.
+	add	r14, r5		; Point at byte after end of copied bytes.
+	mov.b	#0, [r5]	; Store a NUL there.
+1:	
+	mov	r4, r1		; Return the original dest pointer.
+	rts
+@
+
+
+1.1
+log
+@newlib:
+        * configure.host: Add support for RX architecture.
+        * libc/include/machine/ieeefp.h: Likewise.
+        * libc/include/machine/setjmp.h: Likewise.
+        * libc/include/machine/configure.in: Likewise.
+        * libc/include/machine/configure: Regenerate.
+        * libc/machine/rx: New directory.
+        * libc/machine/rx/*: New files to support RX architecture.
+
+libgloss:
+        * configure.in: Add support for RX sub-directory.
+        * configure: Regenerate.
+        * rx: New directory.
+        * rx/*: New files to support RX architecture.
+@
+text
+@d13 1
+a13 1
+	mov 	r3, r6		; Save a copy of the byte count.
+d20 1
+a20 1
+	mov	r6, r3		; Restore the limit on the number of bytes copied.
+d25 1
+a25 1
+	add	#0, r6, r3	; Restore the number of bytes to copy (again), but this time set the Z flag as well.
+d31 1
+a31 1
+	add	r6, r5		; Point at byte after end of copied bytes.
+@
+

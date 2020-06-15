@@ -1,0 +1,399 @@
+head	1.7;
+access;
+symbols
+	newlib-2_2_0:1.7.0.2
+	newlib-2_1_0:1.2;
+locks; strict;
+comment	@# @;
+
+
+1.7
+date	2014.11.13.10.18.57;	author nickc;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2014.10.23.01.49.49;	author dj;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2014.09.22.15.26.45;	author nickc;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2014.04.30.11.30.13;	author nickc;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2014.01.30.02.46.34;	author dj;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2013.09.18.07.38.12;	author nickc;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2013.05.13.21.39.50;	author dj;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.7
+log
+@	* msp430/Makefile.in (CRT_OBJS): Add crt_high_bss.o.
+	* msp430/crt0.S (high_bss): Add.
+	* msp430/msp430-sim.ld: Add error message if .upper sections are
+	detected.
+	* msp430/msp430xl-sim.ld (MEMORY): Adjust to better mimic real
+	life MCUs.  Add support for upper and lower sections.
+@
+text
+@# Copyright (c) 2008-2014 Red Hat, Inc. All rights reserved.
+#
+# This copyrighted material is made available to anyone wishing to use, modify,
+# copy, or redistribute it subject to the terms and conditions of the BSD
+# License.   This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY expressed or implied, including the implied warranties
+# of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  A copy of this license
+# is available at http://www.opensource.org/licenses. Any Red Hat trademarks that
+# are incorporated in the source code or documentation are not subject to the BSD
+# License and may only be used or replicated with the express permission of
+# Red Hat, Inc.
+
+# Makefile for libgloss/msp430.
+
+DESTDIR =
+VPATH = @@srcdir@@
+srcdir = @@srcdir@@
+objdir = .
+srcroot = $(srcdir)/../..
+objroot = $(objdir)/../..
+
+prefix = @@prefix@@
+exec_prefix = @@exec_prefix@@
+
+host_alias = @@host_alias@@
+target_alias = @@target_alias@@
+
+bindir = @@bindir@@
+libdir = @@libdir@@
+tooldir = $(exec_prefix)/$(target_alias)
+
+# Multilib support variables.
+# TOP is used instead of MULTI{BUILD,SRC}TOP.
+MULTIDIRS =
+MULTISUBDIR =
+MULTIDO = true
+MULTICLEAN = true
+
+INSTALL = @@INSTALL@@
+INSTALL_PROGRAM = @@INSTALL_PROGRAM@@
+INSTALL_DATA = @@INSTALL_DATA@@
+
+SHELL = /bin/sh
+
+CC = @@CC@@
+
+AS = @@AS@@
+AR = @@AR@@
+LD = @@LD@@
+RANLIB = @@RANLIB@@
+AR_FLAGS = rc
+
+OBJDUMP = `if [ -f ${objroot}/../binutils/objdump ] ; \
+	then echo ${objroot}/../binutils/objdump ; \
+	else t='$(program_transform_name)'; echo objdump | sed -e $$t ; fi`
+OBJCOPY = `if [ -f ${objroot}/../binutils/objcopy ] ; \
+	then echo ${objroot}/../binutils/objcopy ; \
+	else t='$(program_transform_name)'; echo objcopy | sed -e $$t ; fi`
+
+SCRIPTS  = $(srcdir)/msp430.ld
+SCRIPTS += $(srcdir)/msp430-sim.ld
+SCRIPTS += $(srcdir)/msp430xl-sim.ld
+SCRIPTS += $(srcdir)/intr_vectors.ld
+
+CRT = gcrt0.o crt0.o crt0-minrt.o crtn.o crtn-minrt.o
+SIM_BSP = libsim.a
+LIB_CIO = libcio.a
+LIB_CRT = libcrt.a
+
+SIM_OBJS = syscalls.o \
+	cio.o \
+	write.o \
+	sbrk.o
+
+CIO_OBJS = ciosyscalls.o \
+	cio.o \
+	write.o \
+	unlink.o \
+	sbrk.o
+
+# Each crt_*.o is built from crt0.S using -DL*.  crt0.o is built from
+# crt0.s with -DL0 via the default rule below.
+CRT_OBJS = \
+	crt_bss.o \
+	crt_high_bss.o \
+	crt_movedata.o \
+	crt_main.o \
+	crt_main_minrt.o \
+	crt_callexit.o \
+	crt_init.o
+
+#### Host specific Makefile fragment comes in here.
+@@host_makefile_frag@@
+
+
+all: $(CRT) $(SIM_BSP) $(LIB_CIO) $(LIB_CRT) copy_scripts_to_objdir
+
+crt_%.o : crt0.S
+	$(CC) -DL$* -Wa,-gdwarf2 -Wa,-I$(srcdir) $(CFLAGS_FOR_TARGET) $(INCLUDES) $(CFLAGS) -c $< -o $@@
+
+crt0-minrt.o : crt0.S
+	$(CC) -DL0 -DMINRT -Wa,-gdwarf2 -Wa,-I$(srcdir) $(CFLAGS_FOR_TARGET) $(INCLUDES) $(CFLAGS) -c $< -o $@@
+
+crtn-minrt.o : crtn.S
+	$(CC) -DL0 -DMINRT -Wa,-gdwarf2 -Wa,-I$(srcdir) $(CFLAGS_FOR_TARGET) $(INCLUDES) $(CFLAGS) -c $< -o $@@
+
+# Override .S.o rule to pass assembler debugging flags
+.S.o:
+	$(CC) -DL0 -Wa,-gdwarf2 -Wa,-I$(srcdir) $(CFLAGS_FOR_TARGET) $(INCLUDES) $(CFLAGS) -c $<
+
+$(SIM_BSP): $(SIM_OBJS)
+	$(AR) $(ARFLAGS) $@@ $?
+	$(RANLIB) $@@
+
+$(LIB_CIO): $(CIO_OBJS)
+	$(AR) $(ARFLAGS) $@@ $?
+	$(RANLIB) $@@
+
+$(LIB_CRT): $(CRT_OBJS)
+	$(AR) $(ARFLAGS) $@@ $?
+	$(RANLIB) $@@
+
+copy_scripts_to_objdir: $(SCRIPTS)
+	cp $(SCRIPTS) $(objdir)
+
+# Dependencies
+
+SDEPS = $(srcdir)/cio.h
+
+abort.o : $(SDEPS)
+argv.o : $(SDEPS)
+argvlen.o : $(SDEPS)
+chdir.o : $(SDEPS)
+chmod.o : $(SDEPS)
+close.o : $(SDEPS)
+exit.o : $(SDEPS)
+fstat.o : $(SDEPS)
+getpid.o : $(SDEPS)
+gettimeofday.o : $(SDEPS)
+gcrt0.o: gcrt0.S crt0.S
+kill.o : $(SDEPS)
+link.o : $(SDEPS)
+lseek.o : $(SDEPS)
+mcount.o : $(SDEPS)
+open.o : $(SDEPS)
+read.o : $(SDEPS)
+sigprocmask.o : $(SDEPS)
+sleep.o : $(SDEPS)
+stat.o : $(SDEPS)
+time.o : $(SDEPS)
+times.o : $(SDEPS)
+unlink.o : $(SDEPS)
+utime.o : $(SDEPS)
+write.o : $(SDEPS)
+
+install: $(CRT) $(SIM_BSP) $(LIB_CIO) $(LIB_CRT) $(SCRIPTS)
+	mkdir -p $(DESTDIR)$(tooldir)/lib${MULTISUBDIR}
+	for c in $(CRT) $(SIM_BSP) $(LIB_CIO) $(LIB_CRT); do \
+	  $(INSTALL_DATA) $$c $(DESTDIR)$(tooldir)/lib${MULTISUBDIR}/$$c ;\
+	done
+	for c in $(SCRIPTS); do \
+	  b=`basename $$c`; \
+	  $(INSTALL_DATA) $$c $(DESTDIR)$(tooldir)/lib${MULTISUBDIR}/$$b ;\
+	done
+
+clean mostlyclean:
+	rm -f *.o *.a
+
+distclean maintainer-clean realclean: clean
+	rm -f Makefile config.cache config.log config.status
+
+.PHONY: info dvi doc install-info clean-info
+info doc dvi:
+install-info:
+clean-info:
+
+Makefile: Makefile.in config.status @@host_makefile_frag_path@@
+	$(SHELL) config.status
+
+config.status: configure
+	$(SHELL) config.status --recheck
+@
+
+
+1.6
+log
+@2014-10-22  Tim Harder  <radhermit@@gmail.com>
+* msp430/Makefile.in: respect DESTDIR during install
+@
+text
+@d85 1
+@
+
+
+1.5
+log
+@	* configure.in: Remove config_libnosys=false
+	* configure: Regenerated.
+	* msp430/nosyscalls.S: Rename to ciosyscalls.S
+	* msp430/Makefile.in: Change LIBNOSYS to LIB_CIO.
+@
+text
+@d15 1
+d156 1
+d158 1
+a158 1
+	  $(INSTALL_DATA) $$c $(tooldir)/lib${MULTISUBDIR}/$$c ;\
+d162 1
+a162 1
+	  $(INSTALL_DATA) $$c $(tooldir)/lib${MULTISUBDIR}/$$b ;\
+@
+
+
+1.4
+log
+@	* msp430/Makefile.in (NOSYS_OBJS): Add unlink.o.
+	(SCRIPTS): Remove msp430F5438A-s.ld and msp430F5438A-s.ld.
+	* unlink.c: New file.
+@
+text
+@d66 1
+a66 1
+LIBNOSYS = libnosys.a
+d74 1
+a74 1
+NOSYS_OBJS = nosyscalls.o \
+d94 1
+a94 1
+all: $(CRT) $(SIM_BSP) $(LIBNOSYS) $(LIB_CRT) copy_scripts_to_objdir
+d113 1
+a113 1
+$(LIBNOSYS): $(NOSYS_OBJS)
+d154 2
+a155 2
+install: $(CRT) $(SIM_BSP) $(LIBNOSYS) $(LIB_CRT) $(SCRIPTS)
+	for c in $(CRT) $(SIM_BSP) $(LIBNOSYS) $(LIB_CRT); do \
+@
+
+
+1.3
+log
+@* msp430/Makefile.in (crt0-minrt.o, crtn-minrt.o): New.  Build
+from crt0.S with -DMINRT.
+(CRT_OBJS): Expand.
+(crt_%.o): New rule pattern.  Build multiple objects from crt0.S.
+* msp430/crt0.S: Further break out functionality.  Support -DMINRT
+that omits all init/fini logic.
+* msp430/crtn.S: Likewise.
+* msp430/msp430-sim.ld: Wildcard all .crt_* sections, sorted.
+* msp430/msp430.ld: Likewise.
+* msp430/msp430xl-sim.ld: Likewise.
+@
+text
+@d1 1
+a1 1
+# Copyright (c) 2008, 2009, 2011, 2013 Red Hat, Inc. All rights reserved.
+d59 2
+a60 1
+SCRIPTS = $(srcdir)/msp430.ld $(srcdir)/msp430-sim.ld
+d62 1
+a62 2
+SCRIPTS += $(srcdir)/msp430F5438A-s.ld
+SCRIPTS += $(srcdir)/msp430F5438A-l.ld
+d67 1
+d77 1
+a79 4
+SCRIPTS += $(srcdir)/intr_vectors.ld
+
+LIB_CRT = libcrt.a
+
+@
+
+
+1.2
+log
+@	* msp430/Makefile.in (SCRIPTS): Add intr_vectors.ld.
+	(LIB_CRT): New.
+	(CRT_OBJS): New.
+	(all): Add dependency upon LIB_CRT.
+	(install): Likewise.
+	* msp430/msp430-sim.ld: Include intr_vectors.ld.
+	KEEP crt code, lowtext code and tm_clone_table.
+	Separate the noinit section from the .bss section.
+	Allow for extended .debug_line sections.
+	* msp430/msp430.ld: Likewise.
+	* msp430/msp430F5438A-l.ld: Likewise.
+	* msp430/msp430F5438A-s.ld: Likewise.
+	* msp430/msp430xl-sim.ld: Likewise
+.	* msp430/crt_movedata.S: New.
+	* msp430/crt_bss.S: New.
+	* msp430/intr_vectors.ld: New.
+@
+text
+@d64 1
+a64 1
+CRT = gcrt0.o crt0.o crtn.o
+d82 9
+a90 1
+CRT_OBJS = crt_bss.o crt_movedata.o
+d96 11
+d109 1
+a109 3
+	$(CC) -Wa,-gdwarf2 -Wa,-I$(srcdir) $(CFLAGS_FOR_TARGET) $(INCLUDES) $(CFLAGS) -c $<
+
+all: $(CRT) $(SIM_BSP) $(LIBNOSYS) $(LIB_CRT) copy_scripts_to_objdir
+@
+
+
+1.1
+log
+@[newlib]
+* configure.host (msp430): Add.
+* libc/include/machine/ieeefp.h: Add MSP430 support.
+* libc/include/machine/setjmp.h: Likewise.
+* libc/include/sys/config.h: Likewise.
+* libc/machine/configure.in (msp430): Add.
+* libc/machine/configure: Regenerate.
+* libc/machine/msp430: New directory.
+
+[libgloss]
+* configure.in (msp430*-*-elf): Add.
+* configure: Regenerate.
+* msp430: New directory.
+@
+text
+@d63 1
+d78 6
+d92 1
+a92 1
+all: $(CRT) $(SIM_BSP) $(LIBNOSYS) copy_scripts_to_objdir
+d98 3
+d102 1
+a102 1
+$(LIBNOSYS): $(NOSYS_OBJS)
+d139 2
+a140 2
+install: $(CRT) $(SIM_BSP) $(LIBNOSYS) $(SCRIPTS)
+	for c in $(CRT) $(SIM_BSP) $(LIBNOSYS); do \
+@
+

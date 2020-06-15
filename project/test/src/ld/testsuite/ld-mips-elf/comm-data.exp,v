@@ -1,0 +1,249 @@
+head	1.4;
+access;
+symbols
+	binutils-2_24-branch:1.4.0.2
+	binutils-2_24-branchpoint:1.4
+	binutils-2_23_2:1.2
+	binutils-2_23_1:1.2
+	binutils-2_23:1.2
+	binutils-2_23-branch:1.2.0.2
+	binutils-2_23-branchpoint:1.2
+	binutils_latest_snapshot:1.4;
+locks; strict;
+comment	@# @;
+
+
+1.4
+date	2013.08.24.22.37.18;	author macro;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2013.02.19.01.10.00;	author macro;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2012.03.21.19.15.02;	author hp;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2011.11.29.12.42.10;	author macro;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.4
+log
+@	* ld-elf/comm-data.exp: Use check_shared_lib_support rather than
+	explicit patterns for test target qualification.  Define extra
+	tool flags for *-*-hpux* and tic6x-*-* targets.  Link with a
+	linker script.  Use alternative patterns for targets that do not
+	eliminate copy relocs, currently mn10300-*-* and vax-*-*.
+	* ld-elf/comm-data2.s: Handle HPUX's `.comm' syntax.
+	* ld-elf/comm-data2.ld: New test linker script.
+	* ld-elf/comm-data2.xd: Match section's VMA too.  Ignore ASCII
+	data dump.
+	* ld-elf/comm-data2r.rd: New test pattern.
+	* ld-elf/comm-data2r.sd: New test pattern.
+	* ld-elf/comm-data2r.xd: New test pattern.
+	* ld-mips-elf/comm-data.exp: Use check_shared_lib_support rather
+	than an explicit pattern for test target qualification.  Link
+	with a linker script.
+@
+text
+@# Expect script for common symbol override, MIPS variation.
+#
+#   Copyright 2011  Free Software Foundation, Inc.
+#
+# This file is part of the GNU Binutils.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+# MA 02110-1301, USA.
+#
+
+#
+# Written by Maciej W. Rozycki <macro@@codesourcery.com>
+#
+
+# This test is for MIPS shared-library targets.
+if { ![istarget mips*-*-*]
+     || ![is_elf_format]
+     || ![check_shared_lib_support] } {
+    return
+}
+
+proc mips_comm_data_test { abi flag emul reloc } {
+
+    set testname "MIPS $abi/$reloc common symbol override test"
+
+    # There's no "-z copyreloc" option, deal with it.
+    set ZFLAG [string map [list copyreloc "" nocopyreloc "-z $reloc"] $reloc]
+    set AFLAGS "$flag -EB"
+    set LDFLAGS "-m$emul"
+
+    # Define a global symbol.
+    run_ld_link_tests [list \
+	[list \
+	    "$testname (auxiliary shared object build)" \
+	    "$LDFLAGS -shared" "" \
+	    "$AFLAGS -call_shared" \
+	    { ../ld-elf/comm-data1.s } \
+	    { \
+		{ readelf -s ../ld-elf/comm-data1.sd } \
+	    } \
+	  "libmips-$abi-$reloc-comm-data.so" \
+	] \
+    ]
+
+    # Set the pointer size according to the ABI.
+    if { $abi == "n64" } {
+	append AFLAGS " --defsym ELF64=1"
+    }
+
+    # Verify that a common symbol has been converted to an undefined
+    # reference to the global symbol of the same name defined above
+    # and that the debug reference has been dropped.
+    run_ld_link_tests [list \
+	[list \
+	    "$testname" \
+	    "$LDFLAGS $ZFLAG -T ../ld-elf/comm-data2.ld -Ltmpdir -lmips-$abi-$reloc-comm-data" "" \
+	    "$AFLAGS -call_nonpic" \
+	    { ../ld-elf/comm-data2.s } \
+	    { \
+		{ readelf -s ../ld-elf/comm-data2.sd } \
+		{ readelf -r ../ld-elf/comm-data2.rd } \
+		{ readelf "-x .debug_foo" ../ld-elf/comm-data2.xd } \
+	    } \
+	    "mips-$abi-$reloc-comm-data" \
+	] \
+    ]
+}
+
+# For targets that default to a specific ISA (instead of "from-abi"),
+# the 64-bit -march option is required to override it, like for
+# "mipsisa32r2el-*-*".
+set abis { o32 -32 elf32btsmip n32 "-n32 -march=mips3" elf32btsmipn32 n64 "-64 -march=mips3" elf64btsmip }
+set relocs { copyreloc nocopyreloc }
+foreach { abi flag emul } $abis {
+    foreach reloc $relocs {
+	mips_comm_data_test $abi $flag $emul $reloc
+    }
+}
+@
+
+
+1.3
+log
+@	* lib/ld-lib.exp (run_ld_link_tests): Add another argument, pass
+	its contents to ar_simple_create and ld_simple_link after
+	objfiles.
+	* ld-aarch64/aarch64-elf.exp: Adjust accordingly.
+	* ld-alpha/alpha.exp: Likewise.
+	* ld-arm/arm-elf.exp: Likewise.
+	* ld-arm/export-class.exp: Likewise.
+	* ld-elf/comm-data.exp: Likewise.
+	* ld-elf/eh-group.exp: Likewise.
+	* ld-elf/elf.exp: Likewise.
+	* ld-elf/export-class.exp: Likewise.
+	* ld-elfvers/vers.exp: Likewise.
+	* ld-frv/tls.exp: Likewise.
+	* ld-i386/export-class.exp: Likewise.
+	* ld-i386/i386.exp: Likewise.
+	* ld-ia64/ia64.exp: Likewise.
+	* ld-libs/libs.exp: Likewise.
+	* ld-m68k/m68k.exp: Likewise.
+	* ld-metag/metag.exp: Likewise.
+	* ld-mips-elf/comm-data.exp: Likewise.
+	* ld-mips-elf/export-class.exp: Likewise.
+	* ld-mips-elf/mips-elf.exp: Likewise.
+	* ld-mn10300/mn10300.exp: Likewise.
+	* ld-pe/pe-compile.exp: Likewise.
+	* ld-pe/pe.exp: Likewise.
+	* ld-plugin/plugin.exp: Likewise.
+	* ld-powerpc/aix52.exp: Likewise.
+	* ld-powerpc/export-class.exp: Likewise.
+	* ld-powerpc/powerpc.exp: Likewise.
+	* ld-s390/s390.exp: Likewise.
+	* ld-sh/sh-vxworks.exp: Likewise.
+	* ld-sh/sh64/sh64.exp: Likewise.
+	* ld-sparc/sparc.exp: Likewise.
+	* ld-tic6x/tic6x.exp: Likewise.
+	* ld-tilegx/tilegx.exp: Likewise.
+	* ld-tilepro/tilepro.exp: Likewise.
+	* ld-undefined/entry.exp: Likewise.
+	* ld-vax-elf/vax-elf.exp: Likewise.
+	* ld-x86-64/dwarfreloc.exp: Likewise.
+	* ld-x86-64/export-class.exp: Likewise.
+	* ld-x86-64/x86-64.exp: Likewise.
+	* ld-xc16x/xc16x.exp: Likewise.
+	* ld-xstormy16/xstormy16.exp: Likewise.
+	* ld-xtensa/xtensa.exp: Likewise.
+@
+text
+@d27 4
+a30 3
+# Exclude non-Linux targets; feel free to include your favorite one
+# if you like.
+if ![istarget mips*-*-linux*] {
+d68 1
+a68 1
+	    "$LDFLAGS $ZFLAG -Ltmpdir -lmips-$abi-$reloc-comm-data" "" \
+@
+
+
+1.2
+log
+@	PR ld/13813
+	* ld-mips-elf/comm-data.exp (mips_comm_data_test): For N32 and N64
+	tests, also specify assembler option -march=mips3.
+@
+text
+@d46 1
+a46 1
+	    "$LDFLAGS -shared" \
+d67 1
+a67 1
+	    "$LDFLAGS $ZFLAG -Ltmpdir -lmips-$abi-$reloc-comm-data" \
+@
+
+
+1.1
+log
+@	PR ld/10144
+	* lib/ld-lib.exp (run_ld_link_tests): Handle sources from other
+	directories.
+	(run_ld_link_exec_tests): Likewise.
+	(run_cc_link_tests): Likewise.
+	* ld-elf/comm-data1.sd: New test.
+	* ld-elf/comm-data1.s: Source for the new test.
+	* ld-elf/comm-data2.sd: New test.
+	* ld-elf/comm-data2.rd: Likewise.
+	* ld-elf/comm-data2.xd: Likewise.
+	* ld-elf/comm-data2.s: Source for the new tests.
+	* ld-elf/comm-data.exp: New file.
+	* ld-mips-elf/comm-data.exp: Likewise.
+@
+text
+@d80 4
+a83 1
+set abis { o32 -32 elf32btsmip n32 -n32 elf32btsmipn32 n64 -64 elf64btsmip }
+@
+

@@ -1,0 +1,191 @@
+head	1.2;
+access;
+symbols
+	cygwin-1_7_35-release:1.2
+	cygwin-1_7_34-release:1.2
+	newlib-2_2_0:1.2.0.10
+	cygwin-1_7_33-release:1.2
+	cygwin-1_7_32-release:1.2
+	cygwin-1_7_31-release:1.2
+	cygwin-1_7_30-release:1.2
+	cygwin-1_7_29-release:1.2
+	cygwin-1_7_28-release:1.2
+	newlib-2_1_0:1.2
+	cygwin-1_7_27-release:1.2
+	cygwin-1_7_26-release:1.2
+	cygwin-1_7_25-release:1.2
+	cygwin-1_7_24-release:1.2
+	cygwin-1_7_23-release:1.2
+	cygwin-1_7_22-release:1.2
+	cygwin-1_7_21-release:1.2
+	cygwin-1_7_20-release:1.2
+	cygwin-1_7_19-release:1.2
+	cygwin-64bit-postmerge:1.2
+	cygwin-64bit-premerge-branch:1.2.0.8
+	cygwin-64bit-premerge:1.2
+	cygwin-1_7_18-release:1.2
+	newlib-2_0_0:1.2
+	cygwin-1_7_17-release:1.2
+	cygwin-64bit-branch:1.2.0.6
+	cygwin-1_7_16-release:1.2
+	cygwin-1_7_15-release:1.2
+	cygwin-1_7_14_2-release:1.2
+	cygwin-1_7_14-release:1.2
+	cygwin-1_7_12-release:1.2
+	cygwin-1_7_11-release:1.2
+	cygwin-1_7_10-release:1.2
+	newlib-1_20_0:1.2
+	cygwin-1_7_9-release:1.2
+	cygwin-1_7_8-release:1.2
+	newlib-1_19_0:1.2
+	cygwin-1_7_7-release:1.2
+	cygwin-1_7_5-release:1.2
+	cygwin-1_7_4-release:1.2
+	cygwin-1_7_3-release:1.2
+	cygwin-1_7_2-release:1.2
+	newlib-1_18_0:1.2
+	cygwin-1_7_1-release:1.2
+	newlib-1_17_0-arc:1.2.0.4
+	binutils-arc-20080908-branch:1.2.0.2
+	binutils-arc-20080908-branchpoint:1.2
+	newlib-1_17_0:1.2
+	newlib-1_16_0:1.2;
+locks; strict;
+comment	@ * @;
+
+
+1.2
+date	2007.07.06.16.56.30;	author jjohnstn;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2007.02.21.19.22.33;	author jjohnstn;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@
+2007-07-06  Jeff Johnston  <jjohnstn@@redhat.com>
+
+        * libc/include/sys/time.h (gettimeofday): Change to proper
+        prototype where second parameter is void *.
+        * libc/reent/gettimeofdayr.c (_gettimeofday_r): Change prototype
+        accordingly.
+        * libc/include/reent.h: Fix prototype for _gettimeofday_r.
+        * libc/sys/arm/syscalls.c: Fix gettimeofday function signature.
+        * libc/sys/rdos/gettod.c: Ditto.
+        * libc/sys/sh/syscalls.c: Ditto.
+        * libc/time/time.c (time): Change call to _gettimeofday_r
+        to pass NULL as 2nd argument.
+@
+text
+@/* Reentrant version of gettimeofday system call
+   This implementation just calls the times/gettimeofday system calls.
+   Gettimeofday may not be available on all targets.  It's presence
+   here is dubious.  Consider it for internal use only.  */
+
+#include <reent.h>
+#include <time.h>
+#include <sys/time.h>
+#include <sys/times.h>
+#include <_syslist.h>
+
+/* Some targets provides their own versions of these functions.  Those
+   targets should define REENTRANT_SYSCALLS_PROVIDED in TARGET_CFLAGS.  */
+
+#ifdef _REENT_ONLY
+#ifndef REENTRANT_SYSCALLS_PROVIDED
+#define REENTRANT_SYSCALLS_PROVIDED
+#endif
+#endif
+
+#ifdef REENTRANT_SYSCALLS_PROVIDED
+
+int _dummy_gettimeofday_syscalls = 1;
+
+#else
+
+/* We use the errno variable used by the system dependent layer.  */
+#undef errno
+extern int errno;
+
+/*
+FUNCTION
+	<<_gettimeofday_r>>---Reentrant version of gettimeofday
+
+INDEX
+	_gettimeofday_r
+
+ANSI_SYNOPSIS
+	#include <reent.h>
+	#include <time.h>
+	int _gettimeofday_r(struct _reent *<[ptr]>,
+		struct timeval *<[ptimeval]>,
+		void *<[ptimezone]>);
+
+TRAD_SYNOPSIS
+	#include <reent.h>
+	#include <time.h>
+	int _gettimeofday_r(<[ptr]>, <[ptimeval]>, <[ptimezone]>)
+	struct _reent *<[ptr]>;
+	struct timeval *<[ptimeval]>;
+	void *<[ptimezone]>;
+
+DESCRIPTION
+	This is a reentrant version of <<gettimeofday>>.  It
+	takes a pointer to the global data block, which holds
+	<<errno>>.
+
+	This function is only available for a few targets.
+	Check libc.a to see if its available on yours.
+*/
+
+int
+_DEFUN (_gettimeofday_r, (ptr, ptimeval, ptimezone),
+     struct _reent *ptr _AND
+     struct timeval *ptimeval _AND
+     void *ptimezone)
+{
+  int ret;
+
+  errno = 0;
+  if ((ret = _gettimeofday (ptimeval, ptimezone)) == -1 && errno != 0)
+    ptr->_errno = errno;
+  return ret;
+}
+
+#endif /* ! defined (REENTRANT_SYSCALLS_PROVIDED) */
+@
+
+
+1.1
+log
+@
+2007-02-21  Patrick Mansfield <patmans@@us.ibm.com>
+
+        * libc/reent/timer.c: Removed (split into two new files).
+        * libc/reent/timesr.c: New file for _times_r.
+        * libc/reent/gettimeofdayr.c: New file out _gettimeofday_r.
+        * reent/Makefile.in: Remove timer.c, add timesr.c and
+        gettimeofdayr.c.
+        * libc/reent/Makefile.am: Regenerate.
+@
+text
+@d43 1
+a43 1
+		struct timezone *<[ptimezone]>);
+d51 1
+a51 1
+	struct timezone *<[ptimezone]>;
+d66 1
+a66 1
+     struct timezone *ptimezone)
+@
+

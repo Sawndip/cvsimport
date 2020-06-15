@@ -1,0 +1,1203 @@
+head	1.13;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.13
+	gdb_7_6-2013-04-26-release:1.13
+	gdb_7_6-branch:1.13.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.13
+	gdb_7_5_1-2012-11-29-release:1.11
+	gdb_7_5-2012-08-17-release:1.11
+	gdb_7_5-branch:1.11.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.11
+	gdb_7_4_1-2012-04-26-release:1.5.2.1
+	gdb_7_4-2012-01-24-release:1.5.2.1
+	gdb_7_4-branch:1.5.0.2
+	gdb_7_4-2011-12-13-branchpoint:1.5
+	gdb_7_3_1-2011-09-04-release:1.4
+	gdb_7_3-2011-07-26-release:1.4
+	gdb_7_3-branch:1.4.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.4
+	gdb_7_2-2010-09-02-release:1.1.2.1
+	gdb_7_2-branch:1.1.0.2
+	gdb_7_2-2010-07-07-branchpoint:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.13
+date	2013.01.01.06.32.41;	author brobecke;	state Exp;
+branches;
+next	1.12;
+
+1.12
+date	2012.08.17.17.36.59;	author kseitz;	state Exp;
+branches;
+next	1.11;
+
+1.11
+date	2012.03.15.14.06.20;	author tromey;	state Exp;
+branches;
+next	1.10;
+
+1.10
+date	2012.03.02.19.29.00;	author brobecke;	state Exp;
+branches;
+next	1.9;
+
+1.9
+date	2012.03.01.21.13.58;	author palves;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2012.02.08.19.54.36;	author brobecke;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2012.01.26.04.20.36;	author brobecke;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2012.01.04.08.17.00;	author brobecke;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2011.12.06.18.54.38;	author tromey;	state Exp;
+branches
+	1.5.2.1;
+next	1.4;
+
+1.4
+date	2011.01.07.19.36.15;	author msnyder;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2011.01.01.15.32.59;	author brobecke;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2010.08.11.15.41.37;	author tromey;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2010.04.29.14.45.38;	author brobecke;	state Exp;
+branches
+	1.1.2.1;
+next	;
+
+1.5.2.1
+date	2012.01.06.04.43.06;	author brobecke;	state Exp;
+branches;
+next	;
+
+1.1.2.1
+date	2010.08.11.15.43.01;	author tromey;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.13
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@/* D language support routines for GDB, the GNU debugger.
+
+   Copyright (C) 2005-2013 Free Software Foundation, Inc.
+
+   This file is part of GDB.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+#include "defs.h"
+#include "symtab.h"
+#include "language.h"
+#include "d-lang.h"
+#include "c-lang.h"
+#include "gdb_string.h"
+#include "parser-defs.h"
+#include "gdb_obstack.h"
+
+#include <ctype.h>
+
+/* Extract identifiers from MANGLED_STR and append it to TEMPBUF.
+   Return 1 on success or 0 on failure.  */
+static int
+extract_identifiers (const char *mangled_str, struct obstack *tempbuf)
+{
+  long i = 0;
+
+  while (isdigit (*mangled_str))
+    {
+      char *end_ptr;
+
+      i = strtol (mangled_str, &end_ptr, 10);
+      mangled_str = end_ptr;
+      if (i <= 0 || strlen (mangled_str) < i)
+        return 0;
+      obstack_grow (tempbuf, mangled_str, i);
+      mangled_str += i;
+      obstack_grow_str (tempbuf, ".");
+    }
+  if (*mangled_str == '\0' || i == 0)
+    return 0;
+  obstack_blank (tempbuf, -1);
+  return 1;
+}
+
+/* Extract and demangle type from MANGLED_STR and append it to TEMPBUF.
+   Return 1 on success or 0 on failure.  */
+static int
+extract_type_info (const char *mangled_str, struct obstack *tempbuf)
+{
+  if (*mangled_str == '\0')
+    return 0;
+  switch (*mangled_str++)
+    {
+      case 'A': /* dynamic array */
+      case 'G': /* static array */
+      case 'H': /* associative array */
+	if (!extract_type_info (mangled_str, tempbuf))
+	  return 0;
+	obstack_grow_str (tempbuf, "[]");
+	return 1;
+      case 'P': /* pointer */
+	if (!extract_type_info (mangled_str, tempbuf))
+	  return 0;
+	obstack_grow_str (tempbuf, "*");
+	return 1;
+      case 'R': /* reference */
+	if (!extract_type_info (mangled_str, tempbuf))
+	  return 0;
+	obstack_grow_str (tempbuf, "&");
+	return 1;
+      case 'Z': /* return value */
+	return extract_type_info (mangled_str, tempbuf);
+      case 'J': /* out */
+	obstack_grow_str (tempbuf, "out ");
+	return extract_type_info (mangled_str, tempbuf);
+      case 'K': /* inout */
+	obstack_grow_str (tempbuf, "inout ");
+	return extract_type_info (mangled_str, tempbuf);
+      case 'E': /* enum */
+      case 'T': /* typedef */
+      case 'D': /* delegate */
+      case 'C': /* class */
+      case 'S': /* struct */
+	return extract_identifiers (mangled_str, tempbuf);
+
+      /* basic types: */
+      case 'n': obstack_grow_str (tempbuf, "none"); return 1;
+      case 'v': obstack_grow_str (tempbuf, "void"); return 1;
+      case 'g': obstack_grow_str (tempbuf, "byte"); return 1;
+      case 'h': obstack_grow_str (tempbuf, "ubyte"); return 1;
+      case 's': obstack_grow_str (tempbuf, "short"); return 1;
+      case 't': obstack_grow_str (tempbuf, "ushort"); return 1;
+      case 'i': obstack_grow_str (tempbuf, "int"); return 1;
+      case 'k': obstack_grow_str (tempbuf, "uint"); return 1;
+      case 'l': obstack_grow_str (tempbuf, "long"); return 1;
+      case 'm': obstack_grow_str (tempbuf, "ulong"); return 1;
+      case 'f': obstack_grow_str (tempbuf, "float"); return 1;
+      case 'd': obstack_grow_str (tempbuf, "double"); return 1;
+      case 'e': obstack_grow_str (tempbuf, "real"); return 1;
+
+      /* imaginary and complex: */
+      case 'o': obstack_grow_str (tempbuf, "ifloat"); return 1;
+      case 'p': obstack_grow_str (tempbuf, "idouble"); return 1;
+      case 'j': obstack_grow_str (tempbuf, "ireal"); return 1;
+      case 'q': obstack_grow_str (tempbuf, "cfloat"); return 1;
+      case 'r': obstack_grow_str (tempbuf, "cdouble"); return 1;
+      case 'c': obstack_grow_str (tempbuf, "creal"); return 1;
+
+      /* other types: */
+      case 'b': obstack_grow_str (tempbuf, "bit"); return 1;
+      case 'a': obstack_grow_str (tempbuf, "char"); return 1;
+      case 'u': obstack_grow_str (tempbuf, "wchar"); return 1;
+      case 'w': obstack_grow_str (tempbuf, "dchar"); return 1;
+
+      default:
+	obstack_grow_str (tempbuf, "unknown");
+	return 1;
+    }
+}
+
+/* Implements the la_demangle language_defn routine for language D.  */
+char *
+d_demangle (const char *symbol, int options)
+{
+  struct obstack tempbuf;
+  char *out_str;
+  unsigned char is_func = 0;
+
+  if (symbol == NULL)
+    return NULL;
+  else if (strcmp (symbol, "_Dmain") == 0)
+    return xstrdup ("D main");
+
+  obstack_init (&tempbuf);
+  
+  if (symbol[0] == '_' && symbol[1] == 'D')
+    {
+      symbol += 2;
+      is_func = 1;
+    }
+  else if (strncmp (symbol, "__Class_", 8) == 0)
+    symbol += 8;
+  else if (strncmp (symbol, "__init_", 7) == 0)
+    symbol += 7;
+  else if (strncmp (symbol, "__vtbl_", 7) == 0)
+    symbol += 7;
+  else if (strncmp (symbol, "__modctor_", 10) == 0)
+    symbol += 10;
+  else if (strncmp (symbol, "__moddtor_", 10) == 0)
+    symbol += 10;
+  else if (strncmp (symbol, "__ModuleInfo_", 13) == 0)
+    symbol += 13;
+  else
+    {
+      obstack_free (&tempbuf, NULL);
+      return NULL;
+    }
+  
+  if (!extract_identifiers (symbol, &tempbuf))
+    {
+      obstack_free (&tempbuf, NULL);
+      return NULL;
+    }
+
+  obstack_grow_str (&tempbuf, "(");
+  if (is_func == 1 && *symbol == 'F')
+    {
+      symbol++;
+      while (*symbol != '\0' && *symbol != 'Z')
+	{
+	  if (is_func == 1)
+	    is_func++;
+	  else
+	    obstack_grow_str (&tempbuf, ", ");
+	  if (!extract_type_info (symbol, &tempbuf))
+	    {
+	      obstack_free (&tempbuf, NULL);
+	      return NULL;
+	   }
+	}
+     }
+  obstack_grow_str0 (&tempbuf, ")");
+
+  /* Doesn't display the return type, but wouldn't be too hard to do.  */
+
+  out_str = xstrdup (obstack_finish (&tempbuf));
+  obstack_free (&tempbuf, NULL);
+  return out_str;
+}
+
+/* Table mapping opcodes into strings for printing operators
+   and precedences of the operators.  */
+static const struct op_print d_op_print_tab[] =
+{
+  {",", BINOP_COMMA, PREC_COMMA, 0},
+  {"=", BINOP_ASSIGN, PREC_ASSIGN, 1},
+  {"||", BINOP_LOGICAL_OR, PREC_LOGICAL_OR, 0},
+  {"&&", BINOP_LOGICAL_AND, PREC_LOGICAL_AND, 0},
+  {"|", BINOP_BITWISE_IOR, PREC_BITWISE_IOR, 0},
+  {"^", BINOP_BITWISE_XOR, PREC_BITWISE_XOR, 0},
+  {"&", BINOP_BITWISE_AND, PREC_BITWISE_AND, 0},
+  {"==", BINOP_EQUAL, PREC_EQUAL, 0},
+  {"!=", BINOP_NOTEQUAL, PREC_EQUAL, 0},
+  {"<=", BINOP_LEQ, PREC_ORDER, 0},
+  {">=", BINOP_GEQ, PREC_ORDER, 0},
+  {">", BINOP_GTR, PREC_ORDER, 0},
+  {"<", BINOP_LESS, PREC_ORDER, 0},
+  {">>", BINOP_RSH, PREC_SHIFT, 0},
+  {"<<", BINOP_LSH, PREC_SHIFT, 0},
+  {"+", BINOP_ADD, PREC_ADD, 0},
+  {"-", BINOP_SUB, PREC_ADD, 0},
+  {"*", BINOP_MUL, PREC_MUL, 0},
+  {"/", BINOP_DIV, PREC_MUL, 0},
+  {"%", BINOP_REM, PREC_MUL, 0},
+  {"@@", BINOP_REPEAT, PREC_REPEAT, 0},
+  {"-", UNOP_NEG, PREC_PREFIX, 0},
+  {"!", UNOP_LOGICAL_NOT, PREC_PREFIX, 0},
+  {"~", UNOP_COMPLEMENT, PREC_PREFIX, 0},
+  {"*", UNOP_IND, PREC_PREFIX, 0},
+  {"&", UNOP_ADDR, PREC_PREFIX, 0},
+  {"sizeof ", UNOP_SIZEOF, PREC_PREFIX, 0},
+  {"++", UNOP_PREINCREMENT, PREC_PREFIX, 0},
+  {"--", UNOP_PREDECREMENT, PREC_PREFIX, 0},
+  {NULL, 0, 0, 0}
+};
+
+static const struct language_defn d_language_defn =
+{
+  "d",
+  language_d,
+  range_check_off,
+  case_sensitive_on,
+  array_row_major,
+  macro_expansion_c,
+  &exp_descriptor_c,
+  c_parse,
+  c_error,
+  null_post_parser,
+  c_printchar,			/* Print a character constant.  */
+  c_printstr,			/* Function to print string constant.  */
+  c_emit_char,			/* Print a single char.  */
+  c_print_type,			/* Print a type using appropriate syntax.  */
+  c_print_typedef,		/* Print a typedef using appropriate
+				   syntax.  */
+  d_val_print,			/* Print a value using appropriate syntax.  */
+  c_value_print,		/* Print a top-level value.  */
+  default_read_var_value,	/* la_read_var_value */
+  NULL,				/* Language specific skip_trampoline.  */
+  "this",
+  basic_lookup_symbol_nonlocal, 
+  basic_lookup_transparent_type,
+  d_demangle,			/* Language specific symbol demangler.  */
+  NULL,				/* Language specific
+				   class_name_from_physname.  */
+  d_op_print_tab,		/* Expression operators for printing.  */
+  1,				/* C-style arrays.  */
+  0,				/* String lower bound.  */
+  default_word_break_characters,
+  default_make_symbol_completion_list,
+  c_language_arch_info,
+  default_print_array_index,
+  default_pass_by_reference,
+  c_get_string,
+  NULL,				/* la_get_symbol_name_cmp */
+  iterate_over_symbols,
+  LANG_MAGIC
+};
+
+/* Provide a prototype to silence -Wmissing-prototypes.  */
+extern initialize_file_ftype _initialize_d_language;
+
+void
+_initialize_d_language (void)
+{
+  add_language (&d_language_defn);
+}
+@
+
+
+1.12
+log
+@	PR c++/13356
+	* gdbtypes.c (strict_type_checking): New variable.
+	(show_strict_type_checking): New function.
+	(rank_one_type): Return NS_POINTER_INTEGER_CONVERSION_BADNESS
+	if strict type checking is disabled.
+	(_initialize_gdbtypes): Add "check type" subcommand.
+	* gdbtypes.h (NS_INTEGER_POINTER_CONVERSION_BADNESS): New struct.
+
+	PR c++/13356
+	* gdb.base/default.exp: Update all "check type" tests.
+	* gdb.base/help.exp: Likewise.
+	* gdb.base/setshow.exp: Likewise.
+	* gdb.cp/converts.cc (foo1_type_check): New function.
+	(foo2_type_check): New function.
+	(foo3_type_check): New function.
+	(main): Call new functions.
+	* converts.exp: Add tests for integer-to-pointer conversions
+	with/without strict type-checking.
+
+	PR c++/13356
+	* gdb.texinfo (Type and Range Checking): Remove warning.
+	Remove spurious commas.
+	Update text and examples for re-implementation of set/show
+	check type.
+	(C and C++ Type and Range Checks): Likewise.
+
+	* language.h (type_mode): Remove.
+	(type_check): Remove.
+	(struct language_defn): Remove la_type_check.
+	(STRICT_TYPE): Remove unused macro.
+	(type_error): Remove.
+	* language.c (set_type_range_case): Renamed to ...
+	(set_range_case): ... this.  Update all callers.
+	Remove type_mode/type_check.
+	(type_mode): Remove.
+	(type_check): Remove.
+	(show_type_command): Remove.
+	(set_type_command): Remove.
+	(language_info): Remove type checking output.
+	(type_error): Remove unused function.
+	(range_error): Update comment.
+	(unknown_language_defn): Remove la_type_check.
+	(auto_language_defn): Likewise.
+	(local_language_defn): Likewise.
+	(_initialize_language): Remove "check type" subcommand.
+	* ada-lang.c (ada_language_defn): Remove la_type_check.
+	* c-lang.c (c_language_defn): Likewise.
+	(cplus_language_defn): Likewise.
+	(asm_language_defn): Likewise.
+	(minimal_language_defn): Likewise.
+	* d-lang.c (d_language_defn): Likewise.
+	* f-lang.c (f_language_defn): Likewise.
+	* go-lang.c (go_language_defn): Likewise.
+	* jv-lang.c (java_language_defn): Likewise.
+	* m2-lang.c (m2_language_defn): Likewise.
+	* objc-lang.c (objc_language_defn): Likewise.
+	* opencl-lang.c (opencl_language_defn): Likewise.
+	* p-lang.c (pascal_language_defn): Likewise.
+@
+text
+@d3 1
+a3 1
+   Copyright (C) 2005-2006, 2008-2012 Free Software Foundation, Inc.
+@
+
+
+1.11
+log
+@	* d-lang.c (d_language_defn) <la_iterate_over_symbols>: Set to
+	iterate_over_symbols.
+@
+text
+@a242 1
+  type_check_off,
+@
+
+
+1.10
+log
+@language-specific read_var_value for Ada renamings
+
+The purpose of this patch is to better support renamings in the
+"info locals" command. Consider ...
+
+    procedure Foo is
+       GV : Integer renames Pck.Global_Variable;
+    begin
+       Increment (GV); -- STOP
+    end Foo;
+
+... Pck.Global_Variable is just an integer. After having stopped at
+the "STOP" line, "info locals" yields:
+
+    (gdb) info locals
+    gv = <error reading variable gv (Cannot access memory at address 0xffffffffffffffff)>
+
+In reality, two things are happening:
+
+   (1) Variable "GV" does not exist, which is normal, since there is
+       "GV" the renaming of another variable;
+
+   (2) But to allow the user access to that renaming the same way
+       the code has, the compiler produces an artificial variable
+       whose name encodes the renaming:
+
+        gv___XR_pck__global_variable___XE
+
+       For practical reasons, the artificial variable itself is given
+       irrelevant types and addresses.
+
+But the "info locals" command does not act as if it was a short-cut
+of "foreach VAR in locals, print VAR". Instead it gets the value of
+each VAR directly, which does not work in this case, since the variable
+is artificial and needs to be decoded first.
+
+This patch makes the "read_var_value" routine language-specific.
+The old implementation of "read_var_value" gets renamed to
+"default_read_var_value" and all languages now use it (unchanged
+behavior), except for Ada. In Ada, the new function ada_read_var_value
+checks if we have a renaming, and if so, evaluates its value, or else
+defers to default_read_var_value.
+
+gdb/ChangeLog:
+
+        * language.h (struct language_defn): New "method" la_read_var_value.
+        * findvar.c: #include "language.h".
+        (default_read_var_value): Renames read_var_value.  Rewrite
+        function description.
+        (read_var_value): New function.
+        * value.h (default_read_var_value): Add prototype.
+        * ada-lang.c (ada_read_renaming_var_value, ada_read_var_value):
+        New functions.
+        (ada_language_defn): Add entry for la_read_var_value.
+        * c-lang.c, d-lang.c, f-lang.c, jv-lang.c, language.c,
+        * m2-lang.c, objc-lang.c, opencl-lang.c, p-lang.c: Update
+        language_defn structures to add entry for new la_read_var_value
+        field.
+@
+text
+@d277 1
+a277 1
+  NULL,
+@
+
+
+1.9
+log
+@2012-03-01  Pedro Alves  <palves@@redhat.com>
+
+	* amd64-linux-tdep.c (amd64_linux_record_signal): Make static.
+	* breakpoint.c (create_exception_master_breakpoint, trace_command)
+	(ftrace_command, strace_command): Make static.
+	* d-lang.c (_initialize_d_language): Declare.
+	* dwarf2expr.c (_initialize_dwarf2expr): Declare.
+	* dwarf2loc.c (_initialize_dwarf2loc):
+	* dwarf2read.c (process_psymtab_comp_unit): Make static.
+	* exec.c (exec_get_section_table): Make static.
+	* i386-linux-tdep.c (i386_linux_record_signal): Make static.
+	* infcmd.c (ensure_valid_thread, ensure_not_tfind_mode): Make static.
+	* inferior.c (remove_inferior_command, add_inferior_command)
+	(clone_inferior_command): Make static.
+	* linux-nat.c (linux_nat_thread_address_space)
+	(linux_nat_core_of_thread): Make static.
+	* linux-tdep.c (_initialize_linux_tdep): Declare.
+	* objc-lang.c (_initialize_objc_lang): Declare.
+	* opencl-lang.c (builtin_opencl_type, opencl_language_arch_info):
+	Make static.
+	(_initialize_opencl_language): Declare.
+	* record.c (_initialize_record): Declare.
+	* remote.c (demand_private_info, remote_get_tib_address)
+	(remote_supports_cond_tracepoints)
+	(remote_supports_fast_tracepoints, remote_get_tracepoint_status):
+	Make static.
+	* skip.c (_initialize_step_skip): Declare.
+	* symtab.c (skip_prologue_using_lineinfo): Make static.
+	* tracepoint.c (delete_trace_state_variable)
+	(trace_variable_command, delete_trace_variable_command)
+	(get_uploaded_tsv, find_matching_tracepoint_location)
+	(find_matching_tsv, create_tsv_from_upload, get_traceframe_info):
+	Make static.
+	* value.c (pack_unsigned_long): Make static.
+	* varobj.c (varobj_ensure_python_env): Make static.
+	* windows-tdep.c (_initialize_windows_tdep): Declare.
+	* xml-syscall.c (make_cleanup_free_syscalls_info): Make static.
+@
+text
+@d259 1
+@
+
+
+1.8
+log
+@Rename la_get_symbol_name_match_p into la_get_symbol_name_cmp
+
+The la_get_symbol_name_match_p language hook was poorly named, as
+it suggested that the function should return nonzero if the names
+match, whereas it is the exact opposite.  This patch therefore
+renames the hook and associated typedef, as well some of the code
+that uses that hook.
+
+gdb/ChangeLog:
+
+        * language.h (symbol_name_cmp_ftype): Renames
+        symbol_name_match_p_ftype.
+        (struct language_defn)[la_get_symbol_name_cmp]: Renames
+        la_get_symbol_name_match_p.
+        * ada-lang.c (ada_get_symbol_name_cmp): Renames
+        ada_get_symbol_name_match_p.  Update comment.
+        (ada_language_defn)[la_get_symbol_name_cmp]: Update value.
+        * linespec.c (struct symbol_matcher_data)[symbol_name_cmp]:
+        Renames symbol_name_match_p.  Update field type.
+        (iterate_name_matcher, iterate_over_all_matching_symtabs): Adjust.
+        * c-lang.c, d-lang.c, f-lang.c, jv-lang.c, m2-lang.c, objc-lang.c,
+        opencl-lang.c, p-lang.c: Replace "la_get_symbol_name_match_p" by
+        "la_get_symbol_name_cmp" in comments.
+        * language.c: Likewise.
+@
+text
+@d280 3
+@
+
+
+1.7
+log
+@Ada: allow unqualified function names in linespecs
+
+This is the meat, where we replace the old la_symbol_name_compare
+language method with the new ada_get_symbol_name_match_p.
+It fixes the problem when trying to insert a breakpoint on "+".
+
+gdb/ChangeLog:
+
+        * language.h (symbol_name_match_p_ftype): New typedef.
+        (struct language_defn): Replace field la_symbol_name_compare
+        by la_get_symbol_name_match_p.
+        * ada-lang.c (ada_get_symbol_name_match_p): New function.
+        (ada_language_defn): Use it.
+        * linespec.c (struct symbol_matcher_data): New type.
+        (iterate_name_matcher): Rewrite.
+        (iterate_over_all_matching_symtabs): Pass a pointer to
+        a symbol_matcher_data struct to expand_symtabs_matching
+        instead of just the lookup name.
+        * c-lang.c, d-lang.c, jv-lang.c, m2-lang.c, objc-lang.c,
+        opencl-lang.c, p-lang.c, language.c: Delete field
+        la_symbol_name_compare, and replace by NULL for new field
+        la_get_symbol_name_match_p.
+        * symfile.h (struct quick_symbol_functions): Update comment.
+@
+text
+@d275 1
+a275 1
+  NULL,				/* la_get_symbol_name_match_p */
+@
+
+
+1.6
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d275 1
+a275 1
+  strcmp_iw_ordered,
+@
+
+
+1.5
+log
+@the "ambiguous linespec" series
+gdb
+2011-12-06  Joel Brobecker  <brobecker@@acacore.com>
+
+        * language.h (struct language_defn): Add new component
+        la_symbol_name_compare.
+        * symfile.h (struct quick_symbol_functions): Update the profile
+        of parameter "name_matcher" for the expand_symtabs_matching
+        method.  Update the documentation accordingly.
+        * ada-lang.h (ada_name_for_lookup): Add declaration.
+        * ada-lang.c (ada_name_for_lookup): New function, extracted out
+        from ada_iterate_over_symbols.
+        (ada_iterate_over_symbols): Do not encode symbol name anymore.
+        (ada_expand_partial_symbol_name): Adjust profile.
+        (ada_language_defn): Add value for la_symbol_name_compare field.
+        * linespec.c: #include "ada-lang.h".
+        (iterate_name_matcher): Add language parameter. Replace call
+        to strcmp_iw by call to language->la_symbol_name_compare.
+        (decode_variable): Encode COPY if current language is Ada.
+        * dwarf2read.c (dw2_expand_symtabs_matching): Adjust profile
+        of name_matcher parameter.  Adjust call to name_matcher.
+        * psymtab.c (expand_symtabs_matching_via_partial): Likewise.
+        (expand_partial_symbol_names): Update profile of parameter "fun".
+        * psymtab.h (expand_partial_symbol_names): Update profile of
+        parameter "fun".
+        * symtab.c (demangle_for_lookup): Update function documentation.
+        (search_symbols_name_matches): Add language parameter.
+        (expand_partial_symbol_name): Likewise.
+        * c-lang.c (c_language_defn, cplus_language_defn)
+        (asm_language_defn, minimal_language_defn): Add value for
+        la_symbol_name_compare field.
+        * d-lang.c (d_language_defn): Likewise.
+        * f-lang.c (f_language_defn): Ditto.
+        * jv-lang.c (java_language_defn): Ditto.
+        * m2-lang.c (m2_language_defn): Ditto.
+        * objc-lang.c (objc_language_defn): Ditto.
+        * opencl-lang.c (opencl_language_defn): Ditto.
+        * p-lang.c (pascal_language_defn): Ditto.
+        * language.c (unknown_language_defn, auto_language_defn)
+        (local_language_defn): Ditto.
+
+2011-12-06  Tom Tromey  <tromey@@redhat.com>
+
+	* linespec.c (iterate_over_all_matching_symtabs): Use
+	LA_ITERATE_OVER_SYMBOLS.
+	(lookup_prefix_sym, add_matching_symbols_to_info): Likewise.
+	(find_function_symbols, decode_variable): Remove Ada special
+	case.
+	* language.h (struct language_defn) <la_iterate_over_symbols>: New
+	field.
+	(LA_ITERATE_OVER_SYMBOLS): New macro.
+	* language.c (unknown_language_defn, auto_language_defn)
+	(local_language_defn): Update.
+	* c-lang.c (c_language_defn, cplus_language_defn)
+	(asm_language_defn, minimal_language_defn): Update.
+	* d-lang.c (d_language_defn): Update.
+	* f-lang.c (f_language_defn): Update.
+	* jv-lang.c (java_language_defn): Update.
+	* m2-lang.c (m2_language_defn): Update.
+	* objc-lang.c (objc_language_defn): Update.
+	* opencl-lang.c (opencl_language_defn): Update.
+	* p-lang.c (pascal_language_defn): Update.
+	* ada-lang.c (ada_iterate_over_symbols): New function.
+	(ada_language_defn): Update.
+
+2011-12-06  Tom Tromey  <tromey@@redhat.com>
+	    Joel Brobecker  <brobecker@@acacore.com>
+
+	PR breakpoints/13105, PR objc/8341, PR objc/8343, PR objc/8366,
+	PR objc/8535, PR breakpoints/11657, PR breakpoints/11970,
+	PR breakpoints/12023, PR breakpoints/12334, PR breakpoints/12856,
+	PR shlibs/8929, PR shlibs/7393:
+	* python/py-type.c (compare_maybe_null_strings): Rename from
+	compare_strings.
+	(check_types_equal): Update.
+	* utils.c (compare_strings): New function.
+	* tui/tui-winsource.c (tui_update_breakpoint_info): Update for
+	location changes.
+	* tracepoint.c (scope_info): Update.
+	(trace_find_line_command): Use DECODE_LINE_FUNFIRSTLINE.
+	* symtab.h (iterate_over_minimal_symbols)
+	(iterate_over_some_symtabs, iterate_over_symtabs)
+	(find_pcs_for_symtab_line, iterate_over_symbols)
+	(demangle_for_lookup): Declare.
+	(expand_line_sal): Remove.
+	* symtab.c (iterate_over_some_symtabs, iterate_over_symtabs)
+	(lookup_symtab_callback): New functions.
+	(lookup_symtab): Rewrite.
+	(demangle_for_lookup): New function, extract from
+	lookup_symbol_in_language.
+	(lookup_symbol_in_language): Use it.
+	(iterate_over_symbols): New function.
+	(find_line_symtab): Update.
+	(find_pcs_for_symtab_line): New functions.
+	(find_line_common): Add 'start' argument.
+	(decode_line_spec): Update.  Change argument to 'flags', change
+	interpretation.
+	(append_expanded_sal): Remove.
+	(append_exact_match_to_sals): Remove.
+	(expand_line_sal): Remove.
+	* symfile.h (struct quick_symbol_functions) <lookup_symtab>:
+	Remove.
+	<map_symtabs_matching_filename>: New field.
+	* stack.c (func_command): Only look in the current program space.
+	Use DECODE_LINE_FUNFIRSTLINE.
+	* source.c (line_info): Set pspace on sal.  Check program space in
+	the loop.  Use DECODE_LINE_LIST_MODE.
+	(select_source_symtab): Use DECODE_LINE_FUNFIRSTLINE.
+	* solib-target.c: Remove DEF_VEC_I(CORE_ADDR).
+	* python/python.c (gdbpy_decode_line): Update.
+	* psymtab.c (partial_map_expand_apply): New function.
+	(partial_map_symtabs_matching_filename): Rename from
+	lookup_partial_symbol.  Update arguments.
+	(lookup_symtab_via_partial_symtab): Remove.
+	(psym_functions): Update.
+	* objc-lang.h (parse_selector, parse_method): Don't declare.
+	(find_imps): Update.
+	* objc-lang.c (parse_selector, parse_method): Now static.
+	(find_methods): Change arguments.  Fill in a vector of symbol
+	names.
+	(uniquify_strings): New function.
+	(find_imps): Change arguments.
+	* minsyms.c (iterate_over_minimal_symbols): New function.
+	* linespec.h (enum decode_line_flags): New.
+	(struct linespec_sals): New.
+	(struct linespec_result) <canonical>: Remove.
+	<pre_expanded, addr_string, sals>: New fields.
+	(destroy_linespec_result, make_cleanup_destroy_linespec_result)
+	(decode_line_full): Declare.
+	(decode_line_1): Update.
+	* linespec.c (struct address_entry, struct linespec_state, struct
+	collect_info): New types.
+	(add_sal_to_sals_basic, add_sal_to_sals, hash_address_entry)
+	(eq_address_entry, maybe_add_address): New functions.
+	(total_number_of_methods): Remove.
+	(iterate_name_matcher, iterate_over_all_matching_symtabs): New
+	functions.
+	(find_methods): Change arguments.  Don't canonicalize input.
+	Simplify logic.
+	(add_matching_methods, add_constructors)
+	(build_canonical_line_spec): Remove.
+	(filter_results, convert_results_to_lsals): New functions.
+	(decode_line_2): Change arguments.  Rewrite for new data
+	structures.
+	(decode_line_internal): Rename from decode_line_1.  Change
+	arguments.  Add cleanups.  Update for new data structures.
+	(linespec_state_constructor, linespec_state_destructor)
+	(decode_line_full, decode_line_1): New functions.
+	(decode_indirect): Change arguments.  Update.
+	(locate_first_half): Use skip_spaces.
+	(decode_objc): Change arguments.  Update for new data structures.
+	Simplify logic.
+	(decode_compound): Change arguments.  Add cleanups.  Remove
+	fallback code, replace with error.
+	(struct decode_compound_collector): New type.
+	(collect_one_symbol): New function.
+	(lookup_prefix_sym): Change arguments.  Update.
+	(compare_symbol_name, add_all_symbol_names_from_pspace)
+	(find_superclass_methods ): New functions.
+	(find_method): Rewrite.
+	(struct symtab_collector): New type.
+	(add_symtabs_to_list, collect_symtabs_from_filename): New
+	functions.
+	(symtabs_from_filename): Change API.  Rename from
+	symtab_from_filename.
+	(collect_function_symbols): New function.
+	(find_function_symbols): Change API.  Rename from
+	find_function_symbol.  Rewrite.
+	(decode_all_digits): Change arguments.  Rewrite.
+	(decode_dollar): Change arguments.  Use decode_variable.
+	(decode_label): Change arguments.  Rewrite.
+	(collect_symbols): New function.
+	(minsym_found): Change arguments.  Rewrite.
+	(check_minsym, search_minsyms_for_name)
+	(add_matching_symbols_to_info): New function.
+	(decode_variable): Change arguments.  Iterate over all symbols.
+	(symbol_found): Remove.
+	(symbol_to_sal): New function.
+	(init_linespec_result, destroy_linespec_result)
+	(cleanup_linespec_result, make_cleanup_destroy_linespec_result):
+	New functions.
+	(decode_digits_list_mode, decode_digits_ordinary): New functions.
+	* dwarf2read.c (dw2_map_expand_apply): New function.
+	(dw2_map_symtabs_matching_filename): Rename from
+	dw2_lookup_symtab.  Change arguments.
+	(dwarf2_gdb_index_functions): Update.
+	* dwarf2loc.c: Remove DEF_VEC_I(CORE_ADDR).
+	* defs.h (compare_strings): Declare.
+	* cli/cli-cmds.c (compare_strings): Move to utils.c.
+	(edit_command, list_command): Use DECODE_LINE_LIST_MODE.  Call
+	filter_sals.
+	(compare_symtabs, filter_sals): New functions.
+	* breakpoint.h (struct bp_location) <line_number, source_file>:
+	New fields.
+	(struct breakpoint) <line_number, source_file>: Remove.
+	<filter>: New field.
+	* breakpoint.c (print_breakpoint_location, init_raw_breakpoint)
+	(momentary_breakpoint_from_master, add_location_to_breakpoint):
+	Update for changes to locations.
+	(init_breakpoint_sal): Add 'filter' argument.  Set 'filter' on
+	breakpoint.
+	(create_breakpoint_sal): Add 'filter' argument.
+	(remove_sal, expand_line_sal_maybe): Remove.
+	(create_breakpoints_sal): Remove 'sals' argument.  Handle
+	pre-expanded sals and the filter.
+	(parse_breakpoint_sals): Use decode_line_full.
+	(check_fast_tracepoint_sals): Use get_sal_arch.
+	(create_breakpoint): Create a linespec_sals.  Update.
+	(break_range_command): Use decode_line_full.  Update.
+	(until_break_command): Update.
+	(clear_command): Update match conditions for linespec.c changes.
+	Use DECODE_LINE_LIST_MODE.
+	(say_where): Update for changes to locations.
+	(bp_location_dtor): Free 'source_file'.
+	(base_breakpoint_dtor): Free 'filter'.  Don't free 'source_file'.
+	(update_static_tracepoint): Update for changes to locations.
+	(update_breakpoint_locations): Disable ranged breakpoint if too
+	many locations match.  Update.
+	(addr_string_to_sals): Use decode_line_full.  Resolve all sal
+	PCs.
+	(breakpoint_re_set_default): Don't call expand_line_sal_maybe.
+	(decode_line_spec_1): Update.  Change argument name to 'flags',
+	change interpretation.
+	* block.h (block_containing_function): Declare.
+	* block.c (block_containing_function): New function.
+	* skip.c (skip_function_command): Update.
+	(skip_re_set): Update.
+	* infcmd.c (jump_command): Use DECODE_LINE_FUNFIRSTLINE.
+	* mi/mi-main.c (mi_cmd_trace_find): Use DECODE_LINE_FUNFIRSTLINE.
+	* NEWS: Add entry.
+
+2011-12-06  Tom Tromey  <tromey@@redhat.com>
+
+	* elfread.c (elf_gnu_ifunc_resolver_return_stop): Allow
+	breakpoint's pspace to be NULL.
+	* breakpoint.h (struct breakpoint) <pspace>: Update comment.
+	* breakpoint.c (init_raw_breakpoint): Conditionally set
+	breakpoint's pspace.
+	(init_breakpoint_sal): Don't set breakpoint's pspace.
+	(prepare_re_set_context): Conditionally switch program space.
+	(addr_string_to_sals): Check executing_startup on location's
+	program space.
+
+2011-12-06  Tom Tromey  <tromey@@redhat.com>
+
+	* breakpoint.h (enum enable_state) <bp_startup_disabled>: Remove.
+	* breakpoint.c (should_be_inserted): Explicitly check if program
+	space is executing startup.
+	(describe_other_breakpoints): Update.
+	(disable_breakpoints_before_startup): Change executing_startup
+	earlier.  Remove loop.
+	(enable_breakpoints_after_startup): Likewise.
+	(init_breakpoint_sal): Don't use bp_startup_disabled.
+	(create_breakpoint): Don't use bp_startup_disabled.
+	(update_global_location_list): Use should_be_inserted.
+	(bkpt_re_set): Update.
+gdb/testsuite
+2011-12-06  Joel Brobecker  <brobecker@@acacore.com>
+
+        * gdb.ada/fullname_bp.exp: Add tests for other valid linespecs
+        involving a fully qualified function name.
+
+2011-12-06  Tom Tromey  <tromey@@redhat.com>
+
+	* gdb.ada/homonym.exp: Add three breakpoint tests.
+
+2011-12-06  Tom Tromey  <tromey@@redhat.com>
+
+	* gdb.base/solib-weak.exp (do_test): Remove kfail.
+	* gdb.trace/tracecmd.exp: Disable pending breakpoints earlier.
+	* gdb.objc/objcdecode.exp: Update for output changes.
+	* gdb.linespec/linespec.exp: New file.
+	* gdb.linespec/lspec.cc: New file.
+	* gdb.linespec/lspec.h: New file.
+	* gdb.linespec/body.h: New file.
+	* gdb.linespec/base/two/thefile.cc: New file.
+	* gdb.linespec/base/one/thefile.cc: New file.
+	* gdb.linespec/Makefile.in: New file.
+	* gdb.cp/templates.exp (test_template_breakpoints): Update for
+	output changes.
+	* gdb.cp/re-set-overloaded.exp: Remove kfail.
+	* gdb.cp/ovldbreak.exp: Update for output changes.  "all" test now
+	makes one breakpoint.
+	* gdb.cp/method2.exp (test_break): Update for output changes.
+	* gdb.cp/mb-templates.exp: Update for output changes.
+	* gdb.cp/mb-inline.exp: Update for output changes.
+	* gdb.cp/mb-ctor.exp: Update for output changes.
+	* gdb.cp/ovsrch.exp: Use fully-qualified names.
+	* gdb.base/solib-symbol.exp: Run to main later.  Breakpoint now
+	has multiple matches.
+	* gdb.base/sepdebug.exp: Disable pending breakpoints.  Update for
+	error message change.
+	* gdb.base/list.exp (test_list_filename_and_number): Update for
+	error message change.
+	* gdb.base/break.exp: Disable pending breakpoints.  Update for
+	output changes.
+	* configure.ac: Add gdb.linespec.
+	* configure: Rebuild.
+	* Makefile.in (ALL_SUBDIRS): Add gdb.linespec.
+gdb/doc
+2011-12-06  Tom Tromey  <tromey@@redhat.com>
+
+	* gdb.texinfo (Set Breaks): Update for new behavior.
+@
+text
+@d3 1
+a3 2
+   Copyright (C) 2005, 2006, 2008, 2009, 2010, 2011
+   Free Software Foundation, Inc.
+@
+
+
+1.5.2.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d3 2
+a4 1
+   Copyright (C) 2005-2006, 2008-2012 Free Software Foundation, Inc.
+@
+
+
+1.4
+log
+@2011-01-07  Michael Snyder  <msnyder@@vmware.com>
+
+	* ada-lang.c: Comment cleanup, mostly periods and spaces.
+	* ada-lang.h: Ditto.
+	* ada-tasks.c: Ditto.
+	* ada-valprint.c: Ditto.
+	* aix-threads.c: Ditto.
+	* alpha-linux-nat.c: Ditto.
+	* alpha-linux-tdep.c: Ditto.
+	* alpha-mdebug-tdep.c: Ditto.
+	* alpha-nat.c: Ditto.
+	* alpha-osf1-tdep.c: Ditto.
+	* alpha-tdep.c: Ditto.
+	* alphabsd-nat.c: Ditto.
+	* alphabsd-tdep.c: Ditto.
+	* amd64-darwin-tdep.c: Ditto.
+	* amd64-linux-nat.c: Ditto.
+	* amd64-linux-tdep.c: Ditto.
+	* amd64-sol2-tdep.c: Ditto.
+	* amd64-tdep.c: Ditto.
+	* amd64-fbsd-tdep.c: Ditto.
+	* amd64-nbsd-tdep.c: Ditto.
+	* amd64-obsd-tdep.c: Ditto.
+	* amd64-linux-nat.c: Ditto.
+	* amd64-linux-tdep.c: Ditto.
+	* arm-tdep.c: Ditto.
+	* arm-tdep.h: Ditto.
+	* armnbsd-nat.c: Ditto.
+	* avr-tdep.c: Ditto.
+	* bfin-tdep.c: Ditto.
+	* bsd-kvm.c: Ditto.
+	* c-typeprintc: Ditto.
+	* c-valprint.c: Ditto.
+	* coff-pe-read.h: Ditto.
+	* coffreead.c: Ditto.
+	* cris-tdep.c: Ditto.
+	* d-lang.c: Ditto.
+	* darwin-nat-info.c: Ditto.
+	* darwin-nat.c: Ditto.
+	* dbug-rom.c: Ditto.
+	* dbxread.c: Ditto.
+	* dcache.c: Ditto.
+	* dcache.h: Ditto.
+	* dec-thread.c: Ditto.
+	* defs.h: Ditto.
+	* demangle.c: Ditto.
+	* dicos-tdep.c: Ditto.
+	* dictionary.c: Ditto.
+	* dictionary.h: Ditto.
+	* dink32-rom.c: Ditto.
+	* disasm.c: Ditto.
+	* doublest.c: Ditto.
+	* dsrec.c: Ditto.
+	* dummy-frame.c: Ditto.
+	* dwarf2-frame.c: Ditto.
+	* dwarf2expr.c: Ditto.
+	* dwarf2loc.c: Ditto.
+	* dwarf2read.c: Ditto.
+	* elfread.c: Ditto.
+	* environ.c: Ditto.
+	* eval.c: Ditto.
+	* event-top.h: Ditto.
+	* exceptions.c: Ditto.
+	* exceptions.h: Ditto.
+	* exec.c: Ditto.
+	* expprint.c: Ditto.
+	* expression.h: Ditto.
+	* f-exp.y: Ditto.
+	* f-lang.c: Ditto.
+	* f-lang.h: Ditto.
+	* f-typeprint.c: Ditto.
+	* f-valprint.c: Ditto.
+	* fbsd-nat.c: Ditto.
+	* findvar.c: Ditto.
+	* fork-child.c: Ditto.
+	* frame.c: Ditto.
+	* frame.h: Ditto.
+	* frv-linux-tdep.c: Ditto.
+	* frv-tdep.c: Ditto.
+	* gcore.c: Ditto.
+	* gdb-stabs.h: Ditto.
+	* gdb_assert.h: Ditto.
+	* gdb_string.h: Ditto.
+	* gdb_thread_db.h: Ditto.
+	* gdb_wait.h: Ditto.
+	* gdbarch.sh: Ditto.
+	* gdbcore.h: Ditto.
+	* gdbthread.h: Ditto.
+	* gdbtypes.c: Ditto.
+	* gdbtypes.h: Ditto.
+	* gnu-nat.c: Ditto.
+	* gnu-nat.h: Ditto.
+	* gnu-v2-abi.c: Ditto.
+	* gnu-v3-abi.c: Ditto.
+	* go32-nat.c: Ditto.
+	* gdbarch.c: Regenerate.
+	* gdbarch.h: Regenerate.
+@
+text
+@d276 2
+@
+
+
+1.3
+log
+@run copyright.sh for 2011.
+@
+text
+@d256 2
+a257 1
+  c_print_typedef,		/* Print a typedef using appropriate syntax.  */
+d265 2
+a266 1
+  NULL,				/* Language specific class_name_from_physname.  */
+@
+
+
+1.2
+log
+@2010-08-11  Brad Roberts  <braddr@@puremagic.com>
+
+	* d-lang.c (extract_identifiers): Handle multiple digits.
+@
+text
+@d3 2
+a4 1
+   Copyright (C) 2005, 2006, 2008, 2009, 2010 Free Software Foundation, Inc.
+@
+
+
+1.1
+log
+@D language support.
+
+gdb/ChangeLog:
+
+        D language support.
+        * Makefile.in (SFILES): Add d-lang.c d-valprint.c.
+        (COMMON_OBS): Add d-lang.o d-valprint.o.
+        (HFILES_NO_SRCDIR): Add d-lang.h.
+        * NEWS: Mention D language support.
+        * c-lang.c (c_emit_char, exp_descriptor_c): Make public.
+        * c-lang.h (c_emit_char, exp_descriptor_c): Add declaration.
+        * d-lang.c: New file.
+        * d-lang.h: New file.
+        * d-valprint.c: New file.
+        * defs.h (enum language): Add language_d.
+        * dwarf2read.c (set_cu_language): Add DW_LANG_D.
+        * language.c (binop_result_type, integral_type, character_type)
+        (string_type, boolean_type, structured_type): Add language_d.
+        * symfile.c (init_filename_language_table): Add language_d.
+        * symtab.c: Include d-lang.h.
+        (symbol_init_language_specific, symbol_find_demangled_name)
+        (symbol_natural_name, lookup_symbol_in_language)
+        (symbol_demangled_name, symbol_matches_domain): Add language_d.
+
+gdb/doc/ChangeLog:
+
+        * gdb.texinfo: (Summary) Add mention about D language support.
+        (Filenames): Add D suffixes.
+        (D): New node.
+
+gdb/testsuite/ChangeLog:
+
+        * gdb.base/default.exp: Fix "set language" test.
+@
+text
+@d40 5
+a44 3
+      i = strtol (mangled_str, NULL, 10);
+      mangled_str++;
+      if (i <= 0  && strlen (mangled_str) < i)
+@
+
+
+1.1.2.1
+log
+@2010-08-11  Brad Roberts  <braddr@@puremagic.com>
+
+	* d-lang.c (extract_identifiers): Handle multiple digits.
+@
+text
+@d40 3
+a42 5
+      char *end_ptr;
+
+      i = strtol (mangled_str, &end_ptr, 10);
+      mangled_str = end_ptr;
+      if (i <= 0 || strlen (mangled_str) < i)
+@
+
+

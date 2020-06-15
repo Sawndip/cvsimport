@@ -1,0 +1,1139 @@
+head	1.7;
+access;
+symbols
+	msnyder-checkpoint-072509-branch:1.6.0.2
+	msnyder-checkpoint-072509-branchpoint:1.6;
+locks; strict;
+comment	@ * @;
+
+
+1.7
+date	2009.09.09.17.45.41;	author brobecke;	state dead;
+branches;
+next	1.6;
+
+1.6
+date	2009.07.10.10.35.17;	author pmuldoon;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2009.07.02.17.04.23;	author uweigand;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2009.07.02.12.57.14;	author uweigand;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2009.05.28.16.30.39;	author ppluzhnikov;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2009.05.28.01.09.20;	author tromey;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2009.05.28.01.05.14;	author tromey;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.7
+log
+@Checking in this patch for Thiago: Rename python-* files into py-*,
+more 8+3 friendly.
+
+
+gdb/
+        * Makefile.in (py-cmd.o): Renamed from python-cmd.o.  Updated
+        references.
+        (py-frame.o): Renamed from python-frame.o.  Updated references.
+        (py-function.o): Renamed from python-function.o.  Updated references.
+        (py-objfile.o): Renamed from python-objfile.o.  Updated references.
+        (py-prettyprint.o): Renamed from python-prettyprint.o.  Updated
++references.
+        (py-type.o): Renamed from python-type.o.  Updated references.
+        (py-utils.o): Renamed from python-utils.o.  Updated references.
+        (py-value.o): Renamed from python-value.o.  Updated references.
+        * py-cmd.o: Renamed from python-cmd.o.
+        * py-frame.o: Renamed from python-frame.o.
+        * py-function.o: Renamed from python-function.o.
+        * py-objfile.o: Renamed from python-objfile.o.
+        * py-prettyprint.o: Renamed from python-prettyprint.o.
+        * py-type.o: Renamed from python-type.o.
+        * py-utils.o: Renamed from python-utils.o.
+        * py-value.o: Renamed from python-value.o.
+
+gdb/testsuite/
+        * gdb.python/Makefile.in (EXECUTABLES): Adjust to new executable
+        names, add missing ones.
+        * gdb.python/py-cmd.exp: Rename from python-cmd.exp.
+        * gdb.python/py-frame.c: Rename from python-frame.c.
+        * gdb.python/py-frame.exp: Rename from python-frame.exp.  Adjust
+        testfile name.
+        * gdb.python/py-function.exp: Rename from python-function.exp.
+        * gdb.python/py-mi.exp: Rename from python-mi.exp.  Adjust
+        testfile name.
+        * gdb.python/py-prettyprint.c: Rename from python-prettyprint.c.
+        * gdb.python/py-prettyprint.exp: Rename from python-prettyprint.exp.
+        Adjust testfile name.
+        * gdb.python/py-prettyprint.py: Rename from python-prettyprint.py.
+        * gdb.python/py-template.cc: Rename from python-template.cc.
+        * gdb.python/py-template.exp: Rename from python-template.exp.
+        Adjust testfile name.
+        * gdb.python/py-value.c: Rename from python-value.c.
+        * gdb.python/py-value.exp: Rename from python-value.exp.  Adjust
+        testfile name.
+@
+text
+@/* Python pretty-printing
+
+   Copyright (C) 2008, 2009 Free Software Foundation, Inc.
+
+   This file is part of GDB.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+#include "defs.h"
+#include "exceptions.h"
+#include "objfiles.h"
+#include "symtab.h"
+#include "language.h"
+#include "valprint.h"
+
+#include "python.h"
+
+#ifdef HAVE_PYTHON
+#include "python-internal.h"
+
+
+/* Helper function for find_pretty_printer which iterates over a list,
+   calls each function and inspects output.  This will return a
+   printer object if one recognizes VALUE.  If no printer is found, it
+   will return None.  On error, it will set the Python error and
+   return NULL.  */
+static PyObject *
+search_pp_list (PyObject *list, PyObject *value)
+{
+  Py_ssize_t pp_list_size, list_index;
+  PyObject *function, *printer = NULL;
+
+  pp_list_size = PyList_Size (list);
+  for (list_index = 0; list_index < pp_list_size; list_index++)
+    {
+      function = PyList_GetItem (list, list_index);
+      if (! function)
+	return NULL;
+
+      printer = PyObject_CallFunctionObjArgs (function, value, NULL);
+      if (! printer)
+	return NULL;
+      else if (printer != Py_None)
+	return printer;
+
+      Py_DECREF (printer);
+    }
+
+  Py_RETURN_NONE;
+}
+
+/* Find the pretty-printing constructor function for VALUE.  If no
+   pretty-printer exists, return None.  If one exists, return a new
+   reference.  On error, set the Python error and return NULL.  */
+static PyObject *
+find_pretty_printer (PyObject *value)
+{
+  PyObject *pp_list = NULL;
+  PyObject *function = NULL;
+  struct objfile *obj;
+  volatile struct gdb_exception except;
+
+  /* Look at the pretty-printer dictionary for each objfile.  */
+  ALL_OBJFILES (obj)
+  {
+    PyObject *objf = objfile_to_objfile_object (obj);
+    if (!objf)
+      {
+	/* Ignore the error and continue.  */
+	PyErr_Clear ();
+	continue;
+      }
+
+    pp_list = objfpy_get_printers (objf, NULL);
+    function = search_pp_list (pp_list, value);
+
+    /* If there is an error in any objfile list, abort the search and
+       exit.  */
+    if (! function)
+      {
+	Py_XDECREF (pp_list);
+	return NULL;
+      }
+
+    if (function != Py_None)
+      goto done;
+    
+    Py_DECREF (function);
+    Py_XDECREF (pp_list);
+  }
+
+  pp_list = NULL;
+  /* Fetch the global pretty printer dictionary.  */
+  if (! PyObject_HasAttrString (gdb_module, "pretty_printers"))
+    {
+      function = Py_None;
+      Py_INCREF (function);
+      goto done;
+    }
+  pp_list = PyObject_GetAttrString (gdb_module, "pretty_printers");
+  if (! pp_list)
+    goto done;
+  if (! PyList_Check (pp_list))
+    goto done;
+
+  function = search_pp_list (pp_list, value);
+
+ done:
+  Py_XDECREF (pp_list);
+  
+  return function;
+}
+/* Pretty-print a single value, via the printer object PRINTER.
+   If the function returns a string, a PyObject containing the string
+   is returned.  Otherwise, if the function returns a value,
+   *OUT_VALUE is set to the value, and NULL is returned.  On error,
+   *OUT_VALUE is set to NULL, and NULL is returned.  */
+static PyObject *
+pretty_print_one_value (PyObject *printer, struct value **out_value)
+{
+  volatile struct gdb_exception except;
+  PyObject *result = NULL;
+
+  *out_value = NULL;
+  TRY_CATCH (except, RETURN_MASK_ALL)
+    {
+      result = PyObject_CallMethodObjArgs (printer, gdbpy_to_string_cst, NULL);
+      if (result)
+	{
+	  if (! gdbpy_is_string (result))
+	    {
+	      *out_value = convert_value_from_python (result);
+	      if (PyErr_Occurred ())
+		*out_value = NULL;
+	      Py_DECREF (result);
+	      result = NULL;
+	    }
+	}
+    }
+
+  return result;
+}
+
+/* Return the display hint for the object printer, PRINTER.  Return
+   NULL if there is no display_hint method, or if the method did not
+   return a string.  On error, print stack trace and return NULL.  On
+   success, return an xmalloc()d string.  */
+char *
+gdbpy_get_display_hint (PyObject *printer)
+{
+  PyObject *hint;
+  char *result = NULL;
+
+  if (! PyObject_HasAttr (printer, gdbpy_display_hint_cst))
+    return NULL;
+
+  hint = PyObject_CallMethodObjArgs (printer, gdbpy_display_hint_cst, NULL);
+  if (gdbpy_is_string (hint))
+    result = python_string_to_host_string (hint);
+  if (hint)
+    Py_DECREF (hint);
+  else
+    gdbpy_print_stack ();
+
+  return result;
+}
+
+/* Helper for apply_val_pretty_printer which calls to_string and
+   formats the result.  */
+static void
+print_string_repr (PyObject *printer, const char *hint,
+		   struct ui_file *stream, int recurse,
+		   const struct value_print_options *options,
+		   const struct language_defn *language,
+		   struct gdbarch *gdbarch)
+{
+  struct value *replacement = NULL;
+  PyObject *py_str = NULL;
+
+  py_str = pretty_print_one_value (printer, &replacement);
+  if (py_str)
+    {
+      PyObject *string = python_string_to_target_python_string (py_str);
+      if (string)
+	{
+	  gdb_byte *output = PyString_AsString (string);
+	  int len = PyString_Size (string);
+	  
+	  if (hint && !strcmp (hint, "string"))
+	    LA_PRINT_STRING (stream, builtin_type (gdbarch)->builtin_char,
+			     output, len, 0, options);
+	  else
+	    fputs_filtered (output, stream);
+	  Py_DECREF (string);
+	}
+      else
+	gdbpy_print_stack ();
+      Py_DECREF (py_str);
+    }
+  else if (replacement)
+    common_val_print (replacement, stream, recurse, options, language);
+  else
+    gdbpy_print_stack ();
+}
+
+static void
+py_restore_tstate (void *p)
+{
+  PyFrameObject *frame = p;
+  PyThreadState *tstate = PyThreadState_GET ();
+  tstate->frame = frame;
+}
+
+/* Create a dummy PyFrameObject, needed to work around
+   a Python-2.4 bug with generators.  */
+static PyObject *
+push_dummy_python_frame ()
+{
+  PyObject *empty_string, *null_tuple, *globals;
+  PyCodeObject *code;
+  PyFrameObject *frame;
+  PyThreadState *tstate;
+
+  empty_string = PyString_FromString ("");
+  if (!empty_string)
+    return NULL;
+
+  null_tuple = PyTuple_New (0);
+  if (!null_tuple)
+    {
+      Py_DECREF (empty_string);
+      return NULL;
+    }
+
+  code = PyCode_New (0,			/* argcount */
+		     0,			/* nlocals */
+		     0,			/* stacksize */
+		     0,			/* flags */
+		     empty_string,	/* code */
+		     null_tuple,	/* consts */
+		     null_tuple,	/* names */
+		     null_tuple,	/* varnames */
+#if PYTHON_API_VERSION >= 1010
+		     null_tuple,	/* freevars */
+		     null_tuple,	/* cellvars */
+#endif
+		     empty_string,	/* filename */
+		     empty_string,	/* name */
+		     1,			/* firstlineno */
+		     empty_string	/* lnotab */
+		    );
+
+  Py_DECREF (empty_string);
+  Py_DECREF (null_tuple);
+
+  if (!code)
+    return NULL;
+
+  globals = PyDict_New ();
+  if (!globals)
+    {
+      Py_DECREF (code);
+      return NULL;
+    }
+
+  tstate = PyThreadState_GET ();
+
+  frame = PyFrame_New (tstate, code, globals, NULL);
+
+  Py_DECREF (globals);
+  Py_DECREF (code);
+
+  if (!frame)
+    return NULL;
+
+  tstate->frame = frame;
+  make_cleanup (py_restore_tstate, frame->f_back);
+  return (PyObject *) frame;
+}
+
+/* Helper for apply_val_pretty_printer that formats children of the
+   printer, if any exist.  */
+static void
+print_children (PyObject *printer, const char *hint,
+		struct ui_file *stream, int recurse,
+		const struct value_print_options *options,
+		const struct language_defn *language)
+{
+  int is_map, is_array, done_flag, pretty;
+  unsigned int i;
+  PyObject *children, *iter, *frame;
+  struct cleanup *cleanups;
+
+  if (! PyObject_HasAttr (printer, gdbpy_children_cst))
+    return;
+
+  /* If we are printing a map or an array, we want some special
+     formatting.  */
+  is_map = hint && ! strcmp (hint, "map");
+  is_array = hint && ! strcmp (hint, "array");
+
+  children = PyObject_CallMethodObjArgs (printer, gdbpy_children_cst,
+					 NULL);
+  if (! children)
+    {
+      gdbpy_print_stack ();
+      return;
+    }
+
+  cleanups = make_cleanup_py_decref (children);
+
+  iter = PyObject_GetIter (children);
+  if (!iter)
+    {
+      gdbpy_print_stack ();
+      goto done;
+    }
+  make_cleanup_py_decref (iter);
+
+  /* Use the prettyprint_arrays option if we are printing an array,
+     and the pretty option otherwise.  */
+  pretty = is_array ? options->prettyprint_arrays : options->pretty;
+
+  /* Manufacture a dummy Python frame to work around Python 2.4 bug,
+     where it insists on having a non-NULL tstate->frame when
+     a generator is called.  */
+  frame = push_dummy_python_frame ();
+  if (!frame)
+    {
+      gdbpy_print_stack ();
+      goto done;
+    }
+  make_cleanup_py_decref (frame);
+
+  done_flag = 0;
+  for (i = 0; i < options->print_max; ++i)
+    {
+      PyObject *py_v, *item = PyIter_Next (iter);
+      char *name;
+      struct cleanup *inner_cleanup;
+
+      if (! item)
+	{
+	  if (PyErr_Occurred ())
+	    gdbpy_print_stack ();
+	  /* Set a flag so we can know whether we printed all the
+	     available elements.  */
+	  else	  
+	    done_flag = 1;
+	  break;
+	}
+
+      if (! PyArg_ParseTuple (item, "sO", &name, &py_v))
+	{
+	  gdbpy_print_stack ();
+	  Py_DECREF (item);
+	  continue;
+	}
+      inner_cleanup = make_cleanup_py_decref (item);
+
+      /* Print initial "{".  For other elements, there are three
+	 cases:
+	 1. Maps.  Print a "," after each value element.
+	 2. Arrays.  Always print a ",".
+	 3. Other.  Always print a ",".  */
+      if (i == 0)
+	fputs_filtered (" = {", stream);
+      else if (! is_map || i % 2 == 0)
+	fputs_filtered (pretty ? "," : ", ", stream);
+
+      /* In summary mode, we just want to print "= {...}" if there is
+	 a value.  */
+      if (options->summary)
+	{
+	  /* This increment tricks the post-loop logic to print what
+	     we want.  */
+	  ++i;
+	  /* Likewise.  */
+	  pretty = 0;
+	  break;
+	}
+
+      if (! is_map || i % 2 == 0)
+	{
+	  if (pretty)
+	    {
+	      fputs_filtered ("\n", stream);
+	      print_spaces_filtered (2 + 2 * recurse, stream);
+	    }
+	  else
+	    wrap_here (n_spaces (2 + 2 *recurse));
+	}
+
+      if (is_map && i % 2 == 0)
+	fputs_filtered ("[", stream);
+      else if (is_array)
+	{
+	  /* We print the index, not whatever the child method
+	     returned as the name.  */
+	  if (options->print_array_indexes)
+	    fprintf_filtered (stream, "[%d] = ", i);
+	}
+      else if (! is_map)
+	{
+	  fputs_filtered (name, stream);
+	  fputs_filtered (" = ", stream);
+	}
+
+      if (gdbpy_is_string (py_v))
+	{
+	  char *text = python_string_to_host_string (py_v);
+	  if (! text)
+	    gdbpy_print_stack ();
+	  else
+	    {
+	      fputs_filtered (text, stream);
+	      xfree (text);
+	    }
+	}
+      else
+	{
+	  struct value *value = convert_value_from_python (py_v);
+
+	  if (value == NULL)
+	    {
+	      gdbpy_print_stack ();
+	      error (_("Error while executing Python code."));
+	    }
+	  else
+	    common_val_print (value, stream, recurse + 1, options, language);
+	}
+
+      if (is_map && i % 2 == 0)
+	fputs_filtered ("] = ", stream);
+
+      do_cleanups (inner_cleanup);
+    }
+
+  if (i)
+    {
+      if (!done_flag)
+	{
+	  if (pretty)
+	    {
+	      fputs_filtered ("\n", stream);
+	      print_spaces_filtered (2 + 2 * recurse, stream);
+	    }
+	  fputs_filtered ("...", stream);
+	}
+      if (pretty)
+	{
+	  fputs_filtered ("\n", stream);
+	  print_spaces_filtered (2 * recurse, stream);
+	}
+      fputs_filtered ("}", stream);
+    }
+
+ done:
+  do_cleanups (cleanups);
+}
+
+int
+apply_val_pretty_printer (struct type *type, const gdb_byte *valaddr,
+			  int embedded_offset, CORE_ADDR address,
+			  struct ui_file *stream, int recurse,
+			  const struct value_print_options *options,
+			  const struct language_defn *language)
+{
+  struct gdbarch *gdbarch = get_type_arch (type);
+  PyObject *printer = NULL;
+  PyObject *val_obj = NULL;
+  struct value *value;
+  char *hint = NULL;
+  struct cleanup *cleanups;
+  int result = 0;
+
+  cleanups = ensure_python_env (gdbarch, language);
+
+  /* Instantiate the printer.  */
+  if (valaddr)
+    valaddr += embedded_offset;
+  value = value_from_contents_and_address (type, valaddr, address);
+
+  val_obj = value_to_value_object (value);
+  if (! val_obj)
+    goto done;
+  
+  /* Find the constructor.  */
+  printer = find_pretty_printer (val_obj);
+  Py_DECREF (val_obj);
+  make_cleanup_py_decref (printer);
+  if (! printer || printer == Py_None)
+    goto done;
+
+  /* If we are printing a map, we want some special formatting.  */
+  hint = gdbpy_get_display_hint (printer);
+  make_cleanup (free_current_contents, &hint);
+
+  /* Print the section */
+  print_string_repr (printer, hint, stream, recurse, options, language,
+		     gdbarch);
+  print_children (printer, hint, stream, recurse, options, language);
+  result = 1;
+
+
+ done:
+  if (PyErr_Occurred ())
+    gdbpy_print_stack ();
+  do_cleanups (cleanups);
+  return result;
+}
+
+
+/* Apply a pretty-printer for the varobj code.  PRINTER_OBJ is the
+   print object.  It must have a 'to_string' method (but this is
+   checked by varobj, not here) which takes no arguments and
+   returns a string.  The printer will return a value and in the case
+   of a Python string being returned, this function will return a
+   PyObject containing the string.  For any other type, *REPLACEMENT is
+   set to the replacement value and this function returns NULL.  On
+   error, *REPLACEMENT is set to NULL and this function also returns
+   NULL.  */
+PyObject *
+apply_varobj_pretty_printer (PyObject *printer_obj,
+			     struct value **replacement)
+{
+  int size = 0;
+  PyObject *py_str = NULL;
+
+  *replacement = NULL;
+  py_str = pretty_print_one_value (printer_obj, replacement);
+
+  if (*replacement == NULL && py_str == NULL)
+    gdbpy_print_stack ();
+
+  return py_str;
+}
+
+/* Find a pretty-printer object for the varobj module.  Returns a new
+   reference to the object if successful; returns NULL if not.  VALUE
+   is the value for which a printer tests to determine if it 
+   can pretty-print the value.  */
+PyObject *
+gdbpy_get_varobj_pretty_printer (struct value *value)
+{
+  PyObject *val_obj;
+  PyObject *pretty_printer = NULL;
+  volatile struct gdb_exception except;
+
+  TRY_CATCH (except, RETURN_MASK_ALL)
+    {
+      value = value_copy (value);
+    }
+  GDB_PY_HANDLE_EXCEPTION (except);
+  
+  val_obj = value_to_value_object (value);
+  if (! val_obj)
+    return NULL;
+
+  pretty_printer = find_pretty_printer (val_obj);
+  Py_DECREF (val_obj);
+  return pretty_printer;
+}
+
+/* A Python function which wraps find_pretty_printer and instantiates
+   the resulting class.  This accepts a Value argument and returns a
+   pretty printer instance, or None.  This function is useful as an
+   argument to the MI command -var-set-visualizer.  */
+PyObject *
+gdbpy_default_visualizer (PyObject *self, PyObject *args)
+{
+  PyObject *val_obj;
+  PyObject *cons, *printer = NULL;
+  struct value *value;
+
+  if (! PyArg_ParseTuple (args, "O", &val_obj))
+    return NULL;
+  value = value_object_to_value (val_obj);
+  if (! value)
+    {
+      PyErr_SetString (PyExc_TypeError, "argument must be a gdb.Value");
+      return NULL;
+    }
+
+  cons = find_pretty_printer (val_obj);
+  return cons;
+}
+
+#else /* HAVE_PYTHON */
+
+int
+apply_val_pretty_printer (struct type *type, const gdb_byte *valaddr,
+			  int embedded_offset, CORE_ADDR address,
+			  struct ui_file *stream, int recurse,
+			  const struct value_print_options *options,
+			  const struct language_defn *language)
+{
+  return 0;
+}
+
+#endif /* HAVE_PYTHON */
+@
+
+
+1.6
+log
+@2009-07-10 Phil Muldoon  <pmuldoon@@redhat.com>
+
+	* python/python-internal.h (apply_varobj_pretty_printer): Update
+	definition.
+	(python_string_to_target_python_string): Add definition.
+	* python/python-utils.c (unicode_to_encoded_python_string)
+	(unicode_to_target_python_string)
+	(python_string_to_target_python_string): New Functions.
+	* python/python-prettyprint.c (pretty_print_one_value): Likewise.
+	(print_string_repr): Refactor to logic to account for PyObject
+	returned strings.
+	(apply_varobj_pretty_printer): Likewise.
+	* python/python-value.c (valpy_string): Parse length keyword. Use
+	length keyword in LA_GET_STRING.
+	* varobj.c (value_get_print_value): Refactor logic to account for
+	PyObject returned strings.
+	* c-lang.c (c_get_string): If the length parameter is specified,
+	use that. Return value in characters. Update comments.
+	* language.h: Update c_get_string prototype comments.
+
+2009-07-10  Phil Muldoon  <pmuldoon@@redhat.com>
+
+	* gdb.texinfo (Values From Inferior): Add length parameter
+	description.
+
+2009-07-10 Phil Muldoon  <pmuldoon@@redhat.com>
+
+	* gdb.python/python-prettyprint.c: Add counted null string
+	structure.
+	* gdb.python/python-prettyprint.exp: Print null string. Test for
+	embedded nulls.
+	* gdb.python/python-prettyprint.py (pp_ns): New Function.
+	* gdb.python/python-value.exp (test_value_in_inferior): Add
+	variable length string fetch tests.
+	* gdb.python/python-value.c (main): Add strings for string fetch tests.
+@
+text
+@@
+
+
+1.5
+log
+@	* python/python-internal.h (struct language_defn): Declare.
+	(python_gdbarch, python_language): Likewise.
+	(ensure_python_env): Add prototype.
+	(make_cleanup_py_restore_gil): Remove prototype.
+
+	* python/python.c: Include "arch-utils.h", "value.h" and "language.h".
+	(python_gdbarch, python_language): New global variables.
+	(struct python_env): New data type.
+	(ensure_python_env, restore_python_env): New functions.
+	(eval_python_from_control_command): Call ensure_python_env to
+	install current architecture and language.
+	(python_command, gdbpy_new_objfile): Likewise.
+	* python/python-cmd.c: Include "arch-utils.h" and "language.h".
+	(cmdpy_destroyer, cmdpy_function, cmdpy_completer): Call
+	ensure_python_env.
+	* python/python-type.c (clean_up_objfile_types): Likewise.
+	* python/python-objfile.c: Include "language.h".
+	(clean_up_objfile): Call ensure_python_env.
+	* python/python-prettyprint.c (apply_val_pretty_printer): Likewise.
+	(apply_varobj_pretty_printer): Do not call PyGILState_Ensure.
+	* varobj.c (varobj_ensure_python_env): New helper function.
+	(varobj_get_display_hint, update_dynamic_varobj_children,
+	install_default_visualizer, varobj_set_visualizer, free_variable,
+	value_get_print_value): Call it.
+	(value_get_print_value): Add varobj argument instead of pretty
+	printer argument.  Update all callers.
+
+	* python/python-utils.c (py_gil_restore, make_cleanup_py_restore_gil):
+	Remove.
+
+	* value.h (internal_function_fn): Add GDBARCH and LANGUAGE argument.
+	(call_internal_function): Likewise.
+	* value.c (call_internal_function): Likewise.  Pass to handler.
+	* eval.c (evaluate_subexp_standard): Update call.
+	* python/python-function.c: Include "language.h".
+	(fnpy_call): Add GDBARCH and LANGAUAGE arguments and call
+	make_cleanup_python_env.
+
+	* python/python-value.c (builtin_type_pyint, builtin_type_pyfloat,
+	builtin_type_pylong, builtin_type_pybool, builtin_type_pychar,
+	valpy_str): Use python_gdbarch and python_language instead of
+	current_gdbarch and current_language.
+	* python/python-type.c (typy_lookup_typename): Likewise.
+@
+text
+@d124 6
+a129 7
+
+/* Pretty-print a single value, via the printer object PRINTER.  If
+   the function returns a string, an xmalloc()d copy is returned.
+   Otherwise, if the function returns a value, a *OUT_VALUE is set to
+   the value, and NULL is returned.  On error, *OUT_VALUE is set to
+   NULL and NULL is returned.  */
+static char *
+a131 1
+  char *output = NULL;
+d133 1
+d135 1
+a137 2
+      PyObject *result;
+
+d141 8
+a148 5
+	  if (gdbpy_is_string (result))
+	    output = python_string_to_host_string (result);
+	  else
+	    *out_value = convert_value_from_python (result);
+	  Py_DECREF (result);
+d152 1
+a152 1
+  return output;
+a187 1
+  char *output;
+d189 1
+d191 2
+a192 2
+  output = pretty_print_one_value (printer, &replacement);
+  if (output)
+d194 13
+a206 4
+      if (hint && !strcmp (hint, "string"))
+	LA_PRINT_STRING (stream, builtin_type (gdbarch)->builtin_char,
+			 (gdb_byte *) output, strlen (output),
+			 0, options);
+d208 2
+a209 2
+	fputs_filtered (output, stream);
+      xfree (output);
+d524 1
+d528 7
+a534 6
+   returns a string.  This function returns an xmalloc()d string if
+   the printer returns a string.  The printer may return a replacement
+   value instead; in this case *REPLACEMENT is set to the replacement
+   value, and this function returns NULL.  On error, *REPLACEMENT is
+   set to NULL and this function also returns NULL.  */
+char *
+d538 2
+a539 1
+  char *result;
+d542 3
+a544 2
+  result = pretty_print_one_value (printer_obj, replacement);
+  if (result == NULL);
+d547 1
+a547 1
+  return result;
+@
+
+
+1.4
+log
+@	* gdbtypes.c (make_pointer_type, make_reference_type,
+	smash_to_memberptr_type, lookup_array_range_type, check_stub_method):
+	Use type architecture instead of current_gdbarch.
+
+	* gdbtypes.h (address_space_name_to_int, address_space_int_to_name):
+	Add GDBARCH paramter.
+	* gdbtypes.c (address_space_name_to_int, address_space_int_to_name):
+	Add GDBARCH parameter.   Use it instead of current_gdbarch.
+	* c-typeprint.c (c_type_print_modifier): Update call.
+	* parse.c (push_type_address_space): Likewise.
+
+	* findvar.c (extract_typed_address, store_typed_address): Use type
+	architecture instead of current_gdbarch.
+
+	* value.c (value_as_address, unpack_field_as_long): Use type architecture
+	instead of current_gdbarch.
+
+	* doublest.c (floatformat_from_length): Add GDBARCH argument.  Use it
+	instead of current_gdbarch.
+	(floatformat_from_type): Pass type architecture.
+
+	* infcall.c (find_function_addr): Use type architecture instead
+	of current_gdbarch.
+
+	* valarith.c (value_bitstring_subscript, value_x_binop, value_neg,
+	value_bit_index): Use type architecture instead of current_gdbarch.
+	* valops.c (value_cast, value_slice): Likewise.
+
+	* value.h (modify_field): Add TYPE argument.
+	* value.c (modify_field): Add TYPE argument.  Use type architecture
+	instead of current_gdbarch.
+	(set_internalvar_component): Likewise.
+	* eval.c (evaluate_struct_tuple): Update call.
+	* valops.c (value_assign): Likewise.
+	* ada-lang.c (modify_general_field): Likewise.  Add TYPE argument.
+	(make_array_descriptor): Update calls.
+	(move_bits): Add BITS_BIG_ENDIAN_P argument.  Use it instead of
+	current_gdbarch.
+	(ada_value_assign, value_assign_to_component): Update calls.
+	(decode_packed_array, ada_value_primitive_packed_val, ada_value_assign,
+	value_assign_to_component): Use type arch instead of current_gdbarch.
+
+	* printcmd.c (float_type_from_length): Remove GDBARCH argument,
+	use type architecture instead.
+	(print_scalar_formatted, printf_command): Update calls.  Use type
+	architecture instead of current_gdbarch.
+	* valprint.c (val_print_type_code_int): Use type architecture
+	instead of current_gdbarch.
+	* varobj.c (value_get_print_value): Likewise.
+	* python/python-prettyprint.c (print_string_repr): Add GDBARCH
+	argument.  Use it instead of current_gdbarch.
+	(apply_val_pretty_printer): Update call.
+
+	* ada-valprint.c (ada_val_print_1): Use type architecture instead
+	of current_gdbarch.
+	* c-valprint.c (print_function_pointer_address): Add GDBARCH argument.
+	Use it instead of current_gdbarch.
+	(c_val_print): Update calls passing type architecture.
+	* f-valprint.c (f_val_print): Use type architecture instead of
+	current_gdbarch.
+	* jv-valprint (java_value_print): Likewise.
+	* m2-valprint.c (print_function_pointer_address): Add GDBARCH argument.
+	Use it instead of current_gdbarch.
+	(print_unpacked_pointer): Update calls passing type architecture.
+	* scm-valprint.c (scm_scmval_print): Use type architecture instead of
+	current_gdbarch.
+
+	* gnu-v3-abi.c (get_class_arch): Remove.
+	(gnuv3_rtti_type): Use get_type_arch instead of get_class_arch.  Remove
+	special-case check for Java classes.
+	(gnuv3_virtual_fn_field, gnuv3_baseclass_offset, gnuv3_print_method_ptr,
+	gnuv3_method_ptr_size, gnuv3_make_method_ptr, gnuv3_method_ptr_to_value):
+	Use get_type_arch instead of get_class_arch.
+@
+text
+@a476 1
+  PyGILState_STATE state;
+d478 1
+a478 2
+  state = PyGILState_Ensure ();
+  cleanups = make_cleanup_py_restore_gil (&state);
+a526 1
+  PyGILState_STATE state = PyGILState_Ensure ();
+a531 1
+  PyGILState_Release (state);
+@
+
+
+1.3
+log
+@2009-05-28  Pierre Muller  <muller@@ics.u-strasbg.fr>
+	    Paul Pluzhnikov  <ppluzhnikov@@google.com>
+
+	* configure.ac (!have_libpython): Add python-prettyprint source
+	and object files.
+	* configure: Regenerate.
+	* python/python-prettyprint.c: Move "#ifdef HAVE_PYTHON" before
+	python headers.
+@
+text
+@d184 2
+a185 1
+		   const struct language_defn *language)
+d194 1
+a194 1
+	LA_PRINT_STRING (stream, builtin_type (current_gdbarch)->builtin_char,
+d470 1
+d503 2
+a504 1
+  print_string_repr (printer, hint, stream, recurse, options, language);
+@
+
+
+1.2
+log
+@gdb
+
+2009-05-27  Vladimir Prus  <vladimir@@codesourcery.com>
+	    Tom Tromey  <tromey@@redhat.com>
+	    Thiago Jung Bauermann  <bauerman@@br.ibm.com>
+
+	* mi/mi-main.c (mi_cmd_list_features): List "python" feature.
+	* varobj.h (varobj_set_visualizer): Declare.
+	(varobj_get_display_hint): Likewise.
+	(varobj_update_result_t) <children_changed, value_installed>: New
+	fields.
+	* mi/mi-cmds.c (mi_cmds): Add var-set-visualizer.
+	* mi/mi-cmds.h (mi_cmd_var_set_visualizer,
+	mi_cmd_var_set_child_range): Declare.
+	* mi/mi-cmd-var.c (mi_cmd_var_set_visualizer): New function.
+	(mi_cmd_var_list_children): Emit display hint.
+	(varobj_update_one): Emit display hint.  Handle dynamic children.
+	* python/python.c (GdbMethods): Add "default_visualizer".
+	* python/python-internal.h (apply_varobj_pretty_printer,
+	gdbpy_get_varobj_pretty_printer, gdbpy_get_display_hint):
+	Declare.
+	(gdbpy_default_visualizer): Likewise.
+	* varobj.c: Include python.h, python-internal.h.
+	(PyObject): New typedef.
+	(struct varobj) <children_requested, pretty_printer>: New fields.
+	(varobj_create): Call install_default_visualizer.
+	(instantiate_pretty_printer): New function.
+	(varobj_set_display_format): Update.
+	(varobj_get_display_hint): New function.
+	(update_dynamic_varobj_children): New function.
+	(varobj_get_num_children): Handle dynamic children.
+	(varobj_list_children): Likewise.
+	(install_new_value): Likewise.
+	(varobj_add_child): New function.
+	(install_visualizer): Likewise.
+	(install_default_visualizer): Likewise.
+	(varobj_set_visualizer): Likewise.
+	(varobj_update): Handle dynamic children.
+	(create_child): Use create_child_with_value.
+	(create_child_with_value): New function.
+	(value_get_print_value): Call pretty printer.  Add value_formatter
+	argument.
+	(c_value_of_variable): Update.
+	(varobj_invalidate): Always free all_rootvarobj.
+	* python/python-prettyprint.c (apply_varobj_pretty_printer): New
+	function.
+	(gdbpy_get_varobj_pretty_printer): Likewise.
+	(gdbpy_default_visualizer): Likewise.
+
+gdb/doc
+
+2009-05-27  Tom Tromey  <tromey@@redhat.com>
+
+	* gdb.texinfo (GDB/MI Miscellaneous Commands): Document "python"
+	feature.
+	(GDB/MI Variable Objects): Document -var-set-visualizer.
+
+gdb/testsuite
+
+2009-05-27  Tom Tromey  <tromey@@redhat.com>
+	    Thiago Jung Bauermann  <bauerman@@br.ibm.com>
+
+	* lib/mi-support.exp (mi_varobj_update_dynamic): New proc.
+	(mi_child_regexp): Likewise.
+	(mi_list_varobj_children_range): Likewise.
+	(mi_get_features): Likewise.
+	(mi_list_varobj_children): Rewrite.
+	* gdb.python/python-mi.exp: New file.
+@
+text
+@d26 1
+d28 2
+a31 1
+#ifdef HAVE_PYTHON
+d592 2
+a593 3
+			  struct ui_file *stream, int format,
+			  int deref_ref, int recurse,
+			  enum val_prettyprint pretty,
+@
+
+
+1.1
+log
+@gdb
+
+2009-05-27  Tom Tromey  <tromey@@redhat.com>
+	    Thiago Jung Bauermann  <bauerman@@br.ibm.com>
+	    Phil Muldoon  <pmuldoon@@redhat.com>
+	    Paul Pluzhnikov  <ppluzhnikov@@google.com>
+	    Vladimir Prus  <vladimir@@codesourcery.com>
+
+	* python/python-value.c (value_object_to_value): New function.
+	* python/python-internal.h: Include frameobject.h.
+	(gdbpy_children_cst, gdbpy_to_string_cst, gdbpy_display_hint_cst):
+	Declare.
+	(value_object_to_value): Declare.
+	* printcmd.c (struct format_data) <raw>: New field.
+	(last_format): Default to 0.
+	(decode_format): Initialize val.raw.  Handle /r flag.
+	(print_command_1): Initialize fmt.raw and opts.raw.
+	(output_command): Likewise.
+	(x_command): Fix initialization of fmt.format.  Initialize
+	fmt.raw.
+	(display_command): Initialize fmt.raw.
+	(do_one_display): Set opts.raw.
+	* python/python.c (gdbpy_to_string_cst, gdbpy_children_cst,
+	gdbpy_display_hint_cst): New globals.
+	(_initialize_python): Initialize them.  Set gdb.pretty_printers.
+	* cp-valprint.c: Include python.h.
+	(cp_print_value): Call apply_val_pretty_printer.
+	* python/python.h (apply_val_pretty_printer): Declare.
+	* stack.c (print_this_frame_argument_p): Remove.
+	(print_frame_args): Compute summary flag.  Don't use
+	print_this_frame_argument_p.
+	* valprint.c: Include python.h.
+	(user_print_options): Initialize new fields.
+	(scalar_type_p): New function.
+	(val_print): Handle 'raw' and 'summary' modes.  Call
+	apply_val_pretty_printer.
+	(value_print): Handle 'raw' mode.
+	* valprint.h (struct value_print_options) <raw, summary>: New
+	fields.
+	* Makefile.in (SUBDIR_PYTHON_OBS): Add python-prettyprint.o
+	(SUBDIR_PYTHON_SRCS): Add python-prettyprint.c.
+	(python-prettyprint.o): New target.
+	* python/python-prettyprint.c: New file.
+
+gdb/doc
+
+2009-05-27  Tom Tromey  <tromey@@redhat.com>
+	    Thiago Jung Bauermann  <bauerman@@br.ibm.com>
+	    Phil Muldoon  <pmuldoon@@redhat.com>
+
+	* gdb.texinfo (Objfiles In Python): Reference pretty printing.
+	(Pretty Printing): New node.
+	(Selecting Pretty-Printers): Likewise.
+	(Python API): Update.
+	(Output Formats): Document /r format.
+
+gdb/testsuite
+
+2009-05-27  Tom Tromey  <tromey@@redhat.com>
+	    Thiago Jung Bauermann  <bauerman@@br.ibm.com>
+	    Phil Muldoon  <pmuldoon@@redhat.com>
+	    Paul Pluzhnikov  <ppluzhnikov@@google.com>
+
+	* gdb.python/python-prettyprint.exp: New file.
+	* gdb.python/python-prettyprint.c: New file.
+	* gdb.python/python-prettyprint.py: New file.
+	* gdb.base/display.exp: print/r is now valid.
+@
+text
+@d511 74
+@
+

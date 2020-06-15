@@ -1,0 +1,91 @@
+head	1.1;
+access;
+symbols;
+locks; strict;
+comment	@# @;
+
+
+1.1
+date	2013.07.03.13.25.46;	author palves;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.1
+log
+@On mainline/development, also link GDBserver with -lmcheck.
+
+This factors --enable-libmcheck related bits from GDB's configure.ac
+and makes GDBserver use them too.  Specifically, the 'development'
+global is moved to a separate script to it can be sourced by both GDB
+and GDBserver, and the --enable-libmcheck/--disable-libmcheck bits
+proper are moved to a new m4 file.
+
+I started out by defining 'development' in the m4 file, but in the end
+decided against it, as a separate script has the advantage that
+changing it in release branches does not require regenerating
+configure, unlike today.
+
+I had also started out by making the new GDB_AC_LIBMCHECK itself
+handle the yes/no default fallback depending on release/developement,
+but since I had split out 'development' to a separate script, and, GDB
+needs the python checks anyway (hence we'd need to do the python
+checks in gdb's configure.ac, and pass in a 'default lmcheck yes/no'
+parameter to GDB_AC_LIBMCHECK anyway), I ended up keeping
+GDB_AC_LIBMCHECK isolated from the 'development' global.  IOW, it's
+the caller's business to handle it.
+
+Tested on x86_64 Fedora 17.  Built GDB and GDBserver with and without
+--enable-libmcheck, and observed --enable-libmcheck overrides the
+disablement of -lmcheck caused by python supporting threads, and that
+GDBserver links with -lmcheck when expected.  Also observed that
+changing the 'development' global, and issuing "make" triggers a
+relink, and '-lmcheck' is included or not from the link accordingly.
+
+gdb/
+2013-07-03  Pedro Alves  <palves@@redhat.com>
+
+	* Makefile.in (config.status): Depend on development.sh.
+	(aclocal_m4_deps): Add libmcheck.m4.
+	* acinclude.m4: Include libmcheck.m4.
+	* configure.ac: Source development.sh instead of setting
+	'development' here.  --enable-libmcheck/--disable-libmcheck code
+	factored out to GDB_AC_LIBMCHECK.  Run it.
+	* development.sh: New file.
+	* libmcheck.m4: New file.
+	* configure: Regenerate.
+
+gdb/gdbserver/
+2013-07-03  Pedro Alves  <palves@@redhat.com>
+
+	* Makefile.in (config.status): Depend on development.sh.
+	* acinclude.m4: Include libmcheck.m4.
+	* configure: Regenerate.
+@
+text
+@# Copyright (C) 2012-2013 Free Software Foundation, Inc.
+#
+# This file is part of GDB.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# Set to 'true' for development snapshots, 'false' for releases and
+# pre-releases.  When true, provide more thorough testing with
+# -lmcheck.
+development=true
+@

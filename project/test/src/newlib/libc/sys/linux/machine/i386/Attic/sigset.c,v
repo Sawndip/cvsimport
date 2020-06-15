@@ -1,0 +1,207 @@
+head	1.2;
+access;
+symbols;
+locks; strict;
+comment	@ * @;
+
+
+1.2
+date	2002.05.31.20.18.58;	author jjohnstn;	state dead;
+branches;
+next	1.1;
+
+1.1
+date	2002.04.03.22.46.19;	author jjohnstn;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@
+2002-05-31  Jeff Johnston  <jjohnstn@@redhat.com>
+
+        * libc/sys/linux/Makefile.am: Add sig.c and sigaction.c.  Also
+        make siglist.inc dependent on sig.c instead of signal.c.
+        * libc/sys/linux/Makefile.in: Regenerated.
+        * libc/sys/linux/sig.c: Rename from signal.c and change code to
+        use NSIG instead of _NSIG.
+        * libc/sys/linux/sigaction.c: New file.
+        * libc/sys/linux/signal.c: Changed to be linux signal() function
+        so as to override regular newlib default signal.c.
+        * libc/sys/linux/linuxthreads/config.h: Add __ASSUME_REALTIME_SIGNALS
+        definition.
+        * libc/sys/linux/linuxthreads/testrtsig.h: New file.
+        * libc/sys/linux/machine/i386/Makefile.am: Remove sigset.c.
+        * libc/sys/linux/machine/i386/Makefile.in: Regenerated.
+        * libc/sys/linux/machine/i386/sigset.c: Moved to linux main directory.
+        * libc/sys/linux/sigset.c: Moved from machine/i386 directory.
+        * libc/sys/linux/sys/signal.h: Redefine NSIG to _NSIG and override
+        default linux sigset_t typedef by defining it equal to __sigset_t.
+        * libc/unix/sigset.c: Add check so code isn't compiled on systems
+        with a sigset_t that isn't implemented with a single int.
+@
+text
+@/* sigset.c - signal set manipulation functions */
+
+/* Copyright 2002, Red Hat Inc. */
+
+/* Note: these are currently grouped together in one file so that
+         it will override the default version in the libc/unix 
+         directory which has grouped all functions in one file. */
+
+/* sigaddset function */
+
+#include <signal.h>
+#include <bits/sigset.h>
+#include <errno.h>
+#include <string.h>
+
+int
+sigaddset (sigset_t *set, const int signo)
+{
+  int index, mask;
+  __sigset_t *st = (__sigset_t *)set;
+
+  if (signo > NSIG)
+    {
+      errno = EINVAL;
+      return -1;
+    }
+
+  index = (signo - 1) / 32;
+  mask = 1 << ((signo - 1) % 32);
+
+  st->__val[index] |= mask;
+  return 0;
+}
+
+/* sigdelset function */
+
+int
+sigdelset (sigset_t *set, const int signo)
+{
+  int index, mask;
+  __sigset_t *st = (__sigset_t *)set;
+
+  if (signo > NSIG)
+    {
+      errno = EINVAL;
+      return -1;
+    }
+
+  index = (signo - 1) / 32;
+  mask = 1 << ((signo - 1) % 32);
+
+  st->__val[index] &= ~mask;
+  return 0;
+}
+
+/* sigemptyset function */
+
+int
+sigemptyset (sigset_t *set)
+{
+  int size = NSIG / 8;
+  __sigset_t *st = (__sigset_t *)set;
+  memset (st->__val, 0, size);
+  return 0;
+}
+
+/* sigfillset function */
+
+int
+sigfillset (sigset_t *set)
+{
+  int size = NSIG / 8;
+  __sigset_t *st = (__sigset_t *)set;
+  memset (st->__val, 0xff, size);
+  return 0;
+}
+
+/* sigismember function */
+
+int
+sigismember (const sigset_t *set, int signo)
+{
+  int index, mask;
+  __sigset_t *st = (__sigset_t *)set;
+
+  if (signo > NSIG)
+    {
+      errno = EINVAL;
+      return -1;
+    }
+
+  index = (signo - 1) / 32;
+  mask = 1 << ((signo - 1) % 32);
+
+  return (st->__val[index] & mask) != 0;
+}
+
+@
+
+
+1.1
+log
+@
+2002-04-03  Jeff Johnston  <jjohnstn@@redhat.com>
+
+	* configure.host: Add support for machine subdirectory of
+	sys subdirectory.
+	* configure.in: Add check for sys machine subdirectory.
+	* Makefile.am: Ditto.
+	* configure: Regenerated.
+	* Makefile.in: Ditto.
+	* libc/sys/linux/crt0.c: Moved to machine/i386 directory.
+	* libc/sys/linux/sys/syscall.h: Ditto.
+	* libc/sys/linux/sleep.c: New file.
+	* libc/sys/linux/socket.c: Ditto.
+	* libc/sys/linux/sockops.h: Ditto.
+	* libc/sys/linux/stack.c: Ditto.
+	* libc/sys/linux/usleep.c: Ditto.
+	* libc/sys/linux/machine/Makefile.am: Ditto.
+	* libc/sys/linux/machine/Makefile.in: Ditto.
+	* libc/sys/linux/machine/aclocal.m4: Ditto.
+	* libc/sys/linux/machine/configure: Ditto.
+	* libc/sys/linux/machine/configure.in: Ditto.
+	* libc/sys/linux/machine/i386/Makefile.am: Ditto.
+	* libc/sys/linux/machine/i386/Makefile.in: Ditto.
+	* libc/sys/linux/machine/i386/aclocal.m4: Ditto.
+	* libc/sys/linux/machine/i386/configure: Ditto.
+	* libc/sys/linux/machine/i386/configure.in: Ditto.
+	* libc/sys/linux/machine/i386/crt0.c: Ditto.
+	* libc/sys/linux/machine/i386/sigset.c: Ditto.
+	* libc/sys/linux/machine/i386/sigstack.h: Ditto.
+	* libc/sys/linux/machine/i386/socketcall.h: Ditto.
+	* libc/sys/linux/machine/i386/syscall.h: Ditto.
+	* libc/sys/linux/sys/select.h: Ditto.
+	* libc/sys/linux/configure.in: Add support for machine directory.
+	* libc/sys/linux/Makefile.am: Ditto plus add new files above.
+	* libc/sys/linux/Makefile.in: Regenerated.
+	* libc/sys/linux/configure: Ditto.
+	* libc/sys/linux/brk.c: Use machine/syscall.h instead of sys/syscall.h.
+	* libc/sys/linux/inode.c: Ditto.
+	* libc/sys/linux/linux.c: Ditto.
+	* libc/sys/linux/process.c: Ditto.
+	* libc/sys/linux/systat.c: Ditto.
+	* libc/sys/linux/time.c: Ditto.
+	* libc/sys/linux/wait.c: Ditto.
+	* libc/sys/linux/ids.c: Change header plus add setfsgid/setfsuid.
+	* libc/sys/linux/io.c: Change header plus add readv/writev.
+	* libc/sys/linux/signal.c: Change header plus change sigsuspend to
+	use __sigsuspend syscall.
+	* libc/sys/linux/select.c: Change header plus change select to
+	use _newselect syscall.
+	* libc/sys/linux/sys/cdefs.h: Add a number of standard definitions
+	used by glibc header files.
+	* libc/sys/linux/sys/types.h: Add __socklen_t and __useconds_t
+	types.
+@
+text
+@@
+

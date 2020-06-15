@@ -1,0 +1,316 @@
+head	1.7;
+access;
+symbols
+	binutils-2_24-branch:1.7.0.2
+	binutils-2_24-branchpoint:1.7
+	binutils-2_21_1:1.5
+	binutils-2_23_2:1.5.8.1
+	binutils-2_23_1:1.5
+	binutils-2_23:1.5
+	binutils-2_23-branch:1.5.0.8
+	binutils-2_23-branchpoint:1.5
+	binutils-2_22_branch:1.5.0.6
+	binutils-2_22:1.5
+	binutils-2_22-branch:1.5.0.4
+	binutils-2_22-branchpoint:1.5
+	binutils-2_21:1.5
+	binutils-2_21-branch:1.5.0.2
+	binutils-2_21-branchpoint:1.5
+	binutils_latest_snapshot:1.7;
+locks; strict;
+comment	@# @;
+
+
+1.7
+date	2012.11.27.17.20.29;	author roland;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2012.10.23.09.33.55;	author nathan;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2010.10.11.09.12.25;	author amodra;	state Exp;
+branches
+	1.5.8.1;
+next	1.4;
+
+1.4
+date	2010.09.18.02.30.41;	author amodra;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2010.09.16.10.51.41;	author amodra;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2010.05.06.20.04.27;	author jsm28;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2010.03.16.14.14.40;	author drow;	state Exp;
+branches;
+next	;
+
+1.5.8.1
+date	2012.11.27.17.23.31;	author roland;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.7
+log
+@ld/testsuite/
+	* ld-elf/flags1.d: Add *-*-nacl* to xfail list.
+	* ld-elf/orphan-region.d: Likewise.
+@
+text
+@#source: orphan-region.s
+#ld: -T orphan-region.ld -N -z stack-size=0
+#readelf: -S -l --wide
+#xfail: arc-*-* d30v-*-* dlx-*-* fr30-*-* frv-*-elf i860-*-* i960-*-*
+#xfail: iq*-*-* mn10200-*-* moxie-*-* msp*-*-* mt-*-* or32-*-* pj*-*-*
+#xfail: spu-*-* hppa*64*-*-* *-*-nacl*
+# if not using elf32.em, you don't get fancy orphan handling
+# spu twiddles LOAD range, hppa64 adds PHDR, nacl splits to two segments
+
+#...
+  \[[ 0-9]+\] \.text[ \t]+PROGBITS[ \t]+0*40000000[ \t]+.*
+  \[[ 0-9]+\] \.rodata[ \t]+PROGBITS[ \t]+0*400000[0-9a-f]+[ \t]+.*
+  \[[ 0-9]+\] \.moredata[ \t]+PROGBITS[ \t]+0*400000[0-9a-f]+[ \t]+.*
+#...
+Program Headers:
+  Type.*
+  LOAD[ \t]+0x[0-9a-f]+ 0x0*40000000 0x0*40000000 0x[0-9a-f]+ 0x[0-9a-f]+ RWE 0x[0-9a-f]+
+
+ Section to Segment mapping:
+  Segment Sections...
+   00     .text .rodata .moredata *
+@
+
+
+1.6
+log
+@	bfd/
+	* bfd-in.h (bfd_elf_stack_segment_size): Declare.
+	* bfd-in2.h: Rebuilt.
+	* elfxx-target.h (elf_backend_stack_align): New.
+	(elfNN_bed): Add it.
+	* elf-bfd.h (struct elf_backend_data): Add stack_align field.
+	* elf.c (bfd_elf_map_sections_to_segments): Pay attention to
+	stack_align and stacksize for PT_GNU_STACK segment.
+	(assign_file_positions_for_non_load_sections): Set p_memsz for
+	PT_GNU_STACK segment.
+	(copy_elf_program_header): Copy PT_GNU_STACK size.
+	* elflink.c (bfd_elf_stack_segment_size): New function, taken from
+	uclinux backends.
+	(bfd_elf_size_dynamic_sections): Determine
+	PT_GNU_STACK requirements after calling backend.  Pay attention to
+	stacksize.
+	* elf32-bfin.c (elf32_bfinfdpic_always_size_sections): Call
+	bfd_elf_stack_segment_size.
+	(elf32_bfinfdpic_modify_program_headers): Delete.
+	(elf32_bfingfdpic_copy_private_bfd_data): Don't copy PT_GNU_STACK
+	here.
+	(elf_backend_stack_align): Override.
+	(elf_backend_modify_program_headers): Don't override.
+	* elf32-frv.c (frvfdpic_always_size_sections): Call
+	bfd_elf_stack_segment_size.
+	(elf32_frvfdpic_modify_program_headers): Delete.
+	(elf32_frvfdpic_copy_private_bfd_data): Don't copy PT_GNU_STACK
+	here.
+	(elf_backend_stack_align): Override.
+	(elf_backend_modify_program_headers): Don't override.
+	* elf32-lm32.c (lm32_elf_always_size_sections): Leave
+	PT_GNU_STACK creation to underlying elf support.  Check
+	__stacksize here for backwards compatibility, and set it if
+	needed.
+	(lm32_elf_modify_segment_map): Delete.
+	(lm32_elf_modify_program_headers): Delete.
+	(elf_backend_stack_align): Override.
+	(elf_backend_modify_segment_map): Don't override.
+	(elf_backend_modify_program_headers): Don't override.
+	* elf32-sh.c (sh_elf_always_size_sections): Call
+	bfd_elf_stack_segment_size.
+	(sh_elf_modify_program_headers): Delete.
+	(sh_elf_copy_private_data): Don't copy PT_GNU_STACK
+	here.
+	(elf_backend_stack_align): Override.
+	(elf_backend_modify_program_headers): Don't override.
+	* elf32-tic6x.c (elf32_tic6x_always_size_sections): Call
+	bfd_elf_stack_segment_size.
+	(elf32_tic6x_modify_program_headers): Delete.
+	(elf32_tic6x_copy_private_data): Delete.
+	(elf_backend_stack_align): Override.
+	(bfd_elf32_bfd_copy_private_bfd_data): Don't override.
+	(elf_backend_modify_program_headers): Don't override.
+
+	include/
+	* bfdlink.h (struct bfd_link_info): Add stacksize option.
+
+	ld/
+	* ld.texinfo (stack-size): New option.
+	* emultempl/elf32.em: Add stack-size option.
+
+	ld/testsuite/
+	* ld-elf/binutils.exp: Add -z stack-size=0.
+	* ld-elf/elf.exp: Add stack-exec and stack-size tests.
+	* ld-elf/orphan-region.d: Add stack-size option. Remove xfail.
+	* ld-elf/stack-exec.rd: New.
+	* ld-elf/stack-size.rd: New.
+	* ld-elf/stack.s: New.
+	* ld-scripts/empty-aligned.d: Add stack-size option.
+	* ld-sh/fdpic-stack-set.d: New.
+	* ld-tic6x/shlib-1.rd: Remove __stacksize symbol.
+	* ld-tic6x/shlib-1b.rd: Likewise.
+	* ld-tic6x/shlib-1r.rd: Likewise.
+	* ld-tic6x/shlib-1rb.rd: Likewise.
+	* ld-tic6x/shlib-app-1.rd: Likewise.
+	* ld-tic6x/shlib-app-1b.rd: Likewise.
+	* ld-tic6x/shlib-app-1r.rd: Likewise.
+	* ld-tic6x/shlib-app-1rb.rd: Likewise.
+	* ld-tic6x/shlib-noindex.rd: Likewise.
+	* ld-tic6x/static-app-1.rd: Likewise.
+	* ld-tic6x/static-app-1b.rd: Likewise.
+	* ld-tic6x/static-app-1r.rd: Likewise.
+	* ld-tic6x/static-app-1rb.rd: Likewise.
+@
+text
+@d6 1
+a6 1
+#xfail: spu-*-* hppa*64*-*-*
+d8 1
+a8 1
+# spu twiddles LOAD range, hppa64 adds PHDR
+@
+
+
+1.5
+log
+@	* ld-elf/orphan-region.d: xfail frv-*-*.
+@
+text
+@d2 1
+a2 1
+#ld: -T orphan-region.ld -N
+d6 1
+a6 1
+#xfail: spu-*-* hppa*64*-*-* frv-*-*
+d8 1
+a8 1
+# spu twiddles LOAD range, hppa64 adds PHDR, frv-linux adds GNU_STACK
+@
+
+
+1.5.8.1
+log
+@ld/testsuite/
+	* ld-elf/flags1.d: Add *-*-nacl* to xfail list.
+	* ld-elf/orphan-region.d: Likewise.
+@
+text
+@d6 1
+a6 1
+#xfail: spu-*-* hppa*64*-*-* frv-*-* *-*-nacl*
+d8 1
+a8 2
+# spu twiddles LOAD range, hppa64 adds PHDR, frv-linux adds GNU_STACK,
+# nacl splits to two segments
+@
+
+
+1.4
+log
+@	* lib/ld-lib.exp (check_gc_sections_available): Fail more targets.
+	* ld-discard/discard.exp: Move xfails from here..
+	* ld-discard/extern.d: ..to here.
+	* ld-discard/start.d: ..and here.
+	* ld-discard/static.d: ..and here.
+	* ld-elf/binutils.exp: Don't run tbss1 and tbss2 tests on hppa64.
+	* ld-elf/empty2.d: Remove xfails.
+	* ld-elf/flags1.d: xfail hppa64.
+	* ld-elf/group1.d: Add comment.
+	* ld-elf/group2.d: xfail cr16 and crx.
+	* ld-elf/group3b.d: Correct xfail and add comment.
+	* ld-elf/group4.d: xfail cr16 and crx.
+	* ld-elf/group5.d: Likewise.
+	* ld-elf/group6.d: Likewise.
+	* ld-elf/group7.d: Likewise.
+	* ld-elf/group8a.d: Add more notarget and xfail entries.  Comment.
+	* ld-elf/group8b.d: Likewise.
+	* ld-elf/group9a.d: Likewise.
+	* ld-elf/group9b.d: Likewise.
+	* ld-elf/linkonce2.d: Correct notarget and comment.
+	* ld-elf/merge2.d: Remove iq2000 from xfail.
+	* ld-elf/multibss1.d: xfail hppa64.
+	* ld-elf/nobits-1.d: Likewise.
+	* ld-elf/note-1.d: Likewise.
+	* ld-elf/note-2.d: Likewise.
+	* ld-elf/orphan-region.d: Add xfails.
+	* ld-elf/orphan-region.ld: Discard some sections.
+	* ld-elf/orphan.d: Add xfails.
+	* ld-elf/orphan.ld: Discard some sections.
+	* ld-elf/orphan3.d: Replace xfail frv-*-* with frv-*-elf.  Remove
+	cr16, crx and d10v.
+	* ld-elf/pr349.d: Add xfails.
+	* ld-elf/warn2.d: Add xfails.  Tweak symbol section for hppa64.
+	* ld-scripts/rgn-at5.t: Discard .reginfo.
+@
+text
+@d6 1
+a6 1
+#xfail: spu-*-* hppa*64*-*-*
+d8 1
+a8 1
+# spu twiddles LOAD range, hppa64 adds PHDR
+@
+
+
+1.3
+log
+@	* ld-elf/orphan-region.d: xfail for spu.
+	* ld-elf/relocatable.d: xfail for hppa.
+@
+text
+@d4 5
+a8 1
+#xfail: spu-*-*
+@
+
+
+1.2
+log
+@	* ld-elf/orphan-region.d: Use ld -N.
+@
+text
+@d4 1
+@
+
+
+1.1
+log
+@	* ldlang.c (lang_insert_orphan): Place loadable orphans in the same
+	region and phdrs as their placement section.
+
+	testsuite/
+	* ld-elf/orphan-region.d, ld-elf/orphan-region.ld,
+	ld-elf/orphan-region.s: New files.
+@
+text
+@d2 1
+a2 1
+#ld: -T orphan-region.ld
+d12 1
+a12 1
+  LOAD[ \t]+0x[0-9a-f]+ 0x0*40000000 0x0*40000000 0x[0-9a-f]+ 0x[0-9a-f]+ R E 0x[0-9a-f]+
+@
+

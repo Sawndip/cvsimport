@@ -1,0 +1,217 @@
+head	1.2;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.2
+	gdb_7_6-2013-04-26-release:1.2
+	gdb_7_6-branch:1.2.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.2;
+locks; strict;
+comment	@# @;
+
+
+1.2
+date	2013.01.01.06.33.25;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2012.09.26.16.35.56;	author aburgess;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@# Copyright 2012-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+standard_testfile
+
+if { [prepare_for_testing ${testfile}.exp ${testfile}] } {
+    return -1
+}
+
+# Setup for the test, create COUNT breakpoints at the function BREAKPT.
+proc test_setup { count } {
+    global srcfile
+    global binfile
+
+    clean_restart ${binfile}
+
+    if ![runto_main] then {
+	fail "can't run to main"
+	return 0
+    }
+
+    for {set i 1} {$i <= $count} {incr i} {
+	gdb_breakpoint "breakpt"
+	gdb_test_no_output "set \$bp_num_${i} = \$bpnum"
+    }
+
+    gdb_test "step" \
+	"spacer \\(\\) at .*$srcfile:\[0-9\]+.*" \
+	"step to place breakpoints"
+
+    return 1
+}
+
+
+# Test 1: Create two breakpoints at BREAKPT.  Delete #1 and expect to stop
+# at #2.
+with_test_prefix "del_1_stop_2" {
+    test_setup 2
+
+    gdb_test_no_output {delete $bp_num_1}
+
+    gdb_test continue "Continuing\\..*Breakpoint \[0-9\]+, breakpt \\(\\) at .*$srcfile:\[0-9\]+.*" \
+	"delete #1, stop at #2"
+}
+
+# Test 2: Create two breakpoints at BREAKPT.  Delete #2 and expect to stop
+# at #1.
+with_test_prefix "del_2_stop_1" {
+    test_setup 2
+
+    gdb_test_no_output {delete $bp_num_2}
+
+    gdb_test continue "Continuing\\..*Breakpoint \[0-9\]+, breakpt \\(\\) at .*$srcfile:\[0-9\]+.*" \
+	"delete #2, stop at #1"
+}
+
+# Test 3: Create three breakpoints at BREAKPT.  Disable #1, delete #2,
+# expect to stop at #3.
+with_test_prefix "dis_1_del_2_stop_3" {
+    test_setup 3
+
+    gdb_test_no_output {disable $bp_num_1}
+
+    gdb_test "step" ".*"
+
+    gdb_test_no_output {delete $bp_num_2}
+
+    gdb_test continue "Continuing\\..*Breakpoint \[0-9\]+, breakpt \\(\\) at .*$srcfile:\[0-9\]+.*" \
+	"disable #1, delete #2, stop at #3"
+}
+
+# Test 4: Create three breakpoints at BREAKPT.  Disable #2, delete #1,
+# expect to stop at #3.
+with_test_prefix "dis_2_del_1_stop_3" {
+    test_setup 3
+
+    gdb_test_no_output {disable $bp_num_2}
+
+    gdb_test "step" ".*"
+
+    gdb_test_no_output {delete $bp_num_1}
+
+    gdb_test continue "Continuing\\..*Breakpoint \[0-9\]+, breakpt \\(\\) at .*$srcfile:\[0-9\]+.*" \
+	"disable #2, delete #1, stop at #3"
+}
+
+# Test 5: Create three breakpoints at BREAKPT.  Disable #1, delete #3,
+# expect to stop at #2.
+with_test_prefix "dis_1_del_3_stop_1" {
+    test_setup 3
+
+    gdb_test_no_output {disable $bp_num_1}
+
+    gdb_test "step" ".*"
+
+    gdb_test_no_output {delete $bp_num_3}
+
+    gdb_test continue "Continuing\\..*Breakpoint \[0-9\]+, breakpt \\(\\) at .*$srcfile:\[0-9\]+.*" \
+	"disable #1, delete #3, stop at #2"
+}
+
+# Test 6: Create three breakpoints at BREAKPT.  Disable #3, delete #1,
+# expect to stop at #2
+with_test_prefix "dis_3_del_1_stop_2" {
+    test_setup 3
+
+    gdb_test_no_output {disable $bp_num_3}
+
+    gdb_test "step" ".*"
+
+    gdb_test_no_output {delete $bp_num_1}
+
+    gdb_test continue "Continuing\\..*Breakpoint \[0-9\]+, breakpt \\(\\) at .*$srcfile:\[0-9\]+.*" \
+	"disable #3, delete #1, stop at #2"
+}
+
+# Test 7: Create three breakpoints at BREAKPT.  Disable #2, delete #3,
+# expect to stop at #1.
+with_test_prefix "dis_2_del_3_stop_1" {
+    test_setup 3
+
+    gdb_test_no_output {disable $bp_num_2}
+
+    gdb_test "step" ".*"
+
+    gdb_test_no_output {delete $bp_num_3}
+
+    gdb_test continue "Continuing\\..*Breakpoint \[0-9\]+, breakpt \\(\\) at .*$srcfile:\[0-9\]+.*" \
+	"disable #2, delete #3, stop at #1"
+}
+
+# Test 8: Create three breakpoints at BREAKPT.  Disable #3, delete #2,
+# expect to stop at #1.
+with_test_prefix "dis_3_del_2_stop_1" {
+    test_setup 3
+
+    gdb_test_no_output {disable $bp_num_3}
+
+    gdb_test "step" ".*"
+
+    gdb_test_no_output {delete $bp_num_2}
+
+    gdb_test continue "Continuing\\..*Breakpoint \[0-9\]+, breakpt \\(\\) at .*$srcfile:\[0-9\]+.*" \
+	"disable #3, delete #2, stop at #1"
+}
+@
+
+
+1.1
+log
+@http://sourceware.org/ml/gdb-patches/2012-09/msg00403.html
+
+gdb/ChangeLog
+
+        * breakpoint.c (update_global_location_list): Ignore previous
+        duplicate status of a breakpoint when starting a new scan for
+        duplicate breakpoints.
+
+gdb/testsuite/ChangeLog
+
+        * gdb.base/duplicate-bp.c: New file.
+        * gdb.base/duplicate-bp.exp: New file.
+@
+text
+@d1 1
+a1 1
+# Copyright 2012 Free Software Foundation, Inc.
+@
+

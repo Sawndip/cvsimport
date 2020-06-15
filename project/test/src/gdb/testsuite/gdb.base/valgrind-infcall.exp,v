@@ -1,0 +1,625 @@
+head	1.10;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.7.2.1
+	gdb_7_6-2013-04-26-release:1.7.2.1
+	gdb_7_6-branch:1.7.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.7
+	gdb_7_5_1-2012-11-29-release:1.1.2.5
+	gdb_7_5-2012-08-17-release:1.1.2.4
+	gdb_7_5-branch:1.1.0.2;
+locks; strict;
+comment	@# @;
+
+
+1.10
+date	2013.06.27.19.00.47;	author tromey;	state Exp;
+branches;
+next	1.9;
+
+1.9
+date	2013.06.07.17.31.08;	author palves;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2013.03.17.20.37.32;	author jkratoch;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2013.02.27.18.46.52;	author jkratoch;	state Exp;
+branches
+	1.7.2.1;
+next	1.6;
+
+1.6
+date	2013.01.01.06.33.26;	author brobecke;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2012.09.13.05.32.09;	author jkratoch;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2012.08.07.18.04.12;	author jkratoch;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2012.08.03.16.03.07;	author emachado;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2012.08.01.09.02.50;	author jkratoch;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2012.07.31.07.33.16;	author jkratoch;	state Exp;
+branches
+	1.1.2.1;
+next	;
+
+1.7.2.1
+date	2013.03.17.20.38.50;	author jkratoch;	state Exp;
+branches;
+next	;
+
+1.1.2.1
+date	2012.07.31.07.34.40;	author jkratoch;	state Exp;
+branches;
+next	1.1.2.2;
+
+1.1.2.2
+date	2012.08.01.09.03.18;	author jkratoch;	state Exp;
+branches;
+next	1.1.2.3;
+
+1.1.2.3
+date	2012.08.03.17.49.29;	author emachado;	state Exp;
+branches;
+next	1.1.2.4;
+
+1.1.2.4
+date	2012.08.07.18.05.40;	author jkratoch;	state Exp;
+branches;
+next	1.1.2.5;
+
+1.1.2.5
+date	2012.09.13.05.35.18;	author jkratoch;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.10
+log
+@test suite update - gdb.base/[t-z]
+
+Convert files gdb.base/[t-z]*.exp to use standard_output_file et al.
+
+	* gdb.base/testenv.exp, gdb.base/tui-layout.exp,
+	gdb.base/twice.exp, gdb.base/type-opaque.exp, gdb.base/unload.exp,
+	gdb.base/unwindonsignal.exp, gdb.base/valgrind-db-attach.exp,
+	gdb.base/valgrind-infcall.exp, gdb.base/value-double-free.exp,
+	gdb.base/varargs.exp, gdb.base/watch-cond-infcall.exp,
+	gdb.base/watch-cond.exp, gdb.base/watch-non-mem.exp,
+	gdb.base/watch-read.exp, gdb.base/watch-vfork.exp,
+	gdb.base/watch_thread_num.exp, gdb.base/watchpoint-cond-gone.exp,
+	gdb.base/watchpoint-delete.exp, gdb.base/watchpoint-hw.exp,
+	gdb.base/watchpoint-solib.exp, gdb.base/watchpoint.exp,
+	gdb.base/watchpoints.exp, gdb.base/wchar.exp, gdb.base/whatis.exp:
+	Use standard_testfile, standard_output_file, prepare_for_testing,
+	clean_restart.
+@
+text
+@# Copyright 2012-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+if [is_remote target] {
+    # The test always runs locally.
+    return 0
+}
+
+standard_testfile .c
+if {[build_executable $testfile.exp $testfile $srcfile {debug}] == -1} {
+    return -1
+}
+
+set test "spawn valgrind"
+set cmd "valgrind --vgdb-error=0 $binfile"
+set res [remote_spawn host $cmd]
+if { $res < 0 || $res == "" } {
+    verbose -log "Spawning $cmd failed."
+    unsupported $test
+    return -1
+}
+pass $test
+# Declare GDB now as running.
+set gdb_spawn_id -1
+
+# GDB started by vgdb stops already after the startup is executed, like with
+# non-extended gdbserver.  It is also not correct to run/attach the inferior.
+set use_gdb_stub 1
+
+set test "valgrind started"
+# The trailing '.' differs for different memcheck versions.
+gdb_test_multiple "" $test {
+    -re "Memcheck, a memory error detector\\.?\r\n" {
+	pass $test
+    }
+    -re "valgrind: failed to start tool 'memcheck' for platform '.*': No such file or directory" {
+	unsupported $test
+	return -1
+    }
+    -re "valgrind: wrong ELF executable class" {
+	unsupported $test
+	return -1
+    }
+    -re "command not found" {
+	# The spawn succeeded, but then valgrind was not found - e.g. if
+	# we spawned SSH to a remote system.
+	unsupported $test
+	return -1
+    }
+    -re "valgrind: Bad option.*--vgdb-error=0" {
+	# valgrind is not >= 3.7.0.
+	unsupported $test
+	return -1
+    }
+}
+
+set test "vgdb prompt"
+# The trailing '.' differs for different memcheck versions.
+gdb_test_multiple "" $test {
+    -re "  (target remote | \[^\r\n\]*/vgdb \[^\r\n\]*)\r\n" {
+	set vgdbcmd $expect_out(1,string)
+	pass $test
+    }
+}
+
+# Do not kill valgrind.
+set valgrind_pid [exp_pid -i [board_info host fileid]]
+unset gdb_spawn_id
+set board [host_info name]
+unset_board_info fileid
+
+clean_restart $testfile
+
+gdb_test "$vgdbcmd" " in \\.?_start .*" "target remote for vgdb"
+
+gdb_test "monitor v.set gdb_output" "valgrind output will go to gdb.*"
+
+set continue_count 1
+set loop 1
+while {$loop && $continue_count < 100} {
+    set test "continue #$continue_count"
+    gdb_test_multiple "continue" "" {
+	-re "Invalid free\\(\\).*: main .*\r\n$gdb_prompt $" {
+	    pass $test
+	    set loop 0
+	}
+	-re "Remote connection closed.*\r\n$gdb_prompt $" {
+	    fail "$test (remote connection closed)"
+	    # Only if valgrind got stuck.
+	    remote_exec host "kill -9 ${valgrind_pid}"
+	    return -1
+	}
+	-re "The program is not being run\\.\r\n$gdb_prompt $" {
+	    fail "$test (valgrind vgdb has terminated)"
+	    # Only if valgrind got stuck.
+	    remote_exec host "kill -9 ${valgrind_pid}"
+	    return -1
+	}
+	-re "\r\n$gdb_prompt $" {
+	    pass "$test (false warning)"
+	}
+    }
+    set continue_count [expr $continue_count + 1]
+}
+
+set test "p gdb_test_infcall ()"
+gdb_test_multiple $test $test {
+    -re "unhandled instruction bytes.*\r\n$gdb_prompt $" {
+	fail $test
+    }
+    -re "Continuing \\.\\.\\..*\r\n\\\$1 = 2\r\n$gdb_prompt $" {
+	pass $test
+    }
+}
+
+# Only if valgrind got stuck.
+remote_exec host "kill -9 ${valgrind_pid}"
+@
+
+
+1.9
+log
+@Remove superfluous semicolons from testsuite throughout.
+
+A few months ago semicolons after "return" were removed throughout the
+testsuite.  However, as I pointed out in review, they're unnecessary
+not just after "return", but pretty much after any tcl command.  ';'
+is the command separator, and you only need it if there's another
+command on the same line afterwards.
+
+This patch was written by running:
+
+ $ find . -name "*.exp" | xargs grep -l ";\s*$" | xargs sed -i 's/\([^#][^\s*;]*\)\s*;\s*$/\1/'
+
+and then undoing changes to comments, and lib/future.exp.
+
+Tested on x86_64 Fedora 17.
+
+gdb/testsuite/
+2013-06-07  Pedro Alves  <palves@@redhat.com>
+
+	* boards/native-extended-gdbserver.exp: Remove semicolon.
+	* config/arm-ice.exp: Likewise.
+	* config/bfin.exp: Likewise.
+	* config/cygmon.exp: Likewise.
+	* config/h8300.exp: Likewise.
+	* config/monitor.exp: Likewise.
+	* config/sid.exp: Likewise.
+	* config/sim.exp: Likewise.
+	* config/slite.exp: Likewise.
+	* config/vx.exp: Likewise.
+	* gdb.arch/i386-bp_permanent.exp: Likewise.
+	* gdb.asm/asm-source.exp: Likewise.
+	* gdb.base/args.exp: Likewise.
+	* gdb.base/attach-pie-misread.exp: Likewise.
+	* gdb.base/auxv.exp: Likewise.
+	* gdb.base/bigcore.exp: Likewise.
+	* gdb.base/bitfields2.exp: Likewise.
+	* gdb.base/bitfields.exp: Likewise.
+	* gdb.base/break.exp: Likewise.
+	* gdb.base/break-interp.exp: Likewise.
+	* gdb.base/callfuncs.exp: Likewise.
+	* gdb.base/call-sc.exp: Likewise.
+	* gdb.base/commands.exp: Likewise.
+	* gdb.base/corefile.exp: Likewise.
+	* gdb.base/dbx.exp: Likewise.
+	* gdb.base/ending-run.exp: Likewise.
+	* gdb.base/exprs.exp: Likewise.
+	* gdb.base/funcargs.exp: Likewise.
+	* gdb.base/hbreak2.exp: Likewise.
+	* gdb.base/huge.exp: Likewise.
+	* gdb.base/list.exp: Likewise.
+	* gdb.base/memattr.exp: Likewise.
+	* gdb.base/overlays.exp: Likewise.
+	* gdb.base/printcmds.exp: Likewise.
+	* gdb.base/recurse.exp: Likewise.
+	* gdb.base/remotetimeout.exp: Likewise.
+	* gdb.base/reread.exp: Likewise.
+	* gdb.base/savedregs.exp: Likewise.
+	* gdb.base/scope.exp: Likewise.
+	* gdb.base/sepdebug.exp: Likewise.
+	* gdb.base/setshow.exp: Likewise.
+	* gdb.base/setvar.exp: Likewise.
+	* gdb.base/sigaltstack.exp: Likewise.
+	* gdb.base/siginfo-addr.exp: Likewise.
+	* gdb.base/siginfo.exp: Likewise.
+	* gdb.base/siginfo-obj.exp: Likewise.
+	* gdb.base/sigrepeat.exp: Likewise.
+	* gdb.base/sigstep.exp: Likewise.
+	* gdb.base/structs.exp: Likewise.
+	* gdb.base/testenv.exp: Likewise.
+	* gdb.base/twice.exp: Likewise.
+	* gdb.base/valgrind-db-attach.exp: Likewise.
+	* gdb.base/valgrind-infcall.exp: Likewise.
+	* gdb.base/varargs.exp: Likewise.
+	* gdb.base/watchpoint.exp: Likewise.
+	* gdb.cp/gdb1355.exp: Likewise.
+	* gdb.cp/misc.exp: Likewise.
+	* gdb.disasm/hppa.exp: Likewise.
+	* gdb.disasm/t01_mov.exp: Likewise.
+	* gdb.disasm/t02_mova.exp: Likewise.
+	* gdb.disasm/t03_add.exp: Likewise.
+	* gdb.disasm/t04_sub.exp: Likewise.
+	* gdb.disasm/t05_cmp.exp: Likewise.
+	* gdb.disasm/t06_ari2.exp: Likewise.
+	* gdb.disasm/t07_ari3.exp: Likewise.
+	* gdb.disasm/t08_or.exp: Likewise.
+	* gdb.disasm/t09_xor.exp: Likewise.
+	* gdb.disasm/t10_and.exp: Likewise.
+	* gdb.disasm/t11_logs.exp: Likewise.
+	* gdb.disasm/t12_bit.exp: Likewise.
+	* gdb.disasm/t13_otr.exp: Likewise.
+	* gdb.gdb/selftest.exp: Likewise.
+	* gdb.hp/gdb.base-hp/callfwmall.exp: Likewise.
+	* gdb.mi/mi-reverse.exp: Likewise.
+	* gdb.pascal/floats.exp: Likewise.
+	* gdb.python/py-inferior.exp: Likewise.
+	* gdb.threads/attach-into-signal.exp: Likewise.
+	* gdb.threads/pthreads.exp: Likewise.
+	* gdb.threads/thread_events.exp: Likewise.
+	* gdb.threads/watchthreads.exp: Likewise.
+	* gdb.trace/actions-changed.exp: Likewise.
+	* gdb.trace/actions.exp: Likewise.
+	* gdb.trace/ax.exp: Likewise.
+	* gdb.trace/backtrace.exp: Likewise.
+	* gdb.trace/change-loc.exp: Likewise.
+	* gdb.trace/deltrace.exp: Likewise.
+	* gdb.trace/disconnected-tracing.exp: Likewise.
+	* gdb.trace/ftrace.exp: Likewise.
+	* gdb.trace/infotrace.exp: Likewise.
+	* gdb.trace/passc-dyn.exp: Likewise.
+	* gdb.trace/passcount.exp: Likewise.
+	* gdb.trace/pending.exp: Likewise.
+	* gdb.trace/qtro.exp: Likewise.
+	* gdb.trace/range-stepping.exp: Likewise.
+	* gdb.trace/report.exp: Likewise.
+	* gdb.trace/save-trace.exp: Likewise.
+	* gdb.trace/status-stop.exp: Likewise.
+	* gdb.trace/strace.exp: Likewise.
+	* gdb.trace/tfile.exp: Likewise.
+	* gdb.trace/tfind.exp: Likewise.
+	* gdb.trace/trace-break.exp: Likewise.
+	* gdb.trace/tracecmd.exp: Likewise.
+	* gdb.trace/trace-mt.exp: Likewise.
+	* gdb.trace/tspeed.exp: Likewise.
+	* gdb.trace/tsv.exp: Likewise.
+	* gdb.trace/while-stepping.exp: Likewise.
+	* lib/gdb.exp: Likewise.
+	* lib/gdbserver-support.exp: Likewise.
+	* lib/java.exp: Likewise.
+	* lib/mi-support.exp: Likewise.
+	* lib/pascal.exp: Likewise.
+	* lib/prompt.exp: Likewise.
+	* lib/trace-support.exp: Likewise.
+@
+text
+@d21 2
+a22 5
+set test valgrind-infcall
+set srcfile $test.c
+set executable $test
+set binfile ${objdir}/${subdir}/${executable}
+if {[build_executable $test.exp $executable $srcfile {debug}] == -1} {
+d84 1
+a84 1
+clean_restart $executable
+@
+
+
+1.8
+log
+@gdb/testsuite/
+	* gdb.base/valgrind-infcall.exp
+	(continue #$continue_count) <remote connection closed>
+	(continue #$continue_count) <valgrind vgdb has terminated>: Add kill of
+	$valgrind_pid.
+@
+text
+@d31 1
+a31 1
+set res [remote_spawn host $cmd];
+@
+
+
+1.7
+log
+@gdb/testsuite/
+	* gdb.base/valgrind-infcall.exp (valgrind_pid): New variable.
+	Add final kill of ${valgrind_pid}.
+@
+text
+@d104 2
+d110 2
+@
+
+
+1.7.2.1
+log
+@gdb/testsuite/
+	* gdb.base/valgrind-infcall.exp
+	(continue #$continue_count) <remote connection closed>
+	(continue #$continue_count) <valgrind vgdb has terminated>: Add kill of
+	$valgrind_pid.
+@
+text
+@a103 2
+	    # Only if valgrind got stuck.
+	    remote_exec host "kill -9 ${valgrind_pid}"
+a107 2
+	    # Only if valgrind got stuck.
+	    remote_exec host "kill -9 ${valgrind_pid}"
+@
+
+
+1.6
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@d82 1
+d126 3
+@
+
+
+1.5
+log
+@gdb/testsuite/
+	* gdb.base/valgrind-infcall.exp: Remove comment about Ubuntu.
+@
+text
+@d1 1
+a1 1
+# Copyright 2012 Free Software Foundation, Inc.
+@
+
+
+1.4
+log
+@gdb/testsuite/
+	* gdb.base/valgrind-infcall.exp (continue #$continue_count): Use
+	global variable loop, not a 'break'.  Add loop count limit to 100.
+	Add new fail case for terminated vgdb.
+@
+text
+@a98 1
+	    # In Ubuntu 10.04.4 environments 'break' does not work here.
+@
+
+
+1.3
+log
+@2012-08-03  Edjunior Machado  <emachado@@linux.vnet.ibm.com>
+
+	* gdb.base/valgrind-infcall.exp: Expect leading `.' on ppc64's
+	symbols. Abort if vgdb remote connection is closed.
+@
+text
+@d93 2
+a94 1
+while 1 {
+d99 2
+a100 1
+	    break
+d106 4
+@
+
+
+1.2
+log
+@gdb/testsuite/
+	* gdb.base/valgrind-infcall.exp: Relax the UNSUPPORTED check for more
+	valgrind versions.
+@
+text
+@d88 1
+a88 1
+gdb_test "$vgdbcmd" " in _start .*" "target remote for vgdb"
+d100 4
+@
+
+
+1.1
+log
+@gdb/
+	* infcall.c (call_function_by_hand): Move BP_ADDR comment to
+	AT_ENTRY_POINT.
+	(call_function_by_hand) <ON_STACK>: Call write_memory with
+	gdbarch_breakpoint_from_pc, if possible.
+	(call_function_by_hand) <AT_ENTRY_POINT>: The BP_ADDR comment is moved
+	here.
+
+gdb/testsuite/
+	* gdb.base/valgrind-infcall.c: New file.
+	* gdb.base/valgrind-infcall.exp: New file.
+@
+text
+@d65 1
+a65 1
+    -re "valgrind: Bad option '--vgdb-error=0'" {
+@
+
+
+1.1.2.1
+log
+@gdb/
+	* infcall.c (call_function_by_hand): Move BP_ADDR comment to
+	AT_ENTRY_POINT.
+	(call_function_by_hand) <ON_STACK>: Call write_memory with
+	gdbarch_breakpoint_from_pc, if possible.
+	(call_function_by_hand) <AT_ENTRY_POINT>: The BP_ADDR comment is moved
+	here.
+
+gdb/testsuite/
+	* gdb.base/valgrind-infcall.c: New file.
+	* gdb.base/valgrind-infcall.exp: New file.
+@
+text
+@@
+
+
+1.1.2.2
+log
+@gdb/testsuite/
+	* gdb.base/valgrind-infcall.exp: Relax the UNSUPPORTED check for more
+	valgrind versions.
+@
+text
+@d65 1
+a65 1
+    -re "valgrind: Bad option.*--vgdb-error=0" {
+@
+
+
+1.1.2.3
+log
+@2012-08-03  Edjunior Machado  <emachado@@linux.vnet.ibm.com>
+
+* gdb.base/valgrind-infcall.exp: Expect leading `.' on ppc64's
+symbols. Abort if vgdb remote connection is closed.
+@
+text
+@d88 1
+a88 1
+gdb_test "$vgdbcmd" " in \\.?_start .*" "target remote for vgdb"
+a99 4
+	-re "Remote connection closed.*\r\n$gdb_prompt $" {
+	    fail "$test (remote connection closed)"
+	    return -1
+	}
+@
+
+
+1.1.2.4
+log
+@gdb/testsuite/
+	* gdb.base/valgrind-infcall.exp (continue #$continue_count): Use
+	global variable loop, not a 'break'.  Add loop count limit to 100.
+	Add new fail case for terminated vgdb.
+@
+text
+@d93 1
+a93 2
+set loop 1
+while {$loop && $continue_count < 100} {
+d98 1
+a98 2
+	    # In Ubuntu 10.04.4 environments 'break' does not work here.
+	    set loop 0
+a103 4
+	-re "The program is not being run\\.\r\n$gdb_prompt $" {
+	    fail "$test (valgrind vgdb has terminated)"
+	    return -1
+	}
+@
+
+
+1.1.2.5
+log
+@gdb/testsuite/
+	* gdb.base/valgrind-infcall.exp: Remove comment about Ubuntu.
+@
+text
+@d99 1
+@
+
+

@@ -1,0 +1,282 @@
+head	1.3;
+access;
+symbols
+	cygwin-1_7_35-release:1.3
+	cygwin-1_7_34-release:1.3
+	cygwin-1_7_33-release:1.3
+	cygwin-1_7_32-release:1.3
+	cygwin-1_7_31-release:1.3
+	cygwin-1_7_30-release:1.3
+	cygwin-1_7_29-release:1.3
+	cygwin-1_7_29-release-branchpoint:1.3.0.2
+	cygwin-1_7_28-release:1.3
+	cygwin-1_7_27-release:1.3
+	cygwin-1_7_26-release:1.3
+	cygwin-1_7_25-release:1.3
+	cygwin-1_7_24-release:1.3
+	cygwin-1_7_23-release:1.3
+	cygwin-1_7_22-release:1.3
+	cygwin-1_7_21-release:1.3
+	cygwin-1_7_20-release:1.3
+	cygwin-1_7_19-release:1.3
+	cygwin-64bit-postmerge:1.3
+	cygwin-64bit-premerge-branch:1.2.0.12
+	cygwin-64bit-premerge:1.2
+	cygwin-1_7_18-release:1.2
+	cygwin-1_7_17-release:1.2
+	cygwin-64bit-branch:1.2.0.10
+	cygwin-1_7_16-release:1.2
+	cygwin-1_7_15-release:1.2
+	cygwin-1_7_14_2-release:1.2
+	cygwin-1_7_14-release:1.2
+	cygwin-1_7_12-release:1.2
+	cygwin-1_7_11-release:1.2
+	cygwin-1_7_10-release:1.2
+	cygwin-1_7_9-release:1.2
+	cygwin-1_7_8-release:1.2
+	cygwin-1_7_7-release:1.2
+	cygwin-1_7_5-release:1.2
+	cygwin-1_7_4-release:1.2
+	cygwin-1_7_3-release:1.2
+	cygwin-1_7_2-release:1.2
+	cygwin-1_7_1-release:1.2
+	cv-branch-2:1.2.0.8
+	cr-0x5f1:1.2.0.6
+	cv-branch:1.2.0.4
+	cr-0x3b58:1.2.0.2
+	cr-0x9e:1.1.0.8
+	cr-0x9d:1.1.0.6
+	corinna-01:1.1
+	cr-0x9c:1.1.0.4
+	cr-0x9b:1.1.0.2
+	cr-0x99:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.3
+date	2013.04.23.09.44.30;	author corinna;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2004.09.15.10.17.52;	author corinna;	state Exp;
+branches
+	1.2.10.1;
+next	1.1;
+
+1.1
+date	2003.08.30.16.32.15;	author cgf;	state Exp;
+branches;
+next	;
+
+1.2.10.1
+date	2012.12.04.17.25.22;	author corinna;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.3
+log
+@	* Merge in cygwin-64bit-branch.
+@
+text
+@/* threaded_queue.h
+
+   Copyright 2001, 2002, 2003, 2012 Red Hat Inc.
+
+   Written by Robert Collins <rbtcollins@@hotmail.com>
+
+This file is part of Cygwin.
+
+This software is a copyrighted work licensed under the terms of the
+Cygwin license.  Please consult the file "CYGWIN_LICENSE" for
+details. */
+
+#ifndef _THREADED_QUEUE_
+#define _THREADED_QUEUE_
+
+/*****************************************************************************/
+
+/* a specific request */
+
+class queue_request
+{
+public:
+  queue_request *_next;
+
+  queue_request () : _next (NULL) {}
+  virtual ~queue_request ();
+
+  virtual void process () = 0;
+};
+
+/*****************************************************************************/
+
+/* a queue to allocate requests from n submission loops to x worker threads */
+
+class queue_submission_loop;
+
+class threaded_queue
+{
+public:
+  threaded_queue (size_t initial_workers = 1);
+  ~threaded_queue ();
+
+  void add_submission_loop (queue_submission_loop *);
+
+  bool running () const { return _running; }
+
+  bool start ();
+  bool stop ();
+
+  void add (queue_request *);
+
+private:
+  LONG _workers_count;
+  bool _running;
+
+  queue_submission_loop *_submitters_head;
+
+  long _requests_count;		// Informational only.
+  queue_request *_requests_head;
+
+  CRITICAL_SECTION _queue_lock;
+  HANDLE _requests_sem;		// == _requests_count
+
+  static DWORD WINAPI start_routine (LPVOID /* this */);
+
+  void create_workers (size_t initial_workers);
+  void worker_loop ();
+};
+
+/*****************************************************************************/
+
+/* parameters for a request finding and submitting loop */
+
+class queue_submission_loop
+{
+  friend class threaded_queue;
+
+public:
+  queue_submission_loop (threaded_queue *, bool ninterruptible);
+  virtual ~queue_submission_loop ();
+
+  bool start ();
+  bool stop ();
+
+  threaded_queue *queue () { return _queue; };
+
+protected:
+  bool _running;
+  HANDLE _interrupt_event;
+  threaded_queue *const _queue;
+
+private:
+  bool _interruptible;
+  HANDLE _hThread;
+  DWORD _tid;
+  queue_submission_loop *_next;
+
+  static DWORD WINAPI start_routine (LPVOID /* this */);
+  virtual void request_loop () = 0;
+};
+
+#ifdef __cplusplus
+
+/*---------------------------------------------------------------------------*
+ * Some type-safe versions of the various interlocked functions.
+ *---------------------------------------------------------------------------*/
+
+template <typename T> T *
+TInterlockedExchangePointer (T **lvalue, T *rvalue)
+{
+  return reinterpret_cast<T *>
+    (InterlockedExchangePointer (reinterpret_cast<void **> (lvalue),
+				 reinterpret_cast<void *> (rvalue)));
+}
+
+template <typename T> T *
+TInterlockedCompareExchangePointer (T **lvalue, T *rvalue1, T *rvalue2)
+{
+  return reinterpret_cast<T *>
+    (InterlockedCompareExchangePointer (reinterpret_cast<void **> (lvalue),
+					reinterpret_cast<void *> (rvalue1),
+					reinterpret_cast<void *> (rvalue2)));
+}
+
+#endif /* __cplusplus */
+
+#endif /* _THREADED_QUEUE_ */
+@
+
+
+1.2
+log
+@	Fix copyright throughout.
+	Eliminate use of _impure_ptr outside Cygwin.
+	* bsd_helper.cc: Include errno.h instead of cygerrno.h.
+	* bsd_mutex.cc : Ditto.
+	* client.cc: Ditto.
+	* cygserver.cc: Ditto.
+	* process.cc: Don't build functions inside Cygwin.  Don't include
+	cygerrno.h.  Don't set errno.
+	* transport_pipes.cc (SET_ERRNO): New define.  Use througout.
+	* transport_sockets.cc (SET_ERRNO): Ditto.
+	(GET_ERRNO): Ditto.
+@
+text
+@d3 1
+a3 1
+   Copyright 2001, 2002, 2003 Red Hat Inc.
+d53 1
+a53 1
+  long _workers_count;
+@
+
+
+1.2.10.1
+log
+@	* bsd_helper.cc (tunable_int_fetch): Convert 2nd parameter to
+	int32_t.
+	* bsd_helper.h (tunable_int_fetch): Fix declaration accordingly.
+	* bsd_log.cc (log_level): Change type to int32_t.
+	* bsd_log.h (log_level): Fix declaration accordingly.
+	* bsd_mutex.cc (msgmni): Change type to int32_t.
+	(semmni): Ditto.
+	* cygserver.cc: Fix debug output to be target agnostic.  Use same
+	style throughout.
+	* msg.cc (client_request_msg::serve): Refuse to serve 64 bit processes
+	from 32 bit cygserver.
+	* sem.cc (client_request_sem::serve): Ditto.
+	* shm.cc (client_request_shm::serve): Ditto.
+	* sysv_shm.cc (shm_delete_mapping): Mark size as unused to make gcc
+	happy.
+	(kern_shmat): Ditto with flags.
+	* process.h (class process): Change type of _cleaning_up member to LONG.
+	* threaded_queue.h (class threaded_queue): Ditto for _workers_count.
+@
+text
+@d3 1
+a3 1
+   Copyright 2001, 2002, 2003, 2012 Red Hat Inc.
+d53 1
+a53 1
+  LONG _workers_count;
+@
+
+
+1.1
+log
+@* threaded_queue.h: New file.
+@
+text
+@d3 1
+a3 1
+   Copyright 2001, 2002 Red Hat Inc.
+@
+

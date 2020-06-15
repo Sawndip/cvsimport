@@ -1,0 +1,422 @@
+head	1.8;
+access;
+symbols
+	binutils-2_24-branch:1.8.0.10
+	binutils-2_24-branchpoint:1.8
+	binutils-2_21_1:1.8
+	binutils-2_23_2:1.8
+	binutils-2_23_1:1.8
+	binutils-2_23:1.8
+	binutils-2_23-branch:1.8.0.8
+	binutils-2_23-branchpoint:1.8
+	binutils-2_22_branch:1.8.0.6
+	binutils-2_22:1.8
+	binutils-2_22-branch:1.8.0.4
+	binutils-2_22-branchpoint:1.8
+	binutils-2_21:1.8
+	binutils-2_21-branch:1.8.0.2
+	binutils-2_21-branchpoint:1.8
+	binutils-2_20_1:1.7
+	binutils-2_20:1.7
+	binutils-arc-20081103-branch:1.7.0.10
+	binutils-arc-20081103-branchpoint:1.7
+	binutils-2_20-branch:1.7.0.8
+	binutils-2_20-branchpoint:1.7
+	dje-cgen-play1-branch:1.7.0.6
+	dje-cgen-play1-branchpoint:1.7
+	arc-20081103-branch:1.7.0.4
+	arc-20081103-branchpoint:1.7
+	binutils-2_19_1:1.7
+	binutils-2_19:1.7
+	binutils-2_19-branch:1.7.0.2
+	binutils-2_19-branchpoint:1.7
+	binutils_latest_snapshot:1.8
+	added-to-binutils:1.5;
+locks; strict;
+comment	@ * @;
+
+
+1.8
+date	2010.02.12.04.33.53;	author ian;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2008.05.21.21.37.44;	author ian;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2008.04.17.07.12.00;	author ian;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2008.03.13.21.04.21;	author iant;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2007.12.14.19.00.21;	author iant;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2007.11.22.00.05.51;	author iant;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2007.09.22.21.02.10;	author iant;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2006.11.03.18.26.10;	author iant;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.8
+log
+@	* gold.cc (queue_middle_gc_tasks): Use a separate blocker for each
+	Read_relocs task.
+	(queue_middle_tasks): Likewise, and also for Scan_relocs.  Run
+	Allocate_commons_task first.
+	* reloc.cc (Read_relocs::run): Pass next_blocker_ down to next
+	task, rather than symtab_lock_.
+	(Gc_process_relocs::~Gc_process_relocs): New function.
+	(Gc_process_relocs::is_runnable): Check this_blocker_.
+	(Gc_process_relocs::locks): Use next_blocker_ rather than
+	blocker_.
+	(Scan_relocs::~Scan_relocs): New function.
+	(Scan_relocs::is_runnable): Check this_blocker_ rather than
+	symtab_lock_.
+	(Scan_relocs::locks): Drop symtab_lock_ and blocker_.  Add
+	next_blocker_.
+	* reloc.h (class Read_relocs): Drop symtab_lock_ and blocker_
+	fields.  Add this_blocker_ and next_blocker_ fields.  Adjust
+	constructor accordingly.
+	(class Gc_process_relocs): Likewise.
+	(class Scan_relocs): Likewise.
+	* common.h (class Allocate_commons_task): Remove symtab_lock_
+	field, and corresponding constructor parameter.
+	* common.cc (Allocate_commons_tasK::is_runnable): Remove use of
+	symtab_lock_.
+	(Allocate_commons_task::locks): Likewise.
+@
+text
+@// common.h -- handle common symbols for gold   -*- C++ -*-
+
+// Copyright 2006, 2007, 2008, 2010 Free Software Foundation, Inc.
+// Written by Ian Lance Taylor <iant@@google.com>.
+
+// This file is part of gold.
+
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 3 of the License, or
+// (at your option) any later version.
+
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+// MA 02110-1301, USA.
+
+#ifndef GOLD_COMMON_H
+#define GOLD_COMMON_H
+
+#include "workqueue.h"
+
+namespace gold
+{
+
+class Symbol_table;
+
+// This task is used to allocate the common symbols.
+
+class Allocate_commons_task : public Task
+{
+ public:
+  Allocate_commons_task(Symbol_table* symtab, Layout* layout, Mapfile* mapfile,
+			Task_token* blocker)
+    : symtab_(symtab), layout_(layout), mapfile_(mapfile), blocker_(blocker)
+  { }
+
+  // The standard Task methods.
+
+  Task_token*
+  is_runnable();
+
+  void
+  locks(Task_locker*);
+
+  void
+  run(Workqueue*);
+
+  std::string
+  get_name() const
+  { return "Allocate_commons_task"; }
+
+ private:
+  Symbol_table* symtab_;
+  Layout* layout_;
+  Mapfile* mapfile_;
+  Task_token* blocker_;
+};
+
+} // End namespace gold.
+
+#endif // !defined(GOLD_COMMON_H)
+@
+
+
+1.7
+log
+@	* mapfile.cc: New file.
+	* mapfile.h: New file.
+	* options.h (class General_options): Add -M/--print-map and -Map.
+	* options.cc (General_options::finalize): Make -M equivalent to
+	-Map -.
+	* main.cc: Include <cstdio> and "mapfile.h".
+	(main): Open mapfile if requested.
+	* gold.cc (class Middle_runner): Add mapfile_ field.  Update
+	constructor.  Change caller.
+	(queue_initial_tasks): Add mapfile parameter.  Change caller.
+	(queue_middle_tasks): Likewise.
+	* gold.h (queue_initial_tasks, queue_middle_tasks): Update
+	declarations.
+	* archive.cc: Include "mapfile.h".
+	(Archive::add_symbols): Add mapfile parameter.  Change all
+	callers.  Pass mapfile, symbol, and reason to include_member.
+	(Archive::include_all_members): Add mapfile parameter.  Change all
+	callers.
+	(Archive::include_member): Add mapfile, sym, and why parameters.
+	Change all callers.  Report inclusion to map file.
+	* archive.h: Include "fileread.h".
+	(class Archive): Update declarations.
+	(Archive::file): New const method.
+	(class Add_archive_symbols): Add mapfile_ field.  Update
+	constructor.  Change all callers.
+	* readsyms.h (class Read_symbols): Likewise.
+	(class Finish_group): Likewise.
+	(class Read_script): Likewise.
+	* common.cc: Include "mapfile.h".
+	(Symbol_table::allocate_commons): Add mapfile parameter.  Change
+	all callers.
+	(Symbol_table::do_allocate_commons): Likewise.
+	(Symbol_table::do_allocate_commons_list): Likewise.  Report common
+	symbol allocation to mapfile.
+	* common.h (class Allocate_commons_task): Add mapfile_ field.
+	Update constructor.  Change all callers.
+	* symtab.h (class Symbol_table): Update declarations.
+	* layout.cc: Include "mapfile.h".
+	(Layout_task_runner::run): Print information to mapfile.
+	(Layout::create_gold_note): Change Output_data_fixed_space to
+	Output_data_zero_fill.
+	(Layout::create_build_id): Likewise.
+	(Layout::print_to_mapfile): New function.
+	* layout.h (class Layout_task_runner): Add mapfile_ field.  Update
+	constructor.  Change caller.
+	(class Layout): Declare print_to_mapfile.
+	* output.cc (Output_section::Input_section::print_to_mapfile): New
+	function.
+	(Output_section::add_input_section): If producing a map, always
+	add to input_sections_ list.
+	(Output_section::do_print_to_mapfile): New function.
+	(Output_segment::print_sections_to_mapfile): New function.
+	(Output_segment::print_section_list_to_mapfile): New function.
+	* output.h: Include "mapfile.h".
+	(Output_data::print_to_mapfile): New function.
+	(Output_data::do_print_to_mapfile): New virtual function.
+	(Output_segment_headers::do_print_to_mapfile): New function.
+	(Output_file_header::do_print_to_mapfile): New function.
+	(Output_data_const::do_print_to_mapfile): New function.
+	(class Output_data_const_buffer): Add map_name_ field.  Update
+	constructor.  Change all callers.  Add do_print_to_mapfile
+	function.
+	(class Output_data_fixed_space): Likewise.
+	(class Output_data_space): Likewise.
+	(class Output_data_zero_fill): New class.
+	(Output_data_strtab::do_print_to_mapfile): New function.
+	(Output_data_reloc_base::do_print_to_mapfile): New function.
+	(Output_relocatable_relocs::do_print_to_mapfile): New function.
+	(Output_data_group::do_print_to_mapfile): New function.
+	(Output_data_got::do_print_to_mapfile): New function.
+	(Output_data_dynamic::do_print_to_mapfile): New function.
+	(Output_symtab_xindex::do_print_to_mapfile): New function.
+	(class Output_section): Declare do_print_to_mapflie.  Declare
+	print_to_mapfile in Input_section.
+	(class Output_segment): Declare new functions.
+	* object.h (Sized_relobj::symbol_count): New function.
+	* script-sections.cc
+	(Output_section_element_dot_assignment::set_section_addresses):
+	Change Output_data_fixed_space to Output_data_zero_fill.
+	(Output_data_expression::do_print_to_mapfile): New function.
+	* script.cc (read_input_script): Add mapfile parameter.  Change
+	all callers.
+	* script.h (read_input_script): Update declaration.
+	* ehframe.h (Eh_frame_hdr::do_print_to_mapfile): New function.
+	(Eh_frame::do_print_to_mapfile): New function.
+	* merge.h (Output_merge_data::do_print_to_mapfile): New function.
+	(Output_merge_string::do_print_to_mapfile): New function.
+	* i386.cc (Output_data_plt_i386::do_print_to_mapfile): New
+	function.
+	* sparc.cc (Output_data_plt_sparc::do_print_to_mapfile): New
+	function.
+	* x86_64.cc (Output_data_plt_x86_64::do_print_to_mapfile): New
+	function.
+	* Makefile.am (CCFILES): Add mapfile.cc.
+	(HFILES): Add mapfile.h.
+	* Makefile.in: Rebuild.
+@
+text
+@d3 1
+a3 1
+// Copyright 2006, 2007, 2008 Free Software Foundation, Inc.
+d39 2
+a40 3
+			Task_token* symtab_lock, Task_token* blocker)
+    : symtab_(symtab), layout_(layout), mapfile_(mapfile),
+      symtab_lock_(symtab_lock), blocker_(blocker)
+a61 1
+  Task_token* symtab_lock_;
+@
+
+
+1.6
+log
+@	* common.cc (Symbol_table::allocate_commons): Remove options
+	parameter.  Change caller.
+	(Symbol_table::do_allocate_commons): Remove options parameter.
+	Change caller.  Just call do_allocate_commons_list twice.
+	(Symbol_table::do_allocate_commons_list): New function, broken out
+	of do_allocate_commons.
+	* common.h (class Allocate_commons_task): Remove options_ field.
+	Update constructor.
+	* symtab.cc (Symbol_table::Symbol_table): Initialize
+	tls_commons_.
+	(Symbol_table::add_from_object): Put TLS common symbols on
+	tls_commons_ list.
+	(Symbol_table::sized_finalize_symbol): Handle STT_TLS symbols
+	which are IN_OUTPUT_DATA.
+	* symtab.h (class Symbol_table): Add tls_commons_ field.  Update
+	allocate_commons and do_allocate_commons declarations.  Declare
+	do_allocate_commons_list.
+	* gold.cc (queue_middle_tasks): Update creation of
+	Allocate_commons_task to not pass options.
+	* testsuite/Makefile.am (INCLUDES): Add -I.. .
+	(TLS_TEST_C_FLAGS): New variable.
+	(tls_test_c_pic.o): New target.
+	(tls_test_shared.so): Link in tls_test_c_pic.o.
+	(tls_test_c_pic_ie.o): New target.
+	(tls_test_ie_shared.so): Link in tls_test_c_pic_ie.o.
+	(tls_test_DEPENDENCIES, tls_test_LDADD): Add tls_test_c.o.
+	(tls_test_c.o): New target.
+	(tls_pic_test_DEPENDENCIES): Add tls_test_c_pic.o.
+	(tls_pic_test_LDADD): Likewise.
+	(tls_shared_gd_to_ie_test_DEPENDENCIES): Add tls_test_c_pic.o.
+	(tls_shared_gd_to_ie_test_LDADD): Likewise.
+	(tls_test_c_gnu2.o): New target.
+	(tls_shared_gnu2_gd_to_ie_test_DEPENDENCIES): Add
+	tls_test_c_gnu2.o.
+	(tls_shared_gnu2_gd_to_ie_test_LDADD): Likewise.
+	(tls_test_gnu2_shared.so): Link in tls_test_c_gnu2.o.
+	(tls_test_shared_nonpic.so): Link in tls_test_c.o.
+	* testsuite/tls_test.cc: Include "config.h".
+	(t_last): Call t11_last.
+	* testsuite/tls_test.h (t11, t11_last): Declare.
+	* testsuite/tls_test_c.c: New file.
+	* testsuite/tls_test_main.cc (thread_routine): Call t11.
+	* configure.ac: Check for OpenMP support.
+	* configure, config.in, Makefile.in: Rebuild.
+	* testsuite/Makefile.in: Rebuild.
+@
+text
+@d38 1
+a38 1
+  Allocate_commons_task(Symbol_table* symtab, Layout* layout,
+d40 2
+a41 2
+    : symtab_(symtab), layout_(layout), symtab_lock_(symtab_lock),
+      blocker_(blocker)
+d62 1
+@
+
+
+1.5
+log
+@Update copyright years.  Update language files.
+@
+text
+@a30 1
+class General_options;
+d38 4
+a41 5
+  Allocate_commons_task(const General_options& options, Symbol_table* symtab,
+			Layout* layout, Task_token* symtab_lock,
+			Task_token* blocker)
+    : options_(options), symtab_(symtab), layout_(layout),
+      symtab_lock_(symtab_lock), blocker_(blocker)
+a59 1
+  const General_options& options_;
+@
+
+
+1.4
+log
+@Rewrite workqueue.  This version eliminates the master thread, and
+reduces the amount of locking required to find a new thread to run.
+@
+text
+@d3 1
+a3 1
+// Copyright 2006, 2007 Free Software Foundation, Inc.
+@
+
+
+1.3
+log
+@Add threading support.
+@
+text
+@d48 2
+a49 2
+  Is_runnable_type
+  is_runnable(Workqueue*);
+d51 2
+a52 2
+  Task_locker*
+  locks(Workqueue*);
+a61 2
+  class Allocate_commons_locker;
+
+@
+
+
+1.2
+log
+@Add licensing text to every source file.
+@
+text
+@d57 4
+@
+
+
+1.1
+log
+@Can now do a full static link of hello, world in C or C++
+@
+text
+@d3 20
+@
+

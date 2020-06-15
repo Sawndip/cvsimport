@@ -1,0 +1,445 @@
+head	1.5;
+access;
+symbols
+	sid-20020905-branchpoint:1.3
+	sid-20020905-branch:1.3.0.2
+	cygnus_cvs_20020108_pre:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.5
+date	2003.01.08.04.08.29;	author bje;	state dead;
+branches;
+next	1.4;
+
+1.4
+date	2002.12.02.21.35.13;	author fche;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2002.02.07.17.32.28;	author fche;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2002.01.23.02.12.11;	author bje;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2001.08.04.12.04.47;	author bje;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.5
+log
+@* contribute disassembler interface for C++:
+
+2002-04-03  Ben Elliston  <bje@@redhat.com>
+
+	* Makefile.am (TRACEDIS): Remove.
+	(libcgencpu_la_SOURCES): Add tracedis.cxx.
+	* tracedis.c: Rename from this ..
+	* tracedis.cxx: .. to this.
+	(trace_printf): New static function.
+	(cgen_disassemble): Pass trace_printf with INIT_DISASSEMBLE_INFO.
+	* compCGEN.cxx: Do not #include "tracedis.h" within extern "C".
+@
+text
+@// tracedis.c - disassembly tracing support.  -*- C -*-
+
+// Copyright (C) 2001, 2002 Red Hat.
+// This file is part of SID and is licensed under the GPL.
+// See the file COPYING.SID for conditions for redistribution.
+
+#include "tracedis.h"
+
+void register_name(enum bfd_architecture, const char *);
+
+void
+cgen_disassemble(bfd_vma pc,
+		 disassemble_info *info,
+		 void *this,
+		 READMEM read_mem_func,
+		 MEMERR memory_error_func,
+		 PRINTADDR print_addr_func,
+		 SYMATADDR sym_at_addr_func,
+		 disassembler_ftype fp,
+		 enum bfd_flavour flavour,
+		 enum bfd_architecture arch,
+		 enum bfd_endian endian,
+		 const char *name,
+		 unsigned long isa_mask)
+{
+  register_name(arch, name);
+  INIT_DISASSEMBLE_INFO(*info, stdout, fprintf);
+  info->application_data = this;
+  info->flavour = flavour;
+  info->insn_sets = isa_mask; /* may be 0 */
+  info->arch = arch;
+  info->endian = endian;
+  info->read_memory_func = read_mem_func;
+  info->memory_error_func = memory_error_func;
+  info->print_address_func = print_addr_func;
+  info->symbol_at_address_func = sym_at_addr_func;
+
+  printf("0x%08x\t", (unsigned int)pc);
+  (void) (*fp) (pc, info);
+  printf("\t");
+}
+
+// opcodes needs:
+//	enum bfd_architecture bfd_get_arch(bfd *abfd);
+//		- disassembler() calls it at the top.  we don't use disassembler().
+//	const bfd_arch_info_type *bfd_lookup_arch(enum bfd_architecture arch, unsigned long machine);
+//		- cgen generated disassemblers call this to find subarch(?).  this one is not easy to
+//		  fix as it uses bfd data.
+//	bfd_vma bfd_get_bits (bfd_byte *addr, int bits, bfd_boolean big_p);
+//	void bfd_put_bits (bfd_vma data, bfd_byte *addr, int bits, bfd_boolean big_p);
+//		- these two are small and can be replicated.
+//
+// so that only really leaves bfd_lookup_arch() as an issue...we can hack it.
+
+enum bfd_architecture
+bfd_get_arch(bfd *abfd)
+{ 
+  return 0;
+}
+
+/* Stolen from libbfd.  */
+
+bfd_vma
+bfd_getb16 (addr)
+     register const bfd_byte *addr;
+{
+  return (addr[0] << 8) | addr[1];
+}
+
+bfd_vma
+bfd_getl16 (addr)
+     register const bfd_byte *addr;
+{
+  return (addr[1] << 8) | addr[0];
+}
+
+bfd_vma
+bfd_getb32 (addr)
+     register const bfd_byte *addr;
+{
+  unsigned long v;
+
+  v = (unsigned long) addr[0] << 24;
+  v |= (unsigned long) addr[1] << 16;
+  v |= (unsigned long) addr[2] << 8;
+  v |= (unsigned long) addr[3];
+  return (bfd_vma) v;
+}
+
+bfd_vma
+bfd_getl32 (addr)
+     register const bfd_byte *addr;
+{
+  unsigned long v;
+
+  v = (unsigned long) addr[0];
+  v |= (unsigned long) addr[1] << 8;
+  v |= (unsigned long) addr[2] << 16;
+  v |= (unsigned long) addr[3] << 24;
+  return (bfd_vma) v;
+}
+
+void
+bfd_put_bits (data, addr, bits, big_p)
+     bfd_vma data;
+     bfd_byte *addr;
+     int bits;
+     bfd_boolean big_p;
+{
+  int i;
+  int bytes;
+
+  if (bits % 8 != 0)
+    abort ();
+
+  bytes = bits / 8;
+  for (i = 0; i < bytes; i++)
+    {
+      int index = big_p ? bytes - i - 1 : i;
+
+      addr[index] = (bfd_byte) data;
+      data >>= 8;
+    }
+}
+
+/* Stolen from libbfd.  */
+bfd_vma
+bfd_get_bits (addr, bits, big_p)
+     bfd_byte *addr;
+     int bits;
+     bfd_boolean big_p;
+{
+  bfd_vma data;
+  int i;
+  int bytes;
+
+  if (bits % 8 != 0)
+    abort ();
+
+  data = 0;
+  bytes = bits / 8;
+  for (i = 0; i < bytes; i++)
+    {
+      int index = big_p ? i : bytes - i - 1;
+
+      data = (data << 8) | addr[index];
+    }
+
+  return data;
+}
+
+/* However, bfd_lookup_arch() is a lot harder and requires us to manage
+   our own list of architectures, and return a bfd_arch_info_type with
+   just the name set.  */
+
+/* This is a hack.  */
+struct bfd_arch_hack {
+  struct bfd_arch_hack *next;
+  enum bfd_architecture arch;
+  const char *name;
+};
+
+struct bfd_arch_hack *hack_list;
+
+void
+register_name(enum bfd_architecture arch, const char *name)
+{
+  struct bfd_arch_hack *p;
+
+  if (hack_list == NULL)
+    {
+      hack_list = (struct bfd_arch_hack *)xmalloc(sizeof *hack_list);
+      hack_list->next = NULL;
+      hack_list->arch = arch;
+      hack_list->name = name;
+      return;
+    }
+
+  for (p = hack_list; p; p = p->next)
+    if (strcmp(p->name, name) == 0)
+      {
+	p->arch = arch;
+	return;
+      }
+  p = (struct bfd_arch_hack *)xmalloc(sizeof *hack_list);
+  p->next = hack_list;
+  p->arch = arch;
+  p->name = name;
+}
+
+const bfd_arch_info_type *
+bfd_lookup_arch (arch, machine)
+     enum bfd_architecture arch;
+     unsigned long machine;
+{ 
+  static bfd_arch_info_type info;
+  struct bfd_arch_hack *b;
+
+  for (b = hack_list; b->name; b++)
+    {
+      if (b->arch == arch)
+	{
+          info.printable_name = b->name;
+          return &info;
+	}
+    }
+
+  return NULL;
+}    
+@
+
+
+1.4
+log
+@2002-12-02  Frank Ch. Eigler  <fche@@redhat.com>
+
+	* tracedis.c: s/boolean/bfd_boolean/ throughout, to match bfd change.
+@
+text
+@@
+
+
+1.3
+log
+@* disasm improvements
+
+2002-02-06  Frank Ch. Eigler  <fche@@redhat.com>
+
+	* compCGEN.cxx (cgen_disassemble): New "isa_mask" argument.
+	* tracedis.c (disassemble): Ditto.  Support it.
+	(cgen_disassemble): Defeat initialization bypass cache.
+	* cgen-cpu.h, tracedis.h: Corresponding changes.
+@
+text
+@d49 2
+a50 2
+//	bfd_vma bfd_get_bits (bfd_byte *addr, int bits, boolean big_p);
+//	void bfd_put_bits (bfd_vma data, bfd_byte *addr, int bits, boolean big_p);
+d108 1
+a108 1
+     boolean big_p;
+d131 1
+a131 1
+     boolean big_p;
+@
+
+
+1.2
+log
+@2002-01-23  Ben Elliston  <bje@@redhat.com>
+
+	* tracedis.c (bfd_getb16): New function.
+	(bfd_getl16): Likewise.
+	(bfd_getb32): Likewise.
+	(bfd_getl32): Likewise.
+@
+text
+@d23 2
+a24 1
+		 const char *name)
+d26 11
+a36 13
+  if (info->read_memory_func != read_mem_func)
+    {
+      register_name(arch, name);
+      INIT_DISASSEMBLE_INFO(*info, stdout, fprintf);
+      info->application_data = this;
+      info->flavour = flavour;
+      info->arch = arch;
+      info->endian = endian;
+      info->read_memory_func = read_mem_func;
+      info->memory_error_func = memory_error_func;
+      info->print_address_func = print_addr_func;
+      info->symbol_at_address_func = sym_at_addr_func;
+    }
+@
+
+
+1.1
+log
+@2001-07-20  Ben Elliston  <bje@@redhat.com>
+
+	* configure.in: Check whether libintl is required for gettext.
+	* acinclude.m4: Remove.
+	* configure: Rebuild.
+	* aclocal.m4: Likewise.
+	* Makefile.in: Likewise.
+
+2001-07-10  matthew green  <mrg@@redhat.com>
+
+	* Makefile.in: Regenerate.
+	* aclocal.m4: Regenerate.
+	* configure: Regenerate.
+	* cgen-ops.h (JOINHISI): New define.
+
+2001-07-02  Ben Elliston  <bje@@redhat.com>
+
+	* common-xml/interface.xml (debug-exec?): Remove.
+
+2001-06-29  graydon hoare  <graydon@@redhat.com>
+
+	* common-xml/*: Add files.
+
+2001-06-28  Jeff Johnston  <jjohnstn@@redhat.com>
+
+	* compCGEN.cxx (cgen_cpu::stream_state): Change reference to
+	debug_exec_p to use new warnings_enabled flag.
+	(cgen_cpu::destream_state): Ditto.
+
+2001-06-23  Frank Ch. Eigler  <fche@@redhat.com>
+
+	* cgen-cpu.h, tracedis.h: #undef AND unwittingly acquired
+	from ansidecl.h.
+
+2001-06-20  matthew green  <mrg@@redhat.com>
+
+	* Makefile.am (INCLUDESBFD, OPCODES, LIBIBERTY, TRACEDIS): Set
+	unconditionally.
+	* cgen-cpu.h: Delete CGEN_BFD_DISASSEMBLER conditional.
+	* compCGEN.cxx: Likewise.
+	* configure.in (CY_SID_BFD_DISASM_CHECK): Delete.
+	* configure: Regenerate.
+	* Makefile.in: Likewise.
+	* aclocal.m4: Likewise.
+	* config.in: Likewise.
+
+2001-06-07  matthew green  <mrg@@redhat.com>
+
+	* Makefile.am (BFDLIBS): Remove.
+	* Makefile.in: Regenerate.
+	* cgen-cpu.h (disassemble): Now takes a `const char *name' parameter.
+	* compCGEN.cxx (cgen_bi_endian_cpu::disassemble): Likewise.
+	* tracedis.c (cgen_disassemble): Likewise.  Also, call register_name()
+	with arch & name.
+	(bfd_get_arch): New dummy function.
+	(bfd_put_bits, bfd_get_bits): New functions. Copy from libbfd.
+	(hack_list): New list of arch to name mappings.
+	(register_name): New function.
+	(bfd_lookup_arch): New function. Uses hack_list.
+	* tracedis (cgen_disassemble): Update prototype.
+
+2001-06-07  Frank Ch. Eigler  <fche@@redhat.com>
+
+	* cgen-cpu.h: Move new getter/setter functions to *MEM* from *IMEM*.
+
+2001-06-06  graydon hoare  <graydon@@redhat.com>
+
+	* cgen-types.h: Add SF,DF,BI types.
+	* cgen-cpu.h (class cgen_bi_endian_cpu): Add some getter/setter
+	functions for various memory types.
+
+2001-05-29  matthew green  <mrg@@redhat.com>
+
+	* Makefile.am (OPCODES, BFDLIB, LIBIBERTY, TRACEDIS, INCLUDESBFD): New
+	variables set conditionally on CGEN_BFD_DISASSEMBLER.
+	* acinclude.m4: New. Pull in gettext & bfd.
+	* cgen-cpu.h: If CGEN_BFD_DISASSEMBLER, include "bfd.h" and "dis-asm.h".
+	(cgen_bi_endian_cpu): If CGEN_BFD_DISASSEMBLER, new disassemble(),
+	cgen_read_memory(), cgen_print_address(), cgen_memory_error() and
+	cgen_symbol_at_address() methods, and new disassemble_info{} info.
+	New trace_counter() method and int trace_count.
+	* compCGEN.cxx: If CGEN_BFD_DISASSEMBLER, include "bfd.h", "tracedis.h"
+	and "dis-asm.h".
+	(cgen_bi_endian_cpu ctor): Initialise trace_count to zero.
+	(cgen_bi_endian_cpu::disassemble): New method, calls cgen_disasseble().
+	(cgen_bi_endian_cpu::cgen_read_memory): New method, conditional on
+	CGEN_BFD_DISASSEMBLER..
+	(cgen_bi_endian_cpu::cgen_memory_error): Likewise.
+	(cgen_bi_endian_cpu::cgen_print_address): Likewise.
+	(cgen_bi_endian_cpu::cgen_symbol_at_address: Likewise.
+	(cgen_bi_endian_cpu::trace_counter): New method.
+	* configure.in (CY_SID_BFD_DISASM_CHECK): Use.
+	* tracedis.c (cgen_disassemble): New file, front end to disassembler.
+	* tracedis.h: Header file for above.
+	* Makefile.in: Regenerated.
+	* aclocal.m4: Regenerated.
+	* config.in: Regenerated.
+	* configure: Regenerated.
+
+2001-03-21  Ben Elliston  <bje@@redhat.com>
+
+	* Makefile.in: Regenerate.
+@
+text
+@d3 1
+a3 1
+// Copyright (C) 2001 Red Hat.
+d63 41
+@
+

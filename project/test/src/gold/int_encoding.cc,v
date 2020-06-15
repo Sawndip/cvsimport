@@ -1,0 +1,299 @@
+head	1.3;
+access;
+symbols
+	binutils-2_24-branch:1.3.0.4
+	binutils-2_24-branchpoint:1.3
+	binutils-2_21_1:1.1
+	binutils-2_23_2:1.3
+	binutils-2_23_1:1.3
+	binutils-2_23:1.3
+	binutils-2_23-branch:1.3.0.2
+	binutils-2_23-branchpoint:1.3
+	binutils-2_22_branch:1.2.0.4
+	binutils-2_22:1.2
+	binutils-2_22-branch:1.2.0.2
+	binutils-2_22-branchpoint:1.2
+	binutils-2_21:1.1
+	binutils-2_21-branch:1.1.0.2
+	binutils-2_21-branchpoint:1.1
+	binutils_latest_snapshot:1.3;
+locks; strict;
+comment	@// @;
+
+
+1.3
+date	2012.01.25.07.34.54;	author ccoutant;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2010.12.14.19.03.30;	author rwild;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2009.12.09.03.02.28;	author dougkwan;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.3
+log
+@	* int_encoding.cc (read_unsigned_LEB_128): Replaced with inline
+	definition and ...
+	(read_unsigned_LEB_128_x): ... this new function.
+	(read_signed_LEB_128): Replaced with inline definition and ...
+	(read_signed_LEB_128_x): ... this new function.
+	* int_encoding.h  (read_unsigned_LEB_128_x): New function.
+	(read_unsigned_LEB_128): Add inline definition.
+	(read_signed_LEB_128_x): New function.
+	(read_signed_LEB_128): Add inline definition.
+	* testsuite/Makefile.am (leb128_unittest): New unit test.
+	* testsuite/Makefile.in: Regenerate.
+	* testsuite/leb128_unittest.cc: New unit test.
+@
+text
+@// int_encoding.cc -- variable length and unaligned integer encoding support.
+
+// Copyright 2009, 2010 Free Software Foundation, Inc.
+// Written by Doug Kwan <dougkwan@@google.com> by refactoring scattered
+// contents from other files in gold.  Original code written by Ian
+// Lance Taylor <iant@@google.com> and Caleb Howe <cshowe@@google.com>.
+
+// This file is part of gold.
+
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 3 of the License, or
+// (at your option) any later version.
+
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+// MA 02110-1301, USA.
+
+#include "gold.h"
+
+#include <vector>
+
+#include "int_encoding.h"
+
+namespace gold {
+
+// Read an unsigned LEB128 number.  Each byte contains 7 bits of
+// information, plus one bit saying whether the number continues or
+// not.  BYTE contains the first byte of the number, and is guaranteed
+// to have the continuation bit set.
+
+uint64_t
+read_unsigned_LEB_128_x(const unsigned char* buffer, size_t* len,
+			unsigned char byte)
+{
+  uint64_t result = static_cast<uint64_t>(byte & 0x7f);
+  size_t num_read = 1;
+  unsigned int shift = 7;
+
+  do
+    {
+      if (num_read > 64 / 7 + 1)
+        {
+          gold_warning(_("Unusually large LEB128 decoded, "
+			 "debug information may be corrupted"));
+          break;
+        }
+      byte = *buffer++;
+      num_read++;
+      result |= (static_cast<uint64_t>(byte & 0x7f)) << shift;
+      shift += 7;
+    }
+  while (byte & 0x80);
+
+  *len = num_read;
+
+  return result;
+}
+
+// Read a signed LEB128 number.  These are like regular LEB128
+// numbers, except the last byte may have a sign bit set.
+// BYTE contains the first byte of the number, and is guaranteed
+// to have the continuation bit set.
+
+int64_t
+read_signed_LEB_128_x(const unsigned char* buffer, size_t* len,
+		      unsigned char byte)
+{
+  int64_t result = static_cast<uint64_t>(byte & 0x7f);
+  int shift = 7;
+  size_t num_read = 1;
+
+  do
+    {
+      if (num_read > 64 / 7 + 1)
+        {
+          gold_warning(_("Unusually large LEB128 decoded, "
+			 "debug information may be corrupted"));
+          break;
+        }
+      byte = *buffer++;
+      num_read++;
+      result |= (static_cast<uint64_t>(byte & 0x7f) << shift);
+      shift += 7;
+    }
+  while (byte & 0x80);
+
+  if ((shift < 8 * static_cast<int>(sizeof(result))) && (byte & 0x40))
+    result |= -((static_cast<int64_t>(1)) << shift);
+  *len = num_read;
+  return result;
+}
+
+void
+write_unsigned_LEB_128(std::vector<unsigned char>* buffer, uint64_t value)
+{
+  do
+    {
+      unsigned char current_byte = value & 0x7f;
+      value >>= 7;
+      if (value != 0)
+        {
+          current_byte |= 0x80;
+        }
+      buffer->push_back(current_byte);
+    }
+  while (value != 0);
+}
+
+size_t
+get_length_as_unsigned_LEB_128(uint64_t value)
+{
+  size_t length = 0;
+  do
+    {
+      unsigned char current_byte = value & 0x7f;
+      value >>= 7;
+      if (value != 0)
+        {
+          current_byte |= 0x80;
+        }
+      length++;
+    }
+  while (value != 0);
+  return length;
+}
+
+} // End namespace gold.
+@
+
+
+1.2
+log
+@Fix typos in gold.
+
+gold/:
+	* dwarf_reader.cc: Remove outdated comment.
+	* gold-threads.cc: Fix typo in error message.
+	* archive.cc: Fix typos in comments.
+	* archive.h: Likewise.
+	* arm-reloc-property.cc: Likewise.
+	* arm-reloc-property.h: Likewise.
+	* arm-reloc.def: Likewise.
+	* arm.cc: Likewise.
+	* attributes.h: Likewise.
+	* cref.cc: Likewise.
+	* ehframe.cc: Likewise.
+	* fileread.h: Likewise.
+	* gold.h: Likewise.
+	* i386.cc: Likewise.
+	* icf.cc: Likewise.
+	* incremental.h: Likewise.
+	* int_encoding.cc: Likewise.
+	* layout.h: Likewise.
+	* main.cc: Likewise.
+	* merge.h: Likewise.
+	* object.cc: Likewise.
+	* object.h: Likewise.
+	* options.cc: Likewise.
+	* readsyms.cc: Likewise.
+	* reduced_debug_output.cc: Likewise.
+	* reloc.cc: Likewise.
+	* script-sections.cc: Likewise.
+	* sparc.cc: Likewise.
+	* symtab.h: Likewise.
+	* target-reloc.h: Likewise.
+	* target.cc: Likewise.
+	* target.h: Likewise.
+	* timer.cc: Likewise.
+	* timer.h: Likewise.
+	* x86_64.cc: Likewise.
+@
+text
+@d35 2
+a36 1
+// not.
+d39 2
+a40 1
+read_unsigned_LEB_128(const unsigned char* buffer, size_t* len)
+d42 3
+a44 4
+  uint64_t result = 0;
+  size_t num_read = 0;
+  unsigned int shift = 0;
+  unsigned char byte;
+d48 1
+a48 1
+      if (num_read >= 64 / 7) 
+d68 2
+d72 2
+a73 1
+read_signed_LEB_128(const unsigned char* buffer, size_t* len)
+d75 3
+a77 4
+  int64_t result = 0;
+  int shift = 0;
+  size_t num_read = 0;
+  unsigned char byte;
+d81 1
+a81 1
+      if (num_read >= 64 / 7) 
+@
+
+
+1.1
+log
+@2009-12-08  Doug Kwan  <dougkwan@@google.com>
+
+	* Makefile.am (CCFILES): Add attributes.cc and int_encoding.cc.
+	(HFILES): Add attributes.h and int_encoding.h.
+	* Makefile.in: Regenerate.
+	* dwarf_reader.cc (read_unsigned_LEB_128, read_signed_LEB_128): Move
+	function definitions to int_encoding.cc
+	* dwarf_reader.h (read_unsigned_LEB_128, read_signed_LEB_128): Move
+	prototypes to int_encoding.h
+	* reduced_debug_output.cc (int_encoding.h): New include.
+	(write_unsigned_LEB_128, get_length_as_unsigned_LEB_128): Move
+	function definitions to int_encoding.cc
+	(insert_into_vector, read_from_pointer): Move template definitions to
+	int_encoding.h
+	* attributes.cc: New file.
+	* attributes.h: New file.
+	* int_encoding.cc: New file.
+	* int_encoding.h: New file.
+@
+text
+@d1 1
+a1 1
+// varint.cc -- variable length and unaligned integer encoding support.
+d3 1
+a3 1
+// Copyright 2009 Free Software Foundation, Inc.
+@
+

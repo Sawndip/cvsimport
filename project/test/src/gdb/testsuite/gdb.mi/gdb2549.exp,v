@@ -1,0 +1,564 @@
+head	1.11;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.9
+	gdb_7_6-2013-04-26-release:1.9
+	gdb_7_6-branch:1.9.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.9
+	gdb_7_5_1-2012-11-29-release:1.8
+	gdb_7_5-2012-08-17-release:1.8
+	gdb_7_5-branch:1.8.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.8
+	gdb_7_4_1-2012-04-26-release:1.5.4.1
+	gdb_7_4-2012-01-24-release:1.5.4.1
+	gdb_7_4-branch:1.5.0.4
+	gdb_7_4-2011-12-13-branchpoint:1.5
+	gdb_7_3_1-2011-09-04-release:1.5
+	gdb_7_3-2011-07-26-release:1.5
+	gdb_7_3-branch:1.5.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.5
+	gdb_7_2-2010-09-02-release:1.3
+	gdb_7_2-branch:1.3.0.4
+	gdb_7_2-2010-07-07-branchpoint:1.3
+	gdb_7_1-2010-03-18-release:1.3
+	gdb_7_1-branch:1.3.0.2
+	gdb_7_1-2010-02-18-branchpoint:1.3
+	gdb_7_0_1-2009-12-22-release:1.2
+	gdb_7_0-2009-10-06-release:1.2
+	gdb_7_0-branch:1.2.0.4
+	gdb_7_0-2009-09-16-branchpoint:1.2
+	msnyder-checkpoint-072509-branch:1.2.0.2
+	msnyder-checkpoint-072509-branchpoint:1.2
+	reverse-20081226-branch:1.1.0.4
+	reverse-20081226-branchpoint:1.1
+	multiprocess-20081120-branch:1.1.0.2
+	multiprocess-20081120-branchpoint:1.1;
+locks; strict;
+comment	@# @;
+
+
+1.11
+date	2013.07.06.02.32.31;	author luisgpm;	state Exp;
+branches;
+next	1.10;
+
+1.10
+date	2013.06.20.00.39.11;	author qiyao;	state Exp;
+branches;
+next	1.9;
+
+1.9
+date	2013.01.01.06.41.24;	author brobecke;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2012.07.10.15.32.51;	author tromey;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2012.07.09.18.28.17;	author qiyao;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2012.01.04.08.17.54;	author brobecke;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2011.01.12.21.09.39;	author tromey;	state Exp;
+branches
+	1.5.4.1;
+next	1.4;
+
+1.4
+date	2011.01.01.15.33.47;	author brobecke;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2010.01.01.07.32.03;	author brobecke;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2009.01.03.05.58.05;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2008.11.14.18.38.32;	author tromey;	state Exp;
+branches;
+next	;
+
+1.5.4.1
+date	2012.01.06.04.44.08;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.11
+log
+@	* gdb.mi/gdb2549.exp (register_tests): Expect any decimal for
+	the register number instead of expecting only 0.
+@
+text
+@# Copyright 2008-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# Test essential Machine interface (MI) operations
+#
+# Verify that, using the MI, we can run a simple program and look at registers.
+#
+# The goal is not to test gdb functionality, which is done by other tests,
+# but to verify the correct output response to MI operations.
+#
+
+
+load_lib mi-support.exp
+set MIFLAGS "-i=mi"
+
+gdb_exit
+if [mi_gdb_start] {
+    continue
+}
+
+standard_testfile basics.c
+
+if  { [gdb_compile "${srcdir}/${subdir}/${srcfile}" "${binfile}" executable {debug}] != "" } {
+     untested mi-regs.exp
+     return -1
+}
+
+proc register_tests_no_exec { } {
+	# Test the generic IDT chip.
+	mi_gdb_test "111-data-list-register-values" \
+	    ".*111\\^error,msg=\"-data-list-register-values: Usage: -data-list-register-values \\\[--skip-unavailable\\\] <format> \\\[<regnum1>...<regnumN>\\\]\"" \
+		"wrong arguments"
+
+	mi_gdb_test "111-data-list-register-values x" \
+		".*111\\^error,msg=\"No registers\.\"" \
+		"no executable"
+}
+
+proc register_tests { } {
+    global hex
+    global decimal
+    set octal "\[0-7\]+"
+    set binary "\[0-1\]+"
+    set float "\\-?((\[0-9\]+(\\.\[0-9\]+)?(e\[-+\]\[0-9\]+)?)|(nan\\($hex\\)))"
+
+    mi_gdb_test "222-data-list-register-values x" \
+	    "222\\^done,register-values=\\\[\{number=\"$decimal\",value=\"$hex\"\}.*\\\]" \
+	    "register values x"
+
+    mi_gdb_test "333-data-list-register-values f" \
+	    "333\\^done,register-values=\\\[\{number=\"$decimal\",value=\"$float\"\}.*\\\]" \
+	    "register values f"
+
+    mi_gdb_test "444-data-list-register-values d" \
+	    "444\\^done,register-values=\\\[\{number=\"$decimal\",value=\"-?$decimal\"\}.*\\\]" \
+	    "register values d"
+
+    mi_gdb_test "555-data-list-register-values o" \
+	    "555\\^done,register-values=\\\[\{number=\"$decimal\",value=\"$octal\"\}.*\\\]" \
+	    "register values o"
+
+    mi_gdb_test "666-data-list-register-values t" \
+	    "666\\^done,register-values=\\\[\{number=\"$decimal\",value=\"$binary\"\}.*\\\]" \
+	    "register values t"
+}
+
+register_tests_no_exec
+mi_run_to_main
+register_tests
+
+mi_gdb_exit
+return 0
+@
+
+
+1.10
+log
+@Teach -data-list-register-values to not include unavailable registers
+
+This patch adds an option --skip-unavailable to MI command
+-data-list-register-values, so that unavailable registers are not
+displayed (on the context of traceframes).
+
+The old -data-list-register-values command behaves like
+
+  -data-list-register-values x 0 8
+  ^done,register-values=[{number="0",value="<unavailable>"},{number="8",value="0x80483de"}]
+
+With this patch, an option --skip-unavailable is added,
+
+  -data-list-register-values --skip-unavailable x 0 8
+  ^done,register-values=[{number="8",value="0x80483de"}]
+
+gdb:
+
+2013-06-20  Pedro Alves  <pedro@@codesourcery.com>
+	    Yao Qi  <yao@@codesourcery.com>
+
+	* NEWS: Mention the new option '--skip-unavailable' of command
+	-data-list-register-values.
+	* mi/mi-main.c (mi_cmd_data_list_register_values): Accept the
+	--skip-unavailable option.  Adjust to use output_register.
+	(output_register): Add new 'skip_unavailable' parameter.
+	Handle it.
+
+gdb/doc:
+
+2013-06-20  Pedro Alves  <pedro@@codesourcery.com>
+
+	* gdb.texinfo (GDB/MI Data Manipulation)
+	<-data-list-register-values>: Document the --skip-unavailable
+	option.
+
+gdb/testsuite:
+
+2013-06-20  Yao Qi  <yao@@codesourcery.com>
+
+	* gdb.trace/mi-trace-unavailable.exp: Set tracepoint on 'foo'
+	and set an action.
+	(test_trace_unavailable): Test command -data-list-register-values
+	in the context of traceframe and with option --skip-unavailable.
+	* gdb.trace/trace-unavailable.c (foo): New.
+	(main): Call it.
+	* gdb.mi/gdb2549.exp: Update matching pattern.
+@
+text
+@d59 1
+a59 1
+	    "222\\^done,register-values=\\\[\{number=\"0\",value=\"$hex\"\}.*\\\]" \
+d63 1
+a63 1
+	    "333\\^done,register-values=\\\[\{number=\"0\",value=\"$float\"\}.*\\\]" \
+d67 1
+a67 1
+	    "444\\^done,register-values=\\\[\{number=\"0\",value=\"-?$decimal\"\}.*\\\]" \
+d71 1
+a71 1
+	    "555\\^done,register-values=\\\[\{number=\"0\",value=\"$octal\"\}.*\\\]" \
+d75 1
+a75 1
+	    "666\\^done,register-values=\\\[\{number=\"0\",value=\"$binary\"\}.*\\\]" \
+@
+
+
+1.9
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@d43 1
+a43 1
+		".*111\\^error,msg=\"-data-list-register-values: Usage: -data-list-register-values <format> \\\[<regnum1>...<regnumN>\\\]\"" \
+@
+
+
+1.8
+log
+@	* gdb.mi/dw2-ref-missing-frame.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.mi/gdb2549.exp: Use standard_testfile.
+	* gdb.mi/gdb669.exp: Use standard_testfile.
+	* gdb.mi/gdb701.exp: Use standard_testfile.
+	* gdb.mi/gdb792.exp: Use standard_testfile.
+	* gdb.mi/mi-async.exp: Use standard_testfile.
+	* gdb.mi/mi-basics.exp: Use standard_testfile.
+	* gdb.mi/mi-break.exp: Use standard_testfile.
+	* gdb.mi/mi-cli.exp: Use standard_testfile.
+	* gdb.mi/mi-console.exp: Use standard_testfile.
+	* gdb.mi/mi-disassemble.exp: Use standard_testfile.
+	* gdb.mi/mi-eval.exp: Use standard_testfile.
+	* gdb.mi/mi-file-transfer.exp: Use standard_testfile.
+	* gdb.mi/mi-file.exp: Use standard_testfile.
+	* gdb.mi/mi-inheritance-syntax-error.exp: Use standard_testfile.
+	* gdb.mi/mi-logging.exp: Use standard_testfile.
+	* gdb.mi/mi-nonstop-exit.exp: Use standard_testfile.
+	* gdb.mi/mi-nonstop.exp: Use standard_testfile.
+	* gdb.mi/mi-ns-stale-regcache.exp: Use standard_testfile.
+	* gdb.mi/mi-nsintrall.exp: Use standard_testfile.
+	* gdb.mi/mi-nsmoribund.exp: Use standard_testfile.
+	* gdb.mi/mi-nsthrexec.exp: Use standard_testfile.
+	* gdb.mi/mi-pending.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.mi/mi-pthreads.exp: Use standard_testfile.
+	* gdb.mi/mi-read-memory.exp: Use standard_testfile.
+	* gdb.mi/mi-regs.exp: Use standard_testfile.
+	* gdb.mi/mi-return.exp: Use standard_testfile.
+	* gdb.mi/mi-reverse.exp: Use standard_testfile.
+	* gdb.mi/mi-simplerun.exp: Use standard_testfile.
+	* gdb.mi/mi-solib.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.mi/mi-stack.exp: Use standard_testfile.
+	* gdb.mi/mi-stepi.exp: Use standard_testfile.
+	* gdb.mi/mi-stepn.exp: Use standard_testfile.
+	* gdb.mi/mi-syn-frame.exp: Use standard_testfile.
+	* gdb.mi/mi-until.exp: Use standard_testfile.
+	* gdb.mi/mi-var-block.exp: Use standard_testfile.
+	* gdb.mi/mi-var-child-f.exp: Use standard_testfile.
+	* gdb.mi/mi-var-child.exp: Use standard_testfile.
+	* gdb.mi/mi-var-cmd.exp: Use standard_testfile.
+	* gdb.mi/mi-var-cp.exp: Use standard_testfile.
+	* gdb.mi/mi-var-display.exp: Use standard_testfile.
+	* gdb.mi/mi-var-invalidate.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.mi/mi-var-rtti.exp: Use standard_testfile.
+	* gdb.mi/mi-watch-nonstop.exp: Use standard_testfile.
+	* gdb.mi/mi-watch.exp: Use standard_testfile.
+	* gdb.mi/mi2-amd64-entry-value.exp: Use standard_testfile.
+	* gdb.mi/mi2-basics.exp: Use standard_testfile.
+	* gdb.mi/mi2-break.exp: Use standard_testfile.
+	* gdb.mi/mi2-cli.exp: Use standard_testfile.
+	* gdb.mi/mi2-console.exp: Use standard_testfile.
+	* gdb.mi/mi2-disassemble.exp: Use standard_testfile.
+	* gdb.mi/mi2-eval.exp: Use standard_testfile.
+	* gdb.mi/mi2-file.exp: Use standard_testfile.
+	* gdb.mi/mi2-pthreads.exp: Use standard_testfile.
+	* gdb.mi/mi2-read-memory.exp: Use standard_testfile.
+	* gdb.mi/mi2-regs.exp: Use standard_testfile.
+	* gdb.mi/mi2-return.exp: Use standard_testfile.
+	* gdb.mi/mi2-simplerun.exp: Use standard_testfile.
+	* gdb.mi/mi2-stack.exp: Use standard_testfile.
+	* gdb.mi/mi2-stepi.exp: Use standard_testfile.
+	* gdb.mi/mi2-syn-frame.exp: Use standard_testfile.
+	* gdb.mi/mi2-until.exp: Use standard_testfile.
+	* gdb.mi/mi2-var-block.exp: Use standard_testfile.
+	* gdb.mi/mi2-var-child.exp: Use standard_testfile.
+	* gdb.mi/mi2-var-cmd.exp: Use standard_testfile.
+	* gdb.mi/mi2-var-display.exp: Use standard_testfile.
+	* gdb.mi/mi2-watch.exp: Use standard_testfile.
+@
+text
+@d1 1
+a1 1
+# Copyright 2008-2012 Free Software Foundation, Inc.
+@
+
+
+1.7
+log
+@gdb/testsuite:
+
+	* gdb.mi/gdb2549.exp: Remove -DFAKEARGV from compilation flags.
+	* gdb.mi/mi-async.exp, gdb.mi/mi-basics.exp: Likewise.
+	* gdb.mi/mi-break.exp, gdb.mi/mi-cli.exp: Likewise.
+	* gdb.mi/mi-console.exp, gdb.mi/mi-disassemble.exp: Likewise.
+	* gdb.mi/mi-eval.exp, gdb.mi/mi-file.exp: Likewise.
+	* gdb.mi/mi-read-memory.exp, gdb.mi/mi-regs.exp: Likewise.
+	* gdb.mi/mi-return.exp, gdb.mi/mi-reverse.exp: Likewise.
+	* gdb.mi/mi-simplerun.exp, gdb.mi/mi-stack.exp: Likewise.
+	* gdb.mi/mi-stepi.exp, gdb.mi/mi-syn-frame.exp: Likewise.
+	* gdb.mi/mi-until.exp, gdb.mi/mi-var-block.exp: Likewise.
+	* gdb.mi/mi-var-child.exp, gdb.mi/mi-var-cmd.exp: Likewise.
+	* gdb.mi/mi-var-display.exp: Likewise.
+	* gdb.mi/mi-var-invalidate.exp: Likewise.
+	* gdb.mi/mi-watch.exp, gdb.mi/mi2-basics.exp: Likewise.
+	* gdb.mi/mi2-break.exp, gdb.mi/mi2-cli.exp: Likewise.
+	* gdb.mi/mi2-console.exp: Likewise.
+	* gdb.mi/mi2-disassemble.exp: Likewise.
+	* gdb.mi/mi2-eval.exp, gdb.mi/mi2-file.exp: Likewise.
+	* gdb.mi/mi2-read-memory.exp: Likewise.
+	* gdb.mi/mi2-regs.exp, gdb.mi/mi2-return.exp: Likewise.
+	* gdb.mi/mi2-simplerun.exp: Likewise.
+	* gdb.mi/mi2-stack.exp, gdb.mi/mi2-stepi.exp: Likewise.
+	* gdb.mi/mi2-syn-frame.exp: Likewise.
+	* gdb.mi/mi2-until.exp, gdb.mi/mi2-var-block.exp: Likewise.
+	* gdb.mi/mi2-var-child.exp, gdb.mi/mi2-var-cmd.exp: Likewise.
+	* gdb.mi/mi2-var-display.exp, gdb.mi/mi2-watch.exp: Likewise.
+@
+text
+@d33 2
+a34 3
+set testfile "basics"
+set srcfile ${testfile}.c
+set binfile ${objdir}/${subdir}/${testfile}
+@
+
+
+1.6
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d36 1
+a36 1
+if  { [gdb_compile "${srcdir}/${subdir}/${srcfile}" "${binfile}" executable {debug additional_flags=-DFAKEARGV}] != "" } {
+@
+
+
+1.5
+log
+@gdb
+	* mi/mi-symbol-cmds.c (mi_cmd_symbol_list_lines): Fix error
+	messages.
+	* mi/mi-main.c (mi_cmd_thread_select): Fix error messages.
+	(mi_cmd_thread_list_ids): Likewise.
+	(mi_cmd_data_list_changed_registers): Likewise.
+	(mi_cmd_data_list_register_values): Likewise.
+	(mi_cmd_data_write_register_values): Likewise.
+	(mi_cmd_data_evaluate_expression): Likewise.
+	(mi_cmd_data_read_memory): Likewise.
+	(mi_cmd_data_read_memory_bytes): Likewise.
+	(mi_cmd_data_write_memory): Likewise.
+	(mi_cmd_enable_timings): Likewise.
+	* mi/mi-interp.c (mi_cmd_interpreter_exec): Fix error messages.
+	* mi/mi-cmd-var.c (mi_cmd_var_create): Fix error messages.
+	(mi_cmd_var_delete): Likewise.
+	(mi_cmd_var_set_format): Likewise.
+	(mi_cmd_var_show_format): Likewise.
+	(mi_cmd_var_info_num_children): Likewise.
+	(mi_cmd_var_list_children): Likewise.
+	(mi_cmd_var_info_type): Likewise.
+	(mi_cmd_var_info_expression): Likewise.
+	(mi_cmd_var_show_attributes): Likewise.
+	(mi_cmd_var_assign): Likewise.
+	(mi_cmd_var_update): Likewise.
+	(mi_cmd_enable_pretty_printing): Likewise.
+	(mi_cmd_var_set_update_range): Likewise.
+	* mi/mi-cmd-target.c (mi_cmd_target_file_get): Fix error
+	messages.
+	(mi_cmd_target_file_put): Likewise.
+	(mi_cmd_target_file_delete): Likewise.
+	* mi/mi-cmd-stack.c (mi_cmd_stack_list_frames): Fix error
+	messages.
+	(mi_cmd_stack_info_depth): Likewise.
+	(mi_cmd_stack_list_locals): Likewise.
+	(mi_cmd_stack_list_args): Likewise.
+	(mi_cmd_stack_select_frame): Likewise.
+	(mi_cmd_stack_select_frame): Likewise.
+	(mi_cmd_stack_info_frame): Likewise.
+	* mi/mi-cmd-file.c (mi_cmd_file_list_exec_source_file): Fix error
+	messages.
+	(mi_cmd_file_list_exec_source_files): Likewise.
+	* mi/mi-cmd-env.c (mi_cmd_env_pwd): Fix error messages.
+	(mi_cmd_env_cd): Likewise.
+	(mi_cmd_env_path): Likewise.
+	(mi_cmd_env_dir): Likewise.
+	(mi_cmd_inferior_tty_show): Likewise.
+	* mi/mi-cmd-disas.c (mi_cmd_disassemble): Fix error messages.
+	* mi/mi-cmd-break.c (mi_cmd_break_insert): Fix error messages.
+	(mi_cmd_break_watch): Likewise.
+gdb/testsuite
+	* gdb.mi/gdb2549.exp: Update for error message changes.
+	* gdb.mi/mi-cli.exp: Likewise.
+	* gdb.mi/mi-disassemble.exp: Likewise.
+	* gdb.mi/mi-pthreads.exp: Likewise.
+	* gdb.mi/mi-regs.exp: Likewise.
+	* gdb.mi/mi-stack.exp: Likewise.
+	* gdb.mi/mi-var-block.exp: Likewise.
+	* gdb.mi/mi-var-cmd.exp: Likewise.
+	* gdb.mi/mi2-cli.exp: Likewise.
+	* gdb.mi/mi2-disassemble.exp: Likewise.
+	* gdb.mi/mi2-pthreads.exp: Likewise.
+	* gdb.mi/mi2-regs.exp: Likewise.
+	* gdb.mi/mi2-stack.exp: Likewise.
+	* gdb.mi/mi2-var-block.exp: Likewise.
+	* gdb.mi/mi2-var-cmd.exp: Likewise.
+@
+text
+@d1 1
+a1 1
+# Copyright 2008, 2009, 2010, 2011 Free Software Foundation, Inc.
+@
+
+
+1.5.4.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d1 1
+a1 1
+# Copyright 2008-2012 Free Software Foundation, Inc.
+@
+
+
+1.4
+log
+@run copyright.sh for 2011.
+@
+text
+@d44 1
+a44 1
+		".*111\\^error,msg=\"mi_cmd_data_list_register_values: Usage: -data-list-register-values <format> \\\[<regnum1>...<regnumN>\\\]\"" \
+@
+
+
+1.3
+log
+@Update copyright year in most headers.
+
+Automatic update by copyright.sh.
+@
+text
+@d1 1
+a1 1
+# Copyright 2008, 2009, 2010 Free Software Foundation, Inc.
+@
+
+
+1.2
+log
+@        Updated copyright notices for most files.
+@
+text
+@d1 1
+a1 1
+# Copyright 2008, 2009 Free Software Foundation, Inc.
+@
+
+
+1.1
+log
+@gdb
+
+	PR mi/2549:
+	* mi/mi-main.c (get_register): Use get_formatted_print_options.
+
+gdb/testsuite
+
+2008-11-14  Nick Roberts  <nickrob@@snap.net.nz>
+
+	* gdb.mi/gdb2549.exp: New file.
+@
+text
+@d1 1
+a1 1
+# Copyright 2008 Free Software Foundation, Inc.
+@
+

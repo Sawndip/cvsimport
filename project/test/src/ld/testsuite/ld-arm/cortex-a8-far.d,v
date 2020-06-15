@@ -1,0 +1,179 @@
+head	1.2;
+access;
+symbols
+	binutils-2_24-branch:1.2.0.10
+	binutils-2_24-branchpoint:1.2
+	binutils-2_21_1:1.2
+	binutils-2_23_2:1.2
+	binutils-2_23_1:1.2
+	binutils-2_23:1.2
+	binutils-2_23-branch:1.2.0.8
+	binutils-2_23-branchpoint:1.2
+	binutils-2_22_branch:1.2.0.6
+	binutils-2_22:1.2
+	binutils-2_22-branch:1.2.0.4
+	binutils-2_22-branchpoint:1.2
+	binutils-2_21:1.2
+	binutils-2_21-branch:1.2.0.2
+	binutils-2_21-branchpoint:1.2
+	binutils-2_20_1:1.1
+	binutils-2_20:1.1
+	binutils-2_20-branch:1.1.0.2
+	binutils-2_20-branchpoint:1.1
+	binutils_latest_snapshot:1.2;
+locks; strict;
+comment	@# @;
+
+
+1.2
+date	2010.03.02.08.19.54;	author clyon;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2009.08.05.12.36.14;	author nathan;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@2010-03-02  Christophe Lyon  <christophe.lyon@@st.com>
+	Alan Modra  <amodra@@gmail.com>
+
+	bfd/
+	* elf32-arm.c (a8_erratum_fix): Add st_type field to record the
+	destination mode of the a8 stub.
+	(elf32_arm_link_hash_table): Add top_id field.
+	(elf32_arm_link_hash_table_create): Initialize top_id.
+	(arm_type_of_stub): Update prototype, st_type can now be updated
+	by this function. Actual destination address in case of PLT is
+	computed here, to help factorizing code.
+	(elf32_arm_stub_name): Update prototype, use stub_type additional
+	parameter to build stub name.
+	(elf32_arm_get_stub_entry): Update prototype, use stub_type
+	additional parameter to build stub entry.
+	(arm_build_one_stub): Use bfd_put_16/bfd_put_32 instead of
+	put_thumb_insn/put_arm_insn as BE8 encoding is now handled later.
+	Call elf32_arm_final_link_relocate to process all in-stub
+	relocations.
+	(elf32_arm_setup_section_lists): Update top_id.
+	(cortex_a8_erratum_scan): Record stub destination mode.
+	(elf32_arm_size_stubs): Update call to arm_type_of_stub according
+	to new prototype.
+	(elf32_arm_final_link_relocate): Enable processing of in-stub
+	REL32 relocations. Rely on arm_type_of_stub to detect if a stub is
+	needed, enabling code factorization.
+	(elf32_arm_final_link): Process stub sections.
+	(elf32_arm_output_map_sym): Add entry to code/data map.
+
+	ld/testsuite/
+	* ld-arm/arm-elf.exp: Change .text start address for
+	farcall-thumb-arm tests. Add v4t variant for farcall-mixed-lib
+	test.
+	* ld-arm/farcall-mixed-lib-v4t.d: New test.
+	* ld-arm/farcall-mixed-lib1.s: Don't force armv5t.
+	* ld-arm/farcall-mixed-lib2.s: Likewise.
+	* ld-arm/arm-call.d: Update expected results.
+	* ld-arm/cortex-a8-far.d: Likewise.
+	* ld-arm/farcall-group-size2.d: Likewise.
+	* ld-arm/farcall-group.d: Likewise.
+	* ld-arm/farcall-mix.d: Likewise.
+	* ld-arm/farcall-mix2.d: Likewise.
+	* ld-arm/farcall-mixed-app-v5.d: Likewise.
+	* ld-arm/farcall-mixed-app.d: Likewise.
+	* ld-arm/farcall-mixed-lib.d: Likewise.
+	* ld-arm/farcall-thumb-arm.d: Likewise.
+	* ld-arm/farcall-thumb-arm-blx.d: Likewise.
+	* ld-arm/farcall-thumb-arm-pic-veneer.d: Likewise.
+	* ld-arm/farcall-thumb-arm-blx-pic-veneer.d: Likewise.
+	* ld-arm/farcall-thumb-arm.s: Update test. Add a new call to
+	potentially generate different types of stubs.
+@
+text
+@
+.*:     file format .*
+
+
+Disassembly of section \.text:
+
+00000000 <two>:
+       0:	f000 c802 	blx	800008 <__far_fn_from_thumb>
+	...
+#...
+00800008 <__far_fn_from_thumb>:
+  800008:	e51ff004 	ldr	pc, \[pc, #-4\]	; 80000c <__far_fn_from_thumb\+0x4>
+  80000c:	7fff0000 	.word	0x7fff0000
+
+00800010 <three>:
+  800010:	f001 e802 	blx	801018 <__far_fn1_from_thumb>
+  800014:	f001 e804 	blx	801020 <__far_fn2_from_thumb>
+	...
+  800ff8:	bf00      	nop
+
+00800ffa <label1>:
+  800ffa:	ea81 0002 	eor.w	r0, r1, r2
+  800ffe:	f000 b813 	b.w	801028 <__far_fn2_from_thumb\+0x8>
+  801002:	ea81 0002 	eor.w	r0, r1, r2
+  801006:	ea81 0002 	eor.w	r0, r1, r2
+  80100a:	f7ff bff6 	b.w	800ffa <label1>
+  80100e:	ea81 0002 	eor.w	r0, r1, r2
+  801012:	ea81 0002 	eor.w	r0, r1, r2
+	...
+
+00801018 <__far_fn1_from_thumb>:
+  801018:	e51ff004 	ldr	pc, \[pc, #-4\]	; 80101c <__far_fn1_from_thumb\+0x4>
+  80101c:	80000000 	.word	0x80000000
+
+00801020 <__far_fn2_from_thumb>:
+  801020:	e51ff004 	ldr	pc, \[pc, #-4\]	; 801024 <__far_fn2_from_thumb\+0x4>
+  801024:	80000004 	.word	0x80000004
+  801028:	d001      	beq.n	80102e <__far_fn2_from_thumb\+0xe>
+  80102a:	f7ff bfea 	b.w	801002 <label1\+0x8>
+  80102e:	f7ff bfe4 	b.w	800ffa <label1>
+@
+
+
+1.1
+log
+@	bfd/
+	* elf32-arm.c (elf32_arm_stub_type): Add arm_stub_a8_veneer_lwm.
+	(arm_build_one_stub): Build a8 veneers as a separate pass.
+	(cortex_a8_erratum_scan): Add prev_num_a8_fixes and stub_changed_p
+	parameters.  Use them to check if we create a different a8 fixup
+	than the previous pass.
+	(elf32_arm_size_stubs): Move scope of stub_changed and
+	prev_num_a8_fixes into main loop.
+	(elf32_arm_build_stubs): Build a8 veneers in a second pass.
+
+	ld/testsuite/
+	* ld-arm/cortex-a8-far-1.s: New.
+	* ld-arm/cortex-a8-far-2.s: New.
+	* ld-arm/cortex-a8-far.d: New.
+	* ld-arm/arm-elf.exp: Add new test.
+@
+text
+@d16 2
+a17 2
+  800010:	f001 e806 	blx	801020 <__far_fn1_from_thumb>
+  800014:	f001 e800 	blx	801018 <__far_fn2_from_thumb>
+d23 1
+a23 1
+  800ffe:	f000 b813 	b.w	801028 <__far_fn1_from_thumb\+0x8>
+d31 3
+a33 3
+00801018 <__far_fn2_from_thumb>:
+  801018:	e51ff004 	ldr	pc, \[pc, #-4\]	; 80101c <__far_fn2_from_thumb\+0x4>
+  80101c:	80000004 	.word	0x80000004
+d35 4
+a38 4
+00801020 <__far_fn1_from_thumb>:
+  801020:	e51ff004 	ldr	pc, \[pc, #-4\]	; 801024 <__far_fn1_from_thumb\+0x4>
+  801024:	80000000 	.word	0x80000000
+  801028:	d001      	beq.n	80102e <__far_fn1_from_thumb\+0xe>
+@
+

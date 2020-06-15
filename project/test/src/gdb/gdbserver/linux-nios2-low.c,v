@@ -1,0 +1,809 @@
+head	1.2;
+access;
+symbols;
+locks; strict;
+comment	@ * @;
+
+
+1.2
+date	2013.06.07.10.46.59;	author palves;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2013.05.07.01.11.16;	author sandra;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@[GDBserver] Multi-process + multi-arch
+
+This patch makes GDBserver support multi-process + biarch.
+
+Currently, if you're debugging more than one process at once with a
+single gdbserver (in extended-remote mode), then all processes must
+have the same architecture (e.g., 64-bit vs 32-bit).  Otherwise, you
+see this:
+
+Added inferior 2
+[Switching to inferior 2 [<null>] (<noexec>)]
+Reading symbols from /home/pedro/gdb/tests/main32...done.
+Temporary breakpoint 2 at 0x4004cf: main. (2 locations)
+Starting program: /home/pedro/gdb/tests/main32
+warning: Selected architecture i386 is not compatible with reported target architecture i386:x86-64
+warning: Architecture rejected target-supplied description
+Remote 'g' packet reply is too long: 000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000090cfffff0000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000000000000000b042f7460000000000020000230000002b0000002b0000002b000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000007f03000000000000ffff0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000801f00003b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+... etc, etc ...
+
+Even though the process was running a 32-bit program, GDBserver sent
+back to GDB a register set in 64-bit layout.
+
+A patch (http://sourceware.org/ml/gdb-patches/2012-11/msg00228.html) a
+while ago made GDB track a target_gdbarch per inferior, and as
+consequence, fetch a target description per-inferior.  This patch is
+the GDBserver counterpart, that makes GDBserver keep track of each
+process'es XML target description and register layout.  So in the
+example above, GDBserver will send the correct register set in 32-bit
+layout to GDB.
+
+A new "struct target_desc" object (tdesc for short) is added, that
+holds the target description and register layout information about
+each process.  Each `struct process_info' holds a pointer to a target
+description.  The regcache also gains a pointer to a target
+description, mainly for convenience, and parallel with GDB (and
+possible future support for programs that flip processor modes).
+
+The low target's arch_setup routines are responsible for setting the
+process'es correct tdesc.  This isn't that much different to how
+things were done before, except that instead of detecting the inferior
+process'es architecture and calling the corresponding
+init_registers_FOO routine, which would change the regcache layout
+globals and recreate the threads' regcaches, the regcache.c globals
+are gone, and the init_registers_$BAR routines now each initialize a
+separate global struct target_desc object (one for each arch variant
+GDBserver supports), and so all the init_registers_$BAR routines that
+are built into GDBserver are called early at GDBserver startup time
+(similarly to how GDB handles its built-in target descriptions), and
+then the arch_setup routine is responsible for making
+process_info->tdesc point to one of these target description globals.
+The regcache module is all parameterized to get the regcache's layout
+from the tdesc object instead of the old register_bytes, etc. globals.
+
+The threads' regcaches are now created lazily.  The old scheme where
+we created each of them when we added a new thread doesn't work
+anymore, because we add the main thread/lwp before we see it stop for
+the first time, and it is only when we see the thread stop for the
+first time that we have a chance of determining the inferior's
+architecture (through the_low_target.arch_setup).  Therefore when we
+add the main thread we don't know which architecture/tdesc its
+regcache should have.
+
+This patch makes the gdb.multi/multi-arch.exp test now pass against
+(extended-remote) GDBserver.  It currently fails, without this patch.
+
+The IPA also uses the regcache, so it gains a new global struct
+target_desc pointer, which points at the description of the process it
+is loaded in.
+
+Re. the linux-low.c & friends changes.  Since the register map
+etc. may differ between processes (64-bit vs 32-bit) etc., the
+linux_target_ops num_regs, regmap and regset_bitmap data fields are no
+longer sufficient.  A new method is added in their place that returns
+a pointer to a new struct that includes all info linux-low.c needs to
+access registers of the current inferior.
+
+The patch/discussion that originally introduced
+linux-low.c:disabled_regsets mentions that the disabled_regsets set
+may be different per mode (in a biarch setup), and indeed that is
+cleared whenever we start a new (first) inferior, so that global is
+moved as well behind the new `struct regs_info'.
+
+On the x86 side:
+
+I simply replaced the i387-fp.c:num_xmm_registers global with a check
+for 64-bit or 32-bit process, which is equivalent to how the global
+was set.  This avoided coming up with some more general mechanism that
+would work for all targets that use this module (GNU/Linux, Windows,
+etc.).
+
+Tested:
+
+  GNU/Linux IA64
+  GNU/Linux MIPS64
+  GNU/Linux PowerPC (Fedora 16)
+  GNU/Linux s390x (Fedora 16)
+  GNU/Linux sparc64 (Debian)
+  GNU/Linux x86_64, -m64 and -m32 (Fedora 17)
+
+Cross built, and smoke tested:
+
+  i686-w64-mingw32, under Wine.
+  GNU/Linux TI C6x, by Yao Qi.
+
+Cross built but otherwise not tested:
+
+  aarch64-linux-gnu
+  arm-linux-gnu
+  m68k-linux
+  nios2-linux-gnu
+  sh-linux-gnu
+  spu
+  tilegx-unknown-linux-gnu
+
+Completely untested:
+
+  GNU/Linux Blackfin
+  GNU/Linux CRIS
+  GNU/Linux CRISv32
+  GNU/Linux TI Xtensa
+  GNU/Linux M32R
+  LynxOS
+  QNX NTO
+
+gdb/gdbserver/
+2013-06-07  Pedro Alves  <palves@@redhat.com>
+
+	* Makefile.in (OBS): Add tdesc.o.
+	(IPA_OBJS): Add tdesc-ipa.o.
+	(tdesc-ipa.o): New rule.
+	* ax.c (gdb_eval_agent_expr): Adjust register_size call to new
+	interface.
+	* linux-low.c (new_inferior): Delete.
+	(disabled_regsets, num_regsets): Delete.
+	(linux_add_process): Adjust to set the new per-process
+	new_inferior flag.
+	(linux_detach_one_lwp): Adjust to call regcache_invalidate_thread.
+	(linux_wait_for_lwp): Adjust.  Only call arch_setup if the event
+	was a stop.  When calling arch_setup, switch the current inferior
+	to the thread that got an event.
+	(linux_resume_one_lwp): Adjust to call regcache_invalidate_thread.
+	(regsets_fetch_inferior_registers)
+	(regsets_store_inferior_registers): New regsets_info parameter.
+	Adjust to use it.
+	(linux_register_in_regsets): New regs_info parameter.  Adjust to
+	use it.
+	(register_addr, fetch_register, store_register): New usrregs_info
+	parameter.  Adjust to use it.
+	(usr_fetch_inferior_registers, usr_store_inferior_registers): New
+	parameter regs_info.  Adjust to use it.
+	(linux_fetch_registers): Get the current inferior's regs_info, and
+	adjust to use it.
+	(linux_store_registers): Ditto.
+	[HAVE_LINUX_REGSETS] (initialize_regsets_info): New.
+	(initialize_low): Don't initialize the target_regsets here.  Call
+	initialize_low_arch.
+	* linux-low.h (target_regsets): Delete declaration.
+	(struct regsets_info): New.
+	(struct usrregs_info): New.
+	(struct regs_info): New.
+	(struct process_info_private) <new_inferior>: New field.
+	(struct linux_target_ops): Delete the num_regs, regmap, and
+	regset_bitmap fields.  New field regs_info.
+	[HAVE_LINUX_REGSETS] (initialize_regsets_info): Declare.
+	* i387-fp.c (num_xmm_registers): Delete.
+	(i387_cache_to_fsave, i387_fsave_to_cache): Adjust find_regno
+	calls to new interface.
+	(i387_cache_to_fxsave, i387_cache_to_xsave, i387_fxsave_to_cache)
+	(i387_xsave_to_cache): Adjust find_regno calls to new interface.
+	Infer the number of xmm registers from the regcache's target
+	description.
+	* i387-fp.h (num_xmm_registers): Delete.
+	* inferiors.c (add_thread): Don't install the thread's regcache
+	here.
+	* proc-service.c (gregset_info): Fetch the current inferior's
+	regs_info.  Adjust to use it.
+	* regcache.c: Include tdesc.h.
+	(register_bytes, reg_defs, num_registers)
+	(gdbserver_expedite_regs): Delete.
+	(get_thread_regcache): If the thread doesn't have a regcache yet,
+	create one, instead of aborting gdbserver.
+	(regcache_invalidate_one): Rename to ...
+	(regcache_invalidate_thread): ... this.
+	(regcache_invalidate_one): New.
+	(regcache_invalidate): Only invalidate registers of the current
+	process.
+	(init_register_cache): Add target_desc parameter, and use it.
+	(new_register_cache): Ditto.  Assert the target description has a
+	non zero registers_size.
+	(regcache_cpy): Add assertions.  Adjust.
+	(realloc_register_cache, set_register_cache): Delete.
+	(registers_to_string, registers_from_string): Adjust.
+	(find_register_by_name, find_regno, find_register_by_number)
+	(register_cache_size): Add target_desc parameter, and use it.
+	(free_register_cache_thread, free_register_cache_thread_one)
+	(regcache_release, register_cache_size): New.
+	(register_size): Add target_desc parameter, and use it.
+	(register_data, supply_register, supply_register_zeroed)
+	(supply_regblock, supply_register_by_name, collect_register)
+	(collect_register_as_string, collect_register_by_name): Adjust.
+	* regcache.h (struct target_desc): Forward declare.
+	(struct regcache) <tdesc>: New field.
+	(init_register_cache, new_register_cache): Add target_desc
+	parameter.
+	(regcache_invalidate_thread): Declare.
+	(regcache_invalidate_one): Delete declaration.
+	(regcache_release): Declare.
+	(find_register_by_number, register_cache_size, register_size)
+	(find_regno): Add target_desc parameter.
+	(gdbserver_expedite_regs, gdbserver_xmltarget): Delete
+	declarations.
+	* remote-utils.c: Include tdesc.h.
+	(outreg, prepare_resume_reply): Adjust.
+	* server.c: Include tdesc.h.
+	(gdbserver_xmltarget): Delete declaration.
+	(get_features_xml, process_serial_event): Adjust.
+	* server.h [IN_PROCESS_AGENT] (struct target_desc): Forward
+	declare.
+	(struct process_info) <tdesc>: New field.
+	(ipa_tdesc): Declare.
+	* tdesc.c: New file.
+	* tdesc.h: New file.
+	* tracepoint.c: Include tdesc.h.
+	[IN_PROCESS_AGENT] (ipa_tdesc): Define.
+	(get_context_regcache): Adjust to pass ipa_tdesc down.
+	(do_action_at_tracepoint): Adjust to get the register cache size
+	from the context regcache's description.
+	(traceframe_walk_blocks): Adjust to get the register cache size
+	from the current trace frame's description.
+	(traceframe_get_pc): Adjust to get current trace frame's
+	description and pass it down.
+	(gdb_collect): Adjust to get the register cache size from the
+	IPA's description.
+	* linux-amd64-ipa.c (tdesc_amd64_linux): Declare.
+	(gdbserver_xmltarget): Delete.
+	(initialize_low_tracepoint): Set the ipa's target description.
+	* linux-i386-ipa.c (tdesc_i386_linux): Declare.
+	(initialize_low_tracepoint): Set the ipa's target description.
+	* linux-x86-low.c: Include tdesc.h.
+	[__x86_64__] (is_64bit_tdesc): New.
+	(ps_get_thread_area, x86_get_thread_area): Use it.
+	(i386_cannot_store_register): Rename to ...
+	(x86_cannot_store_register): ... this.  Use is_64bit_tdesc.
+	(i386_cannot_fetch_register): Rename to ...
+	(x86_cannot_fetch_register): ... this.  Use is_64bit_tdesc.
+	(x86_fill_gregset, x86_store_gregset): Adjust register_size calls
+	to new interface.
+	(target_regsets): Rename to ...
+	(x86_regsets): ... this.
+	(x86_get_pc, x86_set_pc): Adjust register_size calls to new
+	interface.
+	(x86_siginfo_fixup): Use is_64bit_tdesc.
+	[__x86_64__] (tdesc_amd64_linux, tdesc_amd64_avx_linux)
+	(tdesc_x32_avx_linux, tdesc_x32_linux)
+	(tdesc_i386_linux, tdesc_i386_mmx_linux, tdesc_i386_avx_linux):
+	Declare.
+	(x86_linux_update_xmltarget): Delete.
+	(I386_LINUX_XSAVE_XCR0_OFFSET): Define.
+	(have_ptrace_getfpxregs, have_ptrace_getregset): New.
+	(AMD64_LINUX_USER64_CS): New.
+	(x86_linux_read_description): New, based on
+	x86_linux_update_xmltarget.
+	(same_process_callback): New.
+	(x86_arch_setup_process_callback): New.
+	(x86_linux_update_xmltarget): New.
+	(x86_regsets_info): New.
+	(amd64_linux_regs_info): New.
+	(i386_linux_usrregs_info): New.
+	(i386_linux_regs_info): New.
+	(x86_linux_regs_info): New.
+	(x86_arch_setup): Reimplement.
+	(x86_install_fast_tracepoint_jump_pad): Use is_64bit_tdesc.
+	(x86_emit_ops): Ditto.
+	(the_low_target): Adjust.  Install x86_linux_regs_info,
+	x86_cannot_fetch_register, and x86_cannot_store_register.
+	(initialize_low_arch): New.
+	* linux-ia64-low.c (tdesc_ia64): Declare.
+	(ia64_fetch_register): Adjust.
+	(ia64_usrregs_info, regs_info): New globals.
+	(ia64_regs_info): New function.
+	(the_low_target): Adjust.
+	(initialize_low_arch): New function.
+	* linux-sparc-low.c (tdesc_sparc64): Declare.
+	(sparc_fill_gregset_to_stack, sparc_store_gregset_from_stack):
+	Adjust.
+	(sparc_arch_setup): New function.
+	(sparc_regsets_info, sparc_usrregs_info, regs_info): New globals.
+	(the_low_target): Adjust.
+	(initialize_low_arch): New function.
+	* linux-ppc-low.c (tdesc_powerpc_32l, tdesc_powerpc_altivec32l)
+	(tdesc_powerpc_cell32l, tdesc_powerpc_vsx32l)
+	(tdesc_powerpc_isa205_32l, tdesc_powerpc_isa205_altivec32l)
+	(tdesc_powerpc_isa205_vsx32l, tdesc_powerpc_e500l)
+	(tdesc_powerpc_64l, tdesc_powerpc_altivec64l)
+	(tdesc_powerpc_cell64l, tdesc_powerpc_vsx64l)
+	(tdesc_powerpc_isa205_64l, tdesc_powerpc_isa205_altivec64l)
+	(tdesc_powerpc_isa205_vsx64l): Declare.
+	(ppc_cannot_store_register, ppc_collect_ptrace_register)
+	(ppc_supply_ptrace_register, parse_spufs_run, ppc_get_pc)
+	(ppc_set_pc, ppc_get_hwcap): Adjust.
+	(ppc_usrregs_info): Forward declare.
+	(!__powerpc64__) ppc_regmap_adjusted: New global.
+	(ppc_arch_setup): Adjust to the current process'es target
+	description.
+	(ppc_fill_vsxregset, ppc_store_vsxregset, ppc_fill_vrregset)
+	(ppc_store_vrregset, ppc_fill_evrregset, ppc_store_evrregse)
+	(ppc_store_evrregset): Adjust.
+	(target_regsets): Rename to ...
+	(ppc_regsets): ... this, and make static.
+	(ppc_usrregs_info, ppc_regsets_info, regs_info): New globals.
+	(ppc_regs_info): New function.
+	(the_low_target): Adjust.
+	(initialize_low_arch): New function.
+	* linux-s390-low.c (tdesc_s390_linux32, tdesc_s390_linux32v1)
+	(tdesc_s390_linux32v2, tdesc_s390_linux64, tdesc_s390_linux64v1)
+	(tdesc_s390_linux64v2, tdesc_s390x_linux64, tdesc_s390x_linux64v1)
+	(tdesc_s390x_linux64v2): Declare.
+	(s390_collect_ptrace_register, s390_supply_ptrace_register)
+	(s390_fill_gregset, s390_store_last_break): Adjust.
+	(target_regsets): Rename to ...
+	(s390_regsets): ... this, and make static.
+	(s390_get_pc, s390_set_pc): Adjust.
+	(s390_get_hwcap): New target_desc parameter, and use it.
+	[__s390x__] (have_hwcap_s390_high_gprs): New global.
+	(s390_arch_setup): Adjust to set the current process'es target
+	description.  Don't adjust the regmap.
+	(s390_usrregs_info, s390_regsets_info, regs_info): New globals.
+	[__s390x__] (s390_usrregs_info_3264, s390_regsets_info_3264)
+	(regs_info_3264): New globals.
+	(s390_regs_info): New function.
+	(the_low_target): Adjust.
+	(initialize_low_arch): New function.
+	* linux-mips-low.c (tdesc_mips_linux, tdesc_mips_dsp_linux)
+	(tdesc_mips64_linux, tdesc_mips64_dsp_linux): Declare.
+	[__mips64] (init_registers_mips_linux)
+	(init_registers_mips_dsp_linux): Delete defines.
+	[__mips64] (tdesc_mips_linux, tdesc_mips_dsp_linux): New defines.
+	(have_dsp): New global.
+	(mips_read_description): New, based on mips_arch_setup.
+	(mips_arch_setup): Reimplement.
+	(get_usrregs_info): New function.
+	(mips_cannot_fetch_register, mips_cannot_store_register)
+	(mips_get_pc, mips_set_pc, mips_fill_gregset, mips_store_gregset)
+	(mips_fill_fpregset, mips_store_fpregset): Adjust.
+	(target_regsets): Rename to ...
+	(mips_regsets): ... this, and make static.
+	(mips_regsets_info, mips_dsp_usrregs_info, mips_usrregs_info)
+	(dsp_regs_info, regs_info): New globals.
+	(mips_regs_info): New function.
+	(the_low_target): Adjust.
+	(initialize_low_arch): New function.
+	* linux-arm-low.c (tdesc_arm, tdesc_arm_with_iwmmxt)
+	(tdesc_arm_with_vfpv2, tdesc_arm_with_vfpv3, tdesc_arm_with_neon):
+	Declare.
+	(arm_fill_vfpregset, arm_store_vfpregset): Adjust.
+	(arm_read_description): New, with bits factored from
+	arm_arch_setup.
+	(arm_arch_setup): Reimplement.
+	(target_regsets): Rename to ...
+	(arm_regsets): ... this, and make static.
+	(arm_regsets_info, arm_usrregs_info, regs_info): New globals.
+	(arm_regs_info): New function.
+	(the_low_target): Adjust.
+	(initialize_low_arch): New function.
+	* linux-m68k-low.c (tdesc_m68k): Declare.
+	(target_regsets): Rename to ...
+	(m68k_regsets): ... this, and make static.
+	(m68k_regsets_info, m68k_usrregs_info, regs_info): New globals.
+	(m68k_regs_info): New function.
+	(m68k_arch_setup): New function.
+	(the_low_target): Adjust.
+	(initialize_low_arch): New function.
+	* linux-sh-low.c (tdesc_sharch): Declare.
+	(target_regsets): Rename to ...
+	(sh_regsets): ... this, and make static.
+	(sh_regsets_info, sh_usrregs_info, regs_info): New globals.
+	(sh_regs_info, sh_arch_setup): New functions.
+	(the_low_target): Adjust.
+	(initialize_low_arch): New function.
+	* linux-bfin-low.c (tdesc_bfin): Declare.
+	(bfin_arch_setup): New function.
+	(bfin_usrregs_info, regs_info): New globals.
+	(bfin_regs_info): New function.
+	(the_low_target): Adjust.
+	(initialize_low_arch): New function.
+	* linux-cris-low.c (tdesc_cris): Declare.
+	(cris_arch_setup): New function.
+	(cris_usrregs_info, regs_info): New globals.
+	(cris_regs_info): New function.
+	(the_low_target): Adjust.
+	(initialize_low_arch): New function.
+	* linux-cris-low.c (tdesc_crisv32): Declare.
+	(cris_arch_setup): New function.
+	(cris_regsets_info, cris_usrregs_info, regs_info): New globals.
+	(cris_regs_info): New function.
+	(the_low_target): Adjust.
+	(initialize_low_arch): New function.
+	* linux-m32r-low.c (tdesc_m32r): Declare.
+	(m32r_arch_setup): New function.
+	(m32r_usrregs_info, regs_info): New globals.
+	(m32r_regs_info): Adjust.
+	(initialize_low_arch): New function.
+	* linux-tic6x-low.c (tdesc_tic6x_c64xp_linux)
+	(tdesc_tic6x_c64x_linux, tdesc_tic6x_c62x_linux): Declare.
+	(tic6x_usrregs_info): Forward declare.
+	(tic6x_read_description): New function, based on ...
+	(tic6x_arch_setup): ... this.  Reimplement.
+	(target_regsets): Rename to ...
+	(tic6x_regsets): ... this, and make static.
+	(tic6x_regsets_info, tic6x_usrregs_info, regs_info): New globals.
+	(tic6x_regs_info): New function.
+	(the_low_target): Adjust.
+	(initialize_low_arch): New function.
+	* linux-xtensa-low.c (tdesc_xtensa): Declare.
+	(xtensa_fill_gregset, xtensa_store_gregset): Adjust.
+	(target_regsets): Rename to ...
+	(xtensa_regsets): ... this, and make static.
+	(xtensa_regsets_info, xtensa_usrregs_info, regs_info): New
+	globals.
+	(xtensa_arch_setup, xtensa_regs_info): New functions.
+	(the_low_target): Adjust.
+	(initialize_low_arch): New function.
+	* linux-nios2-low.c (tdesc_nios2_linux): Declare.
+	(nios2_arch_setup): Set the current process'es tdesc.
+	(target_regsets): Rename to ...
+	(nios2_regsets): ... this.
+	(nios2_regsets_info, nios2_usrregs_info, regs_info): New globals.
+	(nios2_regs_info): New function.
+	(the_low_target): Adjust.
+	(initialize_low_arch): New function.
+        * linux-aarch64-low.c (tdesc_aarch64): Declare.
+        (aarch64_arch_setup): Set the current process'es tdesc.
+        (target_regsets): Rename to ...
+        (aarch64_regsets): ... this.
+        (aarch64_regsets_info, aarch64_usrregs_info, regs_info): New globals.
+        (aarch64_regs_info): New function.
+        (the_low_target): Adjust.
+        (initialize_low_arch): New function.
+	* linux-tile-low.c (tdesc_tilegx, tdesc_tilegx32): Declare
+	globals.
+	(target_regsets): Rename to ...
+	(tile_regsets): ... this.
+	(tile_regsets_info, tile_usrregs_info, regs_info): New globals.
+	(tile_regs_info): New function.
+	(tile_arch_setup): Set the current process'es tdesc.
+	(the_low_target): Adjust.
+	(initialize_low_arch): New function.
+	* spu-low.c (tdesc_spu): Declare.
+	(spu_create_inferior, spu_attach): Set the new process'es tdesc.
+	* win32-arm-low.c (tdesc_arm): Declare.
+	(arm_arch_setup): New function.
+	(the_low_target): Install arm_arch_setup instead of
+	init_registers_arm.
+	* win32-i386-low.c (tdesc_i386, tdesc_amd64): Declare.
+	(init_windows_x86): Rename to ...
+	(i386_arch_setup): ... this.  Set `win32_tdesc'.
+	(the_low_target): Adjust.
+	* win32-low.c (win32_tdesc): New global.
+	(child_add_thread): Don't create the thread cache here.
+	(do_initial_child_stuff): Set the new process'es tdesc.
+	* win32-low.h (struct target_desc): Forward declare.
+	(win32_tdesc): Declare.
+	* lynx-i386-low.c (tdesc_i386): Declare global.
+	(lynx_i386_arch_setup): Set `lynx_tdesc'.
+	* lynx-low.c (lynx_tdesc): New global.
+	(lynx_add_process): Set the new process'es tdesc.
+	* lynx-low.h (struct target_desc): Forward declare.
+	(lynx_tdesc): Declare global.
+	* lynx-ppc-low.c (tdesc_powerpc_32): Declare global.
+	(lynx_ppc_arch_setup): Set `lynx_tdesc'.
+	* nto-low.c (nto_tdesc): New global.
+	(do_attach): Set the new process'es tdesc.
+	* nto-low.h (struct target_desc): Forward declare.
+	(nto_tdesc): Declare.
+	* nto-x86-low.c (tdesc_i386): Declare.
+	(nto_x86_arch_setup): Set `nto_tdesc'.
+
+gdb/
+2013-06-07  Pedro Alves  <palves@@redhat.com>
+
+	* regformats/regdat.sh: Output #include tdesc.h.  Make globals
+	static.  Output a global target description pointer.
+	(init_registers_${name}): Adjust to initialize a
+	target description structure.
+@
+text
+@/* GNU/Linux/Nios II specific low level interface, for the remote server for
+   GDB.
+   Copyright (C) 2008-2013 Free Software Foundation, Inc.
+
+   Contributed by Mentor Graphics, Inc.
+
+   This file is part of GDB.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+#include "server.h"
+#include "linux-low.h"
+#include <sys/ptrace.h>
+#include <endian.h>
+#include "gdb_proc_service.h"
+#include <asm/ptrace.h>
+
+#ifndef PTRACE_GET_THREAD_AREA
+#define PTRACE_GET_THREAD_AREA 25
+#endif
+
+/* The following definition must agree with the number of registers
+   defined in "struct user_regs" in GLIBC
+   (ports/sysdeps/unix/sysv/linux/nios2/sys/user.h), and also with
+   NIOS2_NUM_REGS in GDB proper.  */
+
+#define nios2_num_regs 49
+
+/* Defined in auto-generated file nios2-linux.c.  */
+
+void init_registers_nios2_linux (void);
+extern const struct target_desc *tdesc_nios2_linux;
+
+/* This union is used to convert between int and byte buffer
+   representations of register contents.  */
+
+union nios2_register
+{
+  unsigned char buf[4];
+  int reg32;
+};
+
+/* Return the ptrace ``address'' of register REGNO. */
+
+static int nios2_regmap[] = {
+  -1,  1,  2,  3,  4,  5,  6,  7,
+  8,  9,  10, 11, 12, 13, 14, 15,
+  16, 17, 18, 19, 20, 21, 22, 23,
+  24, 25, 26, 27, 28, 29, 30, 31,
+  32, 33, 34, 35, 36, 37, 38, 39,
+  40, 41, 42, 43, 44, 45, 46, 47,
+  48,
+  0
+};
+
+/* Implement the arch_setup linux_target_ops method.  */
+
+static void
+nios2_arch_setup (void)
+{
+  current_process ()->tdesc = tdesc_nios2_linux;
+}
+
+/* Implement the cannot_fetch_register linux_target_ops method.  */
+
+static int
+nios2_cannot_fetch_register (int regno)
+{
+  if (nios2_regmap[regno] == -1)
+    return 1;
+
+  return 0;
+}
+
+/* Implement the cannot_store_register linux_target_ops method.  */
+
+static int
+nios2_cannot_store_register (int regno)
+{
+  if (nios2_regmap[regno] == -1)
+    return 1;
+
+  return 0;
+}
+
+/* Implement the get_pc linux_target_ops method.  */
+
+static CORE_ADDR
+nios2_get_pc (struct regcache *regcache)
+{
+  union nios2_register pc;
+
+  collect_register_by_name (regcache, "pc", pc.buf);
+  return pc.reg32;
+}
+
+/* Implement the set_pc linux_target_ops method.  */
+
+static void
+nios2_set_pc (struct regcache *regcache, CORE_ADDR pc)
+{
+  union nios2_register newpc;
+
+  newpc.reg32 = pc;
+  supply_register_by_name (regcache, "pc", newpc.buf);
+}
+
+/* Breakpoint support.  */
+
+static const unsigned int nios2_breakpoint = 0x003b6ffa;
+#define nios2_breakpoint_len 4
+
+/* Implement the breakpoint_reinsert_addr linux_target_ops method.  */
+
+static CORE_ADDR
+nios2_reinsert_addr (void)
+{
+  union nios2_register ra;
+  struct regcache *regcache = get_thread_regcache (current_inferior, 1);
+
+  collect_register_by_name (regcache, "ra", ra.buf);
+  return ra.reg32;
+}
+
+/* Implement the breakpoint_at linux_target_ops method.  */
+
+static int
+nios2_breakpoint_at (CORE_ADDR where)
+{
+  unsigned int insn;
+
+  (*the_target->read_memory) (where, (unsigned char *) &insn, 4);
+  if (insn == nios2_breakpoint)
+    return 1;
+  return 0;
+}
+
+/* Fetch the thread-local storage pointer for libthread_db.  */
+
+ps_err_e
+ps_get_thread_area (const struct ps_prochandle *ph,
+                    lwpid_t lwpid, int idx, void **base)
+{
+  if (ptrace (PTRACE_GET_THREAD_AREA, lwpid, NULL, base) != 0)
+    return PS_ERR;
+
+  /* IDX is the bias from the thread pointer to the beginning of the
+     thread descriptor.  It has to be subtracted due to implementation
+     quirks in libthread_db.  */
+  *base = (void *) ((char *) *base - idx);
+
+  return PS_OK;
+}
+
+#ifdef HAVE_PTRACE_GETREGS
+
+/* Helper functions to collect/supply a single register REGNO.  */
+
+static void
+nios2_collect_register (struct regcache *regcache, int regno,
+			union nios2_register *reg)
+{
+  union nios2_register tmp_reg;
+
+  collect_register (regcache, regno, &tmp_reg.reg32);
+  reg->reg32 = tmp_reg.reg32;
+}
+
+static void
+nios2_supply_register (struct regcache *regcache, int regno,
+		       const union nios2_register *reg)
+{
+  supply_register (regcache, regno, reg->buf);
+}
+
+/* We have only a single register set on Nios II.  */
+
+static void
+nios2_fill_gregset (struct regcache *regcache, void *buf)
+{
+  union nios2_register *regset = buf;
+  int i;
+
+  for (i = 1; i < nios2_num_regs; i++)
+    nios2_collect_register (regcache, i, regset + i);
+}
+
+static void
+nios2_store_gregset (struct regcache *regcache, const void *buf)
+{
+  const union nios2_register *regset = buf;
+  int i;
+
+  for (i = 0; i < nios2_num_regs; i++)
+    nios2_supply_register (regcache, i, regset + i);
+}
+#endif /* HAVE_PTRACE_GETREGS */
+
+static struct regset_info nios2_regsets[] =
+{
+#ifdef HAVE_PTRACE_GETREGS
+  { PTRACE_GETREGS, PTRACE_SETREGS, 0, nios2_num_regs * 4, GENERAL_REGS,
+    nios2_fill_gregset, nios2_store_gregset },
+#endif /* HAVE_PTRACE_GETREGS */
+  { 0, 0, 0, -1, -1, NULL, NULL }
+};
+
+static struct regsets_info nios2_regsets_info =
+  {
+    nios2_regsets, /* regsets */
+    0, /* num_regsets */
+    NULL, /* disabled_regsets */
+  };
+
+static struct usrregs_info nios2_usrregs_info =
+  {
+    nios2_num_regs,
+    nios2_regmap,
+  };
+
+static struct regs_info regs_info =
+  {
+    NULL, /* regset_bitmap */
+    &nios2_usrregs_info,
+    &nios2_regsets_info
+  };
+
+static const struct regs_info *
+nios2_regs_info (void)
+{
+  return &regs_info;
+}
+
+struct linux_target_ops the_low_target =
+{
+  nios2_arch_setup,
+  nios2_regs_info,
+  nios2_cannot_fetch_register,
+  nios2_cannot_store_register,
+  NULL,
+  nios2_get_pc,
+  nios2_set_pc,
+  (const unsigned char *) &nios2_breakpoint,
+  nios2_breakpoint_len,
+  nios2_reinsert_addr,
+  0,
+  nios2_breakpoint_at,
+};
+
+void
+initialize_low_arch (void)
+{
+  init_registers_nios2_linux ();
+
+  initialize_regsets_info (&nios2_regsets_info);
+}
+@
+
+
+1.1
+log
+@2013-05-06  Sandra Loosemore  <sandra@@codesourcery.com>
+	    Andrew Jenner  <andrew@@codesourcery.com>
+
+	gdb/gdbserver/
+	* Makefile.in (SFILES): Add linux-nios2-low.c.
+	(clean): Add action to delete nios2-linux.c.
+	(nios2-linux.c): New rule.
+	* configure.srv: Add nios2*-*-linux*.
+	* linux-nios2-low.c: New.
+@
+text
+@d43 1
+d72 1
+a72 1
+  init_registers_nios2_linux ();
+d210 1
+a210 1
+struct regset_info target_regsets[] =
+d219 26
+d248 1
+a248 3
+  nios2_num_regs,
+  nios2_regmap,
+  NULL,
+d260 8
+@
+

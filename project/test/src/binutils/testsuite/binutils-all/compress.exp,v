@@ -1,0 +1,557 @@
+head	1.6;
+access;
+symbols
+	binutils-2_24-branch:1.6.0.2
+	binutils-2_24-branchpoint:1.6
+	binutils-2_21_1:1.1
+	binutils-2_23_2:1.4.2.1
+	binutils-2_23_1:1.4
+	binutils-2_23:1.4
+	binutils-2_23-branch:1.4.0.2
+	binutils-2_23-branchpoint:1.4
+	binutils-2_22_branch:1.3.0.4
+	binutils-2_22:1.3
+	binutils-2_22-branch:1.3.0.2
+	binutils-2_22-branchpoint:1.3
+	binutils-2_21:1.1
+	binutils-2_21-branch:1.1.0.2
+	binutils-2_21-branchpoint:1.1
+	binutils_latest_snapshot:1.6;
+locks; strict;
+comment	@# @;
+
+
+1.6
+date	2012.11.27.17.26.08;	author roland;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2012.10.20.22.14.08;	author hjl;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2012.07.03.16.06.34;	author hjl;	state Exp;
+branches
+	1.4.2.1;
+next	1.3;
+
+1.3
+date	2010.11.15.21.05.26;	author hjl;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2010.11.15.18.14.11;	author hjl;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2010.10.29.12.10.33;	author hjl;	state Exp;
+branches;
+next	;
+
+1.4.2.1
+date	2012.11.29.23.29.13;	author roland;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.6
+log
+@binutils/testsuite/
+	* lib/binutils-common.exp (is_zlib_supported): New function.
+	* lib/utils-lib.exp (run_dump_test): If as options include
+	--compress-debug-sections and zlib is not available, report
+	the test as unsupported.
+	* binutils-all/compress.exp: Bail out if zlib is not available.
+	* binutils-all/objdump.exp (objdump compressed debug):
+	Mark unsupported if zlib is not available.
+	* binutils-all/readelf.exp (readelf_compressed_wa_test): Likewise.
+
+gas/testsuite/
+	* lib/gas-defs.exp (run_dump_test): If as options include
+	--compress-debug-sections and zlib is not available, report
+	the test as unsupported.
+
+ld/testsuite/
+	* ld-elf/compress.exp: Bail out if zlib is not supported.
+	* lib/ld-lib.exp (run_dump_test): If as options include
+	--compress-debug-sections and zlib is not available, report
+	the test as unsupported.
+@
+text
+@#   Copyright 2010, 2012
+#   Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston, MA 02110-1301, USA.
+
+# Test compressed .debug section.
+
+if { [is_remote host] || ![is_elf_format] || ![is_zlib_supported] } then {
+    return
+}
+
+set testfile tmpdir/dw2-1.o
+set compressedfile tmpdir/dw2-1-compressed.o
+set copyfile tmpdir/dw2-copy
+set compressedfile2 tmpdir/dw2-2-compressed.o
+set libfile tmpdir/libdw2.a
+set compressedcopyfile tmpdir/dw2-copy-compressed
+
+if { ![binutils_assemble_flags $srcdir/$subdir/dw2-1.S $testfile --nocompress-debug-sections] } then {
+    unsupported "compressed debug sections"
+    return
+}
+
+if { ![binutils_assemble_flags $srcdir/$subdir/dw2-1.S $compressedfile --compress-debug-sections] } then {
+    unsupported "compressed debug sections"
+    return
+}
+
+if { ![binutils_assemble_flags $srcdir/$subdir/dw2-2.S $compressedfile2 --compress-debug-sections] } then {
+    unsupported "compressed debug sections"
+    return
+}
+
+remote_file host delete $libfile
+set got [binutils_run $AR "rc $libfile $compressedfile $compressedfile2"]
+if ![string match "" $got] then {
+    fail "compressed debug sections"
+    return
+}
+
+set testname "objcopy compress debug sections"
+set got [binutils_run $OBJCOPY "--compress-debug-sections $testfile ${copyfile}.o"]
+if ![string match "" $got] then {
+    fail "objcopy ($testname)"
+} else {
+    send_log "cmp $compressedfile ${copyfile}.o\n"
+    verbose "cmp $compressedfile ${copyfile}.o"
+    set src1 ${compressedfile}
+    set src2 ${copyfile}.o
+    set status [remote_exec build cmp "${src1} ${src2}"]
+    set exec_output [lindex $status 1]
+    set exec_output [prune_warnings $exec_output]
+
+    if [string match "" $exec_output] then {
+	pass "objcopy ($testname)"
+    } else {
+	send_log "$exec_output\n"
+	verbose "$exec_output" 1
+	fail "objcopy ($testname)"
+    }
+}
+
+set testname "objcopy decompress compressed debug sections"
+set got [binutils_run $OBJCOPY "--decompress-debug-sections $compressedfile ${copyfile}.o"]
+if ![string match "" $got] then {
+    fail "objcopy ($testname)"
+} else {
+    send_log "cmp $testfile ${copyfile}.o\n"
+    verbose "cmp $testfile ${copyfile}.o"
+    set src1 ${testfile}
+    set src2 ${copyfile}.o
+    set status [remote_exec build cmp "${src1} ${src2}"]
+    set exec_output [lindex $status 1]
+    set exec_output [prune_warnings $exec_output]
+
+    if [string match "" $exec_output] then {
+	pass "objcopy ($testname)"
+    } else {
+	send_log "$exec_output\n"
+	verbose "$exec_output" 1
+	fail "objcopy ($testname)"
+    }
+}
+
+set testname "objcopy decompress debug sections in archive"
+set got [binutils_run $OBJCOPY "--decompress-debug-sections $libfile ${copyfile}.a"]
+if ![string match "" $got] then {
+    fail "objcopy ($testname)"
+} else {
+    set got [remote_exec host "$READELF -S --wide ${copyfile}.a" "" "/dev/null" "tmpdir/libdw2.out"]
+
+    if { [lindex $got 0] != 0 || ![string match "" [lindex $got 1]] } then {
+	fail "$testname (reason: unexpected output)"
+	send_log $got
+	send_log "\n"
+    }
+
+    if { [regexp_diff tmpdir/libdw2.out $srcdir/$subdir/libdw2.out] } then {
+	fail "$testname"
+    } else {
+	pass "$testname"
+    }
+}
+
+set testname "objcopy compress debug sections in archive"
+set got [binutils_run $OBJCOPY "--compress-debug-sections ${copyfile}.a ${compressedcopyfile}.a"]
+if ![string match "" $got] then {
+    fail "objcopy ($testname)"
+} else {
+    set got [remote_exec host "$OBJDUMP -s -j .zdebug_line ${compressedcopyfile}.a" "" "/dev/null" "tmpdir/libdw2-compressed.out"]
+
+    if { [lindex $got 0] != 0 || ![string match "" [lindex $got 1]] } then {
+	fail "$testname (reason: unexpected output)"
+	send_log $got
+	send_log "\n"
+    }
+
+    if { [regexp_diff tmpdir/libdw2-compressed.out $srcdir/$subdir/libdw2-compressed.out] } then {
+	fail "$testname"
+    } else {
+	pass "$testname"
+    }
+}
+
+set testname "objdump compress debug sections"
+set got [remote_exec host "$OBJDUMP -W $compressedfile" "" "/dev/null" "objdump.out"]
+if { [lindex $got 0] != 0 || ![string match "" [lindex $got 1]] } then {
+    fail "$testname"
+    send_log "$got\n"
+}
+if { [regexp_diff objdump.out $srcdir/$subdir/dw2-1.W] } then {
+    fail "$testname"
+} else {
+    pass "$testname"
+}
+
+set testfile tmpdir/dw2-emty.o
+
+if { ![binutils_assemble_flags $srcdir/$subdir/dw2-empty.S $testfile --nocompress-debug-sections] } then {
+    unsupported "compressed debug sections"
+    return
+}
+
+set testname "objcopy compress empty debug sections"
+set got [binutils_run $OBJCOPY "--compress-debug-sections $testfile ${copyfile}.o"]
+if ![string match "" $got] then {
+    fail "objcopy ($testname)"
+} else {
+    send_log "cmp $testfile ${copyfile}.o\n"
+    verbose "cmp $testfile ${copyfile}.o"
+    set src1 ${testfile}
+    set src2 ${copyfile}.o
+    set status [remote_exec build cmp "${src1} ${src2}"]
+    set exec_output [lindex $status 1]
+    set exec_output [prune_warnings $exec_output]
+
+    if [string match "" $exec_output] then {
+	pass "objcopy ($testname)"
+    } else {
+	send_log "$exec_output\n"
+	verbose "$exec_output" 1
+	fail "objcopy ($testname)"
+    }
+}
+@
+
+
+1.5
+log
+@Add an objdump test on compress debug sections
+
+	* binutils-all/compress.exp: Add an objdump test.
+	* binutils-all/dw2-1.W: New file.
+@
+text
+@d1 1
+a1 1
+#   Copyright 2010
+d8 1
+a8 1
+# 
+d13 1
+a13 1
+# 
+d20 1
+a20 1
+if { [is_remote host] || ![is_elf_format] } then {
+@
+
+
+1.4
+log
+@Don't compress empty debug section
+
+2012-07-03  H.J. Lu  <hongjiu.lu@@intel.com>
+
+	PR binutils/14319
+	* elf.c (_bfd_elf_make_section_from_shdr): Don't compress empty
+	debug section.
+
+2012-07-03  H.J. Lu  <hongjiu.lu@@intel.com>
+
+	PR binutils/14319
+	* binutils-all/compress.exp: Test compress empty debug sections.
+
+	* binutils-all/dw2-empty.S: New file.
+@
+text
+@d137 12
+@
+
+
+1.4.2.1
+log
+@binutils/testsuite/
+	* lib/binutils-common.exp (is_zlib_supported): New function.
+	* lib/utils-lib.exp (run_dump_test): If as options include
+	--compress-debug-sections and zlib is not available, report
+	the test as unsupported.
+	* binutils-all/compress.exp: Bail out if zlib is not available.
+	* binutils-all/objdump.exp (objdump compressed debug):
+	Mark unsupported if zlib is not available.
+	* binutils-all/readelf.exp (readelf_compressed_wa_test): Likewise.
+
+gas/testsuite/
+	* lib/gas-defs.exp (run_dump_test): If as options include
+	--compress-debug-sections and zlib is not available, report
+	the test as unsupported.
+
+ld/testsuite/
+	* ld-elf/compress.exp: Bail out if zlib is not supported.
+	* lib/ld-lib.exp (run_dump_test): If as options include
+	--compress-debug-sections and zlib is not available, report
+	the test as unsupported.
+@
+text
+@d1 1
+a1 1
+#   Copyright 2010, 2012
+d8 1
+a8 1
+#
+d13 1
+a13 1
+#
+d20 1
+a20 1
+if { [is_remote host] || ![is_elf_format] || ![is_zlib_supported] } then {
+@
+
+
+1.3
+log
+@Use binutils_assemble_flags for --nocompress-debug-sections.
+
+2010-11-15  H.J. Lu  <hongjiu.lu@@intel.com>
+
+	* binutils-all/compress.exp: Replace binutils_assemble with
+	binutils_assemble_flags for --nocompress-debug-sections.
+@
+text
+@d136 29
+@
+
+
+1.2
+log
+@Also expect .zdebug in DWARF debug section name.
+
+binutils/testsuite/
+
+2010-11-15  H.J. Lu  <hongjiu.lu@@intel.com>
+
+	* binutils-all/compress.exp: Pass --nocompress-debug-sections to
+	assembler for uncompressed debug sections.
+
+	* binutils-all/testranges.d: Also expect .zdebug in section name.
+
+gas/testsuite/
+
+2010-11-15  H.J. Lu  <hongjiu.lu@@intel.com>
+
+	* gas/elf/dwarf2-3.d: Also expect .zdebug in section name.
+	* gas/i386/debug1.d: Likewise.
+	* gas/lns/lns-common-1.d: Likewise.
+	* gas/lns/lns-duplicate.d: Likewise.
+@
+text
+@d31 1
+a31 1
+if { ![binutils_assemble $srcdir/$subdir/dw2-1.S $testfile --nocompress-debug-sections] } then {
+@
+
+
+1.1
+log
+@Add compressed debug section support to binutils and ld.
+
+bfd/
+
+2010-10-29  H.J. Lu  <hongjiu.lu@@intel.com>
+	    Cary Coutant  <ccoutant@@google.com>
+
+	* archive.c (bfd_openr_next_archived_file): Copy BFD_COMPRESS
+	and BFD_DECOMPRESS.
+
+	* bfd.c (BFD_COMPRESS): New.
+	(BFD_DECOMPRESS): Likewise.
+	(BFD_FLAGS_SAVED): Likewise.
+	(bfd_preserve_save): Replace BFD_IN_MEMORY with BFD_FLAGS_SAVED.
+
+	* compress.c (bfd_uncompress_section_contents): Removed.
+	(get_uncompressed_size): New.
+	(decompress_contents): Likewise.
+	(bfd_compress_section_contents): Likewise.
+	(bfd_get_full_section_contents): Likewise.
+	(bfd_is_section_compressed): Likewise.
+	(bfd_init_section_decompress_status): Likewise.
+	(bfd_init_section_compress_status): Likewise.
+
+	* dwarf2.c (dwarf_debug_sections): New.
+	(dwarf_debug_section_enum): Likewise.
+	(read_section): Remove section_name and compressed_section_name.
+	Add dwarf_debug_section_enum.  Try compressed debug section.
+	(read_indirect_string): Updated.
+	(read_abbrevs): Likewise.
+	(decode_line_info): Likewise.
+	(read_debug_ranges): Likewise.
+	(find_line): Updated.
+
+	* ecoff.c (bfd_debug_section): Add compress_status and
+	compressed_size.
+
+	* elf.c (_bfd_elf_make_section_from_shdr): Call
+	bfd_is_section_compressed to check if a DWARF debug section is
+	compressed.  Call bfd_init_section_compress_status or
+	bfd_init_section_decompress_status if needed.
+
+	* elflink.c (elf_link_input_bfd): Replace bfd_get_section_contents
+	with bfd_get_full_section_contents.
+	* merge.c (_bfd_add_merge_section): Likewise.
+	* reloc.c (bfd_generic_get_relocated_section_contents): Likewise.
+	* simple.c (bfd_simple_get_relocated_section_contents): Likewise.
+
+	* elfxx-target.h (TARGET_BIG_SYM): Allow BFD_COMPRESS and
+	BFD_DECOMPRESS.
+	(TARGET_LITTLE_SYM): Likewise.
+
+	* libbfd-in.h (dwarf_debug_section): New.
+	(dwarf_debug_sections): Likewise.
+
+	* libbfd.c (_bfd_generic_get_section_contents): Issue an error
+	when getting contents on compressed/decompressed section.
+
+	* section.c (COMPRESS_SECTION_NONE): New.
+	(COMPRESS_SECTION_DONE): Likewise.
+	(DECOMPRESS_SECTION_SIZED): Likewise.
+	(BFD_FAKE_SECTION): Add compress_status and compressed_size.
+	(bfd_malloc_and_get_section): Replace bfd_get_section_contents
+	with bfd_get_full_section_contents.
+
+	* bfd-in2.h: Regenerated.
+	* libbfd.h: Likewise.
+
+binutils/
+
+2010-10-29  H.J. Lu  <hongjiu.lu@@intel.com>
+
+	* addr2line.c (process_file): Set BFD_DECOMPRESS.
+
+	* objcopy.c (do_debug_sections): New.
+	(OPTION_COMPRESS_DEBUG_SECTIONS): New.
+	(OPTION_DECOMPRESS_DEBUG_SECTIONS): Likewise.
+	(copy_options): Add OPTION_COMPRESS_DEBUG_SECTIONS and
+	OPTION_DECOMPRESS_DEBUG_SECTIONS.
+	(copy_usage): Add --compress-debug-sections and
+	--decompress-debug-sections.
+	(copy_file): Set BFD_COMPRESS or BFD_DECOMPRESS.
+	(copy_section): Replace bfd_get_section_contents with
+	bfd_get_full_section_contents.
+	(copy_main): Handle OPTION_COMPRESS_DEBUG_SECTIONS and
+	OPTION_DECOMPRESS_DEBUG_SECTIONS.  Check do_debug_sections to
+	rename DWARF debug sections.
+
+	* objdump.c (load_specific_debug_section): Replace
+	bfd_get_section_contents with bfd_get_full_section_contents.
+	Remove bfd_uncompress_section_contents.
+	(dump_section): Replace bfd_get_section_contents with
+	bfd_get_full_section_contents.
+	(display_file): Set BFD_DECOMPRESS if needed.
+
+	* readelf.c (uncompress_section_contents): Set buffer to NULL
+	to indiate decompression failure.
+	(load_specific_debug_section): Always call
+	uncompress_section_contents.
+
+	* doc/binutils.texi: Document --compress-debug-sections and
+	--decompress-debug-sections.
+
+binutils/testsuite/
+
+2010-10-29  H.J. Lu  <hongjiu.lu@@intel.com>
+
+	* binutils-all/compress.exp: New.
+	* binutils-all/dw2-1.S: Likewise.
+	* binutils-all/dw2-2.S: Likewise.
+	* binutils-all/libdw2-compressed.out: Likewise.
+	* binutils-all/libdw2.out: Likewise.
+
+gas/
+
+2010-10-29  H.J. Lu  <hongjiu.lu@@intel.com>
+
+	* write.c (compress_debug): Optimize section flags check.
+
+gas/testsuite/
+
+2010-10-29  H.J. Lu  <hongjiu.lu@@intel.com>
+
+	* elf/dwarf2-1.s: Replace .zdebug_abbrev section with
+	.debug_abbrev section.
+	* elf/dwarf2-2.3: Likewise.
+
+	* elf/dwarf2-1.d: Pass --compress-debug-sections to assembler.
+	Updated.
+	* elf/dwarf2-2.d: Likewise.
+
+	* gas/i386/i386.exp: Remove xfail on dw2-compress-2 and
+	x86-64-dw2-compress-2.
+
+ld/
+
+2010-10-29  H.J. Lu  <hongjiu.lu@@intel.com>
+
+	* ldfile.c (ldfile_try_open_bfd): Set BFD_DECOMPRESS after
+	bfd_openr returns.
+	* emultempl/elf32.em (gld${EMULATION_NAME}_try_needed): Likewise.
+
+	* scripttempl/elf.sc: Include compressed DWARF debug sections.
+
+ld/testsuite/
+
+2010-10-29  H.J. Lu  <hongjiu.lu@@intel.com>
+
+	* ld-elf/compress.exp: New.
+	* ld-elf/compress1.s: Likewise.
+	* ld-elf/compress1a.d: Likewise.
+	* ld-elf/compress1b.d: Likewise.
+	* ld-elf/compress1c.d: Likewise.
+@
+text
+@d31 2
+a32 2
+if { ![binutils_assemble $srcdir/$subdir/dw2-1.S $testfile] } then {
+    fail "compressed debug sections"
+@
+

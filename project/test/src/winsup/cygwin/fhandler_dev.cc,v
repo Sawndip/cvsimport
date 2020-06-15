@@ -1,0 +1,1165 @@
+head	1.13;
+access;
+symbols
+	cygwin-1_7_35-release:1.13
+	cygwin-1_7_34-release:1.13
+	cygwin-1_7_33-release:1.13
+	cygwin-1_7_32-release:1.13
+	cygwin-1_7_31-release:1.13
+	cygwin-1_7_30-release:1.13
+	cygwin-1_7_29-release:1.13
+	cygwin-1_7_29-release-branchpoint:1.13.0.2
+	cygwin-pre-user-db:1.13
+	cygwin-1_7_28-release:1.13
+	cygwin-1_7_27-release:1.13
+	cygwin-1_7_26-release:1.13
+	cygwin-1_7_25-release:1.11
+	cygwin-1_7_24-release:1.11
+	cygwin-1_7_23-release:1.11
+	cygwin-1_7_22-release:1.11
+	cygwin-1_7_21-release:1.11
+	cygwin-1_7_20-release:1.11
+	cygwin-1_7_19-release:1.11
+	cygwin-64bit-postmerge:1.10
+	cygwin-64bit-premerge-branch:1.9.0.2
+	cygwin-64bit-premerge:1.9
+	cygwin-1_7_18-release:1.9
+	post-ptmalloc3:1.8.2.2
+	pre-ptmalloc3:1.8.2.2
+	cygwin-1_7_17-release:1.8
+	cygwin-64bit-branch:1.8.0.2
+	cygwin-1_7_16-release:1.8
+	cygwin-1_7_15-release:1.8
+	cygwin-1_7_14_2-release:1.8
+	cygwin-1_7_14-release:1.8
+	cygwin-1_7_12-release:1.8;
+locks; strict;
+comment	@// @;
+
+
+1.13
+date	2013.10.31.14.26.42;	author corinna;	state Exp;
+branches;
+next	1.12;
+
+1.12
+date	2013.10.30.09.44.47;	author corinna;	state Exp;
+branches;
+next	1.11;
+
+1.11
+date	2013.05.01.01.20.37;	author yselkowitz;	state Exp;
+branches;
+next	1.10;
+
+1.10
+date	2013.04.23.09.44.32;	author corinna;	state Exp;
+branches;
+next	1.9;
+
+1.9
+date	2013.01.21.04.34.51;	author cgf;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2012.04.02.19.25.58;	author corinna;	state Exp;
+branches
+	1.8.2.1;
+next	1.7;
+
+1.7
+date	2012.04.02.11.08.07;	author corinna;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2012.04.01.10.38.07;	author corinna;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2012.04.01.07.19.52;	author cgf;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2012.03.31.20.14.14;	author corinna;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2012.03.31.17.38.00;	author cgf;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2012.03.30.09.26.45;	author corinna;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2012.03.29.18.02.54;	author corinna;	state Exp;
+branches;
+next	;
+
+1.8.2.1
+date	2012.08.13.20.04.33;	author corinna;	state Exp;
+branches;
+next	1.8.2.2;
+
+1.8.2.2
+date	2013.01.21.13.52.05;	author corinna;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.13
+log
+@	* devices.in (dev_cygdrive_storage): Revert mapping to \Device\Null.
+	(dev_storage): Ditto for /dev.
+	* devices.cc: Regenerate.
+	* fhandler.cc (fhandler_base::open_null): New method to open a fake
+	\Device\Null handler.
+	(fhandler_base::open): Fix formatting.  Change O_ACCMODE test to a
+	switch statement.  Simplify a test which still tested for a now unused
+	create_disposition.
+	* fhandler.h (fhandler_base::open_null): Declare.
+	(fhandler_netdrive::close): Declare.
+	* fhandler_dev.cc (fhandler_dev::open): Open fake \Device\Null handle
+	by just calling new open_null method.
+	* fhandler_disk_file.cc (fhandler_cygdrive::open): Ditto.
+	* fhandler_netdrive.cc (fhandler_netdrive::open): Call open_null
+	rather than setting nohandle.
+	(fhandler_netdrive::close): New method.
+	* fhandler_registry.cc (fetch_hkey): Fix token in RegOpenUserClassesRoot
+	call.  Create valid key for HKEY_CURRENT_CONFIG by mapping to real key
+	HKEY_LOCAL_MACHINE\System\CurrentControlSet\Hardware Profiles\Current.
+	(fhandler_registry::open): Set nohandle only when using pseudo registry
+	handle.
+	* fhandler_virtual.cc (fhandler_virtual::opendir): Call open rather
+	than just setting nohandle here.
+	* fhandler_virtual::fstatvfs): Set ST_RDONLY fs flag.
+	* globals.cc (ro_u_null): New readonly UNICODE_STRING for \Device\Null.
+	* path.h (path_conv::set_path): Revert previous change caring for
+	wide_path.
+@
+text
+@/* fhandler_dev.cc, Implement /dev.
+
+   Copyright 2012, 2013 Red Hat, Inc.
+
+This file is part of Cygwin.
+
+This software is a copyrighted work licensed under the terms of the
+Cygwin license.  Please consult the file "CYGWIN_LICENSE" for
+details. */
+
+#include "winsup.h"
+#include <stdlib.h>
+#include <sys/statvfs.h>
+#include "path.h"
+#include "fhandler.h"
+#include "dtable.h"
+#include "cygheap.h"
+#include "devices.h"
+
+#define _COMPILING_NEWLIB
+#include <dirent.h>
+
+#define dev_prefix_len (sizeof ("/dev"))
+#define dev_storage_scan_start (dev_storage + 1)
+#define dev_storage_size (dev_storage_end - dev_storage_scan_start)
+
+static int
+device_cmp (const void *a, const void *b)
+{
+  return strcmp (((const device *) a)->name,
+		 ((const device *) b)->name + dev_prefix_len);
+}
+
+fhandler_dev::fhandler_dev () :
+  fhandler_disk_file (), devidx (NULL), dir_exists (true)
+{
+}
+
+int
+fhandler_dev::open (int flags, mode_t mode)
+{
+  if ((flags & (O_CREAT | O_EXCL)) == (O_CREAT | O_EXCL))
+    {
+      set_errno (EEXIST);
+      return 0;
+    }
+  if (flags & O_WRONLY)
+    {
+      set_errno (EISDIR);
+      return 0;
+    }
+  /* Filter O_CREAT flag to avoid creating a file called /dev accidentally. */
+  int ret = fhandler_disk_file::open (flags & ~O_CREAT, mode);
+  if (!ret)
+    {
+      /* Open a fake handle to \\Device\\Null */
+      ret = open_null (flags);
+      dir_exists = false;
+    }
+  return ret;
+}
+
+int
+fhandler_dev::close ()
+{
+  return fhandler_disk_file::close ();
+}
+
+int __reg2
+fhandler_dev::fstat (struct stat *st)
+{
+  /* If /dev really exists on disk, return correct disk information. */
+  if (pc.fs_got_fs ())
+    return fhandler_disk_file::fstat (st);
+  /* Otherwise fake virtual filesystem. */
+  fhandler_base::fstat (st);
+  st->st_ino = 2;
+  st->st_mode = S_IFDIR | STD_RBITS | STD_XBITS;
+  st->st_nlink = 1;
+  return 0;
+}
+
+int __reg2
+fhandler_dev::fstatvfs (struct statvfs *sfs)
+{
+  int ret = -1, opened = 0;
+  HANDLE fh = get_handle ();
+
+  if (!fh)
+    {
+      if (!open (O_RDONLY, 0))
+	return -1;
+      opened = 1;
+    }
+  if (pc.fs_got_fs ())
+    ret = fhandler_disk_file::fstatvfs (sfs);
+  else
+    {
+      /* Virtual file system.  Just return an empty buffer with a few values
+	 set to something useful similar to Linux. */
+      memset (sfs, 0, sizeof (*sfs));
+      sfs->f_bsize = sfs->f_frsize = 4096;
+      sfs->f_flag = ST_RDONLY;
+      sfs->f_namemax = NAME_MAX;
+      ret = 0;
+    }
+  if (opened)
+    close ();
+  return ret;
+}
+
+DIR *
+fhandler_dev::opendir (int fd)
+{
+  DIR *dir = fhandler_disk_file::opendir (fd);
+  if (dir)
+    dir_exists = true;
+  else if ((dir = (DIR *) malloc (sizeof (DIR))) == NULL)
+    set_errno (ENOMEM);
+  else if ((dir->__d_dirent =
+	    (struct dirent *) malloc (sizeof (struct dirent))) == NULL)
+    {
+      set_errno (ENOMEM);
+      goto free_dir;
+    }
+  else
+    {
+      cygheap_fdnew cfd;
+      if (cfd < 0 && fd < 0)
+	goto free_dirent;
+
+      dir->__d_dirname = NULL;
+      dir->__d_dirent->__d_version = __DIRENT_VERSION;
+      dir->__d_cookie = __DIRENT_COOKIE;
+      dir->__handle = INVALID_HANDLE_VALUE;
+      dir->__d_position = 0;
+      dir->__flags = 0;
+      dir->__d_internal = 0;
+
+      if (fd >= 0)
+	dir->__d_fd = fd;
+      else if (!open (O_RDONLY, 0))
+	goto free_dirent;
+      else
+	{
+	  cfd = this;
+	  dir->__d_fd = cfd;
+	}
+      set_close_on_exec (true);
+      dir->__fh = this;
+      dir_exists = false;
+    }
+
+  devidx = dir_exists ? NULL : dev_storage_scan_start;
+
+  syscall_printf ("%p = opendir (%s)", dir, get_name ());
+  return dir;
+
+free_dirent:
+  free (dir->__d_dirent);
+free_dir:
+  free (dir);
+  return NULL;
+}
+
+int
+fhandler_dev::readdir (DIR *dir, dirent *de)
+{
+  int ret;
+  const device *curdev;
+  device dev;
+
+  if (!devidx)
+    {
+      while ((ret = fhandler_disk_file::readdir (dir, de)) == 0)
+	{
+	  /* Avoid to print devices for which users have created files under
+	     /dev already, for instance by using the old script from Igor
+	     Peshansky. */
+	  dev.name = de->d_name;
+	  if (!bsearch (&dev, dev_storage_scan_start, dev_storage_size,
+			sizeof dev, device_cmp))
+	    break;
+	}
+      if (ret != ENMFILE)
+	goto out;
+      devidx = dev_storage_scan_start;
+    }
+
+  /* Now start processing our internal dev table. */
+  ret = ENMFILE;
+  while ((curdev = devidx++) < dev_storage_end)
+    {
+      /* If exists returns < 0 it means that the device can be used by a
+	 program but its use is deprecated and, so, it is not returned
+	 by readdir(().  */
+      if (curdev->exists () <= 0)
+	continue;
+      ++dir->__d_position;
+      strcpy (de->d_name, curdev->name + dev_prefix_len);
+      if (curdev->get_major () == DEV_TTY_MAJOR
+	  && (curdev->is_device (FH_CONIN)
+	      || curdev->is_device (FH_CONOUT)
+	      || curdev->is_device (FH_CONSOLE)))
+	{
+	  /* Make sure conin, conout, and console have the same inode number
+	     as the current consX. */
+	  de->d_ino = myself->ctty;
+	}
+      else
+	de->d_ino = curdev->get_device ();
+      de->d_type = curdev->type ();
+      ret = 0;
+      break;
+    }
+
+out:
+  debug_printf ("returning %d", ret);
+  return ret;
+}
+
+void
+fhandler_dev::rewinddir (DIR *dir)
+{
+  devidx = dir_exists ? NULL : dev_storage_scan_start;
+  dir->__d_position = 0;
+  if (dir_exists)
+    fhandler_disk_file::rewinddir (dir);
+}
+@
+
+
+1.12
+log
+@	* devices.in (dev_cygdrive_storage): Map to \Device\Null.
+	(dev_storage): Map /dev and /dev/windows to \Device\Null.
+	* devices.cc: Regenerate.
+	* dir.cc (opendir): Create unique id.  Explain why.
+	* fhandler.h (fhandler_dev::get_dev): Implement inline.
+	(fhandler_cygdrive::close): Drop declaration.
+	(fhandler_cygdrive::get_dev): Implement inline.
+	(fhandler_windows::get_hwnd): Ditto.
+	(fhandler_windows::set_close_on_exec): Drop declaration.
+	(fhandler_windows::fixup_after_fork): Ditto.
+	* fhandler_dev.cc (fhandler_dev::open): Call fhandler_disk_file::open
+	without O_CREAT flag.  Explain why.  Create \Device\Null handle if
+	/dev/ doesn't actually exist.
+	(fhandler_dev::close): Drop nohandle case.
+	(fhandler_dev::fstatvfs): Drop nohandle check.  Test for fs_got_fs
+	instead.  Set ST_RDONLY fs flag for simulated /dev.
+	(fhandler_dev::opendir): If /dev doesn't exist, call open() to create
+	fake \Device\Null handle.  Don't set nohandle.  Set dir_exists
+	correctly.
+	(fhandler_dev::rewinddir): Call fhandler_disk_file::rewinddir only if
+	/dev is a real directory.
+	* fhandler_disk_file.cc (fhandler_disk_file::opendir): If called for
+	the cygdrive dir, call open() to create fake \Device\Null handle.
+	Only attach __DIR_mounts buffer to dir if not called for cygdrive dir.
+	Don't set nohandle.
+	(fhandler_cygdrive::open): Create \Device\Null handle.
+	(fhandler_cygdrive::close): Remove.
+	(fhandler_cygdrive::fstatvfs): Set ST_RDONLY fs flag.
+	* fhandler_windows.cc (fhandler_windows::open): Create \Device\Null
+	handle.
+	(fhandler_windows::read): Don't add io_handle to WFMO handle array.
+	Change subsequent test for return value accordingly.  Fix test for
+	"message arrived".
+	(fhandler_windows::set_close_on_exec): Remove.
+	(fhandler_windows::fixup_after_fork): Remove.
+	* path.h (path_conv::set_path): Make sure wide_path is NULL when
+	setting a new path.
+	* select.cc (peek_windows): Use correct hWnd value, not io_handle.
+	(fhandler_windows::select_read): Don't use io_handle as wait object.
+	(fhandler_windows::select_write): Ditto.
+	(fhandler_windows::select_except): Ditto.
+@
+text
+@a18 1
+#include "tls_pbuf.h"
+d56 2
+a58 9
+      /* Open a fake handle to \\Device\\Null, but revert to the old path
+	 string afterwards, otherwise readdir will return with an EFAULT
+	 when trying to fetch the inode number of ".." */
+      tmp_pathbuf tp;
+      char *orig_path = tp.c_get ();
+      stpcpy (orig_path, get_win32_name ());
+      pc.set_path (dev ().native);
+      ret = fhandler_base::open (flags, mode);
+      pc.set_path (orig_path);
+@
+
+
+1.11
+log
+@Throughout, (mainly in fhandler*) fix remaining gcc 4.7 mismatch
+warnings between regparm definitions and declarations.
+* smallprint.cc (__small_vswprintf): Conditionalize declaration and
+setting of l_opt for only x86_64.
+* spawn.cc (child_info_spawn::worker): Remove unused 'pid' variable.
+* thread.cc (verifyable_object_isvalid): Temporarily define as
+non-inline with gcc 4.7+, regardless of target.
+@
+text
+@d19 1
+d53 2
+a54 1
+  int ret = fhandler_disk_file::open (flags, mode);
+d57 10
+a66 3
+      flags |= O_DIROPEN;
+      set_flags (flags);
+      nohandle (true);
+d68 1
+a68 1
+  return 1;
+a73 2
+  if (nohandle ())
+    return 0;
+d97 1
+a97 1
+  if (!fh && !nohandle ())
+d103 3
+a105 1
+  if (!nohandle ())
+d107 7
+a113 2
+      ret = fhandler_disk_file::fstatvfs (sfs);
+      goto out;
+a114 8
+  /* Virtual file system.  Just return an empty buffer with a few values
+     set to something useful.  Just as on Linux. */
+  memset (sfs, 0, sizeof (*sfs));
+  sfs->f_bsize = sfs->f_frsize = 4096;
+  sfs->f_namemax = NAME_MAX;
+  ret = 0;
+
+out:
+d123 1
+a123 4
+  DIR *dir;
+  DIR *res = NULL;
+
+  dir = fhandler_disk_file::opendir (fd);
+d125 2
+a126 2
+    return dir;
+  if ((dir = (DIR *) malloc (sizeof (DIR))) == NULL)
+d150 2
+a155 1
+	  cfd->nohandle (true);
+d159 1
+a159 2
+      devidx = dev_storage_scan_start;
+      res = dir;
+d162 4
+a165 2
+  syscall_printf ("%p = opendir (%s)", res, get_name ());
+  return res;
+d171 1
+a171 1
+  return res;
+d234 3
+a236 1
+  fhandler_disk_file::rewinddir (dir);
+@
+
+
+1.10
+log
+@	* Merge in cygwin-64bit-branch.
+@
+text
+@d84 1
+a84 1
+int __stdcall
+@
+
+
+1.9
+log
+@Throughout, change __attribute__ ((regparm (N))) to just __regN.  Throughout,
+(mainly in fhandler*) start fixing gcc 4.7.2 mismatch between regparm
+definitions and declarations.
+* gendef: Define some functions to take @@ declaration to accommodate _regN
+defines which use __stdcall.
+* gentls_offsets: Define __regN macros as empty.
+* autoload.cc (wsock_init): Remove unneeded regparm attribute.
+* winsup.h (__reg1): Define.
+(__reg2): Define.
+(__reg3): Define.
+* advapi32.cc (DuplicateTokenEx): Coerce some initializers to avoid warnings
+from gcc 4.7.2.
+* exceptions.cc (status_info): Declare struct to use NTSTATUS.
+(cygwin_exception::dump_exception): Coerce e->ExceptionCode to NTSTATUS.
+* fhandler_clipboard.cc (cygnativeformat): Redefine as UINT to avoid gcc 4.7.2
+warnings.
+(fhandler_dev_clipboard::read): Ditto.
+@
+text
+@d71 1
+a71 1
+fhandler_dev::fstat (struct __stat64 *st)
+@
+
+
+1.8
+log
+@	* devices.h (device::get_device): New method.
+	* fhandler_dev.cc (fhandler_dev::readdir): Set st_ino to device number.
+	* syscalls.cc (fhandler_base::stat_fixup): Ditto.  Fix link count for
+	CD-ROM devices.  Fix typo in comment.
+@
+text
+@d3 1
+a3 1
+   Copyright 2012 Red Hat, Inc.
+d70 1
+a70 1
+int
+@
+
+
+1.8.2.1
+log
+@	* include/cygwin/stat.h (struct __stat64): Drop entirely in favor of
+	struct stat.  Accommodate throughout Cygwin.
+	* include/cygwin/types.h: Throughout, drop current, internal types
+	used since Cygwin 1.5 with the base type they have been used for.
+	Throughout, define types based on bitsize-specific types where
+	appropriate.  Accommodate throughout Cygwin.
+	* include/sys/cygwin.h: Drop __uid32_t and __gid32_t in favor of
+	uid_t and gid_t.  Define uid/gid types based on bitsize-specific types.
+	(struct external_pinfo): Accommodate above change.
+	* cygtls.h (struct _local_storage): Drop unused members grp and
+	namearray,
+	* tlsoffsets.h: Regenerate.
+	* devices.h (_dev_t): Drop definition.  Use dev_t throughout instead.
+	* devices.cc: Regenerate.
+
+	Probably temporary patch to drop unneeded functionality on x86_64:
+	* fcntl.cc (_fcntl): Alias to fcntl64 on x86_64.
+	* glob.cc (CYGWIN_gl_stat): Simplify on x86_64.
+	* grp.cc (grp32togrp16): Don't define on x86_64.
+	(getgrgid): Alias to getgrgid32 on x86_64.
+	(getgrnam): Alias to getgrnam32 on x86_64.
+	(getgrent): Alias to getgrent32 on x86_64.
+	(getgroups): Alias to getgroups32 on x86_64.
+	(initgroups): Alias to initgroups32 on x86_64.
+	(setgroups): Alias to setgroups32 on x86_64.
+	* mmap.cc (mmap): Alias to mmap64 on x86_64.
+	* passwd.cc (getpwuid): Alias to getpwuid32 on x86_64.
+	(getpwuid_r): Alias to getpwuid_r32 on x86_64.
+	(getpwduid): Don't define on x86_64.
+	* syscalls.cc (lseek): Alias to lseek64 on x86_64.
+	(_lseek): Alias to lseek64 on x86_64.
+	(chown): Alias to chown32 on x86_64.
+	(lchown): Alias to lchown32 on x86_64.
+	(fchown): Alias to fchown32 on x86_64.
+	(stat64_to_stat32): Don't define on x86_64.
+	(fstat): Alias to fstat64 on x86_64.
+	(_fstat_r): Alias to _fstat64_r on x86_64.
+	(stat): Alias to stat64 on x86_64.
+	(_stat_r): Alias to _stat64_r on x86_64.
+	(lstat): Alias to lstat64 on x86_64.
+	(ftruncate): Alias to ftruncate64 on x86_64.
+	(truncate): Alias to truncate64 on x86_64.
+	(seteuid): Alias to seteuid32 on x86_64.
+	(setuid): Alias to setuid32 on x86_64.
+	(setreuid): Alias to setreuid32 on x86_64.
+	(setegid): Alias to setegid32 on x86_64.
+	(setgid): Alias to setgid32 on x86_64.
+	(setregid): Alias to setregid32 on x86_64.
+	* uinfo.cc (getuid): Alias to getuid32 on x86_64.
+	(getgid): Alias to getgid32 on x86_64.
+	(geteuid): Alias to geteuid32 on x86_64.
+	(getegid): Alias to getegid32 on x86_64.
+	* winsup.h (ILLEGAL_UID16): Don't define on x86_64.
+	(ILLEGAL_GID16): Ditto.
+	(uid16touid32): Don't declare on x86_64.
+	(gid16togid32): Don't declare on x86_64.
+@
+text
+@d71 1
+a71 1
+fhandler_dev::fstat (struct stat *st)
+@
+
+
+1.8.2.2
+log
+@Pull in changes from HEAD
+@
+text
+@d3 1
+a3 1
+   Copyright 2012, 2013 Red Hat, Inc.
+d70 1
+a70 1
+int __reg2
+@
+
+
+1.7
+log
+@	* fhandler.h (fhandler_dev::open): Declare.
+	(fhandler_dev::close): Declare.
+	(fhandler_dev::fstat): Declare.
+	(fhandler_dev::fstatvfs): Declare.
+	(fhandler_cygdrive::fstatvfs): Declare.
+	* fhandler_dev.cc (fhandler_dev::open): New method.
+	(fhandler_dev::close): Ditto.
+	(fhandler_dev::fstat): Ditto.
+	(fhandler_dev::fstatvfs): Ditto.
+	* fhandler_disk_file.cc (fhandler_base::fstat_helper): Don't fill
+	st_rdev.
+	(fhandler_cygdrive::fstatvfs): New method.
+	* path.h (path_conv::fs_got_fs): New method.
+	* mount.h (fs_info::got_fs): Change type to bool, make public.
+@
+text
+@d211 1
+a211 2
+	  dev.parse (myself->ctty);
+	  de->d_ino = hash_path_name (0, dev.native);
+d214 1
+a214 1
+	de->d_ino = hash_path_name (0, curdev->native);
+@
+
+
+1.6
+log
+@	* fhandler_dev.cc (fhandler_dev::readdir): Fix formatting.  Simplify
+	code.  Use device::type() to fetch dirent compatible device type.
+	Add comment.
+@
+text
+@d13 1
+d39 75
+@
+
+
+1.5
+log
+@* devices.h (device::exists_func): Redefine field.
+(device::dev_on_fs): Remove unneeded bit field.  Just make a normal boolean.
+(device::exists): Redefine function.
+* devices.in: Move previous functions earlier since they are now only defined
+static.  Rename some functions due to an as-yet unresolved bug in gendevices.
+Rename posix part of internal-only devices with a double-slash.  gendevices
+will eventuall translate that to a ":".
+(device::parse): Rework to use dev pointer and dev_storage_end.
+* devices.cc: Regenerate.
+* gendevices: Translate "// to ": after shilka processing.
+@
+text
+@d97 1
+d108 2
+a109 2
+	  if (!bsearch (&dev, dev_storage_scan_start, dev_storage_size, sizeof dev,
+			device_cmp))
+d112 1
+a112 3
+      if (ret == ENMFILE)
+	devidx = dev_storage_scan_start;
+      else
+d114 1
+d119 1
+a119 1
+  while (devidx < dev_storage_end)
+a120 1
+      const device& thisdev = *devidx++;
+d124 1
+a124 1
+      if (thisdev.exists () <= 0)
+d127 5
+a131 3
+      strcpy (de->d_name, thisdev.name + dev_prefix_len);
+      de->d_ino = hash_path_name (0, thisdev.native);
+      switch (thisdev.get_major ())
+d133 4
+a136 30
+	case DEV_FLOPPY_MAJOR:
+	case DEV_TAPE_MAJOR:
+	case DEV_CDROM_MAJOR:
+	case DEV_SD_MAJOR:
+	case DEV_SD1_MAJOR:
+	case DEV_SD2_MAJOR:
+	case DEV_SD3_MAJOR:
+	case DEV_SD4_MAJOR:
+	case DEV_SD5_MAJOR:
+	case DEV_SD6_MAJOR:
+	case DEV_SD7_MAJOR:
+	  de->d_type = DT_BLK;
+	  break;
+	case DEV_TTY_MAJOR:
+	  {
+	    int devn = *const_cast<device *> (&thisdev);
+	    switch (devn)
+	      {
+	      case FH_CONIN:
+	      case FH_CONOUT:
+	      case FH_CONSOLE:
+		dev.parse (myself->ctty);
+		de->d_ino = hash_path_name (0, dev.native);
+		break;
+	      }
+	  }
+	  /*FALLTHRU*/
+	default:
+	  de->d_type = DT_CHR;
+	  break;
+d138 3
+@
+
+
+1.4
+log
+@	* devices.cc: Regenerate.
+	* devices.h (device::exists_func): New member function pointer,
+	replacing noexpose.
+	(device::expose): Remove.
+	(device::exists_never): Declare.
+	(device::exists_ptys): Declare.
+	(device::exists_cons): Declare.
+	(device::exists_console): Declare.
+	(device::exists_nt_dev): Declare.
+	(device::exists): Declare.
+	* devices.in (dev_storage): Replace former noexpose values with
+	pointers to matching exists_XXX method.
+	(device::exists_never): New method.
+	(device::exists_ptys): New method.
+	(device::exists_cons): New method.
+	(device::exists_console): New method.
+	(device::exists_nt_dev): New method.
+	(device::exists): New method.
+	* fhandler_dev.cc (fhandler_dev::readdir): Replace call to
+	device::expose with call to device::exists and drop all further
+	existence filtering since it's done in device::exists now.
+	* path.cc (path_conv::check): Replace call to device::expose with call
+	to device::exists.
+@
+text
+@d122 4
+a125 1
+      if (!thisdev.exists ())
+@
+
+
+1.3
+log
+@(Interim checkin while we work on this)
+* devices.cc: Regenerate.
+* devices.h (device::noexpose): New field.
+(device::dev_on_fs): Make a bit field.
+(get_major): Use proper type for declaration.
+(expose): New field.
+(ext_dev_storage): Delete declaration.
+(dev_storage_size): Ditto.
+(dev_storage): New declaration.
+(dev_storage_end): Ditto.
+* devices.in: Mark /dev/ptym*, /dev/com*, /dev/pipe, /dev/fifo, and "/dev" as
+"no expose".
+* fhandler.h (fhandler_dev::lastrealpos): Delete declaration.
+(fhandler_dev::devidx): Declare new field.
+* fhandler_disk_file.cc: Move fhandler_dev functions into fhandler_dev.cc.
+* fhandler_dev.cc: Add includes needed for functions moved from
+fhandler_disk_file.cc.
+(dev_storage_scan_start): Define place to start listing devices.
+(dev_storage_size): Define size of array to scan.
+(fhandler_dev::fhandler_dev): Move here from fhandler_disk_file.cc.
+(fhandler_dev::opendir): Ditto.
+(fhandler_dev::readdir): Just check devidx for non-NULL to determine when to go
+to disk for /dev content.  Use dev_storage rather than ext_dev_storage.
+Iterate over dev_storage using devidx pointer.  Use accessor functions rather
+than raw references to the device struct.  Only increment dir->__d_position
+when we are actually going to be returning something.  Add debug_printf for
+exit.
+(fhandler_dev::rewinddir): Set devidx as appropriate depending on whether
+there's a /dev on disk or not.
+* gendevices: Don't mark dev_storage static but do put it in the _RDATA
+section.
+* path.cc (path_conv::check): Use new "device::expose()" function to decide to
+forbid programs from referencing internal device types.
+@
+text
+@a14 2
+#include "shared_info.h"
+#include "ntdll.h"
+d122 1
+a122 1
+      if (!thisdev.expose ())
+a123 71
+      int devn = *const_cast<device *> (&thisdev);
+      /* Exclude devices which are only available for internal purposes
+	 and devices which are not really existing at this time. */
+      switch (thisdev.get_major ())
+	{
+	case DEV_PTYS_MAJOR:
+	  /* Show only existing slave ptys. */
+	  if (cygwin_shared->tty.connect (thisdev.get_minor ()) == -1)
+	    continue;
+	  break;
+	case DEV_CONS_MAJOR:
+	  /* Show only the one console which is our controlling tty
+	     right now. */
+	  if (!iscons_dev (myself->ctty)
+	      || myself->ctty != devn)
+	    continue;
+	  break;
+	case DEV_TTY_MAJOR:
+	  /* Show con{in,out,sole} only if we're running in a console. */
+	  switch (devn)
+	    {
+	    case FH_CONIN:
+	    case FH_CONOUT:
+	    case FH_CONSOLE:
+	      if (!iscons_dev (myself->ctty))
+		continue;
+	    }
+	  break;
+	case DEV_SERIAL_MAJOR:
+	case DEV_FLOPPY_MAJOR:
+	case DEV_TAPE_MAJOR:
+	case DEV_CDROM_MAJOR:
+	case DEV_SD_MAJOR:
+	case DEV_SD1_MAJOR:
+	case DEV_SD2_MAJOR:
+	case DEV_SD3_MAJOR:
+	case DEV_SD4_MAJOR:
+	case DEV_SD5_MAJOR:
+	case DEV_SD6_MAJOR:
+	case DEV_SD7_MAJOR:
+	  /* Check existence of POSIX devices backed by real NT devices. */
+	  {
+	    WCHAR wpath[MAX_PATH];
+	    UNICODE_STRING upath;
+	    OBJECT_ATTRIBUTES attr;
+	    HANDLE h;
+	    NTSTATUS status;
+
+	    sys_mbstowcs (wpath, MAX_PATH, thisdev.native);
+	    RtlInitUnicodeString (&upath, wpath);
+	    InitializeObjectAttributes (&attr, &upath,
+					OBJ_CASE_INSENSITIVE, NULL, NULL);
+	    /* Except for the serial IO devices, the native paths are
+	       direct device paths, not symlinks, so every status code
+	       except for "NOT_FOUND" means the device exists. */
+	    status = NtOpenSymbolicLinkObject (&h, SYMBOLIC_LINK_QUERY,
+					       &attr);
+	    switch (status)
+	      {
+	      case STATUS_OBJECT_NAME_NOT_FOUND:
+	      case STATUS_OBJECT_PATH_NOT_FOUND:
+		continue;
+	      case STATUS_SUCCESS:
+		NtClose (h);
+		break;
+	      default:
+		break;
+	      }
+	  }
+	  break;
+	}
+d143 12
+a154 9
+	  switch (devn)
+	    {
+	    case FH_CONIN:
+	    case FH_CONOUT:
+	    case FH_CONSOLE:
+	      dev.parse (myself->ctty);
+	      de->d_ino = hash_path_name (0, dev.native);
+	      break;
+	    }
+@
+
+
+1.2
+log
+@	* devices.h (DEV_TTY_MAJOR): Define, use throughout where appropriate.
+	(DEV_VIRTFS_MAJOR): Ditto.
+	* fhandler_dev.cc (fhandler_dev::readdir): Add comments.  Tweak tests
+	for invisible devices.  Don't print comX devices, only ttySX.  Drop
+	requirement to call stat64.
+@
+text
+@d17 2
+d25 2
+d35 60
+d101 1
+a101 1
+  if (dir_exists && !lastrealpos)
+d109 2
+a110 2
+	  if (!bsearch (&dev, ext_dev_storage, dev_storage_size, sizeof dev,
+		       device_cmp))
+d114 3
+a116 1
+	lastrealpos = dir->__d_position;
+d118 4
+a121 1
+  if (!dir_exists || lastrealpos)
+d123 7
+a129 4
+      ret = ENMFILE;
+      for (size_t idx = dir->__d_position - lastrealpos + 1;
+	   idx < dev_storage_size;
+	   ++idx)
+d131 15
+a145 4
+	  ++dir->__d_position;
+	  /* Exclude devices which are only available for internal purposes
+	     and devices which are not really existing at this time. */
+	  switch (ext_dev_storage[idx].d.major)
+d147 4
+a150 12
+	    case DEV_VIRTFS_MAJOR:
+	      /* Drop /dev/fifo and /dev/pipe since they are internal only. */
+	      switch (ext_dev_storage[idx].d.devn)
+		{
+		case FH_FIFO:
+		case FH_PIPE:
+		  continue;
+		}
+	      break;
+	    case DEV_PTYM_MAJOR:
+	      /* Only /dev/ptmx is user-visible. */
+	      if (strcmp (ext_dev_storage[idx].name + dev_prefix_len, "ptmx"))
+d152 35
+a186 12
+	      break;
+	    case DEV_PTYS_MAJOR:
+	      /* Show only existing slave ptys. */
+	      if (cygwin_shared->tty.connect (ext_dev_storage[idx].d.minor)
+		  == -1)
+		continue;
+	      break;
+	    case DEV_CONS_MAJOR:
+	      /* Show only the one console which is our controlling tty
+		 right now. */
+	      if (!iscons_dev (myself->ctty)
+		  || myself->ctty != ext_dev_storage[idx].d.devn_int)
+d188 5
+a192 56
+	      break;
+	    case DEV_TTY_MAJOR:
+	      /* Show con{in,out,sole} only if we're running in a console. */
+	      switch (ext_dev_storage[idx].d.devn)
+		{
+		case FH_CONIN:
+		case FH_CONOUT:
+		case FH_CONSOLE:
+		  if (!iscons_dev (myself->ctty))
+		    continue;
+		}
+	      break;
+	    case DEV_SERIAL_MAJOR:
+	      /* Ignore comX devices, only print ttySx. */
+	      if (ext_dev_storage[idx].name[dev_prefix_len] == 'c')
+		continue;
+	      /*FALLTHRU*/
+	    case DEV_FLOPPY_MAJOR:
+	    case DEV_TAPE_MAJOR:
+	    case DEV_CDROM_MAJOR:
+	    case DEV_SD_MAJOR:
+	    case DEV_SD1_MAJOR:
+	    case DEV_SD2_MAJOR:
+	    case DEV_SD3_MAJOR:
+	    case DEV_SD4_MAJOR:
+	    case DEV_SD5_MAJOR:
+	    case DEV_SD6_MAJOR:
+	    case DEV_SD7_MAJOR:
+	      /* Check existence of POSIX devices backed by real NT devices. */
+	      {
+		WCHAR wpath[MAX_PATH];
+		UNICODE_STRING upath;
+		OBJECT_ATTRIBUTES attr;
+		HANDLE h;
+		NTSTATUS status;
+
+		sys_mbstowcs (wpath, MAX_PATH, ext_dev_storage[idx].native);
+		RtlInitUnicodeString (&upath, wpath);
+		InitializeObjectAttributes (&attr, &upath,
+					    OBJ_CASE_INSENSITIVE, NULL, NULL);
+		/* Except for the serial IO devices, the native paths are
+		   direct device paths, not symlinks, so every status code
+		   except for "NOT_FOUND" means the device exists. */
+		status = NtOpenSymbolicLinkObject (&h, SYMBOLIC_LINK_QUERY,
+						   &attr);
+		switch (status)
+		  {
+		  case STATUS_OBJECT_NAME_NOT_FOUND:
+		  case STATUS_OBJECT_PATH_NOT_FOUND:
+		    continue;
+		  case STATUS_SUCCESS:
+		    NtClose (h);
+		    break;
+		  default:
+		    break;
+		  }
+d194 23
+a216 5
+	      break;
+	    }
+	  strcpy (de->d_name, ext_dev_storage[idx].name + dev_prefix_len);
+	  de->d_ino = hash_path_name (0, ext_dev_storage[idx].native);
+	  switch (ext_dev_storage[idx].d.major)
+d218 5
+a222 26
+	    case DEV_FLOPPY_MAJOR:
+	    case DEV_TAPE_MAJOR:
+	    case DEV_CDROM_MAJOR:
+	    case DEV_SD_MAJOR:
+	    case DEV_SD1_MAJOR:
+	    case DEV_SD2_MAJOR:
+	    case DEV_SD3_MAJOR:
+	    case DEV_SD4_MAJOR:
+	    case DEV_SD5_MAJOR:
+	    case DEV_SD6_MAJOR:
+	    case DEV_SD7_MAJOR:
+	      de->d_type = DT_BLK;
+	      break;
+	    case DEV_TTY_MAJOR:
+	      switch (ext_dev_storage[idx].d.devn)
+		{
+		  case FH_CONIN:
+		  case FH_CONOUT:
+		  case FH_CONSOLE:
+		    dev.parse (myself->ctty);
+		    de->d_ino = hash_path_name (0, dev.native);
+		    break;
+		}
+	      /*FALLTHRU*/
+	    default:
+	      de->d_type = DT_CHR;
+d225 4
+a228 2
+	  ret = 0;
+	      break;
+d230 2
+d233 3
+d242 1
+a242 1
+  lastrealpos = 0;
+a244 1
+
+@
+
+
+1.1
+log
+@	* Makefile.in (DLL_OFILES): Add fhandler_dev.o.
+	* devices.h (DEV_DEV_MAJOR): Define.
+	(FH_DEV): Redefine in terms of DEV_DEV_MAJOR.
+	(ext_dev_storage): Declare.
+	(dev_storage_size): Declare.
+	(dev_dev_storage): Declare.
+	(dev_dev): Define.
+	(isdev_dev): Define.
+	* devices.in (dev_dev_storage): Activate.
+	(ext_dev_storage): Define as externally available pointer to
+	dev_storage.
+	(dev_storage_size): Define to contain number of dev_storage elements.
+	* dir.cc (rmdir): Handle /dev as always not empty.
+	* dtable.cc (fh_alloc): Handle DEV_DEV_MAJOR.
+	* fhandler.h (fhandler_dev): New class, derived from fhandler_disk_file.
+	(fhandler_union): Add fhandler_dev member.
+	* fhandler_disk_file.cc (class __DIR_mounts): Handle /dev directory
+	to make sure it always exists.
+	* fhandler_dev.cc: New file implementing /dev.
+	* globals.cc (ro_u_dev): New R/O unicode string.
+	* path.cc (path_conv::check): Handle FH_DEV device.
+@
+text
+@d35 1
+a43 1
+	  device dev;
+a58 2
+	  struct __stat64 st;
+
+d64 9
+a72 4
+	    case 0:
+	      if (ext_dev_storage[idx].d.minor == FH_FIFO
+		  || ext_dev_storage[idx].d.minor == FH_PIPE)
+		continue;
+d74 2
+a75 2
+	      if (ext_dev_storage[idx].d.minor
+		  || !strcmp (ext_dev_storage[idx].name, "/dev/ptm0"))
+d79 1
+d85 2
+d91 16
+a109 1
+	    case DEV_SERIAL_MAJOR:
+d118 1
+d130 3
+a132 2
+		/* The native paths are devices, not symlinks, so we expect
+		   a matching error message. */
+d149 3
+a151 1
+	  if (!lstat64 (ext_dev_storage[idx].name, &st))
+d153 26
+a178 4
+	      strcpy (de->d_name, ext_dev_storage[idx].name + dev_prefix_len);
+	      de->d_ino = st.st_ino;
+	      de->d_type = S_ISBLK (st.st_mode) ? DT_BLK : DT_CHR;
+	      ret = 0;
+d181 2
+@
+

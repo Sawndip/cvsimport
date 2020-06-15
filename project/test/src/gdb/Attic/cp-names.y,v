@@ -1,0 +1,7393 @@
+head	1.4;
+access;
+symbols
+	gdb-csl-arm-20050325-2005-q1b:1.3
+	gdb-csl-arm-20050325-2005-q1a:1.3
+	csl-arm-20050325-branch:1.3.0.2
+	csl-arm-20050325-branchpoint:1.3
+	drow-cplus-branch:1.1.0.2;
+locks; strict;
+comment	@ * @;
+
+
+1.4
+date	2005.05.12.16.01.08;	author drow;	state dead;
+branches;
+next	1.3;
+
+1.3
+date	2005.03.20.16.26.44;	author kettenis;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2005.03.11.02.24.22;	author drow;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2003.12.16.13.32.14;	author drow;	state dead;
+branches
+	1.1.2.1;
+next	;
+
+1.1.2.1
+date	2003.12.16.13.32.14;	author drow;	state Exp;
+branches;
+next	1.1.2.2;
+
+1.1.2.2
+date	2003.12.16.14.03.58;	author drow;	state Exp;
+branches;
+next	1.1.2.3;
+
+1.1.2.3
+date	2003.12.17.15.15.08;	author drow;	state Exp;
+branches;
+next	1.1.2.4;
+
+1.1.2.4
+date	2003.12.18.15.18.06;	author drow;	state Exp;
+branches;
+next	1.1.2.5;
+
+1.1.2.5
+date	2003.12.18.16.32.12;	author drow;	state Exp;
+branches;
+next	1.1.2.6;
+
+1.1.2.6
+date	2003.12.19.04.19.09;	author drow;	state Exp;
+branches;
+next	1.1.2.7;
+
+1.1.2.7
+date	2003.12.19.06.23.13;	author drow;	state Exp;
+branches;
+next	1.1.2.8;
+
+1.1.2.8
+date	2003.12.19.16.44.33;	author drow;	state Exp;
+branches;
+next	1.1.2.9;
+
+1.1.2.9
+date	2003.12.19.18.54.02;	author drow;	state Exp;
+branches;
+next	1.1.2.10;
+
+1.1.2.10
+date	2003.12.20.06.05.40;	author drow;	state Exp;
+branches;
+next	1.1.2.11;
+
+1.1.2.11
+date	2003.12.20.07.08.44;	author drow;	state Exp;
+branches;
+next	1.1.2.12;
+
+1.1.2.12
+date	2003.12.20.18.02.48;	author drow;	state Exp;
+branches;
+next	1.1.2.13;
+
+1.1.2.13
+date	2003.12.24.21.59.05;	author drow;	state Exp;
+branches;
+next	1.1.2.14;
+
+1.1.2.14
+date	2003.12.24.22.35.25;	author drow;	state Exp;
+branches;
+next	1.1.2.15;
+
+1.1.2.15
+date	2003.12.30.21.01.20;	author drow;	state Exp;
+branches;
+next	1.1.2.16;
+
+1.1.2.16
+date	2004.01.04.19.10.46;	author drow;	state Exp;
+branches;
+next	1.1.2.17;
+
+1.1.2.17
+date	2004.01.04.22.42.41;	author drow;	state Exp;
+branches;
+next	1.1.2.18;
+
+1.1.2.18
+date	2004.01.12.00.44.47;	author drow;	state Exp;
+branches;
+next	1.1.2.19;
+
+1.1.2.19
+date	2004.01.13.18.18.03;	author drow;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.4
+log
+@	* cp-names.y: Renamed to ...
+	* cp-name-parser.y: ... this.
+	* Makefile.in (SFILES, YYFILES, YYOBJ): Rename cp-names.y to
+	cp-name-parser.y.
+	(test-cp-names.o): Renamed to test-cp-name-parser.o.
+	(test-cp-names): Renamed to test-cp-name-parser.
+	(clean, local-maintainer-clean): Update.
+	(cp-names.o): Renamed to cp-name-parser.o.
+@
+text
+@/* YACC parser for C++ names, for GDB.
+
+   Copyright 2003, 2004, 2005
+   Free Software Foundation, Inc.
+
+   Parts of the lexer are based on c-exp.y from GDB.
+
+This file is part of GDB.
+
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
+
+/* Note that malloc's and realloc's in this file are transformed to
+   xmalloc and xrealloc respectively by the same sed command in the
+   makefile that remaps any other malloc/realloc inserted by the parser
+   generator.  Doing this with #defines and trying to control the interaction
+   with include files (<malloc.h> and <stdlib.h> for example) just became
+   too messy, particularly when such includes can be inserted at random
+   times by the parser generator.  */
+
+%{
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <string.h>
+
+#include "safe-ctype.h"
+#include "libiberty.h"
+#include "demangle.h"
+
+/* Bison does not make it easy to create a parser without global
+   state, unfortunately.  Here are all the global variables used
+   in this parser.  */
+
+/* LEXPTR is the current pointer into our lex buffer.  PREV_LEXPTR
+   is the start of the last token lexed, only used for diagnostics.
+   ERROR_LEXPTR is the first place an error occurred.  GLOBAL_ERRMSG
+   is the first error message encountered.  */
+
+static const char *lexptr, *prev_lexptr, *error_lexptr, *global_errmsg;
+
+/* The components built by the parser are allocated ahead of time,
+   and cached in this structure.  */
+
+struct demangle_info {
+  int used;
+  struct demangle_component comps[1];
+};
+
+static struct demangle_info *demangle_info;
+#define d_grab() (&demangle_info->comps[demangle_info->used++])
+
+/* The parse tree created by the parser is stored here after a successful
+   parse.  */
+
+static struct demangle_component *global_result;
+
+/* Prototypes for helper functions used when constructing the parse
+   tree.  */
+
+static struct demangle_component *d_qualify (struct demangle_component *, int,
+					     int);
+
+static struct demangle_component *d_int_type (int);
+
+static struct demangle_component *d_unary (const char *,
+					   struct demangle_component *);
+static struct demangle_component *d_binary (const char *,
+					    struct demangle_component *,
+					    struct demangle_component *);
+
+/* Flags passed to d_qualify.  */
+
+#define QUAL_CONST 1
+#define QUAL_RESTRICT 2
+#define QUAL_VOLATILE 4
+
+/* Flags passed to d_int_type.  */
+
+#define INT_CHAR	(1 << 0)
+#define INT_SHORT	(1 << 1)
+#define INT_LONG	(1 << 2)
+#define INT_LLONG	(1 << 3)
+
+#define INT_SIGNED	(1 << 4)
+#define INT_UNSIGNED	(1 << 5)
+
+/* Remap normal yacc parser interface names (yyparse, yylex, yyerror, etc),
+   as well as gratuitiously global symbol names, so we can have multiple
+   yacc generated parsers in gdb.  Note that these are only the variables
+   produced by yacc.  If other parser generators (bison, byacc, etc) produce
+   additional global names that conflict at link time, then those parser
+   generators need to be fixed instead of adding those names to this list. */
+
+#define	yymaxdepth cpname_maxdepth
+#define	yyparse	cpname_parse
+#define	yylex	cpname_lex
+#define	yyerror	cpname_error
+#define	yylval	cpname_lval
+#define	yychar	cpname_char
+#define	yydebug	cpname_debug
+#define	yypact	cpname_pact	
+#define	yyr1	cpname_r1			
+#define	yyr2	cpname_r2			
+#define	yydef	cpname_def		
+#define	yychk	cpname_chk		
+#define	yypgo	cpname_pgo		
+#define	yyact	cpname_act		
+#define	yyexca	cpname_exca
+#define yyerrflag cpname_errflag
+#define yynerrs	cpname_nerrs
+#define	yyps	cpname_ps
+#define	yypv	cpname_pv
+#define	yys	cpname_s
+#define	yy_yys	cpname_yys
+#define	yystate	cpname_state
+#define	yytmp	cpname_tmp
+#define	yyv	cpname_v
+#define	yy_yyv	cpname_yyv
+#define	yyval	cpname_val
+#define	yylloc	cpname_lloc
+#define yyreds	cpname_reds		/* With YYDEBUG defined */
+#define yytoks	cpname_toks		/* With YYDEBUG defined */
+#define yyname	cpname_name		/* With YYDEBUG defined */
+#define yyrule	cpname_rule		/* With YYDEBUG defined */
+#define yylhs	cpname_yylhs
+#define yylen	cpname_yylen
+#define yydefred cpname_yydefred
+#define yydgoto	cpname_yydgoto
+#define yysindex cpname_yysindex
+#define yyrindex cpname_yyrindex
+#define yygindex cpname_yygindex
+#define yytable	 cpname_yytable
+#define yycheck	 cpname_yycheck
+
+int yyparse (void);
+static int yylex (void);
+static void yyerror (char *);
+
+/* Enable yydebug for the stand-alone parser.  */
+#ifdef TEST_CPNAMES
+# define YYDEBUG	1
+#endif
+
+/* Helper functions.  These wrap the demangler tree interface, handle
+   allocation from our global store, and return the allocated component.  */
+
+static struct demangle_component *
+fill_comp (enum demangle_component_type d_type, struct demangle_component *lhs,
+	   struct demangle_component *rhs)
+{
+  struct demangle_component *ret = d_grab ();
+  cplus_demangle_fill_component (ret, d_type, lhs, rhs);
+  return ret;
+}
+
+static struct demangle_component *
+make_empty (enum demangle_component_type d_type)
+{
+  struct demangle_component *ret = d_grab ();
+  ret->type = d_type;
+  return ret;
+}
+
+static struct demangle_component *
+make_operator (const char *name, int args)
+{
+  struct demangle_component *ret = d_grab ();
+  cplus_demangle_fill_operator (ret, name, args);
+  return ret;
+}
+
+static struct demangle_component *
+make_dtor (enum gnu_v3_dtor_kinds kind, struct demangle_component *name)
+{
+  struct demangle_component *ret = d_grab ();
+  cplus_demangle_fill_dtor (ret, kind, name);
+  return ret;
+}
+
+static struct demangle_component *
+make_builtin_type (const char *name)
+{
+  struct demangle_component *ret = d_grab ();
+  cplus_demangle_fill_builtin_type (ret, name);
+  return ret;
+}
+
+static struct demangle_component *
+make_name (const char *name, int len)
+{
+  struct demangle_component *ret = d_grab ();
+  cplus_demangle_fill_name (ret, name, len);
+  return ret;
+}
+
+#define d_left(dc) (dc)->u.s_binary.left
+#define d_right(dc) (dc)->u.s_binary.right
+
+%}
+
+%union
+  {
+    struct demangle_component *comp;
+    struct nested {
+      struct demangle_component *comp;
+      struct demangle_component **last;
+    } nested;
+    struct {
+      struct demangle_component *comp, *last;
+    } nested1;
+    struct {
+      struct demangle_component *comp, **last;
+      struct nested fn;
+      struct demangle_component *start;
+      int fold_flag;
+    } abstract;
+    int lval;
+    struct {
+      int val;
+      struct demangle_component *type;
+    } typed_val_int;
+    const char *opname;
+  }
+
+%type <comp> exp exp1 type start start_opt operator colon_name
+%type <comp> unqualified_name colon_ext_name
+%type <comp> template template_arg
+%type <comp> builtin_type
+%type <comp> typespec_2 array_indicator
+%type <comp> colon_ext_only ext_only_name
+
+%type <comp> demangler_special function conversion_op
+%type <nested> conversion_op_name
+
+%type <abstract> abstract_declarator direct_abstract_declarator
+%type <abstract> abstract_declarator_fn
+%type <nested> declarator direct_declarator function_arglist
+
+%type <nested> declarator_1 direct_declarator_1
+
+%type <nested> template_params function_args
+%type <nested> ptr_operator
+
+%type <nested1> nested_name
+
+%type <lval> qualifier qualifiers qualifiers_opt
+
+%type <lval> int_part int_seq
+
+%token <comp> INT
+%token <comp> FLOAT
+
+%token <comp> NAME
+%type <comp> name
+
+%token STRUCT CLASS UNION ENUM SIZEOF UNSIGNED COLONCOLON
+%token TEMPLATE
+%token ERROR
+%token NEW DELETE OPERATOR
+%token STATIC_CAST REINTERPRET_CAST DYNAMIC_CAST
+
+/* Special type cases, put in to allow the parser to distinguish different
+   legal basetypes.  */
+%token SIGNED_KEYWORD LONG SHORT INT_KEYWORD CONST_KEYWORD VOLATILE_KEYWORD DOUBLE_KEYWORD BOOL
+%token ELLIPSIS RESTRICT VOID FLOAT_KEYWORD CHAR WCHAR_T
+
+%token <opname> ASSIGN_MODIFY
+
+/* C++ */
+%token TRUEKEYWORD
+%token FALSEKEYWORD
+
+/* Non-C++ things we get from the demangler.  */
+%token <lval> DEMANGLER_SPECIAL
+%token CONSTRUCTION_VTABLE CONSTRUCTION_IN
+%token <typed_val_int> GLOBAL
+
+%{
+enum {
+  GLOBAL_CONSTRUCTORS = DEMANGLE_COMPONENT_LITERAL + 20,
+  GLOBAL_DESTRUCTORS = DEMANGLE_COMPONENT_LITERAL + 21
+};
+%}
+
+/* Precedence declarations.  */
+
+/* Give NAME lower precedence than COLONCOLON, so that nested_name will
+   associate greedily.  */
+%nonassoc NAME
+
+/* Give NEW and DELETE lower precedence than ']', because we can not
+   have an array of type operator new.  This causes NEW '[' to be
+   parsed as operator new[].  */
+%nonassoc NEW DELETE
+
+/* Give VOID higher precedence than NAME.  Then we can use %prec NAME
+   to prefer (VOID) to (function_args).  */
+%nonassoc VOID
+
+/* Give VOID lower precedence than ')' for similar reasons.  */
+%nonassoc ')'
+
+%left ','
+%right '=' ASSIGN_MODIFY
+%right '?'
+%left OROR
+%left ANDAND
+%left '|'
+%left '^'
+%left '&'
+%left EQUAL NOTEQUAL
+%left '<' '>' LEQ GEQ
+%left LSH RSH
+%left '@@'
+%left '+' '-'
+%left '*' '/' '%'
+%right UNARY INCREMENT DECREMENT
+
+/* We don't need a precedence for '(' in this reduced grammar, and it
+   can mask some unpleasant bugs, so disable it for now.  */
+
+%right ARROW '.' '[' /* '(' */
+%left COLONCOLON
+
+
+%%
+
+result		:	start
+			{ global_result = $1; }
+		;
+
+start		:	type
+
+		|	demangler_special
+
+		|	function
+
+		;
+
+start_opt	:	/* */
+			{ $$ = NULL; }
+		|	COLONCOLON start
+			{ $$ = $2; }
+		;
+
+function
+		/* Function with a return type.  declarator_1 is used to prevent
+		   ambiguity with the next rule.  */
+		:	typespec_2 declarator_1
+			{ $$ = $2.comp;
+			  *$2.last = $1;
+			}
+
+		/* Function without a return type.  We need to use typespec_2
+		   to prevent conflicts from qualifiers_opt - harmless.  The
+		   start_opt is used to handle "function-local" variables and
+		   types.  */
+		|	typespec_2 function_arglist start_opt
+			{ $$ = fill_comp (DEMANGLE_COMPONENT_TYPED_NAME, $1, $2.comp);
+			  if ($3) $$ = fill_comp (DEMANGLE_COMPONENT_LOCAL_NAME, $$, $3); }
+		|	colon_ext_only function_arglist start_opt
+			{ $$ = fill_comp (DEMANGLE_COMPONENT_TYPED_NAME, $1, $2.comp);
+			  if ($3) $$ = fill_comp (DEMANGLE_COMPONENT_LOCAL_NAME, $$, $3); }
+
+		|	conversion_op_name start_opt
+			{ $$ = $1.comp;
+			  if ($2) $$ = fill_comp (DEMANGLE_COMPONENT_LOCAL_NAME, $$, $2); }
+		|	conversion_op_name abstract_declarator_fn
+			{ if ($2.last)
+			    {
+			       /* First complete the abstract_declarator's type using
+				  the typespec from the conversion_op_name.  */
+			      *$2.last = *$1.last;
+			      /* Then complete the conversion_op_name with the type.  */
+			      *$1.last = $2.comp;
+			    }
+			  /* If we have an arglist, build a function type.  */
+			  if ($2.fn.comp)
+			    $$ = fill_comp (DEMANGLE_COMPONENT_TYPED_NAME, $1.comp, $2.fn.comp);
+			  else
+			    $$ = $1.comp;
+			  if ($2.start) $$ = fill_comp (DEMANGLE_COMPONENT_LOCAL_NAME, $$, $2.start);
+			}
+		;
+
+demangler_special
+		:	DEMANGLER_SPECIAL start
+			{ $$ = make_empty ($1);
+			  d_left ($$) = $2;
+			  d_right ($$) = NULL; }
+		|	CONSTRUCTION_VTABLE start CONSTRUCTION_IN start
+			{ $$ = fill_comp (DEMANGLE_COMPONENT_CONSTRUCTION_VTABLE, $2, $4); }
+		|	GLOBAL
+			{ $$ = make_empty ($1.val);
+			  d_left ($$) = $1.type;
+			  d_right ($$) = NULL; }
+		;
+
+operator	:	OPERATOR NEW
+			{ $$ = make_operator ("new", 1); }
+		|	OPERATOR DELETE
+			{ $$ = make_operator ("delete", 1); }
+		|	OPERATOR NEW '[' ']'
+			{ $$ = make_operator ("new[]", 1); }
+		|	OPERATOR DELETE '[' ']'
+			{ $$ = make_operator ("delete[]", 1); }
+		|	OPERATOR '+'
+			{ $$ = make_operator ("+", 2); }
+		|	OPERATOR '-'
+			{ $$ = make_operator ("-", 2); }
+		|	OPERATOR '*'
+			{ $$ = make_operator ("*", 2); }
+		|	OPERATOR '/'
+			{ $$ = make_operator ("/", 2); }
+		|	OPERATOR '%'
+			{ $$ = make_operator ("%", 2); }
+		|	OPERATOR '^'
+			{ $$ = make_operator ("^", 2); }
+		|	OPERATOR '&'
+			{ $$ = make_operator ("&", 2); }
+		|	OPERATOR '|'
+			{ $$ = make_operator ("|", 2); }
+		|	OPERATOR '~'
+			{ $$ = make_operator ("~", 1); }
+		|	OPERATOR '!'
+			{ $$ = make_operator ("!", 1); }
+		|	OPERATOR '='
+			{ $$ = make_operator ("=", 2); }
+		|	OPERATOR '<'
+			{ $$ = make_operator ("<", 2); }
+		|	OPERATOR '>'
+			{ $$ = make_operator (">", 2); }
+		|	OPERATOR ASSIGN_MODIFY
+			{ $$ = make_operator ($2, 2); }
+		|	OPERATOR LSH
+			{ $$ = make_operator ("<<", 2); }
+		|	OPERATOR RSH
+			{ $$ = make_operator (">>", 2); }
+		|	OPERATOR EQUAL
+			{ $$ = make_operator ("==", 2); }
+		|	OPERATOR NOTEQUAL
+			{ $$ = make_operator ("!=", 2); }
+		|	OPERATOR LEQ
+			{ $$ = make_operator ("<=", 2); }
+		|	OPERATOR GEQ
+			{ $$ = make_operator (">=", 2); }
+		|	OPERATOR ANDAND
+			{ $$ = make_operator ("&&", 2); }
+		|	OPERATOR OROR
+			{ $$ = make_operator ("||", 2); }
+		|	OPERATOR INCREMENT
+			{ $$ = make_operator ("++", 1); }
+		|	OPERATOR DECREMENT
+			{ $$ = make_operator ("--", 1); }
+		|	OPERATOR ','
+			{ $$ = make_operator (",", 2); }
+		|	OPERATOR ARROW '*'
+			{ $$ = make_operator ("->*", 2); }
+		|	OPERATOR ARROW
+			{ $$ = make_operator ("->", 2); }
+		|	OPERATOR '(' ')'
+			{ $$ = make_operator ("()", 0); }
+		|	OPERATOR '[' ']'
+			{ $$ = make_operator ("[]", 2); }
+		;
+
+		/* Conversion operators.  We don't try to handle some of
+		   the wackier demangler output for function pointers,
+		   since it's not clear that it's parseable.  */
+conversion_op
+		:	OPERATOR typespec_2
+			{ $$ = fill_comp (DEMANGLE_COMPONENT_CAST, $2, NULL); }
+		;
+
+conversion_op_name
+		:	nested_name conversion_op
+			{ $$.comp = $1.comp;
+			  d_right ($1.last) = $2;
+			  $$.last = &d_left ($2);
+			}
+		|	conversion_op
+			{ $$.comp = $1;
+			  $$.last = &d_left ($1);
+			}
+		|	COLONCOLON nested_name conversion_op
+			{ $$.comp = $2.comp;
+			  d_right ($2.last) = $3;
+			  $$.last = &d_left ($3);
+			}
+		|	COLONCOLON conversion_op
+			{ $$.comp = $2;
+			  $$.last = &d_left ($2);
+			}
+		;
+
+/* DEMANGLE_COMPONENT_NAME */
+/* This accepts certain invalid placements of '~'.  */
+unqualified_name:	operator
+		|	operator '<' template_params '>'
+			{ $$ = fill_comp (DEMANGLE_COMPONENT_TEMPLATE, $1, $3.comp); }
+		|	'~' NAME
+			{ $$ = make_dtor (gnu_v3_complete_object_dtor, $2); }
+		;
+
+/* This rule is used in name and nested_name, and expanded inline there
+   for efficiency.  */
+/*
+scope_id	:	NAME
+		|	template
+		;
+*/
+
+colon_name	:	name
+		|	COLONCOLON name
+			{ $$ = $2; }
+		;
+
+/* DEMANGLE_COMPONENT_QUAL_NAME */
+/* DEMANGLE_COMPONENT_CTOR / DEMANGLE_COMPONENT_DTOR ? */
+name		:	nested_name NAME %prec NAME
+			{ $$ = $1.comp; d_right ($1.last) = $2; }
+		|	NAME %prec NAME
+		|	nested_name template %prec NAME
+			{ $$ = $1.comp; d_right ($1.last) = $2; }
+		|	template %prec NAME
+		;
+
+colon_ext_name	:	colon_name
+		|	colon_ext_only
+		;
+
+colon_ext_only	:	ext_only_name
+		|	COLONCOLON ext_only_name
+			{ $$ = $2; }
+		;
+
+ext_only_name	:	nested_name unqualified_name
+			{ $$ = $1.comp; d_right ($1.last) = $2; }
+		|	unqualified_name
+		;
+
+nested_name	:	NAME COLONCOLON
+			{ $$.comp = make_empty (DEMANGLE_COMPONENT_QUAL_NAME);
+			  d_left ($$.comp) = $1;
+			  d_right ($$.comp) = NULL;
+			  $$.last = $$.comp;
+			}
+		|	nested_name NAME COLONCOLON
+			{ $$.comp = $1.comp;
+			  d_right ($1.last) = make_empty (DEMANGLE_COMPONENT_QUAL_NAME);
+			  $$.last = d_right ($1.last);
+			  d_left ($$.last) = $2;
+			  d_right ($$.last) = NULL;
+			}
+		|	template COLONCOLON
+			{ $$.comp = make_empty (DEMANGLE_COMPONENT_QUAL_NAME);
+			  d_left ($$.comp) = $1;
+			  d_right ($$.comp) = NULL;
+			  $$.last = $$.comp;
+			}
+		|	nested_name template COLONCOLON
+			{ $$.comp = $1.comp;
+			  d_right ($1.last) = make_empty (DEMANGLE_COMPONENT_QUAL_NAME);
+			  $$.last = d_right ($1.last);
+			  d_left ($$.last) = $2;
+			  d_right ($$.last) = NULL;
+			}
+		;
+
+/* DEMANGLE_COMPONENT_TEMPLATE */
+/* DEMANGLE_COMPONENT_TEMPLATE_ARGLIST */
+template	:	NAME '<' template_params '>'
+			{ $$ = fill_comp (DEMANGLE_COMPONENT_TEMPLATE, $1, $3.comp); }
+		;
+
+template_params	:	template_arg
+			{ $$.comp = fill_comp (DEMANGLE_COMPONENT_TEMPLATE_ARGLIST, $1, NULL);
+			$$.last = &d_right ($$.comp); }
+		|	template_params ',' template_arg
+			{ $$.comp = $1.comp;
+			  *$1.last = fill_comp (DEMANGLE_COMPONENT_TEMPLATE_ARGLIST, $3, NULL);
+			  $$.last = &d_right (*$1.last);
+			}
+		;
+
+/* "type" is inlined into template_arg and function_args.  */
+
+/* Also an integral constant-expression of integral type, and a
+   pointer to member (?) */
+template_arg	:	typespec_2
+		|	typespec_2 abstract_declarator
+			{ $$ = $2.comp;
+			  *$2.last = $1;
+			}
+		|	'&' start
+			{ $$ = fill_comp (DEMANGLE_COMPONENT_UNARY, make_operator ("&", 1), $2); }
+		|	'&' '(' start ')'
+			{ $$ = fill_comp (DEMANGLE_COMPONENT_UNARY, make_operator ("&", 1), $3); }
+		|	exp
+		;
+
+function_args	:	typespec_2
+			{ $$.comp = fill_comp (DEMANGLE_COMPONENT_ARGLIST, $1, NULL);
+			  $$.last = &d_right ($$.comp);
+			}
+		|	typespec_2 abstract_declarator
+			{ *$2.last = $1;
+			  $$.comp = fill_comp (DEMANGLE_COMPONENT_ARGLIST, $2.comp, NULL);
+			  $$.last = &d_right ($$.comp);
+			}
+		|	function_args ',' typespec_2
+			{ *$1.last = fill_comp (DEMANGLE_COMPONENT_ARGLIST, $3, NULL);
+			  $$.comp = $1.comp;
+			  $$.last = &d_right (*$1.last);
+			}
+		|	function_args ',' typespec_2 abstract_declarator
+			{ *$4.last = $3;
+			  *$1.last = fill_comp (DEMANGLE_COMPONENT_ARGLIST, $4.comp, NULL);
+			  $$.comp = $1.comp;
+			  $$.last = &d_right (*$1.last);
+			}
+		|	function_args ',' ELLIPSIS
+			{ *$1.last
+			    = fill_comp (DEMANGLE_COMPONENT_ARGLIST,
+					   make_builtin_type ("..."),
+					   NULL);
+			  $$.comp = $1.comp;
+			  $$.last = &d_right (*$1.last);
+			}
+		;
+
+function_arglist:	'(' function_args ')' qualifiers_opt %prec NAME
+			{ $$.comp = fill_comp (DEMANGLE_COMPONENT_FUNCTION_TYPE, NULL, $2.comp);
+			  $$.last = &d_left ($$.comp);
+			  $$.comp = d_qualify ($$.comp, $4, 1); }
+		|	'(' VOID ')' qualifiers_opt
+			{ $$.comp = fill_comp (DEMANGLE_COMPONENT_FUNCTION_TYPE, NULL, NULL);
+			  $$.last = &d_left ($$.comp);
+			  $$.comp = d_qualify ($$.comp, $4, 1); }
+		|	'(' ')' qualifiers_opt
+			{ $$.comp = fill_comp (DEMANGLE_COMPONENT_FUNCTION_TYPE, NULL, NULL);
+			  $$.last = &d_left ($$.comp);
+			  $$.comp = d_qualify ($$.comp, $3, 1); }
+		;
+
+/* Should do something about DEMANGLE_COMPONENT_VENDOR_TYPE_QUAL */
+qualifiers_opt	:	/* epsilon */
+			{ $$ = 0; }
+		|	qualifiers
+		;
+
+qualifier	:	RESTRICT
+			{ $$ = QUAL_RESTRICT; }
+		|	VOLATILE_KEYWORD
+			{ $$ = QUAL_VOLATILE; }
+		|	CONST_KEYWORD
+			{ $$ = QUAL_CONST; }
+		;
+
+qualifiers	:	qualifier
+		|	qualifier qualifiers
+			{ $$ = $1 | $2; }
+		;
+
+/* This accepts all sorts of invalid constructions and produces
+   invalid output for them - an error would be better.  */
+
+int_part	:	INT_KEYWORD
+			{ $$ = 0; }
+		|	SIGNED_KEYWORD
+			{ $$ = INT_SIGNED; }
+		|	UNSIGNED
+			{ $$ = INT_UNSIGNED; }
+		|	CHAR
+			{ $$ = INT_CHAR; }
+		|	LONG
+			{ $$ = INT_LONG; }
+		|	SHORT
+			{ $$ = INT_SHORT; }
+		;
+
+int_seq		:	int_part
+		|	int_seq int_part
+			{ $$ = $1 | $2; if ($1 & $2 & INT_LONG) $$ = $1 | INT_LLONG; }
+		;
+
+builtin_type	:	int_seq
+			{ $$ = d_int_type ($1); }
+		|	FLOAT_KEYWORD
+			{ $$ = make_builtin_type ("float"); }
+		|	DOUBLE_KEYWORD
+			{ $$ = make_builtin_type ("double"); }
+		|	LONG DOUBLE_KEYWORD
+			{ $$ = make_builtin_type ("long double"); }
+		|	BOOL
+			{ $$ = make_builtin_type ("bool"); }
+		|	WCHAR_T
+			{ $$ = make_builtin_type ("wchar_t"); }
+		|	VOID
+			{ $$ = make_builtin_type ("void"); }
+		;
+
+ptr_operator	:	'*' qualifiers_opt
+			{ $$.comp = make_empty (DEMANGLE_COMPONENT_POINTER);
+			  $$.comp->u.s_binary.left = $$.comp->u.s_binary.right = NULL;
+			  $$.last = &d_left ($$.comp);
+			  $$.comp = d_qualify ($$.comp, $2, 0); }
+		/* g++ seems to allow qualifiers after the reference?  */
+		|	'&'
+			{ $$.comp = make_empty (DEMANGLE_COMPONENT_REFERENCE);
+			  $$.comp->u.s_binary.left = $$.comp->u.s_binary.right = NULL;
+			  $$.last = &d_left ($$.comp); }
+		|	nested_name '*' qualifiers_opt
+			{ $$.comp = make_empty (DEMANGLE_COMPONENT_PTRMEM_TYPE);
+			  $$.comp->u.s_binary.left = $1.comp;
+			  /* Convert the innermost DEMANGLE_COMPONENT_QUAL_NAME to a DEMANGLE_COMPONENT_NAME.  */
+			  *$1.last = *d_left ($1.last);
+			  $$.comp->u.s_binary.right = NULL;
+			  $$.last = &d_right ($$.comp);
+			  $$.comp = d_qualify ($$.comp, $3, 0); }
+		|	COLONCOLON nested_name '*' qualifiers_opt
+			{ $$.comp = make_empty (DEMANGLE_COMPONENT_PTRMEM_TYPE);
+			  $$.comp->u.s_binary.left = $2.comp;
+			  /* Convert the innermost DEMANGLE_COMPONENT_QUAL_NAME to a DEMANGLE_COMPONENT_NAME.  */
+			  *$2.last = *d_left ($2.last);
+			  $$.comp->u.s_binary.right = NULL;
+			  $$.last = &d_right ($$.comp);
+			  $$.comp = d_qualify ($$.comp, $4, 0); }
+		;
+
+array_indicator	:	'[' ']'
+			{ $$ = make_empty (DEMANGLE_COMPONENT_ARRAY_TYPE);
+			  d_left ($$) = NULL;
+			}
+		|	'[' INT ']'
+			{ $$ = make_empty (DEMANGLE_COMPONENT_ARRAY_TYPE);
+			  d_left ($$) = $2;
+			}
+		;
+
+/* Details of this approach inspired by the G++ < 3.4 parser.  */
+
+/* This rule is only used in typespec_2, and expanded inline there for
+   efficiency.  */
+/*
+typespec	:	builtin_type
+		|	colon_name
+		;
+*/
+
+typespec_2	:	builtin_type qualifiers
+			{ $$ = d_qualify ($1, $2, 0); }
+		|	builtin_type
+		|	qualifiers builtin_type qualifiers
+			{ $$ = d_qualify ($2, $1 | $3, 0); }
+		|	qualifiers builtin_type
+			{ $$ = d_qualify ($2, $1, 0); }
+
+		|	name qualifiers
+			{ $$ = d_qualify ($1, $2, 0); }
+		|	name
+		|	qualifiers name qualifiers
+			{ $$ = d_qualify ($2, $1 | $3, 0); }
+		|	qualifiers name
+			{ $$ = d_qualify ($2, $1, 0); }
+
+		|	COLONCOLON name qualifiers
+			{ $$ = d_qualify ($2, $3, 0); }
+		|	COLONCOLON name
+			{ $$ = $2; }
+		|	qualifiers COLONCOLON name qualifiers
+			{ $$ = d_qualify ($3, $1 | $4, 0); }
+		|	qualifiers COLONCOLON name
+			{ $$ = d_qualify ($3, $1, 0); }
+		;
+
+abstract_declarator
+		:	ptr_operator
+			{ $$.comp = $1.comp; $$.last = $1.last;
+			  $$.fn.comp = NULL; $$.fn.last = NULL; }
+		|	ptr_operator abstract_declarator
+			{ $$ = $2; $$.fn.comp = NULL; $$.fn.last = NULL;
+			  if ($2.fn.comp) { $$.last = $2.fn.last; *$2.last = $2.fn.comp; }
+			  *$$.last = $1.comp;
+			  $$.last = $1.last; }
+		|	direct_abstract_declarator
+			{ $$.fn.comp = NULL; $$.fn.last = NULL;
+			  if ($1.fn.comp) { $$.last = $1.fn.last; *$1.last = $1.fn.comp; }
+			}
+		;
+
+direct_abstract_declarator
+		:	'(' abstract_declarator ')'
+			{ $$ = $2; $$.fn.comp = NULL; $$.fn.last = NULL; $$.fold_flag = 1;
+			  if ($2.fn.comp) { $$.last = $2.fn.last; *$2.last = $2.fn.comp; }
+			}
+		|	direct_abstract_declarator function_arglist
+			{ $$.fold_flag = 0;
+			  if ($1.fn.comp) { $$.last = $1.fn.last; *$1.last = $1.fn.comp; }
+			  if ($1.fold_flag)
+			    {
+			      *$$.last = $2.comp;
+			      $$.last = $2.last;
+			    }
+			  else
+			    $$.fn = $2;
+			}
+		|	direct_abstract_declarator array_indicator
+			{ $$.fn.comp = NULL; $$.fn.last = NULL; $$.fold_flag = 0;
+			  if ($1.fn.comp) { $$.last = $1.fn.last; *$1.last = $1.fn.comp; }
+			  *$1.last = $2;
+			  $$.last = &d_right ($2);
+			}
+		|	array_indicator
+			{ $$.fn.comp = NULL; $$.fn.last = NULL; $$.fold_flag = 0;
+			  $$.comp = $1;
+			  $$.last = &d_right ($1);
+			}
+		/* G++ has the following except for () and (type).  Then
+		   (type) is handled in regcast_or_absdcl and () is handled
+		   in fcast_or_absdcl.
+
+		   However, this is only useful for function types, and
+		   generates reduce/reduce conflicts with direct_declarator.
+		   We're interested in pointer-to-function types, and in
+		   functions, but not in function types - so leave this
+		   out.  */
+		/* |	function_arglist */
+		;
+
+abstract_declarator_fn
+		:	ptr_operator
+			{ $$.comp = $1.comp; $$.last = $1.last;
+			  $$.fn.comp = NULL; $$.fn.last = NULL; $$.start = NULL; }
+		|	ptr_operator abstract_declarator_fn
+			{ $$ = $2;
+			  if ($2.last)
+			    *$$.last = $1.comp;
+			  else
+			    $$.comp = $1.comp;
+			  $$.last = $1.last;
+			}
+		|	direct_abstract_declarator
+			{ $$.comp = $1.comp; $$.last = $1.last; $$.fn = $1.fn; $$.start = NULL; }
+		|	direct_abstract_declarator function_arglist COLONCOLON start
+			{ $$.start = $4;
+			  if ($1.fn.comp) { $$.last = $1.fn.last; *$1.last = $1.fn.comp; }
+			  if ($1.fold_flag)
+			    {
+			      *$$.last = $2.comp;
+			      $$.last = $2.last;
+			    }
+			  else
+			    $$.fn = $2;
+			}
+		|	function_arglist start_opt
+			{ $$.fn = $1;
+			  $$.start = $2;
+			  $$.comp = NULL; $$.last = NULL;
+			}
+		;
+
+type		:	typespec_2
+		|	typespec_2 abstract_declarator
+			{ $$ = $2.comp;
+			  *$2.last = $1;
+			}
+		;
+
+declarator	:	ptr_operator declarator
+			{ $$.comp = $2.comp;
+			  $$.last = $1.last;
+			  *$2.last = $1.comp; }
+		|	direct_declarator
+		;
+
+direct_declarator
+		:	'(' declarator ')'
+			{ $$ = $2; }
+		|	direct_declarator function_arglist
+			{ $$.comp = $1.comp;
+			  *$1.last = $2.comp;
+			  $$.last = $2.last;
+			}
+		|	direct_declarator array_indicator
+			{ $$.comp = $1.comp;
+			  *$1.last = $2;
+			  $$.last = &d_right ($2);
+			}
+		|	colon_ext_name
+			{ $$.comp = make_empty (DEMANGLE_COMPONENT_TYPED_NAME);
+			  d_left ($$.comp) = $1;
+			  $$.last = &d_right ($$.comp);
+			}
+		;
+
+/* These are similar to declarator and direct_declarator except that they
+   do not permit ( colon_ext_name ), which is ambiguous with a function
+   argument list.  They also don't permit a few other forms with redundant
+   parentheses around the colon_ext_name; any colon_ext_name in parentheses
+   must be followed by an argument list or an array indicator, or preceded
+   by a pointer.  */
+declarator_1	:	ptr_operator declarator_1
+			{ $$.comp = $2.comp;
+			  $$.last = $1.last;
+			  *$2.last = $1.comp; }
+		|	colon_ext_name
+			{ $$.comp = make_empty (DEMANGLE_COMPONENT_TYPED_NAME);
+			  d_left ($$.comp) = $1;
+			  $$.last = &d_right ($$.comp);
+			}
+		|	direct_declarator_1
+
+			/* Function local variable or type.  The typespec to
+			   our left is the type of the containing function. 
+			   This should be OK, because function local types
+			   can not be templates, so the return types of their
+			   members will not be mangled.  If they are hopefully
+			   they'll end up to the right of the ::.  */
+		|	colon_ext_name function_arglist COLONCOLON start
+			{ $$.comp = fill_comp (DEMANGLE_COMPONENT_TYPED_NAME, $1, $2.comp);
+			  $$.last = $2.last;
+			  $$.comp = fill_comp (DEMANGLE_COMPONENT_LOCAL_NAME, $$.comp, $4);
+			}
+		|	direct_declarator_1 function_arglist COLONCOLON start
+			{ $$.comp = $1.comp;
+			  *$1.last = $2.comp;
+			  $$.last = $2.last;
+			  $$.comp = fill_comp (DEMANGLE_COMPONENT_LOCAL_NAME, $$.comp, $4);
+			}
+		;
+
+direct_declarator_1
+		:	'(' ptr_operator declarator ')'
+			{ $$.comp = $3.comp;
+			  $$.last = $2.last;
+			  *$3.last = $2.comp; }
+		|	direct_declarator_1 function_arglist
+			{ $$.comp = $1.comp;
+			  *$1.last = $2.comp;
+			  $$.last = $2.last;
+			}
+		|	direct_declarator_1 array_indicator
+			{ $$.comp = $1.comp;
+			  *$1.last = $2;
+			  $$.last = &d_right ($2);
+			}
+		|	colon_ext_name function_arglist
+			{ $$.comp = fill_comp (DEMANGLE_COMPONENT_TYPED_NAME, $1, $2.comp);
+			  $$.last = $2.last;
+			}
+		|	colon_ext_name array_indicator
+			{ $$.comp = fill_comp (DEMANGLE_COMPONENT_TYPED_NAME, $1, $2);
+			  $$.last = &d_right ($2);
+			}
+		;
+
+exp	:	'(' exp1 ')'
+		{ $$ = $2; }
+	;
+
+/* Silly trick.  Only allow '>' when parenthesized, in order to
+   handle conflict with templates.  */
+exp1	:	exp
+	;
+
+exp1	:	exp '>' exp
+		{ $$ = d_binary (">", $1, $3); }
+	;
+
+/* References.  Not allowed everywhere in template parameters, only
+   at the top level, but treat them as expressions in case they are wrapped
+   in parentheses.  */
+exp1	:	'&' start
+		{ $$ = fill_comp (DEMANGLE_COMPONENT_UNARY, make_operator ("&", 1), $2); }
+	;
+
+/* Expressions, not including the comma operator.  */
+exp	:	'-' exp    %prec UNARY
+		{ $$ = d_unary ("-", $2); }
+	;
+
+exp	:	'!' exp    %prec UNARY
+		{ $$ = d_unary ("!", $2); }
+	;
+
+exp	:	'~' exp    %prec UNARY
+		{ $$ = d_unary ("~", $2); }
+	;
+
+/* Casts.  First your normal C-style cast.  If exp is a LITERAL, just change
+   its type.  */
+
+exp	:	'(' type ')' exp  %prec UNARY
+		{ if ($4->type == DEMANGLE_COMPONENT_LITERAL
+		      || $4->type == DEMANGLE_COMPONENT_LITERAL_NEG)
+		    {
+		      $$ = $4;
+		      d_left ($4) = $2;
+		    }
+		  else
+		    $$ = fill_comp (DEMANGLE_COMPONENT_UNARY,
+				      fill_comp (DEMANGLE_COMPONENT_CAST, $2, NULL),
+				      $4);
+		}
+	;
+
+/* Mangling does not differentiate between these, so we don't need to
+   either.  */
+exp	:	STATIC_CAST '<' type '>' '(' exp1 ')' %prec UNARY
+		{ $$ = fill_comp (DEMANGLE_COMPONENT_UNARY,
+				    fill_comp (DEMANGLE_COMPONENT_CAST, $3, NULL),
+				    $6);
+		}
+	;
+
+exp	:	DYNAMIC_CAST '<' type '>' '(' exp1 ')' %prec UNARY
+		{ $$ = fill_comp (DEMANGLE_COMPONENT_UNARY,
+				    fill_comp (DEMANGLE_COMPONENT_CAST, $3, NULL),
+				    $6);
+		}
+	;
+
+exp	:	REINTERPRET_CAST '<' type '>' '(' exp1 ')' %prec UNARY
+		{ $$ = fill_comp (DEMANGLE_COMPONENT_UNARY,
+				    fill_comp (DEMANGLE_COMPONENT_CAST, $3, NULL),
+				    $6);
+		}
+	;
+
+/* Another form of C++-style cast.  "type ( exp1 )" is not allowed (it's too
+   ambiguous), but "name ( exp1 )" is.  Because we don't need to support
+   function types, we can handle this unambiguously (the use of typespec_2
+   prevents a silly, harmless conflict with qualifiers_opt).  This does not
+   appear in demangler output so it's not a great loss if we need to
+   disable it.  */
+exp	:	typespec_2 '(' exp1 ')' %prec UNARY
+		{ $$ = fill_comp (DEMANGLE_COMPONENT_UNARY,
+				    fill_comp (DEMANGLE_COMPONENT_CAST, $1, NULL),
+				    $3);
+		}
+	;
+
+/* TO INVESTIGATE: ._0 style anonymous names; anonymous namespaces */
+
+/* Binary operators in order of decreasing precedence.  */
+
+exp	:	exp '*' exp
+		{ $$ = d_binary ("*", $1, $3); }
+	;
+
+exp	:	exp '/' exp
+		{ $$ = d_binary ("/", $1, $3); }
+	;
+
+exp	:	exp '%' exp
+		{ $$ = d_binary ("%", $1, $3); }
+	;
+
+exp	:	exp '+' exp
+		{ $$ = d_binary ("+", $1, $3); }
+	;
+
+exp	:	exp '-' exp
+		{ $$ = d_binary ("-", $1, $3); }
+	;
+
+exp	:	exp LSH exp
+		{ $$ = d_binary ("<<", $1, $3); }
+	;
+
+exp	:	exp RSH exp
+		{ $$ = d_binary (">>", $1, $3); }
+	;
+
+exp	:	exp EQUAL exp
+		{ $$ = d_binary ("==", $1, $3); }
+	;
+
+exp	:	exp NOTEQUAL exp
+		{ $$ = d_binary ("!=", $1, $3); }
+	;
+
+exp	:	exp LEQ exp
+		{ $$ = d_binary ("<=", $1, $3); }
+	;
+
+exp	:	exp GEQ exp
+		{ $$ = d_binary (">=", $1, $3); }
+	;
+
+exp	:	exp '<' exp
+		{ $$ = d_binary ("<", $1, $3); }
+	;
+
+exp	:	exp '&' exp
+		{ $$ = d_binary ("&", $1, $3); }
+	;
+
+exp	:	exp '^' exp
+		{ $$ = d_binary ("^", $1, $3); }
+	;
+
+exp	:	exp '|' exp
+		{ $$ = d_binary ("|", $1, $3); }
+	;
+
+exp	:	exp ANDAND exp
+		{ $$ = d_binary ("&&", $1, $3); }
+	;
+
+exp	:	exp OROR exp
+		{ $$ = d_binary ("||", $1, $3); }
+	;
+
+/* Not 100% sure these are necessary, but they're harmless.  */
+exp	:	exp ARROW NAME
+		{ $$ = d_binary ("->", $1, $3); }
+	;
+
+exp	:	exp '.' NAME
+		{ $$ = d_binary (".", $1, $3); }
+	;
+
+exp	:	exp '?' exp ':' exp	%prec '?'
+		{ $$ = fill_comp (DEMANGLE_COMPONENT_TRINARY, make_operator ("?", 3),
+				    fill_comp (DEMANGLE_COMPONENT_TRINARY_ARG1, $1,
+						 fill_comp (DEMANGLE_COMPONENT_TRINARY_ARG2, $3, $5)));
+		}
+	;
+			  
+exp	:	INT
+	;
+
+/* Not generally allowed.  */
+exp	:	FLOAT
+	;
+
+exp	:	SIZEOF '(' type ')'	%prec UNARY
+		{ $$ = d_unary ("sizeof", $3); }
+	;
+
+/* C++.  */
+exp     :       TRUEKEYWORD    
+		{ struct demangle_component *i;
+		  i = make_name ("1", 1);
+		  $$ = fill_comp (DEMANGLE_COMPONENT_LITERAL,
+				    make_builtin_type ("bool"),
+				    i);
+		}
+	;
+
+exp     :       FALSEKEYWORD   
+		{ struct demangle_component *i;
+		  i = make_name ("0", 1);
+		  $$ = fill_comp (DEMANGLE_COMPONENT_LITERAL,
+				    make_builtin_type ("bool"),
+				    i);
+		}
+	;
+
+/* end of C++.  */
+
+%%
+
+/* Apply QUALIFIERS to LHS and return a qualified component.  IS_METHOD
+   is set if LHS is a method, in which case the qualifiers are logically
+   applied to "this".  We apply qualifiers in a consistent order; LHS
+   may already be qualified; duplicate qualifiers are not created.  */
+
+struct demangle_component *
+d_qualify (struct demangle_component *lhs, int qualifiers, int is_method)
+{
+  struct demangle_component **inner_p;
+  enum demangle_component_type type;
+
+  /* For now the order is CONST (innermost), VOLATILE, RESTRICT.  */
+
+#define HANDLE_QUAL(TYPE, MTYPE, QUAL)				\
+  if ((qualifiers & QUAL) && (type != TYPE) && (type != MTYPE))	\
+    {								\
+      *inner_p = fill_comp (is_method ? MTYPE : TYPE,	\
+			      *inner_p, NULL);			\
+      inner_p = &d_left (*inner_p);				\
+      type = (*inner_p)->type;					\
+    }								\
+  else if (type == TYPE || type == MTYPE)			\
+    {								\
+      inner_p = &d_left (*inner_p);				\
+      type = (*inner_p)->type;					\
+    }
+
+  inner_p = &lhs;
+
+  type = (*inner_p)->type;
+
+  HANDLE_QUAL (DEMANGLE_COMPONENT_RESTRICT, DEMANGLE_COMPONENT_RESTRICT_THIS, QUAL_RESTRICT);
+  HANDLE_QUAL (DEMANGLE_COMPONENT_VOLATILE, DEMANGLE_COMPONENT_VOLATILE_THIS, QUAL_VOLATILE);
+  HANDLE_QUAL (DEMANGLE_COMPONENT_CONST, DEMANGLE_COMPONENT_CONST_THIS, QUAL_CONST);
+
+  return lhs;
+}
+
+/* Return a builtin type corresponding to FLAGS.  */
+
+static struct demangle_component *
+d_int_type (int flags)
+{
+  const char *name;
+
+  switch (flags)
+    {
+    case INT_SIGNED | INT_CHAR:
+      name = "signed char";
+      break;
+    case INT_CHAR:
+      name = "char";
+      break;
+    case INT_UNSIGNED | INT_CHAR:
+      name = "unsigned char";
+      break;
+    case 0:
+    case INT_SIGNED:
+      name = "int";
+      break;
+    case INT_UNSIGNED:
+      name = "unsigned int";
+      break;
+    case INT_LONG:
+    case INT_SIGNED | INT_LONG:
+      name = "long";
+      break;
+    case INT_UNSIGNED | INT_LONG:
+      name = "unsigned long";
+      break;
+    case INT_SHORT:
+    case INT_SIGNED | INT_SHORT:
+      name = "short";
+      break;
+    case INT_UNSIGNED | INT_SHORT:
+      name = "unsigned short";
+      break;
+    case INT_LLONG | INT_LONG:
+    case INT_SIGNED | INT_LLONG | INT_LONG:
+      name = "long long";
+      break;
+    case INT_UNSIGNED | INT_LLONG | INT_LONG:
+      name = "unsigned long long";
+      break;
+    default:
+      return NULL;
+    }
+
+  return make_builtin_type (name);
+}
+
+/* Wrapper to create a unary operation.  */
+
+static struct demangle_component *
+d_unary (const char *name, struct demangle_component *lhs)
+{
+  return fill_comp (DEMANGLE_COMPONENT_UNARY, make_operator (name, 1), lhs);
+}
+
+/* Wrapper to create a binary operation.  */
+
+static struct demangle_component *
+d_binary (const char *name, struct demangle_component *lhs, struct demangle_component *rhs)
+{
+  return fill_comp (DEMANGLE_COMPONENT_BINARY, make_operator (name, 2),
+		      fill_comp (DEMANGLE_COMPONENT_BINARY_ARGS, lhs, rhs));
+}
+
+/* Find the end of a symbol name starting at LEXPTR.  */
+
+static const char *
+symbol_end (const char *lexptr)
+{
+  const char *p = lexptr;
+
+  while (*p && (ISALNUM (*p) || *p == '_' || *p == '$' || *p == '.'))
+    p++;
+
+  return p;
+}
+
+/* Take care of parsing a number (anything that starts with a digit).
+   The number starts at P and contains LEN characters.  Store the result in
+   YYLVAL.  */
+
+static int
+parse_number (const char *p, int len, int parsed_float)
+{
+  int unsigned_p = 0;
+
+  /* Number of "L" suffixes encountered.  */
+  int long_p = 0;
+
+  struct demangle_component *signed_type;
+  struct demangle_component *unsigned_type;
+  struct demangle_component *type, *name;
+  enum demangle_component_type literal_type;
+
+  if (p[0] == '-')
+    {
+      literal_type = DEMANGLE_COMPONENT_LITERAL_NEG;
+      p++;
+      len--;
+    }
+  else
+    literal_type = DEMANGLE_COMPONENT_LITERAL;
+
+  if (parsed_float)
+    {
+      /* It's a float since it contains a point or an exponent.  */
+      char c;
+
+      /* The GDB lexer checks the result of scanf at this point.  Not doing
+         this leaves our error checking slightly weaker but only for invalid
+         data.  */
+
+      /* See if it has `f' or `l' suffix (float or long double).  */
+
+      c = TOLOWER (p[len - 1]);
+
+      if (c == 'f')
+      	{
+      	  len--;
+      	  type = make_builtin_type ("float");
+      	}
+      else if (c == 'l')
+	{
+	  len--;
+	  type = make_builtin_type ("long double");
+	}
+      else if (ISDIGIT (c) || c == '.')
+	type = make_builtin_type ("double");
+      else
+	return ERROR;
+
+      name = make_name (p, len);
+      yylval.comp = fill_comp (literal_type, type, name);
+
+      return FLOAT;
+    }
+
+  /* This treats 0x1 and 1 as different literals.  We also do not
+     automatically generate unsigned types.  */
+
+  long_p = 0;
+  unsigned_p = 0;
+  while (len > 0)
+    {
+      if (p[len - 1] == 'l' || p[len - 1] == 'L')
+	{
+	  len--;
+	  long_p++;
+	  continue;
+	}
+      if (p[len - 1] == 'u' || p[len - 1] == 'U')
+	{
+	  len--;
+	  unsigned_p++;
+	  continue;
+	}
+      break;
+    }
+
+  if (long_p == 0)
+    {
+      unsigned_type = make_builtin_type ("unsigned int");
+      signed_type = make_builtin_type ("int");
+    }
+  else if (long_p == 1)
+    {
+      unsigned_type = make_builtin_type ("unsigned long");
+      signed_type = make_builtin_type ("long");
+    }
+  else
+    {
+      unsigned_type = make_builtin_type ("unsigned long long");
+      signed_type = make_builtin_type ("long long");
+    }
+
+   if (unsigned_p)
+     type = unsigned_type;
+   else
+     type = signed_type;
+
+   name = make_name (p, len);
+   yylval.comp = fill_comp (literal_type, type, name);
+
+   return INT;
+}
+
+static char backslashable[] = "abefnrtv";
+static char represented[] = "\a\b\e\f\n\r\t\v";
+
+/* Translate the backslash the way we would in the host character set.  */
+static int
+c_parse_backslash (int host_char, int *target_char)
+{
+  const char *ix;
+  ix = strchr (backslashable, host_char);
+  if (! ix)
+    return 0;
+  else
+    *target_char = represented[ix - backslashable];
+  return 1;
+}
+
+/* Parse a C escape sequence.  STRING_PTR points to a variable
+   containing a pointer to the string to parse.  That pointer
+   should point to the character after the \.  That pointer
+   is updated past the characters we use.  The value of the
+   escape sequence is returned.
+
+   A negative value means the sequence \ newline was seen,
+   which is supposed to be equivalent to nothing at all.
+
+   If \ is followed by a null character, we return a negative
+   value and leave the string pointer pointing at the null character.
+
+   If \ is followed by 000, we return 0 and leave the string pointer
+   after the zeros.  A value of 0 does not mean end of string.  */
+
+static int
+parse_escape (const char **string_ptr)
+{
+  int target_char;
+  int c = *(*string_ptr)++;
+  if (c_parse_backslash (c, &target_char))
+    return target_char;
+  else
+    switch (c)
+      {
+      case '\n':
+	return -2;
+      case 0:
+	(*string_ptr)--;
+	return 0;
+      case '^':
+	{
+	  c = *(*string_ptr)++;
+
+	  if (c == '?')
+	    return 0177;
+	  else if (c == '\\')
+	    target_char = parse_escape (string_ptr);
+	  else
+	    target_char = c;
+
+	  /* Now target_char is something like `c', and we want to find
+	     its control-character equivalent.  */
+	  target_char = target_char & 037;
+
+	  return target_char;
+	}
+
+      case '0':
+      case '1':
+      case '2':
+      case '3':
+      case '4':
+      case '5':
+      case '6':
+      case '7':
+	{
+	  int i = c - '0';
+	  int count = 0;
+	  while (++count < 3)
+	    {
+	      c = (**string_ptr);
+	      if (c >= '0' && c <= '7')
+		{
+		  (*string_ptr)++;
+		  i *= 8;
+		  i += c - '0';
+		}
+	      else
+		{
+		  break;
+		}
+	    }
+	  return i;
+	}
+      default:
+	return target_char;
+      }
+}
+
+#define HANDLE_SPECIAL(string, comp)				\
+  if (strncmp (tokstart, string, sizeof (string) - 1) == 0)	\
+    {								\
+      lexptr = tokstart + sizeof (string) - 1;			\
+      yylval.lval = comp;					\
+      return DEMANGLER_SPECIAL;					\
+    }
+
+#define HANDLE_TOKEN2(string, token)			\
+  if (lexptr[1] == string[1])				\
+    {							\
+      lexptr += 2;					\
+      yylval.opname = string;				\
+      return token;					\
+    }      
+
+#define HANDLE_TOKEN3(string, token)			\
+  if (lexptr[1] == string[1] && lexptr[2] == string[2])	\
+    {							\
+      lexptr += 3;					\
+      yylval.opname = string;				\
+      return token;					\
+    }      
+
+/* Read one token, getting characters through LEXPTR.  */
+
+static int
+yylex (void)
+{
+  int c;
+  int namelen;
+  const char *tokstart, *tokptr;
+
+ retry:
+  prev_lexptr = lexptr;
+  tokstart = lexptr;
+
+  switch (c = *tokstart)
+    {
+    case 0:
+      return 0;
+
+    case ' ':
+    case '\t':
+    case '\n':
+      lexptr++;
+      goto retry;
+
+    case '\'':
+      /* We either have a character constant ('0' or '\177' for example)
+	 or we have a quoted symbol reference ('foo(int,int)' in C++
+	 for example). */
+      lexptr++;
+      c = *lexptr++;
+      if (c == '\\')
+	c = parse_escape (&lexptr);
+      else if (c == '\'')
+	{
+	  yyerror ("empty character constant");
+	  return ERROR;
+	}
+
+      c = *lexptr++;
+      if (c != '\'')
+	{
+	  yyerror ("invalid character constant");
+	  return ERROR;
+	}
+
+      /* FIXME: We should refer to a canonical form of the character,
+	 presumably the same one that appears in manglings - the decimal
+	 representation.  But if that isn't in our input then we have to
+	 allocate memory for it somewhere.  */
+      yylval.comp = fill_comp (DEMANGLE_COMPONENT_LITERAL,
+				 make_builtin_type ("char"),
+				 make_name (tokstart, lexptr - tokstart));
+
+      return INT;
+
+    case '(':
+      if (strncmp (tokstart, "(anonymous namespace)", 21) == 0)
+	{
+	  lexptr += 21;
+	  yylval.comp = make_name ("(anonymous namespace)",
+				     sizeof "(anonymous namespace)" - 1);
+	  return NAME;
+	}
+	/* FALL THROUGH */
+
+    case ')':
+    case ',':
+      lexptr++;
+      return c;
+
+    case '.':
+      if (lexptr[1] == '.' && lexptr[2] == '.')
+	{
+	  lexptr += 3;
+	  return ELLIPSIS;
+	}
+
+      /* Might be a floating point number.  */
+      if (lexptr[1] < '0' || lexptr[1] > '9')
+	goto symbol;		/* Nope, must be a symbol. */
+
+      goto try_number;
+
+    case '-':
+      HANDLE_TOKEN2 ("-=", ASSIGN_MODIFY);
+      HANDLE_TOKEN2 ("--", DECREMENT);
+      HANDLE_TOKEN2 ("->", ARROW);
+
+      /* For construction vtables.  This is kind of hokey.  */
+      if (strncmp (tokstart, "-in-", 4) == 0)
+	{
+	  lexptr += 4;
+	  return CONSTRUCTION_IN;
+	}
+
+      if (lexptr[1] < '0' || lexptr[1] > '9')
+	{
+	  lexptr++;
+	  return '-';
+	}
+      /* FALL THRU into number case.  */
+
+    try_number:
+    case '0':
+    case '1':
+    case '2':
+    case '3':
+    case '4':
+    case '5':
+    case '6':
+    case '7':
+    case '8':
+    case '9':
+      {
+	/* It's a number.  */
+	int got_dot = 0, got_e = 0, toktype;
+	const char *p = tokstart;
+	int hex = 0;
+
+	if (c == '-')
+	  p++;
+
+	if (c == '0' && (p[1] == 'x' || p[1] == 'X'))
+	  {
+	    p += 2;
+	    hex = 1;
+	  }
+	else if (c == '0' && (p[1]=='t' || p[1]=='T' || p[1]=='d' || p[1]=='D'))
+	  {
+	    p += 2;
+	    hex = 0;
+	  }
+
+	for (;; ++p)
+	  {
+	    /* This test includes !hex because 'e' is a valid hex digit
+	       and thus does not indicate a floating point number when
+	       the radix is hex.  */
+	    if (!hex && !got_e && (*p == 'e' || *p == 'E'))
+	      got_dot = got_e = 1;
+	    /* This test does not include !hex, because a '.' always indicates
+	       a decimal floating point number regardless of the radix.
+
+	       NOTE drow/2005-03-09: This comment is not accurate in C99;
+	       however, it's not clear that all the floating point support
+	       in this file is doing any good here.  */
+	    else if (!got_dot && *p == '.')
+	      got_dot = 1;
+	    else if (got_e && (p[-1] == 'e' || p[-1] == 'E')
+		     && (*p == '-' || *p == '+'))
+	      /* This is the sign of the exponent, not the end of the
+		 number.  */
+	      continue;
+	    /* We will take any letters or digits.  parse_number will
+	       complain if past the radix, or if L or U are not final.  */
+	    else if (! ISALNUM (*p))
+	      break;
+	  }
+	toktype = parse_number (tokstart, p - tokstart, got_dot|got_e);
+        if (toktype == ERROR)
+	  {
+	    char *err_copy = (char *) alloca (p - tokstart + 1);
+
+	    memcpy (err_copy, tokstart, p - tokstart);
+	    err_copy[p - tokstart] = 0;
+	    yyerror ("invalid number");
+	    return ERROR;
+	  }
+	lexptr = p;
+	return toktype;
+      }
+
+    case '+':
+      HANDLE_TOKEN2 ("+=", ASSIGN_MODIFY);
+      HANDLE_TOKEN2 ("++", INCREMENT);
+      lexptr++;
+      return c;
+    case '*':
+      HANDLE_TOKEN2 ("*=", ASSIGN_MODIFY);
+      lexptr++;
+      return c;
+    case '/':
+      HANDLE_TOKEN2 ("/=", ASSIGN_MODIFY);
+      lexptr++;
+      return c;
+    case '%':
+      HANDLE_TOKEN2 ("%=", ASSIGN_MODIFY);
+      lexptr++;
+      return c;
+    case '|':
+      HANDLE_TOKEN2 ("|=", ASSIGN_MODIFY);
+      HANDLE_TOKEN2 ("||", OROR);
+      lexptr++;
+      return c;
+    case '&':
+      HANDLE_TOKEN2 ("&=", ASSIGN_MODIFY);
+      HANDLE_TOKEN2 ("&&", ANDAND);
+      lexptr++;
+      return c;
+    case '^':
+      HANDLE_TOKEN2 ("^=", ASSIGN_MODIFY);
+      lexptr++;
+      return c;
+    case '!':
+      HANDLE_TOKEN2 ("!=", NOTEQUAL);
+      lexptr++;
+      return c;
+    case '<':
+      HANDLE_TOKEN3 ("<<=", ASSIGN_MODIFY);
+      HANDLE_TOKEN2 ("<=", LEQ);
+      HANDLE_TOKEN2 ("<<", LSH);
+      lexptr++;
+      return c;
+    case '>':
+      HANDLE_TOKEN3 (">>=", ASSIGN_MODIFY);
+      HANDLE_TOKEN2 (">=", GEQ);
+      HANDLE_TOKEN2 (">>", RSH);
+      lexptr++;
+      return c;
+    case '=':
+      HANDLE_TOKEN2 ("==", EQUAL);
+      lexptr++;
+      return c;
+    case ':':
+      HANDLE_TOKEN2 ("::", COLONCOLON);
+      lexptr++;
+      return c;
+
+    case '[':
+    case ']':
+    case '?':
+    case '@@':
+    case '~':
+    case '{':
+    case '}':
+    symbol:
+      lexptr++;
+      return c;
+
+    case '"':
+      /* These can't occur in C++ names.  */
+      yyerror ("unexpected string literal");
+      return ERROR;
+    }
+
+  if (!(c == '_' || c == '$' || ISALPHA (c)))
+    {
+      /* We must have come across a bad character (e.g. ';').  */
+      yyerror ("invalid character");
+      return ERROR;
+    }
+
+  /* It's a name.  See how long it is.  */
+  namelen = 0;
+  do
+    c = tokstart[++namelen];
+  while (ISALNUM (c) || c == '_' || c == '$');
+
+  lexptr += namelen;
+
+  /* Catch specific keywords.  Notice that some of the keywords contain
+     spaces, and are sorted by the length of the first word.  They must
+     all include a trailing space in the string comparison.  */
+  switch (namelen)
+    {
+    case 16:
+      if (strncmp (tokstart, "reinterpret_cast", 16) == 0)
+        return REINTERPRET_CAST;
+      break;
+    case 12:
+      if (strncmp (tokstart, "construction vtable for ", 24) == 0)
+	{
+	  lexptr = tokstart + 24;
+	  return CONSTRUCTION_VTABLE;
+	}
+      if (strncmp (tokstart, "dynamic_cast", 12) == 0)
+        return DYNAMIC_CAST;
+      break;
+    case 11:
+      if (strncmp (tokstart, "static_cast", 11) == 0)
+        return STATIC_CAST;
+      break;
+    case 9:
+      HANDLE_SPECIAL ("covariant return thunk to ", DEMANGLE_COMPONENT_COVARIANT_THUNK);
+      HANDLE_SPECIAL ("reference temporary for ", DEMANGLE_COMPONENT_REFTEMP);
+      break;
+    case 8:
+      HANDLE_SPECIAL ("typeinfo for ", DEMANGLE_COMPONENT_TYPEINFO);
+      HANDLE_SPECIAL ("typeinfo fn for ", DEMANGLE_COMPONENT_TYPEINFO_FN);
+      HANDLE_SPECIAL ("typeinfo name for ", DEMANGLE_COMPONENT_TYPEINFO_NAME);
+      if (strncmp (tokstart, "operator", 8) == 0)
+	return OPERATOR;
+      if (strncmp (tokstart, "restrict", 8) == 0)
+	return RESTRICT;
+      if (strncmp (tokstart, "unsigned", 8) == 0)
+	return UNSIGNED;
+      if (strncmp (tokstart, "template", 8) == 0)
+	return TEMPLATE;
+      if (strncmp (tokstart, "volatile", 8) == 0)
+	return VOLATILE_KEYWORD;
+      break;
+    case 7:
+      HANDLE_SPECIAL ("virtual thunk to ", DEMANGLE_COMPONENT_VIRTUAL_THUNK);
+      if (strncmp (tokstart, "wchar_t", 7) == 0)
+	return WCHAR_T;
+      break;
+    case 6:
+      if (strncmp (tokstart, "global constructors keyed to ", 29) == 0)
+	{
+	  const char *p;
+	  lexptr = tokstart + 29;
+	  yylval.typed_val_int.val = GLOBAL_CONSTRUCTORS;
+	  /* Find the end of the symbol.  */
+	  p = symbol_end (lexptr);
+	  yylval.typed_val_int.type = make_name (lexptr, p - lexptr);
+	  lexptr = p;
+	  return GLOBAL;
+	}
+      if (strncmp (tokstart, "global destructors keyed to ", 28) == 0)
+	{
+	  const char *p;
+	  lexptr = tokstart + 28;
+	  yylval.typed_val_int.val = GLOBAL_DESTRUCTORS;
+	  /* Find the end of the symbol.  */
+	  p = symbol_end (lexptr);
+	  yylval.typed_val_int.type = make_name (lexptr, p - lexptr);
+	  lexptr = p;
+	  return GLOBAL;
+	}
+
+      HANDLE_SPECIAL ("vtable for ", DEMANGLE_COMPONENT_VTABLE);
+      if (strncmp (tokstart, "delete", 6) == 0)
+	return DELETE;
+      if (strncmp (tokstart, "struct", 6) == 0)
+	return STRUCT;
+      if (strncmp (tokstart, "signed", 6) == 0)
+	return SIGNED_KEYWORD;
+      if (strncmp (tokstart, "sizeof", 6) == 0)
+	return SIZEOF;
+      if (strncmp (tokstart, "double", 6) == 0)
+	return DOUBLE_KEYWORD;
+      break;
+    case 5:
+      HANDLE_SPECIAL ("guard variable for ", DEMANGLE_COMPONENT_GUARD);
+      if (strncmp (tokstart, "false", 5) == 0)
+	return FALSEKEYWORD;
+      if (strncmp (tokstart, "class", 5) == 0)
+	return CLASS;
+      if (strncmp (tokstart, "union", 5) == 0)
+	return UNION;
+      if (strncmp (tokstart, "float", 5) == 0)
+	return FLOAT_KEYWORD;
+      if (strncmp (tokstart, "short", 5) == 0)
+	return SHORT;
+      if (strncmp (tokstart, "const", 5) == 0)
+	return CONST_KEYWORD;
+      break;
+    case 4:
+      if (strncmp (tokstart, "void", 4) == 0)
+	return VOID;
+      if (strncmp (tokstart, "bool", 4) == 0)
+	return BOOL;
+      if (strncmp (tokstart, "char", 4) == 0)
+	return CHAR;
+      if (strncmp (tokstart, "enum", 4) == 0)
+	return ENUM;
+      if (strncmp (tokstart, "long", 4) == 0)
+	return LONG;
+      if (strncmp (tokstart, "true", 4) == 0)
+	return TRUEKEYWORD;
+      break;
+    case 3:
+      HANDLE_SPECIAL ("VTT for ", DEMANGLE_COMPONENT_VTT);
+      HANDLE_SPECIAL ("non-virtual thunk to ", DEMANGLE_COMPONENT_THUNK);
+      if (strncmp (tokstart, "new", 3) == 0)
+	return NEW;
+      if (strncmp (tokstart, "int", 3) == 0)
+	return INT_KEYWORD;
+      break;
+    default:
+      break;
+    }
+
+  yylval.comp = make_name (tokstart, namelen);
+  return NAME;
+}
+
+static void
+yyerror (char *msg)
+{
+  if (global_errmsg)
+    return;
+
+  error_lexptr = prev_lexptr;
+  global_errmsg = msg ? msg : "parse error";
+}
+
+/* Allocate all the components we'll need to build a tree.  We generally
+   allocate too many components, but the extra memory usage doesn't hurt
+   because the trees are temporary.  If we start keeping the trees for
+   a longer lifetime we'll need to be cleverer.  */
+static struct demangle_info *
+allocate_info (int comps)
+{
+  struct demangle_info *ret;
+
+  ret = malloc (sizeof (struct demangle_info)
+		+ sizeof (struct demangle_component) * (comps - 1));
+  ret->used = 0;
+  return ret;
+}
+
+/* Convert RESULT to a string.  The return value is allocated
+   using xmalloc.  ESTIMATED_LEN is used only as a guide to the
+   length of the result.  This functions handles a few cases that
+   cplus_demangle_print does not, specifically the global destructor
+   and constructor labels.  */
+
+char *
+cp_comp_to_string (struct demangle_component *result, int estimated_len)
+{
+  char *str, *prefix = NULL, *buf;
+  size_t err = 0;
+
+  if (result->type == GLOBAL_DESTRUCTORS)
+    {
+      result = d_left (result);
+      prefix = "global destructors keyed to ";
+    }
+  else if (result->type == GLOBAL_CONSTRUCTORS)
+    {
+      result = d_left (result);
+      prefix = "global constructors keyed to ";
+    }
+
+  str = cplus_demangle_print (DMGL_PARAMS | DMGL_ANSI, result, estimated_len, &err);
+  if (str == NULL)
+    return NULL;
+
+  if (prefix == NULL)
+    return str;
+
+  buf = malloc (strlen (str) + strlen (prefix) + 1);
+  strcpy (buf, prefix);
+  strcat (buf, str);
+  free (str);
+  return (buf);
+}
+
+/* Convert a demangled name to a demangle_component tree.  *MEMORY is set to the
+   block of used memory that should be freed when finished with the
+   tree.  On error, NULL is returned, and an error message will be
+   set in *ERRMSG (which does not need to be freed).  */
+
+struct demangle_component *
+cp_demangled_name_to_comp (const char *demangled_name, void **memory,
+			   const char **errmsg)
+{
+  static char errbuf[60];
+  struct demangle_component *result;
+
+  int len = strlen (demangled_name);
+
+  len = len + len / 8;
+  prev_lexptr = lexptr = demangled_name;
+  error_lexptr = NULL;
+  global_errmsg = NULL;
+
+  demangle_info = allocate_info (len);
+
+  if (yyparse ())
+    {
+      if (global_errmsg && errmsg)
+	{
+	  snprintf (errbuf, sizeof (errbuf) - 2, "%s, near `%s",
+		    global_errmsg, error_lexptr);
+	  strcat (errbuf, "'");
+	  *errmsg = errbuf;
+	}
+      free (demangle_info);
+      return NULL;
+    }
+
+  *memory = demangle_info;
+  result = global_result;
+  global_result = NULL;
+
+  return result;
+}
+
+#ifdef TEST_CPNAMES
+
+static void
+cp_print (struct demangle_component *result)
+{
+  char *str;
+  size_t err = 0;
+
+  if (result->type == GLOBAL_DESTRUCTORS)
+    {
+      result = d_left (result);
+      fputs ("global destructors keyed to ", stdout);
+    }
+  else if (result->type == GLOBAL_CONSTRUCTORS)
+    {
+      result = d_left (result);
+      fputs ("global constructors keyed to ", stdout);
+    }
+
+  str = cplus_demangle_print (DMGL_PARAMS | DMGL_ANSI, result, 64, &err);
+  if (str == NULL)
+    return;
+
+  fputs (str, stdout);
+
+  free (str);
+}
+
+static char
+trim_chars (char *lexptr, char **extra_chars)
+{
+  char *p = (char *) symbol_end (lexptr);
+  char c = 0;
+
+  if (*p)
+    {
+      c = *p;
+      *p = 0;
+      *extra_chars = p + 1;
+    }
+
+  return c;
+}
+
+int
+main (int argc, char **argv)
+{
+  char *str2, *extra_chars, c;
+  char buf[65536];
+  int arg;
+  const char *errmsg;
+  void *memory;
+  struct demangle_component *result;
+
+  arg = 1;
+  if (argv[arg] && strcmp (argv[arg], "--debug") == 0)
+    {
+      yydebug = 1;
+      arg++;
+    }
+
+  if (argv[arg] == NULL)
+    while (fgets (buf, 65536, stdin) != NULL)
+      {
+	int len;
+	buf[strlen (buf) - 1] = 0;
+	/* Use DMGL_VERBOSE to get expanded standard substitutions.  */
+	c = trim_chars (buf, &extra_chars);
+	str2 = cplus_demangle (buf, DMGL_PARAMS | DMGL_ANSI | DMGL_VERBOSE);
+	if (str2 == NULL)
+	  {
+	    /* printf ("Demangling error\n"); */
+	    if (c)
+	      printf ("%s%c%s\n", buf, c, extra_chars);
+	    else
+	      printf ("%s\n", buf);
+	    continue;
+	  }
+	result = cp_demangled_name_to_comp (str2, &memory, &errmsg);
+	if (result == NULL)
+	  {
+	    fputs (errmsg, stderr);
+	    fputc ('\n', stderr);
+	    continue;
+	  }
+
+	cp_print (result);
+	free (memory);
+
+	free (str2);
+	if (c)
+	  {
+	    putchar (c);
+	    fputs (extra_chars, stdout);
+	  }
+	putchar ('\n');
+      }
+  else
+    {
+      result = cp_demangled_name_to_comp (argv[arg], &memory, &errmsg);
+      if (result == NULL)
+	{
+	  fputs (errmsg, stderr);
+	  fputc ('\n', stderr);
+	  return 0;
+	}
+      cp_print (result);
+      putchar ('\n');
+      free (memory);
+    }
+  return 0;
+}
+
+#endif
+@
+
+
+1.3
+log
+@* cp-names.y: Add prototype for yylex.
+@
+text
+@@
+
+
+1.2
+log
+@	* Makefile.in (SFILES): Add cp-names.y.
+	(libiberty_h, safe_ctype_h): New.
+	(YYFILES): Add cp-names.c.
+	(YYOBJ): Add cp-names.o.
+	(test-cp-names.o, test-cp-names$(EXEEXT), cp-names.o): New rules.
+	(clean): Remove test-cp-names$(EXEEXT).
+	(local-maintainer-clean): Remove cp-names.c.
+	* cp-names.y: New file.
+	* cp-support.c (find_last_component): Delete.
+	(d_left, d_right): Define.
+	(cp_canonicalize_string, mangled_name_to_comp): New functions.
+	(cp_class_name_from_physname, method_name_from_physname): Rewrite
+	to use mangled_name_to_comp.
+	* cp-support.h (cp_canonicalize_string, cp_demangled_name_to_comp)
+	(cp_comp_to_string): New prototypes.
+	* config/djgpp/fnchange.lst: Add cp-names.c.
+@
+text
+@d148 1
+@
+
+
+1.1
+log
+@file cp-names.y was initially added on branch drow-cplus-branch.
+@
+text
+@d1 2131
+@
+
+
+1.1.2.1
+log
+@	* Makefile.in: Add cp-names.y.
+	* cp-names.y: New file.
+@
+text
+@a0 1825
+/* YACC parser for C expressions, for GDB.
+   Copyright 1986, 1989, 1990, 1991, 1992, 1993, 1994, 1995, 1996, 1997,
+   1998, 1999, 2000, 2003
+   Free Software Foundation, Inc.
+
+This file is part of GDB.
+
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
+
+/* Parse a C expression from text in a string,
+   and return the result as a  struct expression  pointer.
+   That structure contains arithmetic operations in reverse polish,
+   with constants represented by operations that are followed by special data.
+   See expression.h for the details of the format.
+   What is important here is that it can be built up sequentially
+   during the process of parsing; the lower levels of the tree always
+   come first in the result.
+
+   Note that malloc's and realloc's in this file are transformed to
+   xmalloc and xrealloc respectively by the same sed command in the
+   makefile that remaps any other malloc/realloc inserted by the parser
+   generator.  Doing this with #defines and trying to control the interaction
+   with include files (<malloc.h> and <stdlib.h> for example) just became
+   too messy, particularly when such includes can be inserted at random
+   times by the parser generator.  */
+   
+%{
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <string.h>
+
+typedef long long LONGEST;
+typedef unsigned long long ULONGEST;
+typedef long double DOUBLEST;
+
+#include "safe-ctype.h"
+
+#include "../libiberty/cp-demangle.c"
+
+static char *lexptr, *prev_lexptr;
+
+static struct d_comp *d_qualify (struct d_comp *, LONGEST, int);
+
+static struct d_comp *d_int_type (int);
+
+static struct d_comp *d_op_from_string (const char *opname);
+
+static struct d_comp *d_unary (const char *opname, struct d_comp *);
+static struct d_comp *d_binary (const char *opname, struct d_comp *, struct d_comp *);
+
+/* Global state, ew.  */
+struct d_info *di;
+static struct d_comp *result;
+
+/* Ew ew, ew ew, ew ew ew.  */
+#define error printf
+
+#define HOST_CHAR_BIT 8
+#define NORETURN
+
+#undef TARGET_INT_BIT
+#define TARGET_INT_BIT 32
+
+#undef TARGET_LONG_BIT
+#define TARGET_LONG_BIT 32
+
+#undef TARGET_LONG_LONG_BIT
+#define TARGET_LONG_LONG_BIT 64
+
+#define QUAL_CONST 1
+#define QUAL_RESTRICT 2
+#define QUAL_VOLATILE 4
+
+#define INT_CHAR	1
+#define INT_SHORT	2
+#define INT_LONG	3
+#define INT_LLONG	4
+
+#define INT_SIGNED	(1 << 3)
+#define INT_UNSIGNED	(2 << 3)
+
+#define BINOP_ADD 1
+#define BINOP_RSH 2
+#define BINOP_LSH 3
+#define BINOP_SUB 4
+#define BINOP_MUL 5
+#define BINOP_DIV 6
+#define BINOP_REM 7
+#define BINOP_BITWISE_IOR 8
+#define BINOP_BITWISE_AND 9
+#define BINOP_BITWISE_XOR 10
+#define BINOP_END 11
+
+/* Remap normal yacc parser interface names (yyparse, yylex, yyerror, etc),
+   as well as gratuitiously global symbol names, so we can have multiple
+   yacc generated parsers in gdb.  Note that these are only the variables
+   produced by yacc.  If other parser generators (bison, byacc, etc) produce
+   additional global names that conflict at link time, then those parser
+   generators need to be fixed instead of adding those names to this list. */
+
+#define	yymaxdepth cpname_maxdepth
+#define	yyparse	cpname_parse
+#define	yylex	cpname_lex
+#define	yyerror	cpname_error
+#define	yylval	cpname_lval
+#define	yychar	cpname_char
+#define	yydebug	cpname_debug
+#define	yypact	cpname_pact	
+#define	yyr1	cpname_r1			
+#define	yyr2	cpname_r2			
+#define	yydef	cpname_def		
+#define	yychk	cpname_chk		
+#define	yypgo	cpname_pgo		
+#define	yyact	cpname_act		
+#define	yyexca	cpname_exca
+#define yyerrflag cpname_errflag
+#define yynerrs	cpname_nerrs
+#define	yyps	cpname_ps
+#define	yypv	cpname_pv
+#define	yys	cpname_s
+#define	yy_yys	cpname_yys
+#define	yystate	cpname_state
+#define	yytmp	cpname_tmp
+#define	yyv	cpname_v
+#define	yy_yyv	cpname_yyv
+#define	yyval	cpname_val
+#define	yylloc	cpname_lloc
+#define yyreds	cpname_reds		/* With YYDEBUG defined */
+#define yytoks	cpname_toks		/* With YYDEBUG defined */
+#define yyname	cpname_name		/* With YYDEBUG defined */
+#define yyrule	cpname_rule		/* With YYDEBUG defined */
+#define yylhs	cpname_yylhs
+#define yylen	cpname_yylen
+#define yydefred cpname_yydefred
+#define yydgoto	cpname_yydgoto
+#define yysindex cpname_yysindex
+#define yyrindex cpname_yyrindex
+#define yygindex cpname_yygindex
+#define yytable	 cpname_yytable
+#define yycheck	 cpname_yycheck
+
+#ifndef YYDEBUG
+#define	YYDEBUG 1		/* Default to yydebug support */
+#endif
+
+int yyparse (void);
+
+static int yylex (void);
+
+void yyerror (char *);
+
+%}
+
+/* Although the yacc "value" of an expression is not used,
+   since the result is stored in the structure being created,
+   other node types do have values.  */
+
+%union
+  {
+    struct d_comp *comp;
+    struct {
+      struct d_comp *comp;
+      struct d_comp **last;
+    } nested;
+    struct {
+      struct d_comp *comp, *last;
+    } nested1;
+    LONGEST lval;
+    struct {
+      LONGEST val;
+      struct d_comp *type;
+    } typed_val_int;
+    struct {
+      DOUBLEST dval;
+    } typed_val_float;
+    const char *opname;
+  }
+
+%{
+/* YYSTYPE gets defined by %union */
+static int parse_number (char *, int, int, YYSTYPE *);
+%}
+
+%type <comp> exp exp1 type start operator qualified
+%type <comp> unqualified_name scope_id ext_name colon_ext_name
+%type <comp> template template_arg basic_exp
+%type <comp> /* base_function typed_function */ colon_name
+%type <comp> builtin_type type2 type1a type1b function_arglist
+%type <comp> decl1b
+
+%type <nested> template_params function_args
+%type <nested> ptr_operator_1 ptr_operator_2 ptr_operator ptr_operator_seq
+
+%type <nested1> nested_name
+
+%type <lval> qualifier qualifiers qualifiers_opt
+
+%type <lval> sign size int_type
+
+%token <typed_val_int> INT
+%token <typed_val_float> FLOAT
+
+%token <comp> NAME
+%type <comp> name
+
+%token STRUCT CLASS UNION ENUM SIZEOF UNSIGNED COLONCOLON
+%token TEMPLATE
+%token ERROR
+%token NEW DELETE OPERATOR
+%token STATIC_CAST REINTERPRET_CAST DYNAMIC_CAST
+
+/* Special type cases, put in to allow the parser to distinguish different
+   legal basetypes.  */
+%token SIGNED_KEYWORD LONG SHORT INT_KEYWORD CONST_KEYWORD VOLATILE_KEYWORD DOUBLE_KEYWORD BOOL
+%token ELLIPSIS RESTRICT VOID FLOAT_KEYWORD CHAR WCHAR_T
+
+%token <opname> ASSIGN_MODIFY
+
+/* C++ */
+%token TRUEKEYWORD
+%token FALSEKEYWORD
+
+%left ','
+%right '=' ASSIGN_MODIFY
+%right '?'
+%left OROR
+%left ANDAND
+%left '|'
+%left '^'
+%left '&'
+%left EQUAL NOTEQUAL
+%left '<' '>' LEQ GEQ
+%left LSH RSH
+%left '@@'
+%left '+' '-'
+%left '*' '/' '%'
+%right UNARY INCREMENT DECREMENT
+%right ARROW '.' '[' '('
+%left COLONCOLON
+
+
+%%
+
+start		:	type
+			{ result = $1; }
+		|	qualified
+			{ result = $1; }
+		;
+
+operator	:	OPERATOR NEW
+			{ $$ = d_op_from_string ("new"); }
+		|	OPERATOR DELETE
+			{ $$ = d_op_from_string ("delete"); }
+		|	OPERATOR NEW '[' ']'
+			{ $$ = d_op_from_string ("new[]"); }
+		|	OPERATOR DELETE '[' ']'
+			{ $$ = d_op_from_string ("delete[]"); }
+		|	OPERATOR '+'
+			{ $$ = d_op_from_string ("+"); }
+		|	OPERATOR '-'
+			{ $$ = d_op_from_string ("-"); }
+		|	OPERATOR '*'
+			{ $$ = d_op_from_string ("*"); }
+		|	OPERATOR '/'
+			{ $$ = d_op_from_string ("/"); }
+		|	OPERATOR '%'
+			{ $$ = d_op_from_string ("%"); }
+		|	OPERATOR '^'
+			{ $$ = d_op_from_string ("^"); }
+		|	OPERATOR '&'
+			{ $$ = d_op_from_string ("&"); }
+		|	OPERATOR '|'
+			{ $$ = d_op_from_string ("|"); }
+		|	OPERATOR '~'
+			{ $$ = d_op_from_string ("~"); }
+		|	OPERATOR '!'
+			{ $$ = d_op_from_string ("!"); }
+		|	OPERATOR '='
+			{ $$ = d_op_from_string ("="); }
+		|	OPERATOR '<'
+			{ $$ = d_op_from_string ("<"); }
+		|	OPERATOR '>'
+			{ $$ = d_op_from_string (">"); }
+		|	OPERATOR ASSIGN_MODIFY
+			{ $$ = d_op_from_string ($2); }
+		|	OPERATOR LSH
+			{ $$ = d_op_from_string ("<<"); }
+		|	OPERATOR RSH
+			{ $$ = d_op_from_string (">>"); }
+		|	OPERATOR EQUAL
+			{ $$ = d_op_from_string ("=="); }
+		|	OPERATOR NOTEQUAL
+			{ $$ = d_op_from_string ("!="); }
+		|	OPERATOR LEQ
+			{ $$ = d_op_from_string ("<="); }
+		|	OPERATOR GEQ
+			{ $$ = d_op_from_string (">="); }
+		|	OPERATOR ANDAND
+			{ $$ = d_op_from_string ("&&"); }
+		|	OPERATOR OROR
+			{ $$ = d_op_from_string ("||"); }
+		|	OPERATOR INCREMENT
+			{ $$ = d_op_from_string ("++"); }
+		|	OPERATOR DECREMENT
+			{ $$ = d_op_from_string ("--"); }
+		|	OPERATOR ','
+			{ $$ = d_op_from_string (","); }
+		|	OPERATOR ARROW '*'
+			{ $$ = d_op_from_string ("*"); }
+		|	OPERATOR ARROW
+			{ $$ = d_op_from_string ("->"); }
+		|	OPERATOR '(' ')'
+			{ $$ = d_op_from_string ("->*"); }
+		|	OPERATOR '[' ']'
+			{ $$ = d_op_from_string ("[]"); }
+/*
+		|	OPERATOR type
+			{ $$ = d_make_node (di, D_COMP_CAST, $2, NULL); }
+*/
+		;
+
+/* D_COMP_NAME */
+/* This accepts certain invalid placements of '~'.  */
+unqualified_name:	operator
+		|	'~' NAME
+			{ $$ = d_make_dtor (di, gnu_v3_complete_object_dtor, $2); }
+		;
+
+scope_id	:	NAME
+		|	template
+		;
+
+colon_name	:	name
+		|	COLONCOLON name
+			{ $$ = $2; }
+		;
+
+/* D_COMP_QUAL_NAME */
+/* D_COMP_CTOR / D_COMP_DTOR ? */
+name		:	nested_name scope_id
+			{ $$ = $1.comp; d_right ($1.last) = $2; }
+		|	scope_id
+		;
+
+colon_ext_name	:	ext_name
+		|	COLONCOLON ext_name
+			{ $$ = $2; }
+		;
+
+ext_name	:	name
+		|	nested_name unqualified_name
+			{ $$ = $1.comp; d_right ($1.last) = $2; }
+		|	unqualified_name
+		;
+
+nested_name	:	scope_id COLONCOLON
+			{ $$.comp = d_make_comp (di, D_COMP_QUAL_NAME, $1, $1);
+			  d_right ($$.comp) = NULL;
+			  $$.last = $$.comp;
+			}
+		|	nested_name scope_id COLONCOLON
+			{ $$.comp = $1.comp;
+			  d_right ($1.last) = d_make_comp (di, D_COMP_QUAL_NAME, $2, $2);
+			  $$.last = d_right ($1.last);
+			  d_right ($$.last) = NULL;
+			}
+		;
+
+/* D_COMP_TEMPLATE */
+/* D_COMP_TEMPLATE_ARGLIST */
+template	:	NAME '<' template_params '>'
+			{ $$ = d_make_comp (di, D_COMP_TEMPLATE, $1, $3.comp); }
+		;
+
+template_params	:	template_arg
+			{ $$.comp = d_make_comp (di, D_COMP_TEMPLATE_ARGLIST, $1, NULL);
+			$$.last = &d_right ($$.comp); }
+		|	template_params ',' template_arg
+			{ $$.comp = $1.comp;
+			  *$1.last = d_make_comp (di, D_COMP_TEMPLATE_ARGLIST, $3, NULL);
+			  $$.last = &d_right (*$1.last);
+			}
+		;
+
+/* Also an integral constant-expression of integral type, and a
+   pointer to member (?) */
+template_arg	:	type
+		|	'&' colon_ext_name
+			{ $$ = d_make_comp (di, D_COMP_REFERENCE, $2, NULL); }
+		|	'&' '(' colon_ext_name ')'
+			{ $$ = d_make_comp (di, D_COMP_REFERENCE, $3, NULL); }
+		|	basic_exp
+		;
+
+function_args	:	type
+			{ if ($1->type == D_COMP_BUILTIN_TYPE
+			      && $1->u.s_builtin.type->print == D_PRINT_VOID)
+			    {
+			      $$.comp = NULL;
+			      $$.last = &$$.comp;
+			    }
+			  else
+			    {
+			      $$.comp = d_make_comp (di, D_COMP_ARGLIST, $1, NULL);
+			      $$.last = &d_right ($$.comp);
+			    }
+			}
+		|	function_args ',' type
+			{ *$1.last = d_make_comp (di, D_COMP_ARGLIST, $3, NULL);
+			  $$.comp = $1.comp;
+			  $$.last = &d_right (*$1.last);
+			}
+		|	function_args ',' ELLIPSIS
+			{ *$1.last
+			    = d_make_comp (di, D_COMP_ARGLIST,
+					   d_make_builtin_type (di, &d_builtin_types['z' - 'a']),
+					   NULL);
+			  $$.comp = $1.comp;
+			  $$.last = &d_right (*$1.last);
+			}
+		;
+
+/*FIXME d_qualify */
+function_arglist:	'(' function_args ')' qualifiers_opt
+			{ $$ = d_make_comp (di, D_COMP_FUNCTION_TYPE, NULL, $2.comp); }
+		|	'(' ')' qualifiers_opt
+			{ $$ = d_make_comp (di, D_COMP_FUNCTION_TYPE, NULL, NULL); }
+		;
+
+/*
+base_function	:	ext_name '(' function_args ')'
+			{ $$ = d_make_comp (di, D_COMP_TYPED_NAME, $1,
+					    d_make_comp (di, D_COMP_FUNCTION_TYPE, NULL, $3.comp)); }
+		|	ext_name '(' ')'
+			{ $$ = d_make_comp (di, D_COMP_TYPED_NAME, $1,
+					    d_make_comp (di, D_COMP_FUNCTION_TYPE, NULL, NULL)); }
+		;
+
+typed_function	:	type base_function
+			{ $$ = $2; d_left (d_right ($2)) = $1; }
+		|	type1a COLONCOLON base_function
+			{ $$ = $3; d_left (d_right ($3)) = $1; }
+		;
+*/
+
+qualified	:	ext_name function_arglist
+		{}
+		|	type1a ext_name function_arglist
+		{}
+		|	type2 ext_name function_arglist
+		{}
+		|	type1a COLONCOLON ext_name function_arglist
+		{}
+		|	decl1b function_arglist
+		{}
+		;
+/* base_function qualifiers_opt 
+			{ $$ = $1;
+			  d_left ($$) = d_qualify (d_left ($$), $2, 1); }
+*/
+/*
+		|	COLONCOLON base_function qualifiers_opt
+			{ $$ = $2;
+			  d_left ($$) = d_qualify (d_left ($$), $3, 1); }
+*/
+/*
+		|	typed_function qualifiers_opt
+			{ $$ = $1;
+			  d_left ($$) = d_qualify (d_left ($$), $2, 1); }
+		;
+*/
+
+/* Should do something about D_COMP_VENDOR_TYPE_QUAL */
+qualifiers_opt	:	/* epsilon */
+			{ $$ = 0; }
+		|	qualifiers
+			{ $$ = $1; }
+		;
+
+qualifier	:	RESTRICT
+			{ $$ = QUAL_RESTRICT; }
+		|	VOLATILE_KEYWORD
+			{ $$ = QUAL_VOLATILE; }
+		|	CONST_KEYWORD
+			{ $$ = QUAL_CONST; }
+		;
+
+qualifiers	:	qualifier
+			{ $$ = $1; }
+		|	qualifier qualifiers
+			{ $$ = $1 | $2; }
+		;
+
+int_opt		:	/* */
+			{ }
+		|	INT_KEYWORD
+			{ }
+		;
+
+sign		:	SIGNED_KEYWORD
+			{ $$ = INT_SIGNED; }
+		|	UNSIGNED
+			{ $$ = INT_UNSIGNED; }
+		;
+
+size		:	CHAR
+			{ $$ = INT_CHAR; }
+		|	LONG
+			{ $$ = INT_LONG; }
+		|	SHORT
+			{ $$ = INT_SHORT; }
+		|	LONG LONG
+			{ $$ = INT_LLONG; }
+		;
+
+int_type	:	sign size int_opt
+			{ $$ = $1 | $2; }
+		|	size sign int_opt
+			{ $$ = $1 | $2; }
+		|	sign INT_KEYWORD size
+			{ $$ = $1 | $3; }
+		|	size INT_KEYWORD sign
+			{ $$ = $1 | $3; }
+		|	INT_KEYWORD sign size
+			{ $$ = $2 | $3; }
+		|	INT_KEYWORD size sign
+			{ $$ = $2 | $3; }
+		|	sign int_opt
+			{ $$ = $1; }
+		|	INT_KEYWORD sign
+			{ $$ = $2; }
+		|	size int_opt
+			{ $$ = $1; }
+		|	INT_KEYWORD size
+			{ $$ = $2; }
+		|	INT_KEYWORD
+			{ $$ = 0; }
+		;
+
+builtin_type	:	int_type
+			{ $$ = d_int_type ($1); }
+		|	FLOAT_KEYWORD
+			{ $$ = d_make_builtin_type (di, &d_builtin_types['f' - 'a']); }
+		|	DOUBLE_KEYWORD
+			{ $$ = d_make_builtin_type (di, &d_builtin_types['d' - 'a']); }
+		|	LONG DOUBLE_KEYWORD
+			{ $$ = d_make_builtin_type (di, &d_builtin_types['e' - 'a']); }
+		|	BOOL
+			{ $$ = d_make_builtin_type (di, &d_builtin_types['b' - 'a']); }
+		|	WCHAR_T
+			{ $$ = d_make_builtin_type (di, &d_builtin_types['w' - 'a']); }
+		|	VOID
+			{ $$ = d_make_builtin_type (di, &d_builtin_types['v' - 'a']); }
+		;
+
+ptr_operator_1	:	'*' qualifiers_opt
+			{ $$.comp = d_make_empty (di, D_COMP_POINTER);
+			  $$.comp->u.s_binary.left = $$.comp->u.s_binary.right = NULL;
+			  $$.last = &d_left ($$.comp);
+			  $$.comp = d_qualify ($$.comp, $2, 0); }
+		|	'&'
+			{ $$.comp = d_make_empty (di, D_COMP_REFERENCE);
+			  $$.comp->u.s_binary.left = $$.comp->u.s_binary.right = NULL;
+			  $$.last = &d_left ($$.comp); }
+		|	nested_name '*' qualifiers_opt
+			{ $$.comp = d_make_empty (di, D_COMP_PTRMEM_TYPE);
+			  $$.comp->u.s_binary.left = $1.comp;
+			  /* Convert the innermost D_COMP_QUAL_NAME to a D_COMP_NAME.  */
+			  *$1.last = *d_left ($1.last);
+			  $$.comp->u.s_binary.right = NULL;
+			  $$.last = &d_right ($$.comp);
+			  $$.comp = d_qualify ($$.comp, $3, 0); }
+		;
+
+ptr_operator_2	:	COLONCOLON nested_name '*' qualifiers_opt
+			{ $$.comp = d_make_empty (di, D_COMP_PTRMEM_TYPE);
+			  $$.comp->u.s_binary.left = $2.comp;
+			  /* Convert the innermost D_COMP_QUAL_NAME to a D_COMP_NAME.  */
+			  *$2.last = *d_left ($2.last);
+			  $$.comp->u.s_binary.right = NULL;
+			  $$.last = &d_right ($$.comp);
+			  $$.comp = d_qualify ($$.comp, $4, 0); }
+		;
+
+ptr_operator	:	ptr_operator_1
+		|	ptr_operator_2
+		;
+
+ptr_operator_seq:	ptr_operator
+		|	ptr_operator ptr_operator_seq
+			{ $$.comp = $2.comp;
+			  $$.last = $1.last;
+			  *$2.last = $1.comp; }
+		;
+
+/* "type1" are the type productions which can legally be followed by a ::
+   token.  "type2" are the type productions which can not.  For instance,
+   int ::Foo::* and Bar Foo::* are both pointer-to-member types, but
+   Bar ::Foo::* is a ptr_operator, because :: is consumed greedily.  */
+
+type1a		:	builtin_type qualifiers_opt
+			{ $$ = d_qualify ($1, $2, 0); }
+		|	qualifiers builtin_type qualifiers_opt
+			{ $$ = d_qualify ($2, $1 | $3, 0); }
+		|	colon_name qualifiers
+			{ $$ = d_qualify ($1, $2, 0); }
+		|	qualifiers colon_name qualifiers
+			{ $$ = d_qualify ($2, $1 | $3, 0); }
+
+		|	type1a ptr_operator_1
+			{ $$ = $2.comp;
+			  *$2.last = $1; }
+		|	type2 ptr_operator_1
+			{ $$ = $2.comp;
+			  *$2.last = $1; }
+/*
+		|	type qualifier
+			{ $$ = d_qualify ($1, $2, 0); }
+*/
+		|	type '[' ']'
+			{ $$ = d_make_comp (di, D_COMP_ARRAY_TYPE, $1, NULL); }
+		|	type '[' INT ']'
+			{ struct d_comp *i;
+			  /* FIXME: Blatant memory leak.  */
+			  char *buf = malloc (24);
+			  sprintf (buf, "%d", (int) $3.val);
+			  i = d_make_name (di, buf, strlen (buf));
+			  $$ = d_make_comp (di, D_COMP_ARRAY_TYPE, $1,
+					    d_make_comp (di, D_COMP_LITERAL, $3.type, i));
+			}
+		;
+
+		/* FIXME this comment is completely wrong; this is not allowing, it's rejecting */
+		/* This ext_name and the one below for
+		   pointer-to-member-function should normally be
+		   "type" instead.  That causes a reduce/reduce
+		   conflict.  Allow a few invalid inputs to keep life
+		   simple.  */
+type1b		:	ext_name '(' ptr_operator_seq ')' '(' function_args ')'
+			{ struct d_comp *funtype;
+			  funtype = d_make_comp (di, D_COMP_FUNCTION_TYPE, $1, $6.comp);
+			  $$ = $3.comp;
+			  *$3.last = funtype; }
+		;
+
+/* FIXME ACTION */
+/* FIXME when I add the name here I get a conflict on ptr-to-members that I don't see a soln for */
+decl1b		:	ext_name '(' ptr_operator_seq ')' '(' function_args ')'
+			{ struct d_comp *funtype;
+			  funtype = d_make_comp (di, D_COMP_FUNCTION_TYPE, $1, $6.comp);
+			  $$ = $3.comp;
+			  *$3.last = funtype; }
+
+/*
+		|	COLONCOLON ext_name '(' ptr_operator_seq ')' '(' function_args ')'
+			{ struct d_comp *funtype;
+			  funtype = d_make_comp (di, D_COMP_FUNCTION_TYPE, $2, $7.comp);
+			  $$ = $4.comp;
+			  *$4.last = funtype; }
+*/
+		;
+
+type2		:	qualifiers colon_name
+			{ $$ = d_qualify ($2, $1, 0); }
+		|	name
+		|	type1a ptr_operator_2
+			{ $$ = d_make_comp (di, D_COMP_POINTER, $1, NULL); }
+		;
+
+type		:	type1a
+		|	type1b
+		|	type2
+		;
+
+basic_exp	:	exp
+		;
+
+exp	:	'(' exp1 ')'
+		{ $$ = $2; }
+	;
+
+/* Silly trick.  Only allow '>' when parenthesized, in order to
+   handle conflict with templates.  */
+exp1	:	exp
+	;
+
+exp1	:	exp '>' exp
+		{ $$ = d_binary (">", $1, $3); }
+	;
+
+/* Expressions, not including the comma operator.  */
+exp	:	'-' exp    %prec UNARY
+		{ $$ = d_unary ("-", $2); }
+	;
+
+exp	:	'!' exp    %prec UNARY
+		{ $$ = d_unary ("!", $2); }
+	;
+
+exp	:	'~' exp    %prec UNARY
+		{ $$ = d_unary ("~", $2); }
+	;
+
+/* Casts.  First your normal C-style cast.  */
+
+exp	:	'(' type ')' exp  %prec UNARY
+		{ $$ = d_make_comp (di, D_COMP_UNARY,
+				    d_make_comp (di, D_COMP_CAST, $2, NULL),
+				    $4);
+		}
+	;
+
+/* Mangling does not differentiate between these, so we don't need to
+   either.  */
+exp	:	STATIC_CAST '<' type '>' '(' exp1 ')' %prec UNARY
+		{ $$ = d_make_comp (di, D_COMP_UNARY,
+				    d_make_comp (di, D_COMP_CAST, $3, NULL),
+				    $6);
+		}
+	;
+
+exp	:	DYNAMIC_CAST '<' type '>' '(' exp1 ')' %prec UNARY
+		{ $$ = d_make_comp (di, D_COMP_UNARY,
+				    d_make_comp (di, D_COMP_CAST, $3, NULL),
+				    $6);
+		}
+	;
+
+exp	:	REINTERPRET_CAST '<' type '>' '(' exp1 ')' %prec UNARY
+		{ $$ = d_make_comp (di, D_COMP_UNARY,
+				    d_make_comp (di, D_COMP_CAST, $3, NULL),
+				    $6);
+		}
+	;
+
+/* Another form of C++-style cast.  "type ( exp1 )" is not allowed (it's too
+   ambiguous), but "name ( exp1 )" is.  We don't support that since it looks
+   too much like a function type, and doesn't appear in the output of any of
+   the demanglers.  */
+exp	:	builtin_type '(' exp1 ')' %prec UNARY
+		{ $$ = d_make_comp (di, D_COMP_UNARY,
+				    d_make_comp (di, D_COMP_CAST, $1, NULL),
+				    $3);
+		}
+	;
+
+/* FIXME ._0 style anonymous names; anonymous namespaces */
+
+/* Binary operators in order of decreasing precedence.  */
+
+exp	:	exp '*' exp
+		{ $$ = d_binary ("*", $1, $3); }
+	;
+
+exp	:	exp '/' exp
+		{ $$ = d_binary ("/", $1, $3); }
+	;
+
+exp	:	exp '%' exp
+		{ $$ = d_binary ("%", $1, $3); }
+	;
+
+exp	:	exp '+' exp
+		{ $$ = d_binary ("+", $1, $3); }
+	;
+
+exp	:	exp '-' exp
+		{ $$ = d_binary ("-", $1, $3); }
+	;
+
+exp	:	exp LSH exp
+		{ $$ = d_binary ("<<", $1, $3); }
+	;
+
+exp	:	exp RSH exp
+		{ $$ = d_binary (">>", $1, $3); }
+	;
+
+exp	:	exp EQUAL exp
+		{ $$ = d_binary ("==", $1, $3); }
+	;
+
+exp	:	exp NOTEQUAL exp
+		{ $$ = d_binary ("!=", $1, $3); }
+	;
+
+exp	:	exp LEQ exp
+		{ $$ = d_binary ("<=", $1, $3); }
+	;
+
+exp	:	exp GEQ exp
+		{ $$ = d_binary (">=", $1, $3); }
+	;
+
+exp	:	exp '<' exp
+		{ $$ = d_binary ("<", $1, $3); }
+	;
+
+exp	:	exp '&' exp
+		{ $$ = d_binary ("&", $1, $3); }
+	;
+
+exp	:	exp '^' exp
+		{ $$ = d_binary ("^", $1, $3); }
+	;
+
+exp	:	exp '|' exp
+		{ $$ = d_binary ("|", $1, $3); }
+	;
+
+exp	:	exp ANDAND exp
+		{ $$ = d_binary ("&&", $1, $3); }
+	;
+
+exp	:	exp OROR exp
+		{ $$ = d_binary ("||", $1, $3); }
+	;
+
+/* Not 100% sure these are necessary, but they're harmless.  */
+exp	:	exp ARROW NAME
+		{ $$ = d_binary ("->", $1, $3); }
+	;
+
+exp	:	exp '.' NAME
+		{ $$ = d_binary (".", $1, $3); }
+	;
+
+exp	:	exp '?' exp ':' exp	%prec '?'
+		{ $$ = d_make_comp (di, D_COMP_TRINARY, d_op_from_string ("?"),
+				    d_make_comp (di, D_COMP_TRINARY_ARG1, $1,
+						 d_make_comp (di, D_COMP_TRINARY_ARG2, $3, $5)));
+		}
+	;
+			  
+exp	:	INT
+			{ struct d_comp *i;
+			  /* FIXME: Blatant memory leak.  */
+			  char *buf = malloc (24);
+			  sprintf (buf, "%d", (int) $1.val);
+			  i = d_make_name (di, buf, strlen (buf));
+			  $$ = d_make_comp (di, D_COMP_LITERAL, $1.type, i);
+			}
+	;
+
+/* Not generally allowed.  */
+exp	:	FLOAT
+			{ struct d_comp *i;
+			  /* FIXME: Blatant memory leak.  */
+			  char *buf = malloc (24);
+			  sprintf (buf, "%f", (double) $1.dval);
+			  i = d_make_name (di, buf, strlen (buf));
+			  $$ = d_make_comp (di, D_COMP_LITERAL,
+					    d_make_builtin_type (di, &d_builtin_types['d' - 'a']),
+					    i);
+			}
+	;
+
+exp	:	SIZEOF '(' type ')'	%prec UNARY
+		{ $$ = d_unary ("sizeof", $3); }
+	;
+
+/* C++.  */
+exp     :       TRUEKEYWORD    
+		{ struct d_comp *i;
+		  i = d_make_name (di, "1", 1);
+		  $$ = d_make_comp (di, D_COMP_LITERAL,
+				    d_make_builtin_type (di, &d_builtin_types['b' - 'a']),
+				    i);
+		}
+	;
+
+exp     :       FALSEKEYWORD   
+		{ struct d_comp *i;
+		  i = d_make_name (di, "0", 1);
+		  $$ = d_make_comp (di, D_COMP_LITERAL,
+				    d_make_builtin_type (di, &d_builtin_types['b' - 'a']),
+				    i);
+		}
+	;
+
+/* end of C++.  */
+
+%%
+
+/* */
+struct d_comp *
+d_qualify (struct d_comp *lhs, LONGEST qualifiers, int is_method)
+{
+  struct d_comp **inner_p;
+  enum d_comp_type type;
+
+  /* For now the order is CONST (innermost), VOLATILE, RESTRICT.  */
+
+#define HANDLE_QUAL(TYPE, MTYPE, QUAL)				\
+  if ((qualifiers & QUAL) && (type != TYPE) && (type != MTYPE))	\
+    {								\
+      *inner_p = d_make_comp (di, is_method ? MTYPE : TYPE,	\
+			      *inner_p, NULL);			\
+      inner_p = &d_left (*inner_p);				\
+      type = (*inner_p)->type;					\
+    }								\
+  else if (type == TYPE || type == MTYPE)			\
+    {								\
+      inner_p = &d_left (*inner_p);				\
+      type = (*inner_p)->type;					\
+    }
+
+  inner_p = &lhs;
+
+  type = (*inner_p)->type;
+
+  HANDLE_QUAL (D_COMP_RESTRICT, D_COMP_RESTRICT_THIS, QUAL_RESTRICT);
+  HANDLE_QUAL (D_COMP_VOLATILE, D_COMP_VOLATILE_THIS, QUAL_VOLATILE);
+  HANDLE_QUAL (D_COMP_CONST, D_COMP_CONST_THIS, QUAL_CONST);
+
+  return lhs;
+}
+
+static struct d_comp *
+d_int_type (int flags)
+{
+  int i;
+
+  switch (flags)
+    {
+    case INT_SIGNED | INT_CHAR:
+      i = 0;
+      break;
+    case INT_CHAR:
+      i = 2;
+      break;
+    case INT_UNSIGNED | INT_CHAR:
+      i = 7;
+      break;
+    case 0:
+    case INT_SIGNED:
+      i = 8;
+      break;
+    case INT_UNSIGNED:
+      i = 9;
+      break;
+    case INT_LONG:
+    case INT_SIGNED | INT_LONG:
+      i = 11;
+      break;
+    case INT_UNSIGNED | INT_LONG:
+      i = 12;
+      break;
+    case INT_SHORT:
+    case INT_SIGNED | INT_SHORT:
+      i = 18;
+      break;
+    case INT_UNSIGNED | INT_SHORT:
+      i = 19;
+      break;
+    case INT_LLONG:
+    case INT_SIGNED | INT_LLONG:
+      i = 23;
+      break;
+    case INT_UNSIGNED | INT_LLONG:
+      i = 24;
+      break;
+    default:
+      return NULL;
+    }
+
+  return d_make_builtin_type (di, &d_builtin_types[i]);
+}
+
+static struct d_comp *
+d_op_from_string (const char *opname)
+{
+  const struct d_operator_info *i = d_operators;
+
+  while (1)
+    {
+      if (strcmp (i->name, opname) == 0)
+	break;
+      i++;
+    }
+  return d_make_operator (di, i);
+}
+
+static struct d_comp *
+d_unary (const char *name, struct d_comp *lhs)
+{
+  return d_make_comp (di, D_COMP_UNARY, d_op_from_string (name), lhs);
+}
+
+static struct d_comp *
+d_binary (const char *name, struct d_comp *lhs, struct d_comp *rhs)
+{
+  return d_make_comp (di, D_COMP_BINARY, d_op_from_string (name),
+		      d_make_comp (di, D_COMP_BINARY_ARGS, lhs, rhs));
+}
+
+static const char *
+target_charset (void)
+{
+  return "foo";
+}
+
+static const char *
+host_charset (void)
+{
+  return "bar";
+}
+
+/* Take care of parsing a number (anything that starts with a digit).
+   Set yylval and return the token type; update lexptr.
+   LEN is the number of characters in it.  */
+
+/*** Needs some error checking for the float case ***/
+
+static int
+parse_number (p, len, parsed_float, putithere)
+     char *p;
+     int len;
+     int parsed_float;
+     YYSTYPE *putithere;
+{
+  /* FIXME: Shouldn't these be unsigned?  We don't deal with negative values
+     here, and we do kind of silly things like cast to unsigned.  */
+  LONGEST n = 0;
+  LONGEST prevn = 0;
+  ULONGEST un;
+
+  int i = 0;
+  int c;
+  int base = 10;
+  int unsigned_p = 0;
+
+  /* Number of "L" suffixes encountered.  */
+  int long_p = 0;
+
+  /* We have found a "L" or "U" suffix.  */
+  int found_suffix = 0;
+
+  ULONGEST high_bit;
+  struct d_comp *signed_type;
+  struct d_comp *unsigned_type;
+
+  if (parsed_float)
+    {
+      /* It's a float since it contains a point or an exponent.  */
+      char c;
+      int num = 0;	/* number of tokens scanned by scanf */
+      char saved_char = p[len];
+
+      p[len] = 0;	/* null-terminate the token */
+      if (sizeof (putithere->typed_val_float.dval) <= sizeof (float))
+	num = sscanf (p, "%g%c", (float *) &putithere->typed_val_float.dval,&c);
+      else if (sizeof (putithere->typed_val_float.dval) <= sizeof (double))
+	num = sscanf (p, "%lg%c", (double *) &putithere->typed_val_float.dval,&c);
+      else
+	{
+#ifdef SCANF_HAS_LONG_DOUBLE
+	  num = sscanf (p, "%Lg%c", &putithere->typed_val_float.dval,&c);
+#else
+	  /* Scan it into a double, then assign it to the long double.
+	     This at least wins with values representable in the range
+	     of doubles. */
+	  double temp;
+	  num = sscanf (p, "%lg%c", &temp,&c);
+	  putithere->typed_val_float.dval = temp;
+#endif
+	}
+      p[len] = saved_char;	/* restore the input stream */
+      if (num != 1) 		/* check scanf found ONLY a float ... */
+	return ERROR;
+      /* See if it has `f' or `l' suffix (float or long double).  */
+
+      c = TOLOWER (p[len - 1]);
+
+#if 0
+      if (c == 'f')
+	putithere->typed_val_float.type = builtin_type_float;
+      else if (c == 'l')
+	putithere->typed_val_float.type = builtin_type_long_double;
+      else if (isdigit (c) || c == '.')
+	putithere->typed_val_float.type = builtin_type_double;
+      else
+	return ERROR;
+#endif
+
+      return FLOAT;
+    }
+
+  /* Handle base-switching prefixes 0x, 0t, 0d, 0 */
+  if (p[0] == '0')
+    switch (p[1])
+      {
+      case 'x':
+      case 'X':
+	if (len >= 3)
+	  {
+	    p += 2;
+	    base = 16;
+	    len -= 2;
+	  }
+	break;
+
+      case 't':
+      case 'T':
+      case 'd':
+      case 'D':
+	if (len >= 3)
+	  {
+	    p += 2;
+	    base = 10;
+	    len -= 2;
+	  }
+	break;
+
+      default:
+	base = 8;
+	break;
+      }
+
+  while (len-- > 0)
+    {
+      c = *p++;
+      if (c >= 'A' && c <= 'Z')
+	c += 'a' - 'A';
+      if (c != 'l' && c != 'u')
+	n *= base;
+      if (c >= '0' && c <= '9')
+	{
+	  if (found_suffix)
+	    return ERROR;
+	  n += i = c - '0';
+	}
+      else
+	{
+	  if (base > 10 && c >= 'a' && c <= 'f')
+	    {
+	      if (found_suffix)
+		return ERROR;
+	      n += i = c - 'a' + 10;
+	    }
+	  else if (c == 'l')
+	    {
+	      ++long_p;
+	      found_suffix = 1;
+	    }
+	  else if (c == 'u')
+	    {
+	      unsigned_p = 1;
+	      found_suffix = 1;
+	    }
+	  else
+	    return ERROR;	/* Char not a digit */
+	}
+      if (i >= base)
+	return ERROR;		/* Invalid digit in this base */
+
+      /* Portably test for overflow (only works for nonzero values, so make
+	 a second check for zero).  FIXME: Can't we just make n and prevn
+	 unsigned and avoid this?  */
+      if (c != 'l' && c != 'u' && (prevn >= n) && n != 0)
+	unsigned_p = 1;		/* Try something unsigned */
+
+      /* Portably test for unsigned overflow.
+	 FIXME: This check is wrong; for example it doesn't find overflow
+	 on 0x123456789 when LONGEST is 32 bits.  */
+      if (c != 'l' && c != 'u' && n != 0)
+	{	
+	  if ((unsigned_p && (ULONGEST) prevn >= (ULONGEST) n))
+	    error ("Numeric constant too large.");
+	}
+      prevn = n;
+    }
+
+  /* An integer constant is an int, a long, or a long long.  An L
+     suffix forces it to be long; an LL suffix forces it to be long
+     long.  If not forced to a larger size, it gets the first type of
+     the above that it fits in.  To figure out whether it fits, we
+     shift it right and see whether anything remains.  Note that we
+     can't shift sizeof (LONGEST) * HOST_CHAR_BIT bits or more in one
+     operation, because many compilers will warn about such a shift
+     (which always produces a zero result).  Sometimes TARGET_INT_BIT
+     or TARGET_LONG_BIT will be that big, sometimes not.  To deal with
+     the case where it is we just always shift the value more than
+     once, with fewer bits each time.  */
+
+  un = (ULONGEST)n >> 2;
+  if (long_p == 0
+      && (un >> (TARGET_INT_BIT - 2)) == 0)
+    {
+      high_bit = ((ULONGEST)1) << (TARGET_INT_BIT-1);
+
+      /* A large decimal (not hex or octal) constant (between INT_MAX
+	 and UINT_MAX) is a long or unsigned long, according to ANSI,
+	 never an unsigned int, but this code treats it as unsigned
+	 int.  This probably should be fixed.  GCC gives a warning on
+	 such constants.  */
+
+      unsigned_type = d_int_type ('j' - 'a');
+      signed_type = d_int_type ('i' - 'a');
+    }
+  else if (long_p <= 1
+	   && (un >> (TARGET_LONG_BIT - 2)) == 0)
+    {
+      high_bit = ((ULONGEST)1) << (TARGET_LONG_BIT-1);
+      unsigned_type = d_int_type ('m' - 'a');
+      signed_type = d_int_type ('l' - 'a');
+    }
+  else
+    {
+      int shift;
+      if (sizeof (ULONGEST) * HOST_CHAR_BIT < TARGET_LONG_LONG_BIT)
+	/* A long long does not fit in a LONGEST.  */
+	shift = (sizeof (ULONGEST) * HOST_CHAR_BIT - 1);
+      else
+	shift = (TARGET_LONG_LONG_BIT - 1);
+      high_bit = (ULONGEST) 1 << shift;
+      unsigned_type = d_int_type ('x' - 'a');
+      signed_type = d_int_type ('y' - 'a');
+    }
+
+   putithere->typed_val_int.val = n;
+
+   /* If the high bit of the worked out type is set then this number
+      has to be unsigned. */
+
+   if (unsigned_p || (n & high_bit)) 
+     putithere->typed_val_int.type = unsigned_type;
+   else
+     putithere->typed_val_int.type = signed_type;
+
+   return INT;
+}
+
+/* Print an error message saying that we couldn't make sense of a
+   \^mumble sequence in a string or character constant.  START and END
+   indicate a substring of some larger string that contains the
+   erroneous backslash sequence, missing the initial backslash.  */
+static NORETURN int
+no_control_char_error (const char *start, const char *end)
+{
+  int len = end - start;
+  char *copy = alloca (end - start + 1);
+
+  memcpy (copy, start, len);
+  copy[len] = '\0';
+
+  error ("There is no control character `\\%s' in the `%s' character set.",
+	 copy, target_charset ());
+  return 0;
+}
+
+static int
+target_char_to_control_char (int c, int *ctrl_char)
+{
+  *ctrl_char = (c & 037);
+  return 1;
+}
+
+static int
+host_char_to_target (int c, int *ctrl_char)
+{
+  *ctrl_char = c;
+  return 1;
+}
+
+static char backslashable[] = "abefnrtv";
+static char represented[] = "\a\b\e\f\n\r\t\v";
+
+/* Translate the backslash the way we would in the host character set.  */
+static int
+c_parse_backslash (int host_char, int *target_char)
+{
+  const char *ix;
+  ix = strchr (backslashable, host_char);
+  if (! ix)
+    return 0;
+  else
+    *target_char = represented[ix - backslashable];
+  return 1;
+}
+
+/* Parse a C escape sequence.  STRING_PTR points to a variable
+   containing a pointer to the string to parse.  That pointer
+   should point to the character after the \.  That pointer
+   is updated past the characters we use.  The value of the
+   escape sequence is returned.
+
+   A negative value means the sequence \ newline was seen,
+   which is supposed to be equivalent to nothing at all.
+
+   If \ is followed by a null character, we return a negative
+   value and leave the string pointer pointing at the null character.
+
+   If \ is followed by 000, we return 0 and leave the string pointer
+   after the zeros.  A value of 0 does not mean end of string.  */
+
+static int
+parse_escape (char **string_ptr)
+{
+  int target_char;
+  int c = *(*string_ptr)++;
+  if (c_parse_backslash (c, &target_char))
+    return target_char;
+  else
+    switch (c)
+      {
+      case '\n':
+	return -2;
+      case 0:
+	(*string_ptr)--;
+	return 0;
+      case '^':
+	{
+	  /* Remember where this escape sequence started, for reporting
+	     errors.  */
+	  char *sequence_start_pos = *string_ptr - 1;
+
+	  c = *(*string_ptr)++;
+
+	  if (c == '?')
+	    {
+	      /* XXXCHARSET: What is `delete' in the host character set?  */
+	      c = 0177;
+
+	      if (!host_char_to_target (c, &target_char))
+		error ("There is no character corresponding to `Delete' "
+		       "in the target character set `%s'.", host_charset ());
+
+	      return target_char;
+	    }
+	  else if (c == '\\')
+	    target_char = parse_escape (string_ptr);
+	  else
+	    {
+	      if (!host_char_to_target (c, &target_char))
+		no_control_char_error (sequence_start_pos, *string_ptr);
+	    }
+
+	  /* Now target_char is something like `c', and we want to find
+	     its control-character equivalent.  */
+	  if (!target_char_to_control_char (target_char, &target_char))
+	    no_control_char_error (sequence_start_pos, *string_ptr);
+
+	  return target_char;
+	}
+
+	/* XXXCHARSET: we need to use isdigit and value-of-digit
+	   methods of the host character set here.  */
+
+      case '0':
+      case '1':
+      case '2':
+      case '3':
+      case '4':
+      case '5':
+      case '6':
+      case '7':
+	{
+	  int i = c - '0';
+	  int count = 0;
+	  while (++count < 3)
+	    {
+	      c = (**string_ptr);
+	      if (c >= '0' && c <= '7')
+		{
+		  (*string_ptr)++;
+		  i *= 8;
+		  i += c - '0';
+		}
+	      else
+		{
+		  break;
+		}
+	    }
+	  return i;
+	}
+      default:
+	if (!host_char_to_target (c, &target_char))
+	  error
+	    ("The escape sequence `\%c' is equivalent to plain `%c', which"
+	     " has no equivalent\n" "in the `%s' character set.", c, c,
+	     target_charset ());
+	return target_char;
+      }
+}
+
+struct token
+{
+  char *operator;
+  int token;
+  int opcode;
+};
+
+static const struct token tokentab3[] =
+  {
+    {">>=", ASSIGN_MODIFY, BINOP_RSH},
+    {"<<=", ASSIGN_MODIFY, BINOP_LSH},
+  };
+
+static const struct token tokentab2[] =
+  {
+    {"+=", ASSIGN_MODIFY, BINOP_ADD},
+    {"-=", ASSIGN_MODIFY, BINOP_SUB},
+    {"*=", ASSIGN_MODIFY, BINOP_MUL},
+    {"/=", ASSIGN_MODIFY, BINOP_DIV},
+    {"%=", ASSIGN_MODIFY, BINOP_REM},
+    {"|=", ASSIGN_MODIFY, BINOP_BITWISE_IOR},
+    {"&=", ASSIGN_MODIFY, BINOP_BITWISE_AND},
+    {"^=", ASSIGN_MODIFY, BINOP_BITWISE_XOR},
+    {"++", INCREMENT, BINOP_END},
+    {"--", DECREMENT, BINOP_END},
+    {"->", ARROW, BINOP_END},
+    {"&&", ANDAND, BINOP_END},
+    {"||", OROR, BINOP_END},
+    {"::", COLONCOLON, BINOP_END},
+    {"<<", LSH, BINOP_END},
+    {">>", RSH, BINOP_END},
+    {"==", EQUAL, BINOP_END},
+    {"!=", NOTEQUAL, BINOP_END},
+    {"<=", LEQ, BINOP_END},
+    {">=", GEQ, BINOP_END}
+  };
+
+/* Read one token, getting characters through lexptr.  */
+
+static int
+yylex ()
+{
+  int c;
+  int namelen;
+  unsigned int i;
+  char *tokstart;
+  char *tokptr;
+  int tempbufindex;
+  static char *tempbuf;
+  static int tempbufsize;
+  struct symbol * sym_class = NULL;
+  char * token_string = NULL;
+  int class_prefix = 0;
+  int unquoted_expr;
+   
+ retry:
+
+  prev_lexptr = lexptr;
+  unquoted_expr = 1;
+
+  tokstart = lexptr;
+  /* See if it is a special token of length 3.  */
+  for (i = 0; i < sizeof tokentab3 / sizeof tokentab3[0]; i++)
+    if (strncmp (tokstart, tokentab3[i].operator, 3) == 0)
+      {
+	lexptr += 3;
+	yylval.opname = tokentab3[i].operator;
+	return tokentab3[i].token;
+      }
+
+  /* See if it is a special token of length 2.  */
+  for (i = 0; i < sizeof tokentab2 / sizeof tokentab2[0]; i++)
+    if (strncmp (tokstart, tokentab2[i].operator, 2) == 0)
+      {
+	lexptr += 2;
+	yylval.opname = tokentab2[i].operator;
+	return tokentab2[i].token;
+      }
+
+  switch (c = *tokstart)
+    {
+    case 0:
+      return 0;
+
+    case ' ':
+    case '\t':
+    case '\n':
+      lexptr++;
+      goto retry;
+
+    case '\'':
+      /* We either have a character constant ('0' or '\177' for example)
+	 or we have a quoted symbol reference ('foo(int,int)' in C++
+	 for example). */
+      lexptr++;
+      c = *lexptr++;
+      if (c == '\\')
+	c = parse_escape (&lexptr);
+      else if (c == '\'')
+	error ("Empty character constant.");
+      else if (! host_char_to_target (c, &c))
+        {
+          int toklen = lexptr - tokstart + 1;
+          char *tok = alloca (toklen + 1);
+          memcpy (tok, tokstart, toklen);
+          tok[toklen] = '\0';
+          error ("There is no character corresponding to %s in the target "
+                 "character set `%s'.", tok, target_charset ());
+        }
+
+      yylval.typed_val_int.val = c;
+      yylval.typed_val_int.type = d_int_type ('c' - 'a');
+
+      c = *lexptr++;
+      if (c != '\'')
+	error ("Invalid character constant.");
+
+      return INT;
+
+    case '(':
+    case ')':
+    case ',':
+      lexptr++;
+      return c;
+
+    case '.':
+      if (lexptr[1] == '.' && lexptr[2] == '.')
+	{
+	  lexptr += 3;
+	  return ELLIPSIS;
+	}
+
+      /* Might be a floating point number.  */
+      if (lexptr[1] < '0' || lexptr[1] > '9')
+	goto symbol;		/* Nope, must be a symbol. */
+      /* FALL THRU into number case.  */
+
+    case '0':
+    case '1':
+    case '2':
+    case '3':
+    case '4':
+    case '5':
+    case '6':
+    case '7':
+    case '8':
+    case '9':
+      {
+	/* It's a number.  */
+	int got_dot = 0, got_e = 0, toktype;
+	char *p = tokstart;
+	int hex = 0;
+
+	if (c == '0' && (p[1] == 'x' || p[1] == 'X'))
+	  {
+	    p += 2;
+	    hex = 1;
+	  }
+	else if (c == '0' && (p[1]=='t' || p[1]=='T' || p[1]=='d' || p[1]=='D'))
+	  {
+	    p += 2;
+	    hex = 0;
+	  }
+
+	for (;; ++p)
+	  {
+	    /* This test includes !hex because 'e' is a valid hex digit
+	       and thus does not indicate a floating point number when
+	       the radix is hex.  */
+	    if (!hex && !got_e && (*p == 'e' || *p == 'E'))
+	      got_dot = got_e = 1;
+	    /* This test does not include !hex, because a '.' always indicates
+	       a decimal floating point number regardless of the radix.  */
+	    /* drow: Is that true in C99? */
+	    else if (!got_dot && *p == '.')
+	      got_dot = 1;
+	    else if (got_e && (p[-1] == 'e' || p[-1] == 'E')
+		     && (*p == '-' || *p == '+'))
+	      /* This is the sign of the exponent, not the end of the
+		 number.  */
+	      continue;
+	    /* We will take any letters or digits.  parse_number will
+	       complain if past the radix, or if L or U are not final.  */
+	    else if ((*p < '0' || *p > '9')
+		     && ((*p < 'a' || *p > 'z')
+				  && (*p < 'A' || *p > 'Z')))
+	      break;
+	  }
+	toktype = parse_number (tokstart, p - tokstart, got_dot|got_e, &yylval);
+        if (toktype == ERROR)
+	  {
+	    char *err_copy = (char *) alloca (p - tokstart + 1);
+
+	    memcpy (err_copy, tokstart, p - tokstart);
+	    err_copy[p - tokstart] = 0;
+	    error ("Invalid number \"%s\".", err_copy);
+	  }
+	lexptr = p;
+	return toktype;
+      }
+
+    case '+':
+    case '-':
+    case '*':
+    case '/':
+    case '%':
+    case '|':
+    case '&':
+    case '^':
+    case '~':
+    case '!':
+    case '@@':
+    case '<':
+    case '>':
+    case '[':
+    case ']':
+    case '?':
+    case ':':
+    case '=':
+    case '{':
+    case '}':
+    symbol:
+      lexptr++;
+      return c;
+
+    case '"':
+
+      /* Build the gdb internal form of the input string in tempbuf,
+	 translating any standard C escape forms seen.  Note that the
+	 buffer is null byte terminated *only* for the convenience of
+	 debugging gdb itself and printing the buffer contents when
+	 the buffer contains no embedded nulls.  Gdb does not depend
+	 upon the buffer being null byte terminated, it uses the length
+	 string instead.  This allows gdb to handle C strings (as well
+	 as strings in other languages) with embedded null bytes */
+
+      tokptr = ++tokstart;
+      tempbufindex = 0;
+
+      do {
+        char *char_start_pos = tokptr;
+
+	/* Grow the static temp buffer if necessary, including allocating
+	   the first one on demand. */
+	if (tempbufindex + 1 >= tempbufsize)
+	  {
+	    tempbuf = (char *) realloc (tempbuf, tempbufsize += 64);
+	  }
+	switch (*tokptr)
+	  {
+	  case '\0':
+	  case '"':
+	    /* Do nothing, loop will terminate. */
+	    break;
+	  case '\\':
+	    tokptr++;
+	    c = parse_escape (&tokptr);
+	    if (c == -1)
+	      {
+		continue;
+	      }
+	    tempbuf[tempbufindex++] = c;
+	    break;
+	  default:
+	    c = *tokptr++;
+            if (! host_char_to_target (c, &c))
+              {
+                int len = tokptr - char_start_pos;
+                char *copy = alloca (len + 1);
+                memcpy (copy, char_start_pos, len);
+                copy[len] = '\0';
+
+                error ("There is no character corresponding to `%s' "
+                       "in the target character set `%s'.",
+                       copy, target_charset ());
+              }
+            tempbuf[tempbufindex++] = c;
+	    break;
+	  }
+      } while ((*tokptr != '"') && (*tokptr != '\0'));
+      if (*tokptr++ != '"')
+	{
+	  error ("Unterminated string in expression.");
+	}
+      tempbuf[tempbufindex] = '\0';	/* See note above */
+#if 1
+      free (tempbuf);
+      error ("Unexpected string literal.");
+#else
+      yylval.sval.ptr = tempbuf;
+      yylval.sval.length = tempbufindex;
+      lexptr = tokptr;
+      return (STRING);
+#endif
+    }
+
+  if (!(c == '_' || c == '$'
+	|| (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')))
+    /* We must have come across a bad character (e.g. ';').  */
+    error ("Invalid character '%c' in expression.", c);
+
+  /* It's a name.  See how long it is.  */
+  namelen = 0;
+  for (c = tokstart[namelen];
+       (c == '_' || c == '$' || (c >= '0' && c <= '9')
+	|| (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'));)
+    c = tokstart[++namelen];
+
+  lexptr += namelen;
+
+  tryname:
+
+  /* Catch specific keywords.  Should be done with a data structure.  */
+  switch (namelen)
+    {
+    case 16:
+      if (strncmp (tokstart, "reinterpret_cast", 16) == 0)
+        return REINTERPRET_CAST;
+      break;
+    case 12:
+      if (strncmp (tokstart, "dynamic_cast", 12) == 0)
+        return DYNAMIC_CAST;
+      break;
+    case 11:
+      if (strncmp (tokstart, "static_cast", 11) == 0)
+        return STATIC_CAST;
+      break;
+    case 8:
+      if (strncmp (tokstart, "operator", 8) == 0)
+	return OPERATOR;
+      if (strncmp (tokstart, "restrict", 8) == 0)
+	return RESTRICT;
+      if (strncmp (tokstart, "unsigned", 8) == 0)
+	return UNSIGNED;
+      if (strncmp (tokstart, "template", 8) == 0)
+	return TEMPLATE;
+      if (strncmp (tokstart, "volatile", 8) == 0)
+	return VOLATILE_KEYWORD;
+      break;
+    case 7:
+      if (strncmp (tokstart, "wchar_t", 7) == 0)
+	return WCHAR_T;
+      break;
+    case 6:
+      if (strncmp (tokstart, "delete", 6) == 0)
+	return DELETE;
+      if (strncmp (tokstart, "struct", 6) == 0)
+	return STRUCT;
+      if (strncmp (tokstart, "signed", 6) == 0)
+	return SIGNED_KEYWORD;
+      if (strncmp (tokstart, "sizeof", 6) == 0)
+	return SIZEOF;
+      if (strncmp (tokstart, "double", 6) == 0)
+	return DOUBLE_KEYWORD;
+      break;
+    case 5:
+      if (strncmp (tokstart, "false", 5) == 0)
+	return FALSEKEYWORD;
+      if (strncmp (tokstart, "class", 5) == 0)
+	return CLASS;
+      if (strncmp (tokstart, "union", 5) == 0)
+	return UNION;
+      if (strncmp (tokstart, "float", 5) == 0)
+	return FLOAT_KEYWORD;
+      if (strncmp (tokstart, "short", 5) == 0)
+	return SHORT;
+      if (strncmp (tokstart, "const", 5) == 0)
+	return CONST_KEYWORD;
+      break;
+    case 4:
+      if (strncmp (tokstart, "void", 4) == 0)
+	return VOID;
+      if (strncmp (tokstart, "bool", 4) == 0)
+	return BOOL;
+      if (strncmp (tokstart, "char", 4) == 0)
+	return BOOL;
+      if (strncmp (tokstart, "enum", 4) == 0)
+	return ENUM;
+      if (strncmp (tokstart, "long", 4) == 0)
+	return LONG;
+      if (strncmp (tokstart, "true", 4) == 0)
+	return TRUEKEYWORD;
+      break;
+    case 3:
+      if (strncmp (tokstart, "new", 3) == 0)
+	return NEW;
+      if (strncmp (tokstart, "int", 3) == 0)
+	return INT_KEYWORD;
+      break;
+    default:
+      break;
+    }
+
+  yylval.comp = d_make_name (di, tokstart, namelen);
+  return NAME;
+}
+
+void
+yyerror (msg)
+     char *msg;
+{
+  if (prev_lexptr)
+    lexptr = prev_lexptr;
+
+  error ("A %s in expression, near `%s'.", (msg ? msg : "error"), lexptr);
+}
+
+#ifdef TEST_CPNAMES
+
+int main(int argc, char **argv)
+{
+  struct d_info myinfo;
+  int err = 0;
+  char *str;
+
+  lexptr = argv[1];
+  d_init_info (NULL, DMGL_PARAMS | DMGL_ANSI, 2 * strlen (lexptr), &myinfo);
+  di = &myinfo;
+  yyparse ();
+  str = d_print (DMGL_PARAMS | DMGL_ANSI, result, &err);
+  printf ("Result is %s\n", str);
+  return 0;
+}
+
+#endif
+@
+
+
+1.1.2.2
+log
+@2003-12-16  Daniel Jacobowitz  <drow@@mvista.com>
+
+	* cp-names.y (function_arglist): Call d_qualify.
+	(ptr_operator_seq): Reverse the list.
+	(decl1b): Add the declarator-id.
+@
+text
+@d437 1
+d439 1
+a439 2
+			{ $$ = d_make_comp (di, D_COMP_FUNCTION_TYPE, NULL, $2.comp);
+			  $$ = d_qualify ($$, $4, 1); }
+d441 1
+a441 2
+			{ $$ = d_make_comp (di, D_COMP_FUNCTION_TYPE, NULL, NULL);
+			  $$ = d_qualify ($$, $3, 1); }
+a459 1
+/* FIXME actions all wrong */
+d604 4
+a607 4
+		|	ptr_operator_seq ptr_operator
+			{ $$.comp = $1.comp;
+			  $$.last = $2.last;
+			  *$1.last = $2.comp; }
+d660 3
+a662 2
+/* FIXME ACTION is quite wrong; need a new type for identifiers? */
+decl1b		:	ext_name '(' ptr_operator_seq ext_name '(' function_args ')' ')'
+d665 2
+a666 2
+			  *$3.last = funtype;
+			  $$ = d_make_comp (di, D_COMP_TYPED_NAME, $4, $3.comp); }
+@
+
+
+1.1.2.3
+log
+@	* cp-names.y: Use precedence to resolve shift/reduce conflicts for
+	COLONCOLON.  Merge type1a, type1b, and type2 rules.
+@
+text
+@d202 1
+a202 1
+%type <comp> builtin_type function_arglist
+a236 3
+/* i.e., lower precedence than COLONCOLON.  */
+%nonassoc NAME
+
+a329 1
+/* FIXME conversion operators are sorta important */
+d354 1
+a354 1
+name		:	nested_name scope_id %prec NAME
+d356 1
+a356 1
+		|	scope_id %prec NAME
+d464 3
+a466 1
+		|	type ext_name function_arglist
+d468 1
+a468 1
+		|	type COLONCOLON ext_name function_arglist
+d612 6
+a617 1
+type		:	builtin_type qualifiers_opt
+d626 4
+a629 1
+		|	type ptr_operator_1
+d647 1
+a647 5
+		|	qualifiers colon_name
+			{ $$ = d_qualify ($2, $1, 0); }
+		|	name
+		|	type ptr_operator_2
+			{ $$ = d_make_comp (di, D_COMP_POINTER, $1, NULL); }
+d655 1
+a655 1
+		|	ext_name '(' ptr_operator_seq ')' '(' function_args ')'
+d676 12
+@
+
+
+1.1.2.4
+log
+@	* cp-names.y (ptr_operator_1, ptr_operator_2): Merge back into
+	ptr_operator.
+	(qualified, decl1b): Remove.
+	(NEW, DELETE): Give higher precedence than '['.
+	(typespec, typespec_2, declarator, direct_declarator)
+	(abstract_declarator, direct_abstract_declarator): New.
+	(start, type): Use them.
+	(operator): Add rules for conversion operators.
+	(exp): Avoid a conflict for function-style casts; allow
+	function-style casts to typenames.
+@
+text
+@d198 1
+a198 1
+%type <comp> exp exp1 type start operator colon_name
+d201 1
+d203 1
+a203 2
+%type <comp> typespec abstract_declarator direct_abstract_declarator
+%type <comp> declarator direct_declarator typespec_2
+d206 1
+a206 1
+%type <nested> ptr_operator ptr_operator_seq
+d237 1
+a237 4
+/* Precedence declarations.  */
+
+/* Give NAME lower precedence than COLONCOLON, so that nested_name will
+   associate greedily.  */
+a239 4
+/* Give NEW and DELETE higher precedence than '[', because we can not
+   have an array of type operator new.  */
+%nonassoc NEW DELETE
+
+d263 2
+a264 1
+		|	typespec_2 declarator
+d333 3
+a335 4
+/* FIXME actions */
+		|	OPERATOR typespec
+			{ $$ = d_make_node (di, D_COMP_CAST, $2, NULL); }
+		|	OPERATOR typespec ptr_operator_seq
+d337 1
+d449 42
+d574 1
+a574 1
+ptr_operator	:	'*' qualifiers_opt
+a578 1
+		/* g++ seems to allow qualifiers after the reference?  */
+d591 3
+a593 1
+		|	COLONCOLON nested_name '*' qualifiers_opt
+d603 4
+d614 5
+a618 7
+/* Details of this approach inspired by the G++ < 3.4 parser.  */
+
+typespec	:	builtin_type
+		|	colon_name
+		;
+
+typespec_2	:	typespec qualifiers_opt
+d620 1
+a620 1
+		|	qualifiers typespec qualifiers_opt
+a621 1
+		;
+d623 51
+a673 38
+abstract_declarator
+		:	ptr_operator
+		|	ptr_operator abstract_declarator
+		|	direct_abstract_declarator
+		;
+
+direct_abstract_declarator
+		:	'(' abstract_declarator ')'
+		|	direct_abstract_declarator '(' function_arglist ')' qualifiers_opt
+		|	direct_abstract_declarator '[' ']'
+		|	direct_abstract_declarator '[' INT ']'
+		|	'[' ']'
+		|	'[' INT ']'
+		/* G++ has the following except for () and (type).  Then
+		   (type) is handled in regcast_or_absdcl and () is handled
+		   in fcast_or_absdcl.  */
+		/* However, this is only useful for function types, and
+		   generates reduce/reduce conflicts with direct_declarators.
+		   We're interested in pointer-to-function types, and in
+		   functions, but not in function types - so leave this
+		   out.  */
+		/* |	'(' function_arglist ')' qualifiers_opt */
+		;
+
+type		:	typespec_2
+		|	typespec_2 abstract_declarator
+		;
+
+declarator	:	ptr_operator declarator
+		|	direct_declarator
+		;
+
+direct_declarator
+		:	'(' declarator ')'
+		|	direct_declarator '(' function_arglist ')' qualifiers_opt
+		|	direct_declarator '[' ']'
+		|	direct_declarator '[' INT ']'
+		|	colon_ext_name
+d738 4
+a741 6
+   ambiguous), but "name ( exp1 )" is.  Because we don't need to support
+   function types, we can handle this unambiguously (the use of typespec_2
+   prevents a silly, harmless conflict with qualifiers_opt).  This does not
+   appear in demangler output so it's not a great loss if we need to
+   disable it.  */
+exp	:	typespec_2 '(' exp1 ')' %prec UNARY
+@
+
+
+1.1.2.5
+log
+@	* cp-names.y (basic_exp): Remove.
+	(function_arglist, declarator, abstract_declarator)
+	(direct_declarator, direct_abstract_declarator): Change type to
+	nested.
+	(array_indicator): New rule.
+	(start): Add actions.
+	(operator): Correct actions for conversion operators.
+	(template_arg): Use exp instead of basic_exp.
+	(abstract_declarator, type, declarator): Add missing actions.
+	(direct_abstract_declarator, direct_declarator): Likewise.
+	Use array_indicator.  Correct use of function_arglist.
+@
+text
+@d200 4
+a203 6
+%type <comp> template template_arg
+%type <comp> builtin_type
+%type <comp> typespec typespec_2 array_indicator
+
+%type <nested> abstract_declarator direct_abstract_declarator
+%type <nested> declarator direct_declarator function_arglist
+a270 3
+			{ result = $2.comp;
+			  *$2.last = $1;
+			}
+d339 1
+d341 1
+a341 1
+			{ $$ = d_make_comp (di, D_COMP_CAST, $2, NULL); }
+d343 1
+a343 2
+			{ *$3.last = $2;
+			  $$ = d_make_comp (di, D_COMP_CAST, $3.comp, NULL); }
+d416 1
+a416 1
+		|	exp
+d448 2
+a449 3
+			{ $$.comp = d_make_comp (di, D_COMP_FUNCTION_TYPE, NULL, $2.comp);
+			  $$.last = &d_left ($$.comp);
+			  $$.comp = d_qualify ($$.comp, $4, 1); }
+d451 2
+a452 3
+			{ $$.comp = d_make_comp (di, D_COMP_FUNCTION_TYPE, NULL, NULL);
+			  $$.last = &d_left ($$.comp);
+			  $$.comp = d_qualify ($$.comp, $3, 1); }
+a572 15
+array_indicator	:	'[' ']'
+			{ $$ = d_make_empty (di, D_COMP_ARRAY_TYPE);
+			  d_right ($$) = NULL;
+			}
+		|	'[' INT ']'
+			{ struct d_comp *i;
+			  /* FIXME: Blatant memory leak.  */
+			  char *buf = malloc (24);
+			  sprintf (buf, "%d", (int) $2.val);
+			  i = d_make_name (di, buf, strlen (buf));
+			  i = d_make_comp (di, D_COMP_LITERAL, $2.type, i);
+			  $$ = d_make_empty (di, D_COMP_ARRAY_TYPE);
+			  d_right ($$) = i;
+			}
+
+a587 3
+			{ $$.comp = $2.comp;
+			  $$.last = $1.last;
+			  *$2.last = $1.comp; }
+d593 5
+a597 15
+			{ $$ = $2; }
+		|	direct_abstract_declarator function_arglist
+			{ $$.comp = $1.comp;
+			  *$1.last = $2.comp;
+			  $$.last = $2.last;
+			}
+		|	direct_abstract_declarator array_indicator
+			{ $$.comp = $1.comp;
+			  *$1.last = $2;
+			  $$.last = &d_left ($2);
+			}
+		|	array_indicator
+			{ $$.comp = $1;
+			  $$.last = &d_left ($1);
+			}
+d606 1
+a606 1
+		/* |	function_arglist */
+a610 3
+			{ $$ = $2.comp;
+			  *$2.last = $1;
+			}
+a613 3
+			{ $$.comp = $2.comp;
+			  $$.last = $1.last;
+			  *$2.last = $1.comp; }
+d619 3
+a621 11
+			{ $$ = $2; }
+		|	direct_declarator function_arglist
+			{ $$.comp = $1.comp;
+			  *$1.last = $2.comp;
+			  $$.last = $2.last;
+			}
+		|	direct_declarator array_indicator
+			{ $$.comp = $1.comp;
+			  *$1.last = $2;
+			  $$.last = &d_left ($2);
+			}
+d623 3
+a625 4
+			{ $$.comp = d_make_empty (di, D_COMP_TYPED_NAME);
+			  d_left ($$.comp) = $1;
+			  $$.last = &d_right ($$.comp);
+			}
+@
+
+
+1.1.2.6
+log
+@	* cp-names.y (ext_name): Remove.
+	(colon_ext_only, ext_only_name): New non-terminals.
+	(colon_ext_name): Use colon_ext_only.
+	(declarator_1, direct_declarator_1): New non-terminals.
+	('('): Remove %right precedence.
+	(result): New non-terminal.
+	(start): Assign to $$.  Use declarator_1.  Handle functions
+	without return types.
+	(template_arg): Use start instead of colon_ext_name.
+	(yylex): Fix typo in "char" case.
+	(yyerror): Add newline.
+	(main): Behave like c++filt when started with no arguments.
+@
+text
+@d38 1
+a38 1
+
+d199 1
+a199 1
+%type <comp> unqualified_name scope_id colon_ext_name
+a202 1
+%type <comp> colon_ext_only ext_only_name
+a206 2
+%type <nested> declarator_1 direct_declarator_1
+
+d264 1
+a264 5
+
+/* We don't need a precedence for '(' in this reduced grammar, and it
+   can mask some unpleasant bugs, so disable it for now.  */
+
+%right ARROW '.' '[' /* '(' */
+d270 1
+a270 1
+result		:	start
+d272 2
+a273 8
+
+start		:	type
+			{ $$ = $1; }
+
+		/* Function with a return type.  declarator_1 is used to prevent
+		   ambiguity with the next rule.  */
+		|	typespec_2 declarator_1
+			{ $$ = $2.comp;
+a275 7
+
+		/* Function without a return type.  We need to use typespec_2
+		   to prevent conflicts from qualifiers_opt.  Harmless.  */
+		|	typespec_2 function_arglist
+			{ $$ = d_make_comp (di, D_COMP_TYPED_NAME, $1, $2.comp); }
+		|	colon_ext_only function_arglist
+			{ $$ = d_make_comp (di, D_COMP_TYPED_NAME, $1, $2.comp); }
+d374 2
+a375 6
+colon_ext_name	:	colon_name
+		|	colon_ext_only
+		;
+
+colon_ext_only	:	ext_only_name
+		|	COLONCOLON ext_only_name
+d379 2
+a380 1
+ext_only_name	:	nested_name unqualified_name
+d417 1
+a417 1
+		|	'&' start
+d419 1
+a419 1
+		|	'&' '(' start ')'
+a677 43
+/* These are similar to declarator and direct_declarator except that they
+   do not permit ( colon_ext_name ), which is ambiguous with a function
+   argument list.  They also don't permit a few other forms with redundant
+   parentheses around the colon_ext_name; any colon_ext_name in parentheses
+   must be followed by an argument list or an array indicator, or preceded
+   by a pointer.  */
+declarator_1	:	ptr_operator declarator
+			{ $$.comp = $2.comp;
+			  $$.last = $1.last;
+			  *$2.last = $1.comp; }
+		|	colon_ext_name
+			{ $$.comp = d_make_empty (di, D_COMP_TYPED_NAME);
+			  d_left ($$.comp) = $1;
+			  $$.last = &d_right ($$.comp);
+			}
+		|	direct_declarator_1
+		;
+
+direct_declarator_1
+		:	'(' ptr_operator declarator ')'
+			{ $$.comp = $3.comp;
+			  $$.last = $2.last;
+			  *$3.last = $2.comp; }
+		|	direct_declarator_1 function_arglist
+			{ $$.comp = $1.comp;
+			  *$1.last = $2.comp;
+			  $$.last = $2.last;
+			}
+		|	direct_declarator_1 array_indicator
+			{ $$.comp = $1.comp;
+			  *$1.last = $2;
+			  $$.last = &d_left ($2);
+			}
+		|	colon_ext_name function_arglist
+			{ $$.comp = d_make_comp (di, D_COMP_TYPED_NAME, $1, $2.comp);
+			  $$.last = $2.last;
+			}
+		|	colon_ext_name array_indicator
+			{ $$.comp = d_make_comp (di, D_COMP_TYPED_NAME, $1, $2);
+			  $$.last = &d_left ($2);
+			}
+		;
+
+d1764 1
+a1764 1
+	return CHAR;
+d1793 1
+a1793 1
+  error ("A %s in expression, near `%s'.\n", (msg ? msg : "error"), lexptr);
+d1798 1
+a1798 2
+int
+main (int argc, char **argv)
+d1802 8
+a1809 35
+  char *str, *str2;
+  char buf[65536];
+  
+  if (argv[1] == NULL)
+    while (fgets (buf, 65536, stdin) != NULL)
+      {
+	result = NULL;
+	buf[strlen (buf) - 1] = 0;
+	str2 = cplus_demangle (buf, DMGL_PARAMS | DMGL_ANSI);
+	lexptr = str2;
+	if (lexptr == NULL)
+	  {
+	    printf ("Demangling error\n");
+	    continue;
+	  }
+	d_init_info (NULL, DMGL_PARAMS | DMGL_ANSI, 2 * strlen (lexptr), &myinfo);
+	di = &myinfo;
+	if (yyparse () || result == NULL)
+	  continue;
+	str = d_print (DMGL_PARAMS | DMGL_ANSI, result, &err);
+	free (str2);
+	printf ("%s\n", str);
+	free (str);
+      }
+  else
+    {
+      lexptr = argv[1];
+      d_init_info (NULL, DMGL_PARAMS | DMGL_ANSI, 2 * strlen (lexptr), &myinfo);
+      di = &myinfo;
+      if (yyparse () || result == NULL)
+	return 0;
+      str = d_print (DMGL_PARAMS | DMGL_ANSI, result, &err);
+      printf ("%s\n", str);
+      free (str);
+    }
+@
+
+
+1.1.2.7
+log
+@	* cp-names.y (demangler_special): New non-terminal.
+	(DEMANGLER_SPECIAL, CONSTRUCTION_VTABLE, CONSTRUCTION_IN): New
+	terminals.
+	(GLOBAL_CONSTRUCTORS, GLOBAL_DESTRUCTORS): New enums.
+	(tokentab_big): New struct.
+	(yylex): Recognize them.  Handle negative literals.
+	(parse_number): Handle negative literals.
+	(start): Use demangler_special.
+	(operator): Correct typos for ->* and ().  Use typespec_2 instead of
+	typespec.
+	(unqualified_name): Allow operator templates.
+	(template_arg): Create a unary operation, not a reference type.
+	(exp): Set the type of D_COMP_LITERALs instead of adding a cast
+	operation.
+	(cp_print, trim_chars): New helper functions.
+	(main): Use them.
+@
+text
+@a204 2
+%type <comp> demangler_special
+
+a241 11
+/* Non-C++ things we get from the demangler.  */
+%token <lval> DEMANGLER_SPECIAL CONSTRUCTION_VTABLE
+%token CONSTRUCTION_IN
+
+%{
+enum {
+  GLOBAL_CONSTRUCTORS = D_COMP_LITERAL + 20,
+  GLOBAL_DESTRUCTORS = D_COMP_LITERAL + 21
+};
+%}
+
+a295 11
+
+		| demangler_special
+		;
+
+demangler_special
+		:	DEMANGLER_SPECIAL start
+			{ $$ = d_make_empty (di, $1);
+			  d_left ($$) = $2;
+			  d_right ($$) = NULL; }
+		|	CONSTRUCTION_VTABLE start CONSTRUCTION_IN start
+			{ $$ = d_make_comp (di, $1, $2, $4); }
+d357 1
+a357 1
+			{ $$ = d_op_from_string ("->*"); }
+d361 1
+a361 1
+			{ $$ = d_op_from_string ("()"); }
+d364 1
+a364 1
+		|	OPERATOR typespec_2
+d366 1
+a366 1
+		|	OPERATOR typespec_2 ptr_operator_seq
+a373 2
+		|	operator '<' template_params '>'
+			{ $$ = d_make_comp (di, D_COMP_TEMPLATE, $1, $3.comp); }
+a418 13
+/*
+		|	scope_id function_arglist COLONCOLON
+			{ $$.comp = d_make_comp (di, D_COMP_QUAL_NAME, $1, $1);
+			  d_right ($$.comp) = NULL;
+			  $$.last = $$.comp;
+			}
+		|	nested_name scope_id function_arglist COLONCOLON
+			{ $$.comp = $1.comp;
+			  d_right ($1.last) = d_make_comp (di, D_COMP_QUAL_NAME, $2, $2);
+			  $$.last = d_right ($1.last);
+			  d_right ($$.last) = NULL;
+			}
+*/
+d441 1
+a441 1
+			{ $$ = d_make_comp (di, D_COMP_UNARY, d_op_from_string ("&"), $2); }
+d443 1
+a443 1
+			{ $$ = d_make_comp (di, D_COMP_UNARY, d_op_from_string ("&"), $3); }
+d770 1
+a770 2
+/* Casts.  First your normal C-style cast.  If exp is a LITERAL, just change
+   its type.  */
+d773 3
+a775 9
+		{ if ($4->type == D_COMP_LITERAL)
+		    {
+		      $$ = $4;
+		      d_left ($4) = $2;
+		    }
+		  else
+		    $$ = d_make_comp (di, D_COMP_UNARY,
+				      d_make_comp (di, D_COMP_CAST, $2, NULL),
+				      $4);
+a1099 1
+  int negative_p = 0;
+a1156 9
+  if (p[0] == '-')
+    {
+      negative_p = 1;
+      p++;
+      len--;
+    }
+  else
+    negative_p = 0;
+
+a1288 4
+  /* FIXME: overflow, et cetera.  Dumb this whole function down a notch.  */
+  if (negative_p)
+    n = -n;
+
+a1491 16
+static const struct token tokentab_big[] = {
+  { "global constructors keyed to", 28, GLOBAL_CONSTRUCTORS},
+  { "global destructors keyed to", 27, GLOBAL_DESTRUCTORS},
+  { "construction vtable for", 23, D_COMP_CONSTRUCTION_VTABLE},
+  { "VTT for", 7, D_COMP_VTT},
+  { "vtable for", 10, D_COMP_VTABLE},
+  { "typeinfo for", 12, D_COMP_TYPEINFO},
+  { "typeinfo fn for", 15, D_COMP_TYPEINFO_FN},
+  { "typeinfo name for", 17, D_COMP_TYPEINFO_NAME},
+  { "non-virtual thunk to", 20, D_COMP_THUNK},
+  { "virtual thunk to", 16, D_COMP_VIRTUAL_THUNK},
+  { "covariant return thunk to", 25, D_COMP_COVARIANT_THUNK},
+  { "guard variable for", 18, D_COMP_GUARD},
+  { "reference temporary for", 23, D_COMP_REFTEMP}
+};
+
+a1533 15
+  /* For construction vtables.  This is kind of hokey.  */
+  if (strncmp (tokstart, "-in-", 4) == 0)
+    {
+      lexptr += 4;
+      return CONSTRUCTION_IN;
+    }
+
+  if (strncmp (tokstart, "(anonymous namespace)", 21) == 0)
+    {
+      lexptr += 21;
+      yylval.comp = d_make_name (di, "(anonymous namespace)",
+				 sizeof "(anonymous namespace)" - 1);
+      return NAME;
+    }
+
+a1591 8
+    case '-':
+      if (lexptr[1] < '0' || lexptr[1] > '9')
+	{
+	  lexptr++;
+	  return '-';
+	}
+      /* FALL THRU into number case.  */
+
+a1607 3
+	if (c == '-')
+	  p++;
+
+d1657 1
+a1755 11
+  /* Tokens containing spaces.  */
+  for (i = 0; i < sizeof tokentab_big / sizeof tokentab_big[0]; i++)
+    if (strncmp (tokstart, tokentab_big[i].operator, tokentab_big[i].token) == 0)
+      {
+	lexptr += tokentab_big[i].token;
+	yylval.lval = tokentab_big[i].opcode;
+	if (yylval.lval == D_COMP_CONSTRUCTION_VTABLE)
+	  return CONSTRUCTION_VTABLE;
+	return DEMANGLER_SPECIAL;
+      }  
+
+a1863 50
+static char *
+cp_print (struct d_comp *result)
+{
+  char *str, *str2 = NULL, *str3;
+  int err = 0;
+
+  if (result->type == GLOBAL_DESTRUCTORS)
+    {
+      result = d_left (result);
+      str2 = "global destructors keyed to ";
+    }
+  else if (result->type == GLOBAL_CONSTRUCTORS)
+    {
+      result = d_left (result);
+      str2 = "global constructors keyed to ";
+    }
+
+  str = d_print (DMGL_PARAMS | DMGL_ANSI, result, &err);
+  if (str == NULL)
+    return NULL;
+
+  if (str2 == NULL)
+    return str;
+
+  str3 = malloc (strlen (str) + strlen (str2) + 1);
+  strcpy (str3, str2);
+  strcat (str3, str);
+  free (str);
+  return str3;
+}
+
+static char
+trim_chars (char *lexptr, char **extra_chars)
+{
+  char *p = lexptr;
+  char c = 0;
+
+  while (*p && (ISALNUM (*p) || *p == '_' || *p == '$' || *p == '.'))
+    p++;
+
+  if (*p)
+    {
+      c = *p;
+      *p = 0;
+      *extra_chars = p + 1;
+    }
+
+  return c;
+}
+
+d1868 2
+a1869 1
+  char *str, *str2, *extra_chars, c;
+d1877 1
+a1877 3
+	/* Use DMGL_VERBOSE to get expanded standard substitutions.  */
+	c = trim_chars (buf, &extra_chars);
+	str2 = cplus_demangle (buf, DMGL_PARAMS | DMGL_ANSI | DMGL_VERBOSE);
+d1881 1
+a1881 5
+	    /* printf ("Demangling error\n"); */
+	    if (c)
+	      printf ("%s%c%s\n", buf, c, extra_chars);
+	    else
+	      printf ("%s\n", buf);
+d1888 1
+a1888 1
+	str = cp_print (result);
+d1890 1
+a1890 4
+	printf ("%s", str);
+	if (c)
+	  printf ("%c%s", c, extra_chars);
+	printf ("\n");
+d1900 1
+a1900 1
+      str = cp_print (result);
+@
+
+
+1.1.2.8
+log
+@	* cp-names.y (symbol_end): New function.
+	(trim_chars): Use it.
+	(start_opt, function): New non-terminals used to support
+	function-local names.
+	(GLOBAL): New terminal.
+	(start): Use start_opt.
+	(demangler_special): Handle GLOBAL.
+	(array_indicator): Swap arguments to D_COMP_ARRAY_TYPE.
+	(direct_abstract_declarator, direct_declarator)
+	(direct_declarator_1): Likewise.
+	(declarator_1): Use declarator_1 instead of declarator after
+	a ptr_operator.  Support function-local names.
+	(yylex): Handle GLOBAL specially.
+@
+text
+@a51 1
+/* #define CP_DEMANGLE_DEBUG */
+a64 2
+static char *symbol_end (char *lexptr);
+
+d198 1
+a198 1
+%type <comp> exp exp1 type start start_opt operator colon_name
+d205 1
+a205 1
+%type <comp> demangler_special function
+a246 1
+%token <typed_val_int> GLOBAL
+a295 13
+		|	demangler_special
+
+		|	function
+
+		;
+
+start_opt	:	/* */
+			{ $$ = NULL; }
+		|	COLONCOLON start
+			{ $$ = $2; }
+		;
+
+function
+d298 1
+a298 1
+		:	typespec_2 declarator_1
+d304 5
+a308 9
+		   to prevent conflicts from qualifiers_opt - harmless.  The
+		   start_opt is used to handle "function-local" variables and
+		   types.  */
+		|	typespec_2 function_arglist start_opt
+			{ $$ = d_make_comp (di, D_COMP_TYPED_NAME, $1, $2.comp);
+			  if ($3) $$ = d_make_comp (di, D_COMP_QUAL_NAME, $$, $3); }
+		|	colon_ext_only function_arglist start_opt
+			{ $$ = d_make_comp (di, D_COMP_TYPED_NAME, $1, $2.comp);
+			  if ($3) $$ = d_make_comp (di, D_COMP_QUAL_NAME, $$, $3); }
+d310 1
+a319 4
+		|	GLOBAL
+			{ $$ = d_make_empty (di, $1.val);
+			  d_left ($$) = $1.type;
+			  d_right ($$) = NULL; }
+a387 4
+
+		/* Conversion operators.  We don't try to handle some of
+		   the wackier demangler output for function pointers,
+		   since it's not clear that it's parseable.  */
+d644 1
+a644 1
+			  d_left ($$) = NULL;
+d654 1
+a654 1
+			  d_left ($$) = i;
+d689 1
+a689 1
+			  $$.last = &d_right ($2);
+d693 1
+a693 1
+			  $$.last = &d_right ($1);
+d731 1
+a731 1
+			  $$.last = &d_right ($2);
+d746 1
+a746 1
+declarator_1	:	ptr_operator declarator_1
+a755 11
+
+			/* Function local variable or type.  The typespec to
+			   our left is the type of the containing function. 
+			   This should be OK, because function local types
+			   can not be templates, so the return types of their
+			   members will not be mangled.  */
+		|	colon_ext_name function_arglist COLONCOLON start
+			{ $$.comp = d_make_comp (di, D_COMP_TYPED_NAME, $1, $2.comp);
+			  $$.last = $2.last;
+			  $$.comp = d_make_comp (di, D_COMP_QUAL_NAME, $$.comp, $4);
+			}
+d771 1
+a771 1
+			  $$.last = &d_right ($2);
+d779 1
+a779 1
+			  $$.last = &d_right ($2);
+a1864 10
+	else if (yylval.lval == GLOBAL_CONSTRUCTORS
+		 || yylval.lval == GLOBAL_DESTRUCTORS)
+	  {
+	    /* Skip the trailing space, find the end of the symbol.  */
+	    char *p = symbol_end (lexptr + 1);
+	    yylval.typed_val_int.val = yylval.lval;
+	    yylval.typed_val_int.type = d_make_name (di, lexptr + 1, p - (lexptr + 1));
+	    lexptr = p;
+	    return GLOBAL;
+	  }
+d2007 2
+a2008 2
+static char *
+symbol_end (char *lexptr)
+d2011 1
+a2014 9
+
+  return p;
+}
+
+static char
+trim_chars (char *lexptr, char **extra_chars)
+{
+  char *p = symbol_end (lexptr);
+  char c = 0;
+@
+
+
+1.1.2.9
+log
+@	* cp-names.y (%union): Remove typed_val_float.
+	(INT, FLOAT): Change to type comp.
+	(CONSTRUCTION_VTABLE): Change to untyped.
+	(demangler_special): Use D_COMP_CONSTRUCTION_VTABLE.
+	(array_indicator, exp): Update for new types of INT and FLOAT.
+	Handle D_COMP_LITERAL_NEG.
+	(parse_number): Simplify.  Use D_COMP_LITERAL_NEG.
+	(HANDLE_SPECIAL): Define.
+	(tokentab_big): Remove.
+	(yylex): Remove unused variables.  Optimize calls to strncmp
+	and handling of multi-word tokens.
+@
+text
+@d190 3
+d224 2
+a225 2
+%token <comp> INT
+%token <comp> FLOAT
+d248 2
+a249 2
+%token <lval> DEMANGLER_SPECIAL
+%token CONSTRUCTION_VTABLE CONSTRUCTION_IN
+d339 1
+a339 1
+			{ $$ = d_make_comp (di, D_COMP_CONSTRUCTION_VTABLE, $2, $4); }
+d675 8
+a682 2
+			{ $$ = d_make_empty (di, D_COMP_ARRAY_TYPE);
+			  d_left ($$) = $2;
+d852 1
+a852 2
+		{ if ($4->type == D_COMP_LITERAL
+		      || $4->type == D_COMP_LITERAL_NEG)
+d989 7
+d1000 9
+d1175 9
+d1185 1
+d1190 4
+a1195 11
+  struct d_comp *type, *name;
+  enum d_comp_type literal_type;
+
+  if (p[0] == '-')
+    {
+      literal_type = D_COMP_LITERAL_NEG;
+      p++;
+      len--;
+    }
+  else
+    literal_type = D_COMP_LITERAL;
+d1201 2
+d1204 21
+a1224 4
+      /* The GDB lexer checks the result of scanf at this point.  Not doing
+         this leaves our error checking slightly weaker but only for invalid
+         data.  */
+
+d1229 1
+d1231 1
+a1231 4
+      	{
+      	  len--;
+      	  type = d_make_builtin_type (di, &d_builtin_types ['f' - 'a']);
+      	}
+d1233 3
+a1235 6
+	{
+	  len--;
+	  type = d_make_builtin_type (di, &d_builtin_types ['e' - 'a']);
+	}
+      else if (ISDIGIT (c) || c == '.')
+	type = d_make_builtin_type (di, &d_builtin_types ['d' - 'a']);
+d1238 1
+d1240 2
+a1241 2
+      name = d_make_name (di, p, len);
+      putithere->comp = d_make_comp (di, literal_type, type, name);
+d1243 5
+a1247 1
+      return FLOAT;
+d1249 2
+d1252 30
+a1281 2
+  /* This treats 0x1 and 1 as different literals.  We also do not
+     automatically generate unsigned types.  */
+d1283 1
+a1283 3
+  long_p = 0;
+  unsigned_p = 0;
+  while (len > 0)
+d1285 6
+a1290 1
+      if (p[len - 1] == 'l' || p[len - 1] == 'L')
+d1292 3
+a1294 3
+	  len--;
+	  long_p++;
+	  continue;
+d1296 1
+a1296 1
+      if (p[len - 1] == 'u' || p[len - 1] == 'U')
+d1298 35
+a1332 3
+	  len--;
+	  unsigned_p++;
+	  continue;
+d1334 1
+a1334 1
+      break;
+d1337 15
+a1351 1
+  if (long_p == 0)
+d1353 8
+d1364 2
+a1365 1
+  else if (long_p == 1)
+d1367 1
+d1373 7
+d1384 6
+d1393 2
+a1394 2
+   if (unsigned_p)
+     type = unsigned_type;
+d1396 1
+a1396 4
+     type = signed_type;
+
+   name = d_make_name (di, p, len);
+   putithere->comp = d_make_comp (di, literal_type, type, name);
+d1591 15
+a1605 7
+#define HANDLE_SPECIAL(string, len, comp)		\
+  if (strncmp (tokstart, string, len) == 0)		\
+    {							\
+      lexptr = tokstart + len;				\
+      yylval.lval = comp;				\
+      return DEMANGLER_SPECIAL;				\
+    }
+d1610 1
+a1610 1
+yylex (void)
+d1620 3
+d1633 1
+a1633 3
+    if (tokstart[0] == tokentab3[i].operator[0]
+        && tokstart[1] == tokentab3[i].operator[1]
+        && tokstart[2] == tokentab3[i].operator[2])
+d1642 1
+a1642 2
+    if (tokstart[0] == tokentab2[i].operator[0]
+        && tokstart[1] == tokentab2[i].operator[1])
+d1649 15
+a1704 9
+      if (strncmp (tokstart, "(anonymous namespace)", 21) == 0)
+	{
+	  lexptr += 21;
+	  yylval.comp = d_make_name (di, "(anonymous namespace)",
+				     sizeof "(anonymous namespace)" - 1);
+	  return NAME;
+	}
+	/* FALL THROUGH */
+
+a1722 7
+      /* For construction vtables.  This is kind of hokey.  */
+      if (strncmp (tokstart, "-in-", 4) == 0)
+	{
+	  lexptr += 4;
+	  return CONSTRUCTION_IN;
+	}
+
+d1896 21
+d1926 2
+a1935 5
+      if (strncmp (tokstart, "construction vtable for", 23) == 0)
+	{
+	  lexptr = tokstart + 23;
+	  return CONSTRUCTION_VTABLE;
+	}
+a1942 4
+    case 9:
+      HANDLE_SPECIAL ("covariant return thunk to", 25, D_COMP_COVARIANT_THUNK);
+      HANDLE_SPECIAL ("reference temporary for", 23, D_COMP_REFTEMP);
+      break;
+a1943 3
+      HANDLE_SPECIAL ("typeinfo for", 12, D_COMP_TYPEINFO);
+      HANDLE_SPECIAL ("typeinfo fn for", 15, D_COMP_TYPEINFO_FN);
+      HANDLE_SPECIAL ("typeinfo name for", 17, D_COMP_TYPEINFO_NAME);
+a1955 1
+      HANDLE_SPECIAL ("virtual thunk to", 16, D_COMP_VIRTUAL_THUNK);
+a1959 24
+      if (strncmp (tokstart, "global constructors keyed to", 28) == 0)
+	{
+	  char *p;
+	  lexptr = tokstart + 28;
+	  yylval.typed_val_int.val = GLOBAL_CONSTRUCTORS;
+	  /* Skip the trailing space, find the end of the symbol.  */
+	  p = symbol_end (lexptr + 1);
+	  yylval.typed_val_int.type = d_make_name (di, lexptr + 1, p - (lexptr + 1));
+	  lexptr = p;
+	  return GLOBAL;
+	}
+      if (strncmp (tokstart, "global destructors keyed to", 27) == 0)
+	{
+	  char *p;
+	  lexptr = tokstart + 27;
+	  yylval.typed_val_int.val = GLOBAL_DESTRUCTORS;
+	  /* Skip the trailing space, find the end of the symbol.  */
+	  p = symbol_end (lexptr + 1);
+	  yylval.typed_val_int.type = d_make_name (di, lexptr + 1, p - (lexptr + 1));
+	  lexptr = p;
+	  return GLOBAL;
+	}
+
+      HANDLE_SPECIAL ("vtable for", 10, D_COMP_VTABLE);
+a1971 1
+      HANDLE_SPECIAL ("guard variable for", 18, D_COMP_GUARD);
+a1999 2
+      HANDLE_SPECIAL ("VTT for", 7, D_COMP_VTT);
+      HANDLE_SPECIAL ("non-virtual thunk to", 20, D_COMP_THUNK);
+@
+
+
+1.1.2.10
+log
+@	* cp-names.y (tokentab2, tokentab3): Remove.
+	(HANDLE_TOKEN2, HANDLE_TOKEN3): New macros.
+	(yylex): Use them.
+@
+text
+@d1416 30
+a1453 16
+#define HANDLE_TOKEN2(string, token, op)		\
+  if (lexptr[1] == string[1])				\
+    {							\
+      lexptr += 2;					\
+      yylval.opname = string;				\
+      return token;					\
+    }      
+
+#define HANDLE_TOKEN3(string, token, op)		\
+  if (lexptr[1] == string[1] && lexptr[2] == string[2])	\
+    {							\
+      lexptr += 2;					\
+      yylval.opname = string;				\
+      return token;					\
+    }      
+
+d1461 1
+d1475 20
+a1563 4
+      HANDLE_TOKEN2 ("-=", ASSIGN_MODIFY, BINOP_SUB);
+      HANDLE_TOKEN2 ("--", DECREMENT, BINOP_END);
+      HANDLE_TOKEN2 ("->", ARROW, BINOP_END);
+
+a1645 4
+      HANDLE_TOKEN2 ("+=", ASSIGN_MODIFY, BINOP_ADD);
+      HANDLE_TOKEN2 ("++", INCREMENT, BINOP_END);
+      lexptr++;
+      return c;
+a1646 3
+      HANDLE_TOKEN2 ("*=", ASSIGN_MODIFY, BINOP_MUL);
+      lexptr++;
+      return c;
+a1647 3
+      HANDLE_TOKEN2 ("/=", ASSIGN_MODIFY, BINOP_DIV);
+      lexptr++;
+      return c;
+a1648 3
+      HANDLE_TOKEN2 ("%=", ASSIGN_MODIFY, BINOP_REM);
+      lexptr++;
+      return c;
+a1649 4
+      HANDLE_TOKEN2 ("|=", ASSIGN_MODIFY, BINOP_BITWISE_IOR);
+      HANDLE_TOKEN2 ("||", OROR, BINOP_END);
+      lexptr++;
+      return c;
+a1650 4
+      HANDLE_TOKEN2 ("&=", ASSIGN_MODIFY, BINOP_BITWISE_AND);
+      HANDLE_TOKEN2 ("&&", ANDAND, BINOP_END);
+      lexptr++;
+      return c;
+d1652 1
+a1652 3
+      HANDLE_TOKEN2 ("^=", ASSIGN_MODIFY, BINOP_BITWISE_XOR);
+      lexptr++;
+      return c;
+d1654 1
+a1654 3
+      HANDLE_TOKEN2 ("!=", NOTEQUAL, BINOP_END);
+      lexptr++;
+      return c;
+a1655 5
+      HANDLE_TOKEN2 ("<=", LEQ, BINOP_END);
+      HANDLE_TOKEN2 ("<<", LSH, BINOP_END);
+      HANDLE_TOKEN3 ("<<=", ASSIGN_MODIFY, BINOP_LSH);
+      lexptr++;
+      return c;
+a1656 14
+      HANDLE_TOKEN2 (">=", GEQ, BINOP_END);
+      HANDLE_TOKEN2 (">>", RSH, BINOP_END);
+      HANDLE_TOKEN3 (">>=", ASSIGN_MODIFY, BINOP_RSH);
+      lexptr++;
+      return c;
+    case '=':
+      HANDLE_TOKEN2 ("==", EQUAL, BINOP_END);
+      lexptr++;
+      return c;
+    case ':':
+      HANDLE_TOKEN2 ("::", COLONCOLON, BINOP_END);
+      lexptr++;
+      return c;
+
+d1660 2
+a1661 2
+    case '@@':
+    case '~':
+@
+
+
+1.1.2.11
+log
+@	* cp-names.y (%union): Add abstract_fn.
+	(conversion_op): New non-terminal, broken out of operator.
+	(conversion_op_name, abstract_declarator_fn): New non-terminals.
+	(ptr_operator_seq): Remove.
+	(function): Use D_COMP_LOCAL_NAME.  Handle conversion operators.
+	(declarator_1): Use D_COMP_LOCAL_NAME.
+	(tokentab2, tokentab3): Remove.
+	(HANDLE_TOKEN3): Fix typo.
+	(yylex): Call HANDLE_TOKEN3 before HANDLE_TOKEN2.
+@
+text
+@a184 3
+    struct {
+      struct d_comp *comp, **last, *fn;
+    } abstract_fn;
+d205 1
+a205 2
+%type <comp> demangler_special function conversion_op
+%type <nested> conversion_op_name
+a207 1
+%type <abstract_fn> abstract_declarator_fn
+d213 1
+a213 1
+%type <nested> ptr_operator
+d323 1
+a323 1
+			  if ($3) $$ = d_make_comp (di, D_COMP_LOCAL_NAME, $$, $3); }
+d326 1
+a326 14
+			  if ($3) $$ = d_make_comp (di, D_COMP_LOCAL_NAME, $$, $3); }
+
+		|	conversion_op_name abstract_declarator_fn start_opt
+			{ if ($2.last)
+			    {
+			       /* First complete the abstract_declarator's type using
+				  the typespec from the conversion_op_name.  */
+			      *$2.last = *$1.last;
+			      /* Then complete the conversion_op_name with the type.  */
+			      *$1.last = $2.comp;
+			    }
+			  /* Then finally build the function.  */
+			  $$ = d_make_comp (di, D_COMP_TYPED_NAME, $1.comp, $2.fn);
+			  if ($3) $$ = d_make_comp (di, D_COMP_LOCAL_NAME, $$, $3); }
+a408 1
+		;
+d413 1
+a413 2
+conversion_op
+		:	OPERATOR typespec_2
+d415 3
+a417 21
+		;
+
+conversion_op_name
+		:	nested_name conversion_op
+			{ $$.comp = $1.comp;
+			  d_right ($1.last) = $2;
+			  $$.last = &d_left ($2);
+			}
+		|	conversion_op
+			{ $$.comp = $1;
+			  $$.last = &d_left ($1);
+			}
+		|	COLONCOLON nested_name conversion_op
+			{ $$.comp = $2.comp;
+			  d_right ($2.last) = $3;
+			  $$.last = &d_left ($3);
+			}
+		|	COLONCOLON conversion_op
+			{ $$.comp = $2;
+			  $$.last = &d_left ($2);
+			}
+d660 7
+a724 24
+abstract_declarator_fn
+		:	function_arglist
+			{ $$.fn = $1.comp;
+			  $$.comp = NULL;
+			  $$.last = NULL;
+			}
+		|	ptr_operator abstract_declarator_fn
+			{ $$.fn = $2.fn;
+			  $$.last = $1.last;
+			  if ($2.comp)
+			    {
+			      $$.comp = $2.comp;
+			      *$2.last = $1.comp;
+			    }
+			  else
+			    $$.comp = $1.comp;
+			}
+		|	direct_abstract_declarator function_arglist
+			{ $$.fn = $2.comp;
+			  $$.comp = $1.comp;
+			  $$.last = $1.last;
+			}
+		;
+
+d784 1
+a784 1
+			  $$.comp = d_make_comp (di, D_COMP_LOCAL_NAME, $$.comp, $4);
+d1435 1
+a1435 1
+      lexptr += 3;					\
+a1649 1
+      HANDLE_TOKEN3 ("<<=", ASSIGN_MODIFY, BINOP_LSH);
+d1652 1
+a1655 1
+      HANDLE_TOKEN3 (">>=", ASSIGN_MODIFY, BINOP_RSH);
+d1658 1
+@
+
+
+1.1.2.12
+log
+@	* cp-names.y (%union): Remove abstract_fn.  Add abstract.
+	(abstract_declarator_fn): Change type to abstract.  Fold function
+	arglists lazily.  Handle start_opt after function_arglist
+	and :: after more complex function types.
+	(abstract_declarator): Change type to abstract.  Fold function
+	arglists eagerly.
+	(direct_abstract_declarator): Change type to abstract.  Fold function
+	arglists only when necessary.
+	(function): Move start_opt into abstract_declarator_fn.  Handle
+	bare conversion typespecs and unfolded arglists.
+	(declarator_1): Handle local names inside more complex function
+	declarations.
+	(main): Support --debug.
+@
+text
+@d178 1
+a178 1
+    struct nested {
+d186 2
+a187 5
+      struct d_comp *comp, **last;
+      struct nested fn;
+      struct d_comp *start;
+      int fold_flag;
+    } abstract;
+d211 2
+a212 2
+%type <abstract> abstract_declarator direct_abstract_declarator
+%type <abstract> abstract_declarator_fn
+d333 1
+a333 4
+		|	conversion_op_name start_opt
+			{ $$ = $1.comp;
+			  if ($2) $$ = d_make_comp (di, D_COMP_LOCAL_NAME, $$, $2); }
+		|	conversion_op_name abstract_declarator_fn
+d342 4
+a345 7
+			  /* If we have an arglist, build a function type.  */
+			  if ($2.fn.comp)
+			    $$ = d_make_comp (di, D_COMP_TYPED_NAME, $1.comp, $2.fn.comp);
+			  else
+			    $$ = $1.comp;
+			  if ($2.start) $$ = d_make_comp (di, D_COMP_LOCAL_NAME, $$, $2.start);
+			}
+a720 2
+			{ $$.comp = $1.comp; $$.last = $1.last;
+			  $$.fn.comp = NULL; $$.fn.last = NULL; }
+d722 3
+a724 4
+			{ $$ = $2; $$.fn.comp = NULL; $$.fn.last = NULL;
+			  if ($2.fn.comp) { $$.last = $2.fn.last; *$2.last = $2.fn.comp; }
+			  *$$.last = $1.comp;
+			  $$.last = $1.last; }
+a725 3
+			{ $$ = $1; $$.fn.comp = NULL; $$.fn.last = NULL;
+			  if ($1.fn.comp) { $$.last = $1.fn.last; *$1.last = $1.fn.comp; }
+			}
+d730 1
+a730 3
+			{ $$ = $2; $$.fn.comp = NULL; $$.fn.last = NULL; $$.fold_flag = 1;
+			  if ($2.fn.comp) { $$.last = $2.fn.last; *$2.last = $2.fn.comp; }
+			}
+d732 3
+a734 9
+			{ $$ = $1; $$.fold_flag = 0;
+			  if ($1.fn.comp) { $$.last = $1.fn.last; *$1.last = $1.fn.comp; }
+			  if ($1.fold_flag)
+			    {
+			      *$$.last = $2.comp;
+			      $$.last = $2.last;
+			    }
+			  else
+			    $$.fn = $2;
+d737 1
+a737 2
+			{ $$ = $1; $$.fn.comp = NULL; $$.fn.last = NULL; $$.fold_flag = 0;
+			  if ($1.fn.comp) { $$.last = $1.fn.last; *$1.last = $1.fn.comp; }
+d742 1
+a742 2
+			{ $$.fn.comp = NULL; $$.fn.last = NULL; $$.fold_flag = 0;
+			  $$.comp = $1;
+d757 5
+a761 3
+		:	ptr_operator
+			{ $$.comp = $1.comp; $$.last = $1.last;
+			  $$.fn.comp = NULL; $$.fn.last = NULL; $$.start = NULL; }
+d763 1
+a763 5
+			{ $$ = $2;
+			  if ($2.last)
+			    *$$.last = $1.comp;
+			  else
+			    $$.comp = $1.comp;
+d765 1
+a765 7
+			}
+		|	direct_abstract_declarator
+			{ $$.comp = $1.comp; $$.last = $1.last; $$.fn = $1.fn; $$.start = NULL; }
+		|	direct_abstract_declarator function_arglist COLONCOLON start
+			{ $$ = $1; $$.start = $4;
+			  if ($1.fn.comp) { $$.last = $1.fn.last; *$1.last = $1.fn.comp; }
+			  if ($1.fold_flag)
+d767 2
+a768 2
+			      *$$.last = $2.comp;
+			      $$.last = $2.last;
+d771 1
+a771 1
+			    $$.fn = $2;
+d773 4
+a776 4
+		|	function_arglist start_opt
+			{ $$.fn = $1;
+			  $$.start = $2;
+			  $$.comp = NULL; $$.last = NULL;
+d835 1
+a835 2
+			   members will not be mangled.  If they are hopefully
+			   they'll end up to the right of the ::.  */
+a840 6
+		|	direct_declarator_1 function_arglist COLONCOLON start
+			{ $$.comp = $1.comp;
+			  *$1.last = $2.comp;
+			  $$.last = $2.last;
+			  $$.comp = d_make_comp (di, D_COMP_LOCAL_NAME, $$.comp, $4);
+			}
+d2022 2
+a2023 10
+  int arg;
+
+  arg = 1;
+  if (argv[arg] && strcmp (argv[arg], "--debug") == 0)
+    {
+      yydebug = 1;
+      arg++;
+    }
+
+  if (argv[arg] == NULL)
+d2055 1
+a2055 1
+      lexptr = argv[arg];
+@
+
+
+1.1.2.13
+log
+@	* cp-names.y (LONGEST, ULONGEST, DOUBLEST): Remove.
+	(d_qualify): Take an int argument.  Update for new INT_LLONG
+	handling.
+	(INT_CHAR, INT_SHORT, INT_LONG, INT_LLONG, INT_SIGNED)
+	(INT_UNSIGNED): Change into bitflags.
+	(%union): Change lval and typed_val_int.val to ints.
+	(scope_id, typespec): Inline non-terminals at their use sites.
+	(sign, size, int_type): Remove.
+	(int_part, int_seq): New non-terminals.
+	(result): Add missing semicolon.
+	(name, nested_name): Inline scope_id here.
+	(template_arg, function_args): Inline type here.
+	(builtin_type): Use int_seq.  Add missing semicolon.
+	(typespec_2): Inline typespec and colon_name here.
+	(start, qualifiers_opt, qualifiers): Remove redundant action.
+	(abstract_declarator, direct_abstract_declarator): Likewise.
+	(abstract_declarator_fn): Likewise.
+	(d_builtin_type): New helper function.
+	(parse_number): Use d_builtin_type.
+	(HANDLE_SPECIAL): Only take one argument.
+	(yylex): Remove unused variable unquoted_expr.  Use d_builtin_type.
+	Update calls to HANDLE_SPECIAL.  Jump around case '-' instead of
+	falling through it.  Use ISALNUM and ISALPHA.  Add a return
+	statement after a call to error.  Match trailing speaces on special
+	tokens.
+	(cp_print): Take a len argument, and pass it to d_print.  Print the
+	string instead of returning it.
+	(main): Pass len to cp_print.  Allocate and free myinfo.comps.
+	Use putchar and puts instead of printf.
+
+	* Makefile.in (safe_ctype_h): Add.
+	(test-cpnames, cp-names-main.tab.o): New rules.
+	(clean): Remove test-cpnames.
+	(cp-names.tab.o): Update dependencies.
+@
+text
+@d46 4
+d57 1
+a57 1
+static struct d_comp *d_qualify (struct d_comp *, int, int);
+d91 4
+a94 4
+#define INT_CHAR	(1 << 0)
+#define INT_SHORT	(1 << 1)
+#define INT_LONG	(1 << 2)
+#define INT_LLONG	(1 << 3)
+d96 2
+a97 2
+#define INT_SIGNED	(1 << 4)
+#define INT_UNSIGNED	(1 << 5)
+d191 1
+a191 1
+    int lval;
+d193 1
+a193 1
+      int val;
+d205 1
+a205 1
+%type <comp> unqualified_name colon_ext_name
+d208 1
+a208 1
+%type <comp> typespec_2 array_indicator
+d227 1
+a227 1
+%type <lval> int_part int_seq
+a300 1
+		;
+d303 1
+a475 3
+/* This rule is used in name and nested_name, and expanded inline there
+   for efficiency.  */
+/*
+a478 1
+*/
+d487 1
+a487 1
+name		:	nested_name NAME %prec NAME
+d489 1
+a489 4
+		|	NAME %prec NAME
+		|	nested_name template %prec NAME
+			{ $$ = $1.comp; d_right ($1.last) = $2; }
+		|	template %prec NAME
+d506 2
+a507 3
+nested_name	:	NAME COLONCOLON
+			{ $$.comp = d_make_empty (di, D_COMP_QUAL_NAME);
+			  d_left ($$.comp) = $1;
+d511 1
+a511 1
+		|	nested_name NAME COLONCOLON
+d513 1
+a513 1
+			  d_right ($1.last) = d_make_empty (di, D_COMP_QUAL_NAME);
+a514 1
+			  d_left ($$.last) = $2;
+d517 3
+a519 3
+		|	template COLONCOLON
+			{ $$.comp = d_make_empty (di, D_COMP_QUAL_NAME);
+			  d_left ($$.comp) = $1;
+d523 1
+a523 1
+		|	nested_name template COLONCOLON
+d525 1
+a525 1
+			  d_right ($1.last) = d_make_empty (di, D_COMP_QUAL_NAME);
+a526 1
+			  d_left ($$.last) = $2;
+d529 1
+a547 2
+/* "type" is inlined into template_arg and function_args.  */
+
+d550 1
+a550 5
+template_arg	:	typespec_2
+		|	typespec_2 abstract_declarator
+			{ $$ = $2.comp;
+			  *$2.last = $1;
+			}
+d558 1
+a558 1
+function_args	:	typespec_2
+d571 1
+a571 6
+		|	typespec_2 abstract_declarator
+			{ *$2.last = $1;
+			  $$.comp = d_make_comp (di, D_COMP_ARGLIST, $2.comp, NULL);
+			  $$.last = &d_right ($$.comp);
+			}
+		|	function_args ',' typespec_2
+a575 6
+		|	function_args ',' typespec_2 abstract_declarator
+			{ *$4.last = $3;
+			  *$1.last = d_make_comp (di, D_COMP_ARGLIST, $4.comp, NULL);
+			  $$.comp = $1.comp;
+			  $$.last = &d_right (*$1.last);
+			}
+d600 1
+d612 1
+d617 5
+a621 2
+/* This accepts all sorts of invalid constructions and produces
+   invalid output for them - an error would be better.  */
+d623 1
+a623 3
+int_part	:	INT_KEYWORD
+			{ $$ = 0; }
+		|	SIGNED_KEYWORD
+d627 3
+a629 1
+		|	CHAR
+d635 2
+d639 22
+a660 3
+int_seq		:	int_part
+		|	int_seq int_part
+			{ $$ = $1 | $2; if ($1 & $2 & INT_LONG) $$ = $1 | INT_LLONG; }
+d663 1
+a663 1
+builtin_type	:	int_seq
+a714 1
+		;
+a717 3
+/* This rule is only used in typespec_2, and expanded inline there for
+   efficiency.  */
+/*
+a720 9
+*/
+
+typespec_2	:	builtin_type qualifiers
+			{ $$ = d_qualify ($1, $2, 0); }
+		|	builtin_type
+		|	qualifiers builtin_type qualifiers
+			{ $$ = d_qualify ($2, $1 | $3, 0); }
+		|	qualifiers builtin_type
+			{ $$ = d_qualify ($2, $1, 0); }
+d722 1
+a722 1
+		|	name qualifiers
+d724 1
+a724 2
+		|	name
+		|	qualifiers name qualifiers
+a725 11
+		|	qualifiers name
+			{ $$ = d_qualify ($2, $1, 0); }
+
+		|	COLONCOLON name qualifiers
+			{ $$ = d_qualify ($2, $3, 0); }
+		|	COLONCOLON name
+			{ $$ = $2; }
+		|	qualifiers COLONCOLON name qualifiers
+			{ $$ = d_qualify ($3, $1 | $4, 0); }
+		|	qualifiers COLONCOLON name
+			{ $$ = d_qualify ($3, $1, 0); }
+d738 1
+a738 1
+			{ $$.fn.comp = NULL; $$.fn.last = NULL;
+d749 1
+a749 1
+			{ $$.fold_flag = 0;
+d760 1
+a760 1
+			{ $$.fn.comp = NULL; $$.fn.last = NULL; $$.fold_flag = 0;
+d796 1
+a796 1
+			{ $$.start = $4;
+d1111 1
+a1111 1
+d_qualify (struct d_comp *lhs, int qualifiers, int is_method)
+d1180 2
+a1181 2
+    case INT_LLONG | INT_LONG:
+    case INT_SIGNED | INT_LLONG | INT_LONG:
+d1184 1
+a1184 1
+    case INT_UNSIGNED | INT_LLONG | INT_LONG:
+a1194 6
+d_builtin_type (int which)
+{
+  return d_make_builtin_type (di, &d_builtin_types[which]);
+}
+
+static struct d_comp *
+d1323 2
+a1324 2
+      unsigned_type = d_builtin_type ('j' - 'a');
+      signed_type = d_builtin_type ('i' - 'a');
+d1328 2
+a1329 2
+      unsigned_type = d_builtin_type ('m' - 'a');
+      signed_type = d_builtin_type ('l' - 'a');
+d1333 2
+a1334 2
+      unsigned_type = d_builtin_type ('x' - 'a');
+      signed_type = d_builtin_type ('y' - 'a');
+d1511 6
+a1516 6
+#define HANDLE_SPECIAL(string, comp)				\
+  if (strncmp (tokstart, string, sizeof (string) - 1) == 0)	\
+    {								\
+      lexptr = tokstart + sizeof (string) - 1;			\
+      yylval.lval = comp;					\
+      return DEMANGLER_SPECIAL;					\
+d1547 3
+a1550 1
+ retry:
+d1552 2
+d1588 1
+a1588 1
+      yylval.typed_val_int.type = d_builtin_type ('c' - 'a');
+d1621 1
+a1621 2
+
+      goto try_number;
+a1641 1
+    try_number:
+d1691 3
+a1693 1
+	    else if (! ISALNUM (*p))
+a1703 1
+	    return ERROR;
+d1847 2
+a1848 1
+  if (!(c == '_' || c == '$' || ISALPHA (c)))
+d1855 2
+a1856 1
+       ISALNUM (c) || c == '_' || c == '$'; )
+d1861 1
+a1861 3
+  /* Catch specific keywords.  Notice that some of the keywords contain
+     spaces, and are sorted by the length of the first word.  They must
+     all include a trailing space in the string comparison.  */
+d1869 1
+a1869 1
+      if (strncmp (tokstart, "construction vtable for ", 24) == 0)
+d1871 1
+a1871 1
+	  lexptr = tokstart + 24;
+d1882 2
+a1883 2
+      HANDLE_SPECIAL ("covariant return thunk to ", D_COMP_COVARIANT_THUNK);
+      HANDLE_SPECIAL ("reference temporary for ", D_COMP_REFTEMP);
+d1886 3
+a1888 3
+      HANDLE_SPECIAL ("typeinfo for ", D_COMP_TYPEINFO);
+      HANDLE_SPECIAL ("typeinfo fn for ", D_COMP_TYPEINFO_FN);
+      HANDLE_SPECIAL ("typeinfo name for ", D_COMP_TYPEINFO_NAME);
+d1901 1
+a1901 1
+      HANDLE_SPECIAL ("virtual thunk to ", D_COMP_VIRTUAL_THUNK);
+d1906 1
+a1906 1
+      if (strncmp (tokstart, "global constructors keyed to ", 29) == 0)
+d1909 1
+a1909 1
+	  lexptr = tokstart + 29;
+d1911 3
+a1913 3
+	  /* Find the end of the symbol.  */
+	  p = symbol_end (lexptr);
+	  yylval.typed_val_int.type = d_make_name (di, lexptr, p - lexptr);
+d1917 1
+a1917 1
+      if (strncmp (tokstart, "global destructors keyed to ", 28) == 0)
+d1920 1
+a1920 1
+	  lexptr = tokstart + 28;
+d1922 3
+a1924 3
+	  /* Find the end of the symbol.  */
+	  p = symbol_end (lexptr);
+	  yylval.typed_val_int.type = d_make_name (di, lexptr, p - lexptr);
+d1929 1
+a1929 1
+      HANDLE_SPECIAL ("vtable for ", D_COMP_VTABLE);
+d1942 1
+a1942 1
+      HANDLE_SPECIAL ("guard variable for ", D_COMP_GUARD);
+d1971 2
+a1972 2
+      HANDLE_SPECIAL ("VTT for ", D_COMP_VTT);
+      HANDLE_SPECIAL ("non-virtual thunk to ", D_COMP_THUNK);
+d1998 2
+a1999 2
+static void
+cp_print (struct d_comp *result, int len)
+d2001 1
+a2001 1
+  char *str;
+d2007 1
+a2007 1
+      puts ("global destructors keyed to ");
+d2012 1
+a2012 1
+      puts ("global constructors keyed to ");
+d2015 1
+a2015 1
+  str = d_print (DMGL_PARAMS | DMGL_ANSI, result, len, &err);
+d2017 1
+a2017 1
+    return;
+d2019 2
+a2020 1
+  puts (str);
+d2022 3
+d2026 1
+d2060 1
+a2060 1
+  char *str2, *extra_chars, c;
+a2073 1
+	int len;
+d2089 1
+a2089 4
+	len = strlen (lexptr);
+	d_init_info (NULL, DMGL_PARAMS | DMGL_ANSI, len, &myinfo);
+	myinfo.comps = malloc (myinfo.num_comps * sizeof (struct d_comp));
+	myinfo.subs = NULL;
+d2093 1
+a2093 1
+	cp_print (result, len);
+d2095 1
+d2097 3
+a2099 8
+	  {
+	    putchar (c);
+	    puts (extra_chars);
+	  }
+	putchar ('\n');
+	free (myinfo.comps);
+	if (myinfo.subs)
+	  free (myinfo.subs);
+a2102 1
+      int len;
+d2104 1
+a2104 3
+      len = strlen (lexptr);
+      d_init_info (NULL, DMGL_PARAMS | DMGL_ANSI, len, &myinfo);
+      myinfo.comps = malloc (myinfo.num_comps * sizeof (struct d_comp));
+d2108 3
+a2110 4
+      cp_print (result, len);
+      free (myinfo.comps);
+      if (myinfo.subs)
+	free (myinfo.subs);
+@
+
+
+1.1.2.14
+log
+@	* Makefile.in (cp_names_h): New variable.
+	(cp-names.tab.o, cp-names-main.tab.o): Depend on cp-names.h.
+	* cp-names.h: New file.
+	* cp-names.y: Include "cp-names.h".
+	(lexptr, prev_lexptr): Make const.
+	(symbol_end): Make argument and return type const.  Move outside
+	of TEST_CPNAMES.
+	(parse_number): Make argument const.  Use an ISO C declaration.
+	(parse_escape): Make argument const.
+	(yylex): Make some pointers const.
+	(cp_comp_to_string, cp_canonicalize_string): New functions.
+	(trim_chars): Cast symbol_end's return value to non-const in
+	this case.
+@
+text
+@d1 3
+a3 3
+/* YACC parser for C++ names, for GDB.
+
+   Copyright 2003
+a5 2
+   Parts of the lexer are based on c-exp.y from GDB.
+
+d22 10
+a31 1
+/* Note that malloc's and realloc's in this file are transformed to
+d51 1
+a51 3
+#include "cp-names.h"
+
+static const char *lexptr, *prev_lexptr;
+d62 1
+a62 1
+static const char *symbol_end (const char *lexptr);
+d197 1
+a197 1
+static int parse_number (const char *, int, int, YYSTYPE *);
+d1267 5
+a1271 1
+parse_number (const char *p, int len, int parsed_float, YYSTYPE *putithere)
+d1442 1
+a1442 1
+parse_escape (const char **string_ptr)
+d1460 1
+a1460 1
+	  const char *sequence_start_pos = *string_ptr - 1;
+d1569 2
+a1570 1
+  const char *tokstart, *tokptr;
+d1680 1
+a1680 1
+	const char *p = tokstart;
+d1815 1
+a1815 1
+        const char *char_start_pos = tokptr;
+d1932 1
+a1932 1
+	  const char *p;
+d1943 1
+a1943 1
+	  const char *p;
+a2019 71
+static const char *
+symbol_end (const char *lexptr)
+{
+  const char *p = lexptr;
+
+  while (*p && (ISALNUM (*p) || *p == '_' || *p == '$' || *p == '.'))
+    p++;
+
+  return p;
+}
+
+static char *
+cp_comp_to_string (struct d_comp *result, int estimated_len)
+{
+  char *str, *prefix = NULL, *buf;
+  int err = 0;
+
+  if (result->type == GLOBAL_DESTRUCTORS)
+    {
+      result = d_left (result);
+      prefix = "global destructors keyed to ";
+    }
+  else if (result->type == GLOBAL_CONSTRUCTORS)
+    {
+      result = d_left (result);
+      prefix = "global constructors keyed to ";
+    }
+
+  str = d_print (DMGL_PARAMS | DMGL_ANSI, result, estimated_len, &err);
+  if (str == NULL)
+    return NULL;
+
+  if (prefix == NULL)
+    return str;
+
+  buf = malloc (strlen (str) + strlen (prefix) + 1);
+  strcpy (buf, prefix);
+  strcat (buf, str);
+  free (str);
+  return (buf);
+}
+
+/* Return the canonicalized form of STRING, or NULL if STRING can not be
+   parsed.  */
+
+char *
+cp_canonicalize_string (const char *string)
+{
+  struct d_info myinfo;
+  int len = strlen (string);
+  char *ret;
+
+  len = len + len / 8;
+
+  lexptr = string;
+  d_init_info (NULL, DMGL_PARAMS | DMGL_ANSI, len, &myinfo);
+  myinfo.comps = malloc (myinfo.num_comps * sizeof (struct d_comp));
+  myinfo.subs = NULL;
+  di = &myinfo;
+  if (yyparse () || result == NULL)
+    return NULL;
+
+  ret = cp_comp_to_string (result, len);
+
+  free (myinfo.comps);
+  if (myinfo.subs)
+    free (myinfo.subs);
+
+  return ret;
+}
+
+d2048 11
+d2062 1
+a2062 1
+  char *p = (char *) symbol_end (lexptr);
+@
+
+
+1.1.2.15
+log
+@	* cp-names.y (yylex): Fix thinko for character constants.
+	* dwarf2read.c: Include "cp-names.h".
+	(read_structure_scope): Canonicalize class names.
+@
+text
+@d1600 3
+a1605 8
+
+      /* FIXME: We should refer to a canonical form of the character,
+	 presumably the same one that appears in manglings - the decimal
+	 representation.  But if that isn't in our input then we have to
+	 allocate memory for it somewhere.  */
+      yylval.comp = d_make_comp (di, D_COMP_LITERAL,
+				 d_builtin_type ('c' - 'a'),
+				 d_make_name (di, tokstart, lexptr - tokstart));
+@
+
+
+1.1.2.16
+log
+@	* Makefile.in (cp-names.tab.o, cp-names-main.tab.o, test-cpnames):
+	Update dependencies.  Link the correct libiberty.
+	* cp-names.y: Include cp-demangle.h instead of cp-demangle.c.
+	Update names of exported functions from cp-demangle.c.  Use
+	cp_v3_d_init_info_alloc and cp_v3_d_free_info.
+@
+text
+@d3 1
+a3 1
+   Copyright 2003, 2004
+a39 2
+#include "libiberty.h"
+#include "demangle.h"
+d41 2
+a42 2
+#define IN_GDB
+#include "cp-demangle.h"
+d321 2
+a322 2
+			{ $$ = cp_v3_d_make_comp (di, D_COMP_TYPED_NAME, $1, $2.comp);
+			  if ($3) $$ = cp_v3_d_make_comp (di, D_COMP_LOCAL_NAME, $$, $3); }
+d324 2
+a325 2
+			{ $$ = cp_v3_d_make_comp (di, D_COMP_TYPED_NAME, $1, $2.comp);
+			  if ($3) $$ = cp_v3_d_make_comp (di, D_COMP_LOCAL_NAME, $$, $3); }
+d329 1
+a329 1
+			  if ($2) $$ = cp_v3_d_make_comp (di, D_COMP_LOCAL_NAME, $$, $2); }
+d341 1
+a341 1
+			    $$ = cp_v3_d_make_comp (di, D_COMP_TYPED_NAME, $1.comp, $2.fn.comp);
+d344 1
+a344 1
+			  if ($2.start) $$ = cp_v3_d_make_comp (di, D_COMP_LOCAL_NAME, $$, $2.start);
+d350 1
+a350 1
+			{ $$ = cp_v3_d_make_empty (di, $1);
+d354 1
+a354 1
+			{ $$ = cp_v3_d_make_comp (di, D_COMP_CONSTRUCTION_VTABLE, $2, $4); }
+d356 1
+a356 1
+			{ $$ = cp_v3_d_make_empty (di, $1.val);
+d362 1
+a362 1
+			{ $$ = cp_v3_d_make_operator_from_string (di, "new"); }
+d364 1
+a364 1
+			{ $$ = cp_v3_d_make_operator_from_string (di, "delete"); }
+d366 1
+a366 1
+			{ $$ = cp_v3_d_make_operator_from_string (di, "new[]"); }
+d368 1
+a368 1
+			{ $$ = cp_v3_d_make_operator_from_string (di, "delete[]"); }
+d370 1
+a370 1
+			{ $$ = cp_v3_d_make_operator_from_string (di, "+"); }
+d372 1
+a372 1
+			{ $$ = cp_v3_d_make_operator_from_string (di, "-"); }
+d374 1
+a374 1
+			{ $$ = cp_v3_d_make_operator_from_string (di, "*"); }
+d376 1
+a376 1
+			{ $$ = cp_v3_d_make_operator_from_string (di, "/"); }
+d378 1
+a378 1
+			{ $$ = cp_v3_d_make_operator_from_string (di, "%"); }
+d380 1
+a380 1
+			{ $$ = cp_v3_d_make_operator_from_string (di, "^"); }
+d382 1
+a382 1
+			{ $$ = cp_v3_d_make_operator_from_string (di, "&"); }
+d384 1
+a384 1
+			{ $$ = cp_v3_d_make_operator_from_string (di, "|"); }
+d386 1
+a386 1
+			{ $$ = cp_v3_d_make_operator_from_string (di, "~"); }
+d388 1
+a388 1
+			{ $$ = cp_v3_d_make_operator_from_string (di, "!"); }
+d390 1
+a390 1
+			{ $$ = cp_v3_d_make_operator_from_string (di, "="); }
+d392 1
+a392 1
+			{ $$ = cp_v3_d_make_operator_from_string (di, "<"); }
+d394 1
+a394 1
+			{ $$ = cp_v3_d_make_operator_from_string (di, ">"); }
+d396 1
+a396 1
+			{ $$ = cp_v3_d_make_operator_from_string (di, $2); }
+d398 1
+a398 1
+			{ $$ = cp_v3_d_make_operator_from_string (di, "<<"); }
+d400 1
+a400 1
+			{ $$ = cp_v3_d_make_operator_from_string (di, ">>"); }
+d402 1
+a402 1
+			{ $$ = cp_v3_d_make_operator_from_string (di, "=="); }
+d404 1
+a404 1
+			{ $$ = cp_v3_d_make_operator_from_string (di, "!="); }
+d406 1
+a406 1
+			{ $$ = cp_v3_d_make_operator_from_string (di, "<="); }
+d408 1
+a408 1
+			{ $$ = cp_v3_d_make_operator_from_string (di, ">="); }
+d410 1
+a410 1
+			{ $$ = cp_v3_d_make_operator_from_string (di, "&&"); }
+d412 1
+a412 1
+			{ $$ = cp_v3_d_make_operator_from_string (di, "||"); }
+d414 1
+a414 1
+			{ $$ = cp_v3_d_make_operator_from_string (di, "++"); }
+d416 1
+a416 1
+			{ $$ = cp_v3_d_make_operator_from_string (di, "--"); }
+d418 1
+a418 1
+			{ $$ = cp_v3_d_make_operator_from_string (di, ","); }
+d420 1
+a420 1
+			{ $$ = cp_v3_d_make_operator_from_string (di, "->*"); }
+d422 1
+a422 1
+			{ $$ = cp_v3_d_make_operator_from_string (di, "->"); }
+d424 1
+a424 1
+			{ $$ = cp_v3_d_make_operator_from_string (di, "()"); }
+d426 1
+a426 1
+			{ $$ = cp_v3_d_make_operator_from_string (di, "[]"); }
+d434 1
+a434 1
+			{ $$ = cp_v3_d_make_comp (di, D_COMP_CAST, $2, NULL); }
+d462 1
+a462 1
+			{ $$ = cp_v3_d_make_comp (di, D_COMP_TEMPLATE, $1, $3.comp); }
+d464 1
+a464 1
+			{ $$ = cp_v3_d_make_dtor (di, gnu_v3_complete_object_dtor, $2); }
+d505 1
+a505 1
+			{ $$.comp = cp_v3_d_make_empty (di, D_COMP_QUAL_NAME);
+d512 1
+a512 1
+			  d_right ($1.last) = cp_v3_d_make_empty (di, D_COMP_QUAL_NAME);
+d518 1
+a518 1
+			{ $$.comp = cp_v3_d_make_empty (di, D_COMP_QUAL_NAME);
+d525 1
+a525 1
+			  d_right ($1.last) = cp_v3_d_make_empty (di, D_COMP_QUAL_NAME);
+d535 1
+a535 1
+			{ $$ = cp_v3_d_make_comp (di, D_COMP_TEMPLATE, $1, $3.comp); }
+d539 1
+a539 1
+			{ $$.comp = cp_v3_d_make_comp (di, D_COMP_TEMPLATE_ARGLIST, $1, NULL);
+d543 1
+a543 1
+			  *$1.last = cp_v3_d_make_comp (di, D_COMP_TEMPLATE_ARGLIST, $3, NULL);
+d558 1
+a558 1
+			{ $$ = cp_v3_d_make_comp (di, D_COMP_UNARY, cp_v3_d_make_operator_from_string (di, "&"), $2); }
+d560 1
+a560 1
+			{ $$ = cp_v3_d_make_comp (di, D_COMP_UNARY, cp_v3_d_make_operator_from_string (di, "&"), $3); }
+d573 1
+a573 1
+			      $$.comp = cp_v3_d_make_comp (di, D_COMP_ARGLIST, $1, NULL);
+d579 1
+a579 1
+			  $$.comp = cp_v3_d_make_comp (di, D_COMP_ARGLIST, $2.comp, NULL);
+d583 1
+a583 1
+			{ *$1.last = cp_v3_d_make_comp (di, D_COMP_ARGLIST, $3, NULL);
+d589 1
+a589 1
+			  *$1.last = cp_v3_d_make_comp (di, D_COMP_ARGLIST, $4.comp, NULL);
+d595 2
+a596 2
+			    = cp_v3_d_make_comp (di, D_COMP_ARGLIST,
+					   cp_v3_d_make_builtin_type (di, 'z'),
+d604 1
+a604 1
+			{ $$.comp = cp_v3_d_make_comp (di, D_COMP_FUNCTION_TYPE, NULL, $2.comp);
+d608 1
+a608 1
+			{ $$.comp = cp_v3_d_make_comp (di, D_COMP_FUNCTION_TYPE, NULL, NULL);
+d657 1
+a657 1
+			{ $$ = cp_v3_d_make_builtin_type (di, 'f'); }
+d659 1
+a659 1
+			{ $$ = cp_v3_d_make_builtin_type (di, 'd'); }
+d661 1
+a661 1
+			{ $$ = cp_v3_d_make_builtin_type (di, 'e'); }
+d663 1
+a663 1
+			{ $$ = cp_v3_d_make_builtin_type (di, 'b'); }
+d665 1
+a665 1
+			{ $$ = cp_v3_d_make_builtin_type (di, 'w'); }
+d667 1
+a667 1
+			{ $$ = cp_v3_d_make_builtin_type (di, 'v'); }
+d671 1
+a671 1
+			{ $$.comp = cp_v3_d_make_empty (di, D_COMP_POINTER);
+d677 1
+a677 1
+			{ $$.comp = cp_v3_d_make_empty (di, D_COMP_REFERENCE);
+d681 1
+a681 1
+			{ $$.comp = cp_v3_d_make_empty (di, D_COMP_PTRMEM_TYPE);
+d689 1
+a689 1
+			{ $$.comp = cp_v3_d_make_empty (di, D_COMP_PTRMEM_TYPE);
+d699 1
+a699 1
+			{ $$ = cp_v3_d_make_empty (di, D_COMP_ARRAY_TYPE);
+d703 1
+a703 1
+			{ $$ = cp_v3_d_make_empty (di, D_COMP_ARRAY_TYPE);
+d857 1
+a857 1
+			{ $$.comp = cp_v3_d_make_empty (di, D_COMP_TYPED_NAME);
+d874 1
+a874 1
+			{ $$.comp = cp_v3_d_make_empty (di, D_COMP_TYPED_NAME);
+d887 1
+a887 1
+			{ $$.comp = cp_v3_d_make_comp (di, D_COMP_TYPED_NAME, $1, $2.comp);
+d889 1
+a889 1
+			  $$.comp = cp_v3_d_make_comp (di, D_COMP_LOCAL_NAME, $$.comp, $4);
+d895 1
+a895 1
+			  $$.comp = cp_v3_d_make_comp (di, D_COMP_LOCAL_NAME, $$.comp, $4);
+d915 1
+a915 1
+			{ $$.comp = cp_v3_d_make_comp (di, D_COMP_TYPED_NAME, $1, $2.comp);
+d919 1
+a919 1
+			{ $$.comp = cp_v3_d_make_comp (di, D_COMP_TYPED_NAME, $1, $2);
+d961 2
+a962 2
+		    $$ = cp_v3_d_make_comp (di, D_COMP_UNARY,
+				      cp_v3_d_make_comp (di, D_COMP_CAST, $2, NULL),
+d970 2
+a971 2
+		{ $$ = cp_v3_d_make_comp (di, D_COMP_UNARY,
+				    cp_v3_d_make_comp (di, D_COMP_CAST, $3, NULL),
+d977 2
+a978 2
+		{ $$ = cp_v3_d_make_comp (di, D_COMP_UNARY,
+				    cp_v3_d_make_comp (di, D_COMP_CAST, $3, NULL),
+d984 2
+a985 2
+		{ $$ = cp_v3_d_make_comp (di, D_COMP_UNARY,
+				    cp_v3_d_make_comp (di, D_COMP_CAST, $3, NULL),
+d997 2
+a998 2
+		{ $$ = cp_v3_d_make_comp (di, D_COMP_UNARY,
+				    cp_v3_d_make_comp (di, D_COMP_CAST, $1, NULL),
+d1085 3
+a1087 3
+		{ $$ = cp_v3_d_make_comp (di, D_COMP_TRINARY, cp_v3_d_make_operator_from_string (di, "?"),
+				    cp_v3_d_make_comp (di, D_COMP_TRINARY_ARG1, $1,
+						 cp_v3_d_make_comp (di, D_COMP_TRINARY_ARG2, $3, $5)));
+d1105 3
+a1107 3
+		  i = cp_v3_d_make_name (di, "1", 1);
+		  $$ = cp_v3_d_make_comp (di, D_COMP_LITERAL,
+				    cp_v3_d_make_builtin_type (di, 'b'),
+d1114 3
+a1116 3
+		  i = cp_v3_d_make_name (di, "0", 1);
+		  $$ = cp_v3_d_make_comp (di, D_COMP_LITERAL,
+				    cp_v3_d_make_builtin_type (di, 'b'),
+d1137 1
+a1137 1
+      *inner_p = cp_v3_d_make_comp (di, is_method ? MTYPE : TYPE,	\
+d1207 21
+a1227 1
+  return cp_v3_d_make_builtin_type (di, i + 'a');
+d1233 1
+a1233 1
+  return cp_v3_d_make_comp (di, D_COMP_UNARY, cp_v3_d_make_operator_from_string (di, name), lhs);
+d1239 2
+a1240 2
+  return cp_v3_d_make_comp (di, D_COMP_BINARY, cp_v3_d_make_operator_from_string (di, name),
+		      cp_v3_d_make_comp (di, D_COMP_BINARY_ARGS, lhs, rhs));
+d1299 1
+a1299 1
+      	  type = cp_v3_d_make_builtin_type (di, 'f');
+d1304 1
+a1304 1
+	  type = cp_v3_d_make_builtin_type (di, 'e');
+d1307 1
+a1307 1
+	type = cp_v3_d_make_builtin_type (di, 'd');
+d1311 2
+a1312 2
+      name = cp_v3_d_make_name (di, p, len);
+      putithere->comp = cp_v3_d_make_comp (di, literal_type, type, name);
+d1341 2
+a1342 2
+      unsigned_type = cp_v3_d_make_builtin_type (di, 'j');
+      signed_type = cp_v3_d_make_builtin_type (di, 'i');
+d1346 2
+a1347 2
+      unsigned_type = cp_v3_d_make_builtin_type (di, 'm');
+      signed_type = cp_v3_d_make_builtin_type (di, 'l');
+d1351 2
+a1352 2
+      unsigned_type = cp_v3_d_make_builtin_type (di, 'x');
+      signed_type = cp_v3_d_make_builtin_type (di, 'y');
+d1363 2
+a1364 2
+   name = cp_v3_d_make_name (di, p, len);
+   putithere->comp = cp_v3_d_make_comp (di, literal_type, type, name);
+d1608 3
+a1610 3
+      yylval.comp = cp_v3_d_make_comp (di, D_COMP_LITERAL,
+				 cp_v3_d_make_builtin_type (di, 'c'),
+				 cp_v3_d_make_name (di, tokstart, lexptr - tokstart));
+d1618 1
+a1618 1
+	  yylval.comp = cp_v3_d_make_name (di, "(anonymous namespace)",
+d1932 1
+a1932 1
+	  yylval.typed_val_int.type = cp_v3_d_make_name (di, lexptr, p - lexptr);
+d1943 1
+a1943 1
+	  yylval.typed_val_int.type = cp_v3_d_make_name (di, lexptr, p - lexptr);
+d2001 1
+a2001 1
+  yylval.comp = cp_v3_d_make_name (di, tokstart, namelen);
+d2043 1
+a2043 1
+  str = cp_v3_d_print (DMGL_PARAMS | DMGL_ANSI, result, estimated_len, &err);
+d2063 1
+d2070 4
+a2073 1
+  di = cp_v3_d_init_info_alloc (NULL, DMGL_PARAMS | DMGL_ANSI, len);
+d2079 3
+a2081 1
+  cp_v3_d_free_info (di);
+d2105 1
+a2105 1
+  str = cp_v3_d_print (DMGL_PARAMS | DMGL_ANSI, result, len, &err);
+d2133 1
+d2165 4
+a2168 1
+	di = cp_v3_d_init_info_alloc (NULL, DMGL_PARAMS | DMGL_ANSI, len);
+d2179 3
+a2181 1
+	cp_v3_d_free_info (di);
+d2188 3
+a2190 1
+      di = cp_v3_d_init_info_alloc (NULL, DMGL_PARAMS | DMGL_ANSI, len);
+d2194 3
+a2196 1
+      cp_v3_d_free_info (di);
+@
+
+
+1.1.2.17
+log
+@	* Makefile.in (cp_names_h): Remove.
+	(cp_demangle_h): New.
+	(cp-names.tab.o, cp-names-main.tab.o): Use $(cp_demangle_h) and
+	remove $(cp_names_h).
+	(cp-support.o): Use $(cp_demangle_h).
+	* cp-names.y: Don't include cp-names.h.
+	(cp_comp_to_string): Export.
+	(cp_canonicalize_string): Move to cp-support.c.
+	(demangled_name_to_comp, mangled_name_to_comp): New functions.
+	* cp-support.c: Include "cp-demangle.h".
+	(cp_canonicalize_string): New function, moved from cp-names.y and
+	updated.
+	(class_name_from_physname, method_name_from_physname): Rewritten.
+	(find_last_component): Removed.
+	* cp-support.h: Add new opaque types and prototypes.
+	* dwarf2read.c: Don't include cp-names.h.
+	* cp-names.h: Remove file.
+@
+text
+@d46 2
+d2008 1
+a2008 1
+char *
+d2039 2
+a2040 2
+/* Convert a demangled name to a d_comp tree.  *DI_P is set to the
+   struct d_info that should be freed when finished with the tree.  */
+d2042 2
+a2043 2
+struct d_comp *
+demangled_name_to_comp (const char *demangled_name, struct d_info **di_p)
+d2045 2
+a2046 1
+  int len = strlen (demangled_name);
+a2048 1
+  lexptr = demangled_name;
+d2050 1
+a2051 1
+
+d2053 1
+a2053 4
+    {
+      cp_v3_d_free_info (di);
+      return NULL;
+    }
+d2055 1
+a2055 3
+  *di_p = di;
+  return result;
+}
+d2057 1
+a2057 26
+/* Convert a mangled name to a d_comp tree.  *DI_P is set to the
+   struct d_info that should be freed when finished with the tree.
+   DEMANGLED_P is set to the char * that should be freed when finished
+   with the tree.  OPTIONS will be passed to the demangler.
+   
+   This could be done much more efficiently for v3 mangled names by exposing
+   d_demangle from the demangler.  */
+
+struct d_comp *
+mangled_name_to_comp (const char *mangled_name, int options,
+		      struct d_info **di_p, char **demangled_p)
+{
+  char *demangled_name = cplus_demangle (mangled_name, options);
+  int len;
+  struct d_comp *ret;
+
+  if (demangled_name == NULL)
+    return NULL;
+  
+  ret = demangled_name_to_comp (demangled_name, di_p);
+
+  if (ret == NULL)
+    {
+      free (demangled_name);
+      return NULL;
+    }
+a2058 1
+  *demangled_p = demangled_name;
+@
+
+
+1.1.2.18
+log
+@	* cp-names.y (orig_lexptr): New variable.
+	(exp1): New production for parenthesized references.
+	(yyerror): Print out complete string on parse error.
+	(demangled_name_to_comp, main): Set orig_lexptr.
+@
+text
+@d46 1
+a46 1
+static const char *lexptr, *prev_lexptr, *orig_lexptr;
+a936 7
+/* References.  Not allowed everywhere in template parameters, only
+   at the top level, but treat them as expressions in case they are wrapped
+   in parentheses.  */
+exp1	:	'&' start
+		{ $$ = cp_v3_d_make_comp (di, D_COMP_UNARY, cp_v3_d_make_operator_from_string (di, "&"), $2); }
+	;
+
+a1991 1
+  printf ("Orig expression: %s\n", orig_lexptr);
+d2046 1
+a2046 1
+  orig_lexptr = lexptr = demangled_name;
+d2158 1
+a2158 1
+	orig_lexptr = lexptr = str2;
+d2185 1
+a2185 1
+      orig_lexptr = lexptr = argv[arg];
+@
+
+
+1.1.2.19
+log
+@	* cp-names.y: Don't include "cp-demangle.h".  Convert all references
+	to d_info, d_comp, and D_COMP_* to demangle_info, demangle_component,
+	and DEMANGLE_COMPONENT_*.  Convert all calls to cp_v3_d_* functions
+	to new wrapper functions.  Add precedences for VOID and ')'.
+	(struct demangle_info): New type.
+	(d_grab, d_left, d_right): New macros.
+	(fill_comp, make_empty, make_operator, make_dtor, make_builtin_type)
+	(make_name): New wrapper functions.
+	(function_args): Remove D_PRINT_VOID test.
+	(function_arglist): Handle '(' VOID ')'.
+	(allocate_info): New function.
+	(demangled_name_to_comp): Use it.  Call free.
+	(mangled_name_to_comp): Use cplus_demangle_v3_components.
+	(cp_print, main): Use fputs instead of puts.
+	* cp-support.c (cp_canonicalize_string, class_name_from_physname)
+	(method_name_from_physname): Remove calls to cp_v3_d_free_info.
+	Test demangled_name before freeing it.
+@
+text
+@d43 3
+d48 1
+a48 1
+static struct demangle_component *d_qualify (struct demangle_component *, int, int);
+d50 1
+a50 1
+static struct demangle_component *d_int_type (int);
+d52 1
+a52 1
+static struct demangle_component *d_op_from_string (const char *opname);
+d54 2
+a55 2
+static struct demangle_component *d_unary (const char *opname, struct demangle_component *);
+static struct demangle_component *d_binary (const char *opname, struct demangle_component *, struct demangle_component *);
+a58 5
+struct demangle_info {
+  int allocated, used;
+  struct demangle_component comps[1];
+};
+
+d60 2
+a61 4
+struct demangle_info *di;
+/* Overflow checking?  */
+#define d_grab() (&di->comps[di->used++])
+static struct demangle_component *result;
+a159 55
+/* Helper functions.  These wrap the demangler tree interface, handle
+   allocation from our global store, and return the allocated component.  */
+
+static struct demangle_component *
+fill_comp (enum demangle_component_type d_type, struct demangle_component *lhs,
+	   struct demangle_component *rhs)
+{
+  struct demangle_component *ret = d_grab ();
+  cplus_demangle_fill_component (ret, d_type, lhs, rhs);
+  return ret;
+}
+
+static struct demangle_component *
+make_empty (enum demangle_component_type d_type)
+{
+  struct demangle_component *ret = d_grab ();
+  ret->type = d_type;
+  return ret;
+}
+
+static struct demangle_component *
+make_operator (const char *name, int args)
+{
+  struct demangle_component *ret = d_grab ();
+  cplus_demangle_fill_operator (ret, name, args);
+  return ret;
+}
+
+static struct demangle_component *
+make_dtor (enum gnu_v3_dtor_kinds kind, struct demangle_component *name)
+{
+  struct demangle_component *ret = d_grab ();
+  cplus_demangle_fill_dtor (ret, kind, name);
+  return ret;
+}
+
+static struct demangle_component *
+make_builtin_type (const char *name)
+{
+  struct demangle_component *ret = d_grab ();
+  cplus_demangle_fill_builtin_type (ret, name);
+  return ret;
+}
+
+static struct demangle_component *
+make_name (const char *name, int len)
+{
+  struct demangle_component *ret = d_grab ();
+  cplus_demangle_fill_name (ret, name, len);
+  return ret;
+}
+
+#define d_left(dc) (dc)->u.s_binary.left
+#define d_right(dc) (dc)->u.s_binary.right
+
+d168 1
+a168 1
+    struct demangle_component *comp;
+d170 2
+a171 2
+      struct demangle_component *comp;
+      struct demangle_component **last;
+d174 1
+a174 1
+      struct demangle_component *comp, *last;
+d177 1
+a177 1
+      struct demangle_component *comp, **last;
+d179 1
+a179 1
+      struct demangle_component *start;
+d185 1
+a185 1
+      struct demangle_component *type;
+d250 2
+a251 2
+  GLOBAL_CONSTRUCTORS = DEMANGLE_COMPONENT_LITERAL + 20,
+  GLOBAL_DESTRUCTORS = DEMANGLE_COMPONENT_LITERAL + 21
+d261 2
+a262 3
+/* Give NEW and DELETE lower precedence than ']', because we can not
+   have an array of type operator new.  This causes NEW '[' to be
+   parsed as operator new[].  */
+a264 7
+/* Give VOID higher precedence than NAME.  Then we can use %prec NAME
+   to prefer (VOID) to (function_args).  */
+%nonassoc VOID
+
+/* Give VOID lower precedence than ')' for similar reasons.  */
+%nonassoc ')'
+
+d321 2
+a322 2
+			{ $$ = fill_comp (DEMANGLE_COMPONENT_TYPED_NAME, $1, $2.comp);
+			  if ($3) $$ = fill_comp (DEMANGLE_COMPONENT_LOCAL_NAME, $$, $3); }
+d324 2
+a325 2
+			{ $$ = fill_comp (DEMANGLE_COMPONENT_TYPED_NAME, $1, $2.comp);
+			  if ($3) $$ = fill_comp (DEMANGLE_COMPONENT_LOCAL_NAME, $$, $3); }
+d329 1
+a329 1
+			  if ($2) $$ = fill_comp (DEMANGLE_COMPONENT_LOCAL_NAME, $$, $2); }
+d341 1
+a341 1
+			    $$ = fill_comp (DEMANGLE_COMPONENT_TYPED_NAME, $1.comp, $2.fn.comp);
+d344 1
+a344 1
+			  if ($2.start) $$ = fill_comp (DEMANGLE_COMPONENT_LOCAL_NAME, $$, $2.start);
+d350 1
+a350 1
+			{ $$ = make_empty ($1);
+d354 1
+a354 1
+			{ $$ = fill_comp (DEMANGLE_COMPONENT_CONSTRUCTION_VTABLE, $2, $4); }
+d356 1
+a356 1
+			{ $$ = make_empty ($1.val);
+d362 1
+a362 1
+			{ $$ = make_operator ("new", 1); }
+d364 1
+a364 1
+			{ $$ = make_operator ("delete", 1); }
+d366 1
+a366 1
+			{ $$ = make_operator ("new[]", 1); }
+d368 1
+a368 1
+			{ $$ = make_operator ("delete[]", 1); }
+d370 1
+a370 1
+			{ $$ = make_operator ("+", 2); }
+d372 1
+a372 1
+			{ $$ = make_operator ("-", 2); }
+d374 1
+a374 1
+			{ $$ = make_operator ("*", 2); }
+d376 1
+a376 1
+			{ $$ = make_operator ("/", 2); }
+d378 1
+a378 1
+			{ $$ = make_operator ("%", 2); }
+d380 1
+a380 1
+			{ $$ = make_operator ("^", 2); }
+d382 1
+a382 1
+			{ $$ = make_operator ("&", 2); }
+d384 1
+a384 1
+			{ $$ = make_operator ("|", 2); }
+d386 1
+a386 1
+			{ $$ = make_operator ("~", 1); }
+d388 1
+a388 1
+			{ $$ = make_operator ("!", 1); }
+d390 1
+a390 1
+			{ $$ = make_operator ("=", 2); }
+d392 1
+a392 1
+			{ $$ = make_operator ("<", 2); }
+d394 1
+a394 1
+			{ $$ = make_operator (">", 2); }
+d396 1
+a396 1
+			{ $$ = make_operator ($2, 2); }
+d398 1
+a398 1
+			{ $$ = make_operator ("<<", 2); }
+d400 1
+a400 1
+			{ $$ = make_operator (">>", 2); }
+d402 1
+a402 1
+			{ $$ = make_operator ("==", 2); }
+d404 1
+a404 1
+			{ $$ = make_operator ("!=", 2); }
+d406 1
+a406 1
+			{ $$ = make_operator ("<=", 2); }
+d408 1
+a408 1
+			{ $$ = make_operator (">=", 2); }
+d410 1
+a410 1
+			{ $$ = make_operator ("&&", 2); }
+d412 1
+a412 1
+			{ $$ = make_operator ("||", 2); }
+d414 1
+a414 1
+			{ $$ = make_operator ("++", 1); }
+d416 1
+a416 1
+			{ $$ = make_operator ("--", 1); }
+d418 1
+a418 1
+			{ $$ = make_operator (",", 2); }
+d420 1
+a420 1
+			{ $$ = make_operator ("->*", 2); }
+d422 1
+a422 1
+			{ $$ = make_operator ("->", 2); }
+d424 1
+a424 1
+			{ $$ = make_operator ("()", 0); }
+d426 1
+a426 1
+			{ $$ = make_operator ("[]", 2); }
+d434 1
+a434 1
+			{ $$ = fill_comp (DEMANGLE_COMPONENT_CAST, $2, NULL); }
+d458 1
+a458 1
+/* DEMANGLE_COMPONENT_NAME */
+d462 1
+a462 1
+			{ $$ = fill_comp (DEMANGLE_COMPONENT_TEMPLATE, $1, $3.comp); }
+d464 1
+a464 1
+			{ $$ = make_dtor (gnu_v3_complete_object_dtor, $2); }
+d480 2
+a481 2
+/* DEMANGLE_COMPONENT_QUAL_NAME */
+/* DEMANGLE_COMPONENT_CTOR / DEMANGLE_COMPONENT_DTOR ? */
+d505 1
+a505 1
+			{ $$.comp = make_empty (DEMANGLE_COMPONENT_QUAL_NAME);
+d512 1
+a512 1
+			  d_right ($1.last) = make_empty (DEMANGLE_COMPONENT_QUAL_NAME);
+d518 1
+a518 1
+			{ $$.comp = make_empty (DEMANGLE_COMPONENT_QUAL_NAME);
+d525 1
+a525 1
+			  d_right ($1.last) = make_empty (DEMANGLE_COMPONENT_QUAL_NAME);
+d532 2
+a533 2
+/* DEMANGLE_COMPONENT_TEMPLATE */
+/* DEMANGLE_COMPONENT_TEMPLATE_ARGLIST */
+d535 1
+a535 1
+			{ $$ = fill_comp (DEMANGLE_COMPONENT_TEMPLATE, $1, $3.comp); }
+d539 1
+a539 1
+			{ $$.comp = fill_comp (DEMANGLE_COMPONENT_TEMPLATE_ARGLIST, $1, NULL);
+d543 1
+a543 1
+			  *$1.last = fill_comp (DEMANGLE_COMPONENT_TEMPLATE_ARGLIST, $3, NULL);
+d558 1
+a558 1
+			{ $$ = fill_comp (DEMANGLE_COMPONENT_UNARY, make_operator ("&", 1), $2); }
+d560 1
+a560 1
+			{ $$ = fill_comp (DEMANGLE_COMPONENT_UNARY, make_operator ("&", 1), $3); }
+d565 11
+a575 2
+			{ $$.comp = fill_comp (DEMANGLE_COMPONENT_ARGLIST, $1, NULL);
+			  $$.last = &d_right ($$.comp);
+d579 1
+a579 1
+			  $$.comp = fill_comp (DEMANGLE_COMPONENT_ARGLIST, $2.comp, NULL);
+d583 1
+a583 1
+			{ *$1.last = fill_comp (DEMANGLE_COMPONENT_ARGLIST, $3, NULL);
+d589 1
+a589 1
+			  *$1.last = fill_comp (DEMANGLE_COMPONENT_ARGLIST, $4.comp, NULL);
+d595 2
+a596 2
+			    = fill_comp (DEMANGLE_COMPONENT_ARGLIST,
+					   make_builtin_type ("..."),
+d603 2
+a604 6
+function_arglist:	'(' function_args ')' qualifiers_opt %prec NAME
+			{ $$.comp = fill_comp (DEMANGLE_COMPONENT_FUNCTION_TYPE, NULL, $2.comp);
+			  $$.last = &d_left ($$.comp);
+			  $$.comp = d_qualify ($$.comp, $4, 1); }
+		|	'(' VOID ')' qualifiers_opt
+			{ $$.comp = fill_comp (DEMANGLE_COMPONENT_FUNCTION_TYPE, NULL, NULL);
+d608 1
+a608 1
+			{ $$.comp = fill_comp (DEMANGLE_COMPONENT_FUNCTION_TYPE, NULL, NULL);
+d613 1
+a613 1
+/* Should do something about DEMANGLE_COMPONENT_VENDOR_TYPE_QUAL */
+d657 1
+a657 1
+			{ $$ = make_builtin_type ("float"); }
+d659 1
+a659 1
+			{ $$ = make_builtin_type ("double"); }
+d661 1
+a661 1
+			{ $$ = make_builtin_type ("long double"); }
+d663 1
+a663 1
+			{ $$ = make_builtin_type ("bool"); }
+d665 1
+a665 1
+			{ $$ = make_builtin_type ("wchar_t"); }
+d667 1
+a667 1
+			{ $$ = make_builtin_type ("void"); }
+d671 1
+a671 1
+			{ $$.comp = make_empty (DEMANGLE_COMPONENT_POINTER);
+d677 1
+a677 1
+			{ $$.comp = make_empty (DEMANGLE_COMPONENT_REFERENCE);
+d681 1
+a681 1
+			{ $$.comp = make_empty (DEMANGLE_COMPONENT_PTRMEM_TYPE);
+d683 1
+a683 1
+			  /* Convert the innermost DEMANGLE_COMPONENT_QUAL_NAME to a DEMANGLE_COMPONENT_NAME.  */
+d689 1
+a689 1
+			{ $$.comp = make_empty (DEMANGLE_COMPONENT_PTRMEM_TYPE);
+d691 1
+a691 1
+			  /* Convert the innermost DEMANGLE_COMPONENT_QUAL_NAME to a DEMANGLE_COMPONENT_NAME.  */
+d699 1
+a699 1
+			{ $$ = make_empty (DEMANGLE_COMPONENT_ARRAY_TYPE);
+d703 1
+a703 1
+			{ $$ = make_empty (DEMANGLE_COMPONENT_ARRAY_TYPE);
+d857 1
+a857 1
+			{ $$.comp = make_empty (DEMANGLE_COMPONENT_TYPED_NAME);
+d874 1
+a874 1
+			{ $$.comp = make_empty (DEMANGLE_COMPONENT_TYPED_NAME);
+d887 1
+a887 1
+			{ $$.comp = fill_comp (DEMANGLE_COMPONENT_TYPED_NAME, $1, $2.comp);
+d889 1
+a889 1
+			  $$.comp = fill_comp (DEMANGLE_COMPONENT_LOCAL_NAME, $$.comp, $4);
+d895 1
+a895 1
+			  $$.comp = fill_comp (DEMANGLE_COMPONENT_LOCAL_NAME, $$.comp, $4);
+d915 1
+a915 1
+			{ $$.comp = fill_comp (DEMANGLE_COMPONENT_TYPED_NAME, $1, $2.comp);
+d919 1
+a919 1
+			{ $$.comp = fill_comp (DEMANGLE_COMPONENT_TYPED_NAME, $1, $2);
+d941 1
+a941 1
+		{ $$ = fill_comp (DEMANGLE_COMPONENT_UNARY, make_operator ("&", 1), $2); }
+d961 2
+a962 2
+		{ if ($4->type == DEMANGLE_COMPONENT_LITERAL
+		      || $4->type == DEMANGLE_COMPONENT_LITERAL_NEG)
+d968 2
+a969 2
+		    $$ = fill_comp (DEMANGLE_COMPONENT_UNARY,
+				      fill_comp (DEMANGLE_COMPONENT_CAST, $2, NULL),
+d977 2
+a978 2
+		{ $$ = fill_comp (DEMANGLE_COMPONENT_UNARY,
+				    fill_comp (DEMANGLE_COMPONENT_CAST, $3, NULL),
+d984 2
+a985 2
+		{ $$ = fill_comp (DEMANGLE_COMPONENT_UNARY,
+				    fill_comp (DEMANGLE_COMPONENT_CAST, $3, NULL),
+d991 2
+a992 2
+		{ $$ = fill_comp (DEMANGLE_COMPONENT_UNARY,
+				    fill_comp (DEMANGLE_COMPONENT_CAST, $3, NULL),
+d1004 2
+a1005 2
+		{ $$ = fill_comp (DEMANGLE_COMPONENT_UNARY,
+				    fill_comp (DEMANGLE_COMPONENT_CAST, $1, NULL),
+d1092 3
+a1094 3
+		{ $$ = fill_comp (DEMANGLE_COMPONENT_TRINARY, make_operator ("?", 3),
+				    fill_comp (DEMANGLE_COMPONENT_TRINARY_ARG1, $1,
+						 fill_comp (DEMANGLE_COMPONENT_TRINARY_ARG2, $3, $5)));
+d1111 4
+a1114 4
+		{ struct demangle_component *i;
+		  i = make_name ("1", 1);
+		  $$ = fill_comp (DEMANGLE_COMPONENT_LITERAL,
+				    make_builtin_type ("bool"),
+d1120 4
+a1123 4
+		{ struct demangle_component *i;
+		  i = make_name ("0", 1);
+		  $$ = fill_comp (DEMANGLE_COMPONENT_LITERAL,
+				    make_builtin_type ("bool"),
+d1133 2
+a1134 2
+struct demangle_component *
+d_qualify (struct demangle_component *lhs, int qualifiers, int is_method)
+d1136 2
+a1137 2
+  struct demangle_component **inner_p;
+  enum demangle_component_type type;
+d1144 1
+a1144 1
+      *inner_p = fill_comp (is_method ? MTYPE : TYPE,	\
+d1159 3
+a1161 3
+  HANDLE_QUAL (DEMANGLE_COMPONENT_RESTRICT, DEMANGLE_COMPONENT_RESTRICT_THIS, QUAL_RESTRICT);
+  HANDLE_QUAL (DEMANGLE_COMPONENT_VOLATILE, DEMANGLE_COMPONENT_VOLATILE_THIS, QUAL_VOLATILE);
+  HANDLE_QUAL (DEMANGLE_COMPONENT_CONST, DEMANGLE_COMPONENT_CONST_THIS, QUAL_CONST);
+d1166 1
+a1166 1
+static struct demangle_component *
+d1169 1
+a1169 1
+  const char *name;
+d1174 1
+a1174 1
+      name = "signed char";
+d1177 1
+a1177 1
+      name = "char";
+d1180 1
+a1180 1
+      name = "unsigned char";
+d1184 1
+a1184 1
+      name = "int";
+d1187 1
+a1187 1
+      name = "unsigned int";
+d1191 1
+a1191 1
+      name = "long";
+d1194 1
+a1194 1
+      name = "unsigned long";
+d1198 1
+a1198 1
+      name = "short";
+d1201 1
+a1201 1
+      name = "unsigned short";
+d1205 1
+a1205 1
+      name = "long long";
+d1208 1
+a1208 1
+      name = "unsigned long long";
+d1214 1
+a1214 1
+  return make_builtin_type (name);
+d1217 2
+a1218 2
+static struct demangle_component *
+d_unary (const char *name, struct demangle_component *lhs)
+d1220 1
+a1220 1
+  return fill_comp (DEMANGLE_COMPONENT_UNARY, make_operator (name, 1), lhs);
+d1223 2
+a1224 2
+static struct demangle_component *
+d_binary (const char *name, struct demangle_component *lhs, struct demangle_component *rhs)
+d1226 2
+a1227 2
+  return fill_comp (DEMANGLE_COMPONENT_BINARY, make_operator (name, 2),
+		      fill_comp (DEMANGLE_COMPONENT_BINARY_ARGS, lhs, rhs));
+d1256 4
+a1259 4
+  struct demangle_component *signed_type;
+  struct demangle_component *unsigned_type;
+  struct demangle_component *type, *name;
+  enum demangle_component_type literal_type;
+d1263 1
+a1263 1
+      literal_type = DEMANGLE_COMPONENT_LITERAL_NEG;
+d1268 1
+a1268 1
+    literal_type = DEMANGLE_COMPONENT_LITERAL;
+d1286 1
+a1286 1
+      	  type = make_builtin_type ("float");
+d1291 1
+a1291 1
+	  type = make_builtin_type ("long double");
+d1294 1
+a1294 1
+	type = make_builtin_type ("double");
+d1298 2
+a1299 2
+      name = make_name (p, len);
+      putithere->comp = fill_comp (literal_type, type, name);
+d1328 2
+a1329 2
+      unsigned_type = make_builtin_type ("unsigned int");
+      signed_type = make_builtin_type ("int");
+d1333 2
+a1334 2
+      unsigned_type = make_builtin_type ("unsigned long");
+      signed_type = make_builtin_type ("long");
+d1338 2
+a1339 2
+      unsigned_type = make_builtin_type ("unsigned long long");
+      signed_type = make_builtin_type ("long long");
+d1350 2
+a1351 2
+   name = make_name (p, len);
+   putithere->comp = fill_comp (literal_type, type, name);
+d1595 3
+a1597 3
+      yylval.comp = fill_comp (DEMANGLE_COMPONENT_LITERAL,
+				 make_builtin_type ("char"),
+				 make_name (tokstart, lexptr - tokstart));
+d1605 1
+a1605 1
+	  yylval.comp = make_name ("(anonymous namespace)",
+d1888 2
+a1889 2
+      HANDLE_SPECIAL ("covariant return thunk to ", DEMANGLE_COMPONENT_COVARIANT_THUNK);
+      HANDLE_SPECIAL ("reference temporary for ", DEMANGLE_COMPONENT_REFTEMP);
+d1892 3
+a1894 3
+      HANDLE_SPECIAL ("typeinfo for ", DEMANGLE_COMPONENT_TYPEINFO);
+      HANDLE_SPECIAL ("typeinfo fn for ", DEMANGLE_COMPONENT_TYPEINFO_FN);
+      HANDLE_SPECIAL ("typeinfo name for ", DEMANGLE_COMPONENT_TYPEINFO_NAME);
+d1907 1
+a1907 1
+      HANDLE_SPECIAL ("virtual thunk to ", DEMANGLE_COMPONENT_VIRTUAL_THUNK);
+d1919 1
+a1919 1
+	  yylval.typed_val_int.type = make_name (lexptr, p - lexptr);
+d1930 1
+a1930 1
+	  yylval.typed_val_int.type = make_name (lexptr, p - lexptr);
+d1935 1
+a1935 1
+      HANDLE_SPECIAL ("vtable for ", DEMANGLE_COMPONENT_VTABLE);
+d1948 1
+a1948 1
+      HANDLE_SPECIAL ("guard variable for ", DEMANGLE_COMPONENT_GUARD);
+d1977 2
+a1978 2
+      HANDLE_SPECIAL ("VTT for ", DEMANGLE_COMPONENT_VTT);
+      HANDLE_SPECIAL ("non-virtual thunk to ", DEMANGLE_COMPONENT_THUNK);
+d1988 1
+a1988 1
+  yylval.comp = make_name (tokstart, namelen);
+a2013 16
+/* Allocate all the components we'll need to build a tree.  We generally
+   allocate too many components, but the extra memory usage doesn't hurt
+   because the trees are temporary.  If we start keeping the trees for
+   a longer lifetime we'll need to be cleverer.  */
+static struct demangle_info *
+allocate_info (int comps)
+{
+  struct demangle_info *ret;
+
+  ret = malloc (sizeof (struct demangle_info)
+		+ sizeof (struct demangle_component) * (comps - 1));
+  ret->allocated = comps;
+  ret->used = 0;
+  return ret;
+}
+
+d2015 1
+a2015 1
+cp_comp_to_string (struct demangle_component *result, int estimated_len)
+d2018 1
+a2018 1
+  size_t err = 0;
+d2031 1
+a2031 1
+  str = cplus_demangle_print (DMGL_PARAMS | DMGL_ANSI, result, estimated_len, &err);
+d2045 2
+a2046 3
+/* Convert a demangled name to a demangle_component tree.  *MEMORY is set to the
+   block of used memory that should be freed when finished with the
+   tree.  */
+d2048 2
+a2049 2
+struct demangle_component *
+demangled_name_to_comp (const char *demangled_name, void **memory)
+d2056 1
+a2056 1
+  di = allocate_info (len);
+d2060 1
+a2060 1
+      free (di);
+d2064 1
+a2064 1
+  *memory = di;
+d2068 7
+a2074 5
+/* Convert a mangled name to a demangle_component tree.  *MEMORY is set to the
+   block of used memory that should be freed when finished with the tree. 
+   DEMANGLED_P is set to the char * that should be freed when finished with
+   the tree, or NULL if none was needed.  OPTIONS will be passed to the
+   demangler.  */
+d2076 1
+a2076 1
+struct demangle_component *
+d2078 1
+a2078 1
+		      void **memory, char **demangled_p)
+d2080 1
+a2080 2
+  struct demangle_component *ret;
+  char *demangled_name;
+d2082 1
+a2083 14
+  /* If it looks like a v3 mangled name, then try to go directly
+     to trees.  */
+  if (mangled_name[0] == '_' && mangled_name[1] == 'Z')
+    {
+      ret = cplus_demangle_v3_components (mangled_name, options, memory);
+      if (ret)
+	{
+	  *demangled_p = NULL;
+	  return ret;
+	}
+    }
+
+  /* If it doesn't, or if that failed, then try to demangle the name.  */
+  demangled_name = cplus_demangle (mangled_name, options);
+d2085 1
+a2085 1
+   return NULL;
+d2087 1
+a2087 2
+  /* If we could demangle the name, parse it to build the component tree.  */
+  ret = demangled_name_to_comp (demangled_name, memory);
+d2102 1
+a2102 1
+cp_print (struct demangle_component *result, int len)
+d2105 1
+a2105 1
+  size_t err = 0;
+d2110 1
+a2110 1
+      fputs ("global destructors keyed to ", stdout);
+d2115 1
+a2115 1
+      fputs ("global constructors keyed to ", stdout);
+d2118 1
+a2118 1
+  str = cplus_demangle_print (DMGL_PARAMS | DMGL_ANSI, result, len, &err);
+d2122 1
+a2122 1
+  fputs (str, stdout);
+d2177 1
+a2177 2
+	len = len + len / 8;
+	di = allocate_info (len);
+d2185 1
+a2185 1
+	    fputs (extra_chars, stdout);
+d2188 1
+a2188 1
+	free (di);
+d2195 1
+a2195 2
+      len = len + len / 8;
+      di = allocate_info (len);
+d2199 1
+a2199 2
+      putchar ('\n');
+      free (di);
+@
+
+

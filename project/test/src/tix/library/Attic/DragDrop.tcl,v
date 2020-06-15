@@ -1,0 +1,253 @@
+head	1.3;
+access;
+symbols
+	gdb_5_3-2002-12-12-release:1.2
+	gdb_5_3-branch:1.2.0.4
+	gdb_5_3-2002-09-04-branchpoint:1.2
+	gdb_5_2_1-2002-07-23-release:1.2
+	gdb_5_2-2002-04-29-release:1.2
+	gdb_5_2-branch:1.2.0.2
+	gdb_5_2-2002-03-03-branchpoint:1.2
+	gdb_5_1_1-2002-01-24-release:1.1.1.1
+	cygnus_cvs_20020108_pre:1.2
+	gdb_5_1_0_1-2002-01-03-branch:1.1.1.1.0.8
+	gdb_5_1_0_1-2002-01-03-branchpoint:1.1.1.1
+	gdb_5_1-2001-11-21-release:1.1.1.1
+	gdb_s390-2001-09-26-branch:1.1.1.1.0.6
+	gdb_s390-2001-09-26-branchpoint:1.1.1.1
+	TIX_TCL_8_3:1.1.1.1
+	NET:1.1.1
+	gdb_5_1-2001-07-29-branch:1.1.1.1.0.4
+	gdb_5_1-2001-07-29-branchpoint:1.1.1.1
+	insight-precleanup-2001-01-01:1.1.1.1
+	gdb_5_0-2000-05-19-release:1.1.1.1
+	gdb_4_18_2-2000-05-18-release:1.1.1.1
+	gdb_4_95_1-2000-05-11-snapshot:1.1.1.1
+	gdb_4_95_0-2000-04-27-snapshot:1.1.1.1
+	gdb_5_0-2000-04-10-branch:1.1.1.1.0.2
+	gdb_5_0-2000-04-10-branchpoint:1.1.1.1
+	repo-unification-2000-02-06:1.1.1.1
+	insight-2000-02-04:1.1.1.1
+	SNAPSHOT:1.1.1;
+locks; strict;
+comment	@# @;
+expand	@o@;
+
+
+1.3
+date	2003.03.07.23.09.21;	author hunt;	state dead;
+branches;
+next	1.2;
+
+1.2
+date	2001.09.08.23.25.52;	author irox;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2000.02.07.00.19.28;	author jsm;	state Exp;
+branches
+	1.1.1.1;
+next	;
+
+1.1.1.1
+date	2000.02.07.00.19.28;	author jsm;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.3
+log
+@Remove directory.
+@
+text
+@# DragDrop.tcl ---
+#
+#	Implements drag+drop for Tix widgets.
+#
+# Copyright (c) 1996, Expert Interface Technologies
+#
+# See the file "license.terms" for information on usage and redistribution
+# of this file, and for a DISCLAIMER OF ALL WARRANTIES.
+#
+
+tixClass tixDragDropContext {
+    -superclass {}
+    -classname  TixDragDropContext
+    -method {
+	cget configure drag drop set startdrag
+    }
+    -flag {
+	-command -source
+    }
+    -configspec {
+	{-command ""}
+	{-source ""}
+    }
+}
+
+proc tixDragDropContext:Constructor {w} {
+    upvar #0 $w data
+}
+
+#----------------------------------------------------------------------
+# Private methods
+#
+#----------------------------------------------------------------------
+proc tixDragDropContext:CallCommand {w target command X Y} {
+    upvar #0 $w data
+     
+    set x [expr $X-[winfo rootx $target]]
+    set y [expr $Y-[winfo rooty $target]]
+    
+    regsub %x $command $x command
+    regsub %y $command $y command
+    regsub %X $command $X command
+    regsub %Y $command $Y command
+    regsub %W $command $target command
+    regsub %S $command [list $data(-command)] command
+
+    eval $command
+}
+
+proc tixDragDropContext:Send {w target event X Y} {
+    upvar #0 $w data
+    global tixDrop
+
+    foreach tag [tixDropBindTags $target] {
+	if [info exists tixDrop($tag,$event)] {
+	    tixDragDropContext:CallCommand $w $target \
+		$tixDrop($tag,$event) $X $Y
+	}
+    }
+}
+
+#----------------------------------------------------------------------
+# set --
+#
+#	Set the "small data" of the type supported by the source widget
+#----------------------------------------------------------------------
+
+proc tixDragDropContext:set {w type data} {
+
+}
+
+#----------------------------------------------------------------------
+# startdrag --
+#
+#	Start the dragging action
+#----------------------------------------------------------------------
+proc tixDragDropContext:startdrag {w x y} {
+    upvar #0 $w data
+
+    set data(oldTarget) ""
+
+    $data(-source) config -cursor "[tix getbitmap drop] black"
+    tixDragDropContext:drag $w $x $y
+}
+
+#----------------------------------------------------------------------
+# drag --
+#
+#	Continue the dragging action
+#----------------------------------------------------------------------
+proc tixDragDropContext:drag {w X Y} {
+    upvar #0 $w data
+    global tixDrop
+
+    set target [winfo containing $X $Y]
+ 
+    if {$target != $data(oldTarget)} {
+	if {$data(oldTarget) != ""} {
+	    tixDragDropContext:Send $w $data(oldTarget) <Out> $X $Y 
+	}
+	if {$target != ""} {
+	    tixDragDropContext:Send $w $target <In> $X $Y
+	}
+	set data(oldTarget) $target
+    }
+    if {$target != ""} {
+	tixDragDropContext:Send $w $target <Over> $X $Y
+    }
+}
+
+proc tixDragDropContext:drop {w X Y} {
+    upvar #0 $w data
+    global tixDrop
+
+    set target [winfo containing $X $Y]
+    if {$target != ""} {
+	tixDragDropContext:Send $w $target <Drop> $X $Y
+    }
+
+    if {$data(-source) != ""} {
+	$data(-source) config -cursor ""
+    }
+    set data(-source) ""
+}
+
+#----------------------------------------------------------------------
+# Public Procedures -- This is NOT a member of the tixDragDropContext
+#		       class!
+#
+# parameters :
+#	$w:	who wants to start dragging? (currently ignored)
+#----------------------------------------------------------------------
+proc tixGetDragDropContext {w} {
+    global tixDD
+    if {[info exists tixDD]} {
+	return tixDD
+    }
+
+    return [tixDragDropContext tixDD]
+}
+
+proc tixDropBind {w event command} {
+    global tixDrop
+
+    set tixDrop($w) 1
+    set tixDrop($w,$event) $command
+}
+
+proc tixDropBindTags {w args} {
+    global tixDropTags
+
+    if {$args == ""} {
+	if [info exists tixDropTags($w)] {
+	    return $tixDropTags($w)
+	} else {
+	    return [list [winfo class $w] $w]
+	}
+    } else {
+	set tixDropTags($w) $args
+    }
+}
+@
+
+
+1.2
+log
+@Touched all tix files to ease next import.
+@
+text
+@@
+
+
+1.1
+log
+@Initial revision
+@
+text
+@@
+
+
+1.1.1.1
+log
+@import insight-2000-02-04 snapshot (2nd try)
+@
+text
+@@

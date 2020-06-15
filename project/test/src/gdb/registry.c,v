@@ -1,0 +1,180 @@
+head	1.2;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.2
+	gdb_7_6-2013-04-26-release:1.2
+	gdb_7_6-branch:1.2.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.2;
+locks; strict;
+comment	@ * @;
+
+
+1.2
+date	2013.01.01.06.32.49;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2012.09.13.14.35.16;	author palves;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@/* Support functions for general registry objects.
+
+   Copyright (C) 2011-2013 Free Software Foundation, Inc.
+
+   This file is part of GDB.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+#include "defs.h"
+#include "registry.h"
+#include "gdb_assert.h"
+#include "gdb_string.h"
+
+const struct registry_data *
+register_data_with_cleanup (struct registry_data_registry *registry,
+			    registry_data_callback save,
+			    registry_data_callback free)
+{
+  struct registry_data_registration **curr;
+
+  /* Append new registration.  */
+  for (curr = &registry->registrations;
+       *curr != NULL;
+       curr = &(*curr)->next)
+    ;
+
+  *curr = XMALLOC (struct registry_data_registration);
+  (*curr)->next = NULL;
+  (*curr)->data = XMALLOC (struct registry_data);
+  (*curr)->data->index = registry->num_registrations++;
+  (*curr)->data->save = save;
+  (*curr)->data->free = free;
+
+  return (*curr)->data;
+}
+
+void
+registry_alloc_data (struct registry_data_registry *registry,
+		       struct registry_fields *fields)
+{
+  gdb_assert (fields->data == NULL);
+  fields->num_data = registry->num_registrations;
+  fields->data = XCALLOC (fields->num_data, void *);
+}
+
+void
+registry_clear_data (struct registry_data_registry *data_registry,
+		     registry_callback_adaptor adaptor,
+		     struct registry_container *container,
+		     struct registry_fields *fields)
+{
+  struct registry_data_registration *registration;
+  int i;
+
+  gdb_assert (fields->data != NULL);
+
+  /* Process all the save handlers.  */
+
+  for (registration = data_registry->registrations, i = 0;
+       i < fields->num_data;
+       registration = registration->next, i++)
+    if (fields->data[i] != NULL && registration->data->save != NULL)
+      adaptor (registration->data->save, container, fields->data[i]);
+
+  /* Now process all the free handlers.  */
+
+  for (registration = data_registry->registrations, i = 0;
+       i < fields->num_data;
+       registration = registration->next, i++)
+    if (fields->data[i] != NULL && registration->data->free != NULL)
+      adaptor (registration->data->free, container, fields->data[i]);
+
+  memset (fields->data, 0, fields->num_data * sizeof (void *));
+}
+
+void
+registry_container_free_data (struct registry_data_registry *data_registry,
+			      registry_callback_adaptor adaptor,
+			      struct registry_container *container,
+			      struct registry_fields *fields)
+{
+  void ***rdata = &fields->data;
+  gdb_assert (*rdata != NULL);
+  registry_clear_data (data_registry, adaptor, container, fields);
+  xfree (*rdata);
+  *rdata = NULL;
+}
+
+void
+registry_set_data (struct registry_fields *fields,
+		   const struct registry_data *data,
+		   void *value)
+{
+  gdb_assert (data->index < fields->num_data);
+  fields->data[data->index] = value;
+}
+
+void *
+registry_data (struct registry_fields *fields,
+	       const struct registry_data *data)
+{
+  gdb_assert (data->index < fields->num_data);
+  return fields->data[data->index];
+}
+@
+
+
+1.1
+log
+@2012-09-13  Pedro Alves  <palves@@redhat.com>
+
+	* Makefile.in (COMMON_OBS): Add registry.o.
+	* registry.c: New file.
+	* registry.h (struct registry_container): Declare.
+	(registry_data_callback): New typedef.
+	(struct registry_data, struct registry_data_registration, struct
+	registry_data_registry): New type.
+	(register_data_with_cleanup, registry_alloc_data)
+	(registry_callback_adaptor, registry_clear_data)
+	(registry_container_free_data, registry_set_data, registry_data):
+	Declare.
+	(DEFINE_REGISTRY): Refactor structures and functions as shims over
+	the new common structures and functions.
+	(DECLARE_REGISTRY): Declare struct TAG ## _data.  Use the tagged
+	callback typedefs.
+@
+text
+@d3 1
+a3 2
+   Copyright (C) 2011, 2012
+   Free Software Foundation, Inc.
+@
+

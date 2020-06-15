@@ -1,0 +1,290 @@
+head	1.6;
+access;
+symbols
+	cygwin-1_7_17-release:1.5
+	cygwin-64bit-branch:1.5.0.4
+	cygwin-1_7_16-release:1.5
+	cygwin-1_7_15-release:1.5
+	cygwin-1_7_14_2-release:1.5
+	cygwin-1_7_14-release:1.5
+	cygwin-1_7_12-release:1.5
+	cygwin-1_7_11-release:1.5
+	cygwin-1_7_10-release:1.5
+	cygwin-1_7_9-release:1.5
+	cygwin-1_7_8-release:1.5
+	cygwin-1_7_7-release:1.5
+	cygwin-1_7_5-release:1.5
+	cygwin-1_7_4-release:1.5
+	cygwin-1_7_3-release:1.5
+	cygwin-1_7_2-release:1.5
+	cygwin-1_7_1-release:1.5
+	cv-branch-2:1.5.0.2
+	cr-0x5f1:1.4.0.4
+	cv-branch:1.4.0.2
+	cr-0x3b58:1.1.0.2;
+locks; strict;
+comment	@ * @;
+
+
+1.6
+date	2012.11.07.16.52.19;	author cgf;	state dead;
+branches;
+next	1.5;
+
+1.5
+date	2006.08.31.23.48.56;	author dannysmith;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2006.06.26.00.53.34;	author dannysmith;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2006.06.12.21.48.08;	author dannysmith;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2006.05.17.07.49.39;	author dannysmith;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2005.04.24.11.30.27;	author dannysmith;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.6
+log
+@* mingw: Delete obsolete directory.
+* w32api: Ditto.
+@
+text
+@#include "mb_wc_common.h"
+#include <wchar.h>
+#include <stdlib.h>
+#include <errno.h>
+#include <limits.h>
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+
+
+static int __MINGW_ATTRIB_NONNULL(1)
+ __wcrtomb_cp (char *dst, wchar_t wc, const unsigned int cp,
+	       const unsigned int mb_max)
+{       
+  if (cp == 0)
+    {
+      if (wc > 255)
+	{
+	  errno = EILSEQ;
+	  return -1;
+	}
+      *dst = (char) wc;
+      return 1;
+    }
+  else
+    {
+      int invalid_char = 0;
+   
+      int size = WideCharToMultiByte (cp, 0 /* Is this correct flag? */,
+				      &wc, 1, dst, mb_max,
+				      NULL, &invalid_char);
+      if (size == 0 || invalid_char)  
+        {
+          errno = EILSEQ;
+          return -1;
+        }
+      return size;
+    }
+}
+
+size_t
+wcrtomb (char *dst, wchar_t wc, mbstate_t * __UNUSED_PARAM (ps))
+{
+  char byte_bucket [MB_LEN_MAX];
+  char* tmp_dst = dst ? dst : byte_bucket;      
+  return (size_t)__wcrtomb_cp (tmp_dst, wc, get_codepage (),
+			       MB_CUR_MAX);
+}
+
+size_t wcsrtombs (char *dst, const wchar_t **src, size_t len,
+		  mbstate_t * __UNUSED_PARAM (ps))
+{
+  int ret = 0;
+  size_t n = 0;
+  const unsigned int cp = get_codepage();
+  const unsigned int mb_max = MB_CUR_MAX;
+  const wchar_t *pwc = *src;
+  
+  if (src == NULL || *src == NULL) /* undefined behavior */
+     return 0;
+
+  if (dst != NULL)
+    {
+       while (n < len)
+        {
+          if ((ret = __wcrtomb_cp (dst, *pwc, cp, mb_max)) <= 0)
+	     return (size_t) -1;
+  	  n += ret;
+   	  dst += ret;
+          if (*(dst - 1) == '\0')
+	    {
+	      *src = (wchar_t*) NULL;;
+	      return (n  - 1);
+	    }
+	  pwc++;
+        }
+      *src = pwc;
+    }
+  else
+    {
+      char byte_bucket [MB_LEN_MAX];
+      while (n < len)
+        {
+	  if ((ret = __wcrtomb_cp (byte_bucket, *pwc, cp, mb_max))
+		 <= 0)
+ 	    return (size_t) -1;    
+	  n += ret;
+	  if (byte_bucket [ret - 1] == '\0')
+	    return (n - 1);
+          pwc++;
+        }
+    }
+ 
+  return n;
+}
+@
+
+
+1.5
+log
+@	Import David Gay's gdtoa library.
+
+	* mingwex/gdtoa: New directory.
+	* mingwex/gdtoa/(arithchk.c, dmisc.c, dtoa.c, g__fmt.c, g_dfmt.c,
+	g_ffmt.c, g_xfmt.c, gd_arith.h, gd_qnan.h, gdtoa.c, gdtoa.h,
+	gdtoaimp.h, gethex.c, gmisc.c, hd_init.c, hexnan.c, misc.c, qnan.c,
+	README, smisc.c, strtodg.c, strtodnrp.c, strtof.c, strtopx.c, sum.c,
+	ulp.c): New files.
+	* mingwex/(strtof.c, strtold.c, ldtoa.c): Remove files.
+	* mingwex/math/(cephes-emath.c, cephes-emath.h): Remove files.
+	* mingwex/mb_wc_common.h (get_cp_from_locale); Rename to get_codepage().
+        * mingwex/(btowc.c, wctob.c, mbrtowc.c, wcrtomb.c): Adjust call to get_codepage().
+	* mingwex/wcstold.c: Avoid using strtold internals.
+	* mingwex/wcstof.c: Rewrite.
+	* mingwex/Makefile.in (GDTOA_DISTFILES): Add to distribution.
+	(GDTOA_OBJS): Add to library.
+	(DISTFILES): Remove strtof.c strtold.c ldtoa.c cephes-emath.c cephes-emath.h.
+	(STDLIB_OBJS): Remove.
+	(STDLIB_STUB_OBJS): Remove strtof.o wcstof,o.
+	(Q8_OBJS): Add wcstof.o wcstold.o.
+	* include/stdlib.h (strtof): Remove inline definition.
+	(wcstof): Likewise.
+	* include/wchar.h (wcstof): Remove inline definition.
+@
+text
+@@
+
+
+1.4
+log
+@	* mingwex/wcrtomb.c (wcsrtombs): Fix src end-pointer thinko.
+	* mingwex/math/lgamma.c: (LOGPI) Avoid type punning.
+	(LS2PI): Likewise.
+        * mingwex/math/sf_erf.c (erff): Initialize z.
+        (erfcf): Likewise.
+	* mingwex/math/tgamma.c (SQTPI): Avoid type punning.
+@
+text
+@d45 1
+a45 1
+  return (size_t)__wcrtomb_cp (tmp_dst, wc, get_cp_from_locale (),
+d54 1
+a54 1
+  const unsigned int cp = get_cp_from_locale();
+@
+
+
+1.3
+log
+@	* mingwex/wcrtomb.c (wcrtomb_cp): Correct typo.
+@
+text
+@d56 2
+a57 1
+
+d63 1
+a63 2
+      const wchar_t ** saved_src = src;
+      while (n < len)
+d65 1
+a65 1
+          if ((ret = __wcrtomb_cp (dst, **src, cp, mb_max)) <= 0)
+d71 1
+a71 1
+	      *saved_src = (wchar_t*) NULL;;
+d74 1
+a74 1
+	  *src++;
+d76 1
+d83 1
+a83 1
+	  if ((ret = __wcrtomb_cp (byte_bucket, **src, cp, mb_max))
+d89 1
+a89 1
+          *src++;
+d92 1
+@
+
+
+1.2
+log
+@	* mingwex/wcrtomb.c (wcrtomb_cp): Test (wc > 255) only if C locale.
+	Use supplied codepage as arg to WideCharToMultiByte.
+@
+text
+@d71 1
+a71 1
+	      *saved_src = (wchar_t) NULL;;
+@
+
+
+1.1
+log
+@	* mingwex/mbrtowc.c: New file.
+	* mingwex/wcrtomb.c: New file.
+	* mingwex/btowc.c: New file.
+	* mingwex/wctob.c: New file.
+	* mingwex/mb_wc_common.h: New file.
+	* mingwex/Makefile.in (DISTFILES): Add new files.
+	(Q8_OBJS): Add new objects.
+	* include/wchar.h: Adjust comment about mbrtowc() and related
+	funcions. Add __restrict__ to pointer params in prototypes.
+	(wmemset. wmemchr, wmemcpy, wmemmove, wcstoll, wcstoull): Remove
+	arg names from protototypes.
+@
+text
+@a13 6
+ if (wc > 255)
+    {
+      errno = EILSEQ;
+      return -1;
+    }
+
+d16 5
+d28 3
+a30 4
+      int size = WideCharToMultiByte(get_cp_from_locale(),
+				     0 /* Is this correct flag? */,
+				     &wc, 1, dst, mb_max,
+				     NULL, &invalid_char);
+@
+

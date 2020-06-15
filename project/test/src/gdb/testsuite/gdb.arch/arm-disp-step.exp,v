@@ -1,0 +1,751 @@
+head	1.8;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.8
+	gdb_7_6-2013-04-26-release:1.8
+	gdb_7_6-branch:1.8.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.8
+	gdb_7_5_1-2012-11-29-release:1.7
+	gdb_7_5-2012-08-17-release:1.7
+	gdb_7_5-branch:1.7.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.7
+	gdb_7_4_1-2012-04-26-release:1.5.2.1
+	gdb_7_4-2012-01-24-release:1.5.2.1
+	gdb_7_4-branch:1.5.0.2
+	gdb_7_4-2011-12-13-branchpoint:1.5
+	gdb_7_3_1-2011-09-04-release:1.3
+	gdb_7_3-2011-07-26-release:1.3
+	gdb_7_3-branch:1.3.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.3;
+locks; strict;
+comment	@# @;
+
+
+1.8
+date	2013.01.01.06.33.24;	author brobecke;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2012.01.16.16.21.44;	author palves;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2012.01.04.08.17.44;	author brobecke;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2011.09.18.14.34.55;	author qiyao;	state Exp;
+branches
+	1.5.2.1;
+next	1.4;
+
+1.4
+date	2011.05.05.02.51.28;	author qiyao;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2011.02.15.14.26.34;	author qiyao;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2011.01.01.15.33.40;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2010.12.23.15.10.24;	author qiyao;	state Exp;
+branches;
+next	;
+
+1.5.2.1
+date	2012.01.06.04.43.59;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.8
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@# Copyright 2010-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# This file is part of the gdb testsuite.
+
+# Test arm displaced stepping.
+
+if {![istarget "arm*-*-*"]} then {
+    verbose "Skipping arm displaced stepping tests."
+    return
+}
+
+set testfile "arm-disp-step"
+set srcfile ${testfile}.S
+set binfile ${objdir}/${subdir}/${testfile}
+
+set additional_flags "-Wa,-g"
+
+if { [gdb_compile "${srcdir}/${subdir}/${srcfile}" "${binfile}" executable [list debug $additional_flags]] != "" } {
+    untested arm-disp-step.exp
+    return -1
+}
+
+
+#########################################
+# Test ldm/stm related to PC.
+proc test_ldm_stm_pc {} {
+    global srcfile
+    global gdb_prompt
+
+    # Try to set breakpoint on test_ldm_stm_pc.  If symbol 'test_ldm_stm_pc'
+    # can't be resolved, test case is compiled in Thumb mode, skip it.
+    gdb_test_multiple "break *test_ldm_stm_pc" "break test_ldm_stm_pc" {
+	-re "Breakpoint.*at.* file .*$srcfile, line.*\r\n$gdb_prompt $" {
+	    pass "break test_ldm_stm_pc"
+	}
+	-re "No symbol.*\r\n$gdb_prompt $" {
+	    pass "break test_ldm_stm_pc"
+	    return 0
+	}
+    }
+
+    gdb_test "break *test_ldm_pc" \
+	"Breakpoint.*at.* file .*$srcfile, line.*" \
+	"break test_ldm_pc"
+    gdb_test "break *test_ldm_stm_pc_ret" \
+	"Breakpoint.*at.* file .*$srcfile, line.*" \
+	"break test_ldm_stm_pc_ret"
+
+    gdb_continue_to_breakpoint "continue to test_ldm_stm_pc" \
+	".*stmdb.*sp\!\,.*\{lr\, pc\}.*"
+    gdb_continue_to_breakpoint "continue to test_ldm_pc" \
+	".*ldmia.*sp\!\,.*\{pc\}.*"
+    gdb_continue_to_breakpoint "continue to test_ldm_stm_pc_ret" \
+	".*bx lr.*"
+}
+
+#########################################
+# Test ldrX literal
+proc test_ldr_literal {} {
+    global srcfile
+    global gdb_prompt
+
+    gdb_test_multiple "break *test_ldr_literal" "break test_ldr_literal" {
+       -re "Breakpoint.*at.* file .*$srcfile, line.*\r\n$gdb_prompt $" {
+           pass "break test_ldr_literal"
+       }
+       -re "No symbol.*\r\n$gdb_prompt $" {
+           return 0
+       }
+    }
+
+    gdb_test "break *test_ldrsb_literal" \
+       "Breakpoint.*at.* file .*$srcfile, line.*" \
+       "break test_ldrsb_literal"
+    gdb_test "break *test_ldrsh_literal" \
+       "Breakpoint.*at.* file .*$srcfile, line.*" \
+       "break test_ldrsh_literal"
+    gdb_test "break *test_ldr_literal_end" \
+       "Breakpoint.*at.* file .*$srcfile, line.*" \
+       "break test_test_ldr_literal_end"
+
+    gdb_continue_to_breakpoint "continue to test_ldr_literal" \
+       ".*ldrh.*r0\,.*\[pc\].*"
+    gdb_continue_to_breakpoint "continue to test_ldrsb_literal" \
+       ".*ldrsb.*r0\,.*\[pc\].*"
+    gdb_continue_to_breakpoint "continue to test_ldrsh_literal" \
+       ".*ldrsh.*r0\,.*\[pc\].*"
+    gdb_continue_to_breakpoint "continue to test_ldr_literal_ret" \
+       ".*bx lr.*"
+}
+
+proc test_ldr_literal_16 {} {
+    global srcfile
+    global gdb_prompt
+
+    gdb_test_multiple "break *test_ldr_literal_16" "break test_ldr_literal_16" {
+	-re "Breakpoint.*at.* file .*$srcfile, line.*\r\n$gdb_prompt $" {
+	    pass "break test_ldr_literal"
+	}
+	-re "No symbol.*\r\n$gdb_prompt $" {
+	    return 0
+	}
+    }
+    gdb_test "break *test_ldr_literal_16_end" \
+	"Breakpoint.*at.* file .*$srcfile, line.*" \
+	"break test_ldr_literal_16_end"
+
+    gdb_continue_to_breakpoint "continue to test_ldr_literal_16" \
+	".*ldr.*r0\,.*L2.*"
+    gdb_continue_to_breakpoint "continue to test_ldr_literal_16_end" \
+	".*bx lr.*"
+}
+
+##########################################
+# Test call/ret.
+proc test_call_ret {} {
+    global srcfile
+    global testfile
+
+    gdb_test "break *test_call" \
+	"Breakpoint.*at.* file .*$srcfile, line.*" \
+	"break test_call"
+
+    gdb_test "break *test_call_end" \
+	"Breakpoint.*at.* file .*$srcfile, line.*" \
+	"break test_call_end"
+    gdb_test "break *test_ret" \
+	"Breakpoint.*at.* file .*$srcfile, line.*" \
+	"break test_ret"
+    gdb_test "break *test_ret_end" \
+	"Breakpoint.*at.* file .*$srcfile, line.*" \
+	"break test_ret_end"
+
+    gdb_continue_to_breakpoint "test_call" ".*bl test_call_subr.*"
+    gdb_continue_to_breakpoint "test_call_end" \
+	".*@@ Location test_call_end.*"
+    gdb_continue_to_breakpoint "test_ret" \
+	".*bx lr.*"
+    gdb_continue_to_breakpoint "continue to test_ret_end" \
+	".*@@ Location test_ret_end.*"
+}
+
+
+#########################################
+# Test branch
+proc test_branch {} {
+    global srcfile
+    gdb_test "break *test_branch" \
+	"Breakpoint.*at.* file .*$srcfile, line.*" \
+	"break test_branch"
+    gdb_test "break *L_branch" \
+	"Breakpoint.*at.* file .*$srcfile, line.*" \
+	"break Lbranch"
+
+    gdb_continue_to_breakpoint "continue to test_branch" \
+	".*b.*L_branch.*"
+    gdb_continue_to_breakpoint "continue to Lbranch" \
+	".*bx lr.*"
+}
+
+#########################################
+
+# Test ldr from pc
+proc test_ldr_from_pc {} {
+    global srcfile
+    gdb_test "break *test_ldr_pc" \
+	"Breakpoint.*at.* file .*$srcfile, line.*" \
+	"break test_ldr_pc"
+    gdb_test "break test_ldr_pc_ret" \
+	"Breakpoint.*at.* file .*$srcfile, line.*" \
+	"break test_ldr_pc_ret"
+
+    gdb_continue_to_breakpoint "continue to test_ldr_pc" \
+	".*ldr.*r1\,.*\[pc, #0\].*"
+    gdb_continue_to_breakpoint "continue to test_ldr_pc_ret" \
+	".*bx lr.*"
+}
+
+#########################################
+
+# Test cbz and cbnz
+proc test_cbz_cbnz {} {
+    global srcfile
+    global gdb_prompt
+
+    gdb_test_multiple "break *test_zero_cbnz" "break test_zero_cbnz" {
+	-re "Breakpoint.*at.* file .*$srcfile, line.*\r\n$gdb_prompt $" {
+	    pass "break test_ldr_literal"
+	}
+	-re "No symbol.*\r\n$gdb_prompt $" {
+	    return 0
+	}
+    }
+
+    gdb_test "break *test_zero_cbz" \
+	"Breakpoint.*at.* file .*$srcfile, line.*" \
+	"break test_zero_cbz"
+    gdb_test "break *test_non_zero_cbnz" \
+	"Breakpoint.*at.* file .*$srcfile, line.*" \
+	"break test_non_zero_cbnz"
+    gdb_test "break *test_non_zero_cbz" \
+	"Breakpoint.*at.* file .*$srcfile, line.*" \
+	"break test_non_zero_cbz"
+
+    gdb_continue_to_breakpoint "continue to test_zero_cbnz" \
+	".*cbnz.*r0\,.*\.L3.*"
+    gdb_continue_to_breakpoint "continue to test_zero_cbz" \
+	".*cbz.*r0\,.*\.L3.*"
+    gdb_continue_to_breakpoint "continue to test_non_zero_cbz" \
+	".*cbz.*r0\,.*\.L4.*"
+    gdb_continue_to_breakpoint "continue to test_non_zero_cbnz" \
+	".*cbnz.*r0\,.*\.L4.*"
+}
+
+# Test adr
+
+proc test_adr {} {
+    global srcfile
+    global gdb_prompt
+
+    gdb_test_multiple "break *test_adr" "break test_adr" {
+	-re "Breakpoint.*at.* file .*$srcfile, line.*\r\n$gdb_prompt $" {
+	    pass "break test_adr"
+	}
+	-re "No symbol.*\r\n$gdb_prompt $" {
+	    return 0
+	}
+    }
+
+    gdb_test "break *test_adr_end" \
+	"Breakpoint.*at.* file .*$srcfile, line.*" \
+	"break test_adr_end"
+
+    gdb_continue_to_breakpoint "test_adr" \
+	".*adr.*r0\,.*\.L8.*"
+    gdb_continue_to_breakpoint "test_adr_end" \
+	".*bx lr.*"
+}
+
+proc test_adr_32bit {} {
+    global srcfile
+    global gdb_prompt
+
+    gdb_test_multiple "break *test_adr_32bit" "break test_adr_32bit" {
+	-re "Breakpoint.*at.* file .*$srcfile, line.*\r\n$gdb_prompt $" {
+	    pass "break test_adr"
+	}
+	-re "No symbol.*\r\n$gdb_prompt $" {
+	    return 0
+	}
+    }
+
+    gdb_test "break *test_adr_32bit_after" \
+	"Breakpoint.*at.* file .*$srcfile, line.*" \
+	"break test_adr_32bit_after"
+
+    gdb_test "break *test_adr_32bit_end" \
+	"Breakpoint.*at.* file .*$srcfile, line.*" \
+	"break test_adr_32bit_end"
+
+    gdb_continue_to_breakpoint "test_adr_32bit" \
+	".*adr.*r0\,.*\.L6.*"
+    gdb_continue_to_breakpoint "test_adr_32bit_after" \
+	".*adr.*r0\,.*\.L6.*"
+    gdb_continue_to_breakpoint "test_adr_32bit_end" \
+	".*bx lr.*"
+}
+
+#########################################
+# Test pop to PC
+proc test_pop_pc {} {
+    global srcfile
+    gdb_test "break *test_pop_pc_1" \
+	"Breakpoint.*at.* file .*$srcfile, line.*" \
+	"break test_pop_pc_1"
+    gdb_test "break *test_pop_pc_2" \
+	"Breakpoint.*at.* file .*$srcfile, line.*" \
+	"break test_pop_pc_2"
+    gdb_test "break *test_pop_pc_3" \
+	"Breakpoint.*at.* file .*$srcfile, line.*" \
+	"break test_pop_pc_3"
+
+    gdb_test "break *test_pop_pc_ret" \
+	"Breakpoint.*at.* file .*$srcfile, line.*" \
+	"break test_pop_pc_ret"
+
+    gdb_test "break *test_pop_pc_1_right" \
+	"Breakpoint.*at.* file .*$srcfile, line.*" \
+	"break test_pop_pc_1_right"
+    gdb_test "break *test_pop_pc_1_wrong" \
+	"Breakpoint.*at.* file .*$srcfile, line.*" \
+	"break test_pop_pc_1_wrong"
+    gdb_test "break *test_pop_pc_2_right" \
+	"Breakpoint.*at.* file .*$srcfile, line.*" \
+	"break test_pop_pc_2_right"
+    gdb_test "break *test_pop_pc_2_wrong" \
+	"Breakpoint.*at.* file .*$srcfile, line.*" \
+	"break test_pop_pc_2_wrong"
+    gdb_test "break *test_pop_pc_3_right" \
+	"Breakpoint.*at.* file .*$srcfile, line.*" \
+	"break test_pop_pc_3_right"
+    gdb_test "break *test_pop_pc_3_wrong" \
+	"Breakpoint.*at.* file .*$srcfile, line.*" \
+	"break test_pop_pc_1_wrong"
+
+    gdb_continue_to_breakpoint "continue to test_pop_pc_1" \
+	".*b.*\{r1\, pc\}.*"
+    gdb_continue_to_breakpoint "continue to test_pop_pc_1_check" \
+	".*b.*right.*"
+
+    gdb_continue_to_breakpoint "continue to test_pop_pc_2" \
+	".*\{pc\}.*"
+    gdb_continue_to_breakpoint "continue to test_pop_pc_2_check" \
+	".*b.*right.*"
+    gdb_continue_to_breakpoint "continue to test_pop_pc_3" \
+	".*\{r0\,r1\,r2\,r3\,r4\,r5\,r6\,r7\,pc\}.*"
+    gdb_continue_to_breakpoint "continue to test_pop_pc_3_check" \
+	".*b.*right.*"
+    gdb_continue_to_breakpoint "continue to test_pop_pc_ret" \
+	".*r7.*"
+}
+
+###########################################
+
+proc test_str_pc {} {
+    global srcfile
+    global gdb_prompt
+
+    gdb_test_multiple "break *test_str_pc" "break test_str_pc" {
+	-re "Breakpoint.*at.* file .*$srcfile, line.*\r\n$gdb_prompt $" {
+	    pass "break test_str_pc"
+	}
+	-re "No symbol.*\r\n$gdb_prompt $" {
+	    pass "break test_str_pc"
+	    return
+	}
+    }
+    gdb_test "break *test_str_pc_end" \
+	"Breakpoint.*at.* file .*$srcfile, line.*" \
+	"break test_str_pc_end"
+
+    # Set breakpoint on both lables pc_offset_right and pc_offset_wrong
+    gdb_test "break *pc_offset_right" \
+	"Breakpoint.*at.* file .*$srcfile, line.*" \
+	"break pc_offset_right"
+    gdb_test "break *pc_offset_wrong" \
+	"Breakpoint.*at.* file .*$srcfile, line.*" \
+	"break pc_offset_wrong"
+
+    gdb_continue_to_breakpoint "continue to test_str_pc" \
+	".*str.*pc\,.*\[sp, #-4\].*"
+    # If breakpoint on lable pc_offset_wrong is hit, that means the offset
+    # computed in displaced stepping is different from offset computed
+    # without displaced stepping.  Report a failure.
+    gdb_continue_to_breakpoint "continue to pc_offset_right" \
+	".*b.*test_str_pc_end.*"
+    gdb_continue_to_breakpoint "continue to test_str_pc_end" \
+	".*bx lr.*"
+}
+
+# Get things started.
+
+clean_restart ${testfile}
+
+# Turn displaced stepping off before runto main. When displaced stepping
+# is on, and we type 'run', GDB will first try to single step on _dl_debug_state,
+# which is in library might be compiled in Thumb.
+gdb_test_no_output "set displaced-stepping off"
+
+if ![runto_main] then {
+    fail "Can't run to main"
+    return 0
+}
+
+gdb_test_no_output "set displaced-stepping on"
+gdb_test "show displaced-stepping" ".* displaced stepping .* is on.*"
+
+test_call_ret
+
+test_branch
+
+test_ldr_from_pc
+
+test_ldm_stm_pc
+
+test_ldr_literal
+
+test_ldr_literal_16
+
+test_cbz_cbnz
+
+test_adr
+
+test_adr_32bit
+
+test_pop_pc
+
+test_str_pc
+
+##########################################
+
+# Done, run program to exit.
+
+gdb_continue_to_end "arm-disp-step"
+@
+
+
+1.7
+log
+@2012-01-16  Pedro Alves  <palves@@redhat.com>
+
+	Remove all calls to strace.
+@
+text
+@d1 1
+a1 1
+# Copyright 2010-2012 Free Software Foundation, Inc.
+@
+
+
+1.6
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@a19 4
+if $tracelevel {
+    strace $tracelevel
+}
+
+@
+
+
+1.5
+log
+@	Support displaced stepping for Thumb 16-bit insns.
+	gdb/
+	* arm-tdep.c (THUMB_NOP) Define.
+	(thumb_copy_unmodified_16bit): New.
+	(thumb_copy_b, thumb_copy_bx_blx_reg): New.
+	(thumb_copy_alu_reg): New.
+	(arm_copy_svc): Move some common code to ...
+	(install_svc): ... here.  New.
+	(thumb_copy_svc): New.
+	(install_pc_relative): New.
+	(thumb_copy_pc_relative_16bit): New.
+	(thumb_decode_pc_relative_16bit): New.
+	(thumb_copy_16bit_ldr_literal): New.
+	(thumb_copy_cbnz_cbz): New.
+	(cleanup_pop_pc_16bit_all): New.
+	(thumb_copy_pop_pc_16bit): New.
+	(thumb_process_displaced_16bit_insn): New.
+	(thumb_process_displaced_32bit_insn): New.
+	(thumb_process_displaced_insn): process thumb instruction.
+
+	Support displaced stepping for Thumb 32-bit insns.
+	gdb/
+	* arm-tdep.c (thumb_copy_unmodified_32bit): New.
+	(thumb2_copy_preload): New.
+	(thumb2_copy_copro_load_store): New.
+	(thumb2_copy_b_bl_blx): New.
+	(thumb2_copy_alu_imm): New.
+	(thumb2_copy_load_reg_imm): New.
+	(thumb2_copy_load_literal): New
+	(thumb2_copy_block_xfer): New.
+	(thumb_32bit_copy_undef): New.
+	(thumb_32bit_copy_unpred): New.
+	(thumb2_decode_ext_reg_ld_st): New.
+	(thumb2_decode_svc_copro): New.
+	(decode_thumb_32bit_store_single_data_item): New.
+	(thumb_copy_pc_relative_32bit): New.
+	(thumb_decode_pc_relative_32bit): New.
+	(decode_thumb_32bit_ld_mem_hints): New.
+	(thumb2_copy_table_branch): New
+	(thumb_process_displaced_32bit_insn): Process Thumb 32-bit
+	instructions.
+
+	gdb/testsuite/
+	* gdb.arch/arm-disp-step.S (test_ldr_literal): Test for Thumb
+	instructions.
+	(test_adr_32bit, test_pop_pc): Likewise.
+	(test_ldr_literal_16, test_cbz_cbnz, test_adr): New test for
+	Thumb instructions.
+	* gdb.arch/arm-disp-step.exp (test_ldm_stm_pc): Match $gdb_prompt
+	in gdb_test_multiple.
+	(test_ldr_literal_16, test_cbz_cbnz, test_adr): New.
+@
+text
+@d1 1
+a1 1
+# Copyright 2010, 2011 Free Software Foundation, Inc.
+@
+
+
+1.5.2.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d1 1
+a1 1
+# Copyright 2010-2012 Free Software Foundation, Inc.
+@
+
+
+1.4
+log
+@2011-05-05  Yao Qi  <yao@@codesourcery.com>
+
+	* gdb.arch/arm-disp-step.S(test_ldr_literal): New.
+	(test_adr_32bit, test_pop_pc): New.
+	* gdb.arch/arm-disp-step.exp (test_ldr_literal): New.
+	(test_adr_32bit, test_pop_pc): New.
+@
+text
+@d45 2
+d50 1
+a50 1
+	-re "Breakpoint.*at.* file .*$srcfile, line.*" {
+d53 3
+a55 3
+	-re "Function \"test_ldm_stm_pc\" not defined\..*Make breakpoint pending on future shared library load.*y or .n.. $" {
+	    gdb_test "n" "" "Test case is compiled in Thumb mode"
+	    return
+d109 22
+d135 6
+d151 2
+a152 1
+    gdb_continue_to_breakpoint "continue to test_call_end" \
+d154 1
+a154 1
+    gdb_continue_to_breakpoint "continue to test_ret" \
+d192 62
+a253 1
+    gdb_continue_to_breakpoint "continue to Lbranch" \
+d262 6
+a267 6
+       -re "Breakpoint.*at.* file .*$srcfile, line.*\r\n$gdb_prompt $" {
+           pass "break test_adr"
+       }
+       -re "No symbol.*\r\n$gdb_prompt $" {
+           return 0
+       }
+d271 2
+a272 2
+       "Breakpoint.*at.* file .*$srcfile, line.*" \
+       "break test_adr_32bit_after"
+d275 2
+a276 2
+       "Breakpoint.*at.* file .*$srcfile, line.*" \
+       "break test_adr_32bit_end"
+d279 1
+a279 1
+       ".*adr.*r0\,.*\.L6.*"
+d281 1
+a281 1
+       ".*adr.*r0\,.*\.L6.*"
+d283 1
+a283 1
+       ".*bx lr.*"
+d291 9
+a299 2
+       "Breakpoint.*at.* file .*$srcfile, line.*" \
+       "break test_pop_pc"
+d301 26
+a326 2
+       "Breakpoint.*at.* file .*$srcfile, line.*" \
+       "break test_pop_pc_ret"
+d328 8
+a335 2
+    gdb_continue_to_breakpoint "continue to test_pop_pc" \
+       ".*b.*\{r1\, pc\}.*"
+d337 1
+a337 1
+        ".*bx lr.*"
+d344 2
+d347 1
+a347 1
+	-re "Breakpoint.*at.* file .*$srcfile, line.*" {
+d350 1
+a350 1
+	-re "No symbol.*" {
+a394 14
+gdb_test "break *test_call" \
+	"Breakpoint.*at.* file .*$srcfile, line.*" \
+	"break test_call"
+
+gdb_test_multiple "continue" "continue to test_call" {
+	-re ".*bl test_call_subr.*" {
+	    pass "continue to test_call"
+	}
+	-re "Displaced stepping is only supported in" {
+	    kfail "gdb/NNNN" $testfile
+	    return
+	}
+    }
+
+d405 6
+d416 1
+@
+
+
+1.3
+log
+@2011-02-15  Yao Qi  <yao@@codesourcery.com>
+
+	PR tdep/12352
+	* arm-tdep.c (copy_ldr_str_ldrb_strb): Replace PC with SP in
+	order to store PC value on stack instead of text section.
+
+2011-02-15  Yao Qi  <yao@@codesourcery.com>
+
+	PR tdep/12352
+	* gdb.arch/arm-disp-step.S : New test for str instruction.
+	* gdb.arch/arm-disp-step.exp : Likewise
+@
+text
+@d71 36
+d165 46
+d286 6
+@
+
+
+1.2
+log
+@run copyright.sh for 2011.
+@
+text
+@d129 36
+d204 1
+@
+
+
+1.1
+log
+@2010-12-23  Yao Qi  <yao@@codesourcery.com>
+
+	* gdb.arch/arm-disp-step.exp: New.
+	* gdb.arch/arm-disp-step.S: New.
+@
+text
+@d1 1
+a1 1
+# Copyright 2010 Free Software Foundation, Inc.
+@
+

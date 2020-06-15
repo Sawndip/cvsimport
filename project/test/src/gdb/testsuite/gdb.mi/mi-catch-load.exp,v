@@ -1,0 +1,243 @@
+head	1.5;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.4
+	gdb_7_6-2013-04-26-release:1.4
+	gdb_7_6-branch:1.4.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.4;
+locks; strict;
+comment	@# @;
+
+
+1.5
+date	2013.10.11.07.27.46;	author qiyao;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2013.01.21.23.57.58;	author marckhouzam;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2013.01.16.17.27.53;	author tromey;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2013.01.01.06.41.24;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2012.12.12.21.25.09;	author mgherzan;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.5
+log
+@gdb/testsuite/
+
+	* gdb.mi/mi-catch-load.c: Remove the include of "dlfcn.h".
+	 [__WIN32__]: Include "windows.h" and define macro 'dlopen'
+	 and 'dlclose'.
+	[!__WIN32__]: Include "dlfcn.h".
+	* gdb.mi/mi-catch-load.exp: Set up kfail.
+@
+text
+@# Copyright 2012-2013 Free Software Foundation, Inc.
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+load_lib mi-support.exp
+
+if {[skip_shlib_tests]} {
+    return -1
+}
+
+gdb_exit
+if [mi_gdb_start] {
+    continue
+}
+
+if {[get_compiler_info]} {
+    warning "Could not get compiler info"
+    untested mi-catch-load.exp
+    return -1
+}
+
+standard_testfile mi-catch-load.c
+
+if  { [gdb_compile "${srcdir}/${subdir}/${srcfile}" "${binfile}" executable {debug shlib_load}] != "" } {
+    untested mi-catch-load.exp
+    return -1
+}
+
+set testfile2 mi-catch-load-so
+set srcfile2 ${testfile2}.c
+set binfile2 [standard_output_file ${testfile2}.so]
+set binfile2_dlopen [shlib_target_file ${testfile2}.so]
+if { [gdb_compile_shlib "${srcdir}/${subdir}/${srcfile2}" ${binfile2} {debug}] != "" } {
+    untested mi-catch-load.exp
+    return -1
+}
+mi_run_to_main
+
+# test -catch-load
+mi_gdb_test "111-gdb-set auto-solib-add on" "111\\^done" "catch-load: auto-solib-add on"
+mi_gdb_test "222-catch-load -t mi-catch-load-so.so*" \
+    "222\\^done,bkpt=\{number=\"2\",type=\"catchpoint\",disp=\"del\",enabled=\"y\",what=\"load of library matching mi-catch-load-so\.so\\*\",catch-type=\"load\",thread-groups=\\\[\"i1\"\\\],times=\"0\"\}" \
+    "catch-load: catch load"
+mi_send_resuming_command "exec-continue" "catch-load: continue"
+
+gdb_expect {
+    -re "\\*stopped.*reason=\"solib-event\".*added=.*\r\n.*\r\n$mi_gdb_prompt$" {
+        pass "catch-load: solib-event stop"
+    }
+    -re ".*$mi_gdb_prompt$" {
+	setup_kfail mi/15945 *-*-*mingw*
+        fail "catch-load: solib-event stop"
+    }
+    timeout {
+        fail "(timeout) catch-load: solib-event stop"
+    }
+}
+
+mi_gdb_exit
+
+
+if [mi_gdb_start] {
+    continue
+}
+mi_run_to_main
+
+# test -catch-unload
+mi_gdb_test "111-gdb-set auto-solib-add on" "111\\^done" "catch-unload: auto-solib-add on"
+mi_gdb_test "222-catch-unload -t mi-catch-load-so.so*" \
+    "222\\^done,bkpt=\{number=\"2\",type=\"catchpoint\",disp=\"del\",enabled=\"y\",what=\"unload of library matching mi-catch-load-so\.so\\*\",catch-type=\"unload\",thread-groups=\\\[\"i1\"\\\],times=\"0\"\}" \
+    "catch-unload: catch unload"
+mi_send_resuming_command "exec-continue" "catch-unload: continue"
+
+gdb_expect {
+    -re "\\*stopped.*reason=\"solib-event\".*removed=.*\r\n.*\r\n$mi_gdb_prompt$" {
+        pass "catch-unload: solib-event stop"
+    }
+    -re ".*$mi_gdb_prompt$" {
+	setup_kfail mi/15945 *-*-*mingw*
+        fail "catch-unload: solib-event stop"
+    }
+    timeout {
+        fail "(timeout) catch-unload: solib-event stop"
+    }
+}
+@
+
+
+1.4
+log
+@2013-01-21  Marc Khouzam  <marc.khouzam@@ericsson.com>
+
+        * breakpoint.c (print_one_breakpoint_location): Add MI
+        field 'thread-groups' when printing a breakpoint.
+        (output_thread_groups): New function.
+
+2013-01-21  Marc Khouzam  <marc.khouzam@@ericsson.com>
+
+        * gdb.texinfo (GDB/MI Breakpoint Commands): Document new
+        'thread-groups' field when printing a breakpoint in MI.
+
+2013-01-21  Marc Khouzam  <marc.khouzam@@ericsson.com>
+
+        * gdb.mi/mi-break.exp: Expect new 'thread-groups' field.
+        * gdb.mi/mi-nsmoribund.exp: Expect new 'thread-groups' field.
+        Also handle 'thread' field.
+        * gdb.mi/mi-simplerun.exp: Expect new 'thread-groups' field.
+        * gdb.mi/mi-watch.exp: Ditto.
+        * lib/mi-support.exp: Ditto.
+@
+text
+@d61 1
+d89 1
+@
+
+
+1.3
+log
+@	* breakpoint.c (print_one_catch_fork, print_one_catch_vfork)
+	(print_one_catch_solib, print_one_catch_syscall)
+	(print_one_catch_exec, print_one_exception_catchpoint): Emit
+	"catch-type".
+gdb/doc
+	* gdb.texinfo (GDB/MI Breakpoint Information): Document
+	"catch-type" field.
+	(GDB/MI Catchpoint Commands): Add "catch-type" to examples.
+gdb/testsuite
+	* gdb.mi/mi-catch-load.exp: Look for "catch-type".
+@
+text
+@d52 1
+a52 1
+    "222\\^done,bkpt=\{number=\"2\",type=\"catchpoint\",disp=\"del\",enabled=\"y\",what=\"load of library matching mi-catch-load-so\.so\\*\",catch-type=\"load\",times=\"0\"\}" \
+d79 1
+a79 1
+    "222\\^done,bkpt=\{number=\"2\",type=\"catchpoint\",disp=\"del\",enabled=\"y\",what=\"unload of library matching mi-catch-load-so\.so\\*\",catch-type=\"unload\",times=\"0\"\}" \
+@
+
+
+1.2
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@d52 1
+a52 1
+    "222\\^done,bkpt=\{number=\"2\",type=\"catchpoint\",disp=\"del\",enabled=\"y\",what=\"load of library matching mi-catch-load-so\.so\\*\",times=\"0\"\}" \
+d79 1
+a79 1
+    "222\\^done,bkpt=\{number=\"2\",type=\"catchpoint\",disp=\"del\",enabled=\"y\",what=\"unload of library matching mi-catch-load-so\.so\\*\",times=\"0\"\}" \
+@
+
+
+1.1
+log
+@MI: tests for -catch-load/-catch-unload
+
+Added basic MI tests for the -catch-load and
+-catch-unload MI commands.
+
+2012-11-19 Keven Boell <keven.boell@@intel.com>
+
+gdb/testsuite:
+	* gdb.mi/mi-catch-load-so.c: New. Clone of the
+	catch load test library source file.
+	* gdb.mi/mi-catch-load.c: New. Clone of the catch
+	load test source file.
+	* gdb.mi/mi-catch-load.exp: New. Test file for
+	basic MI -catch-load and -catch-unload tests.
+@
+text
+@d1 1
+a1 1
+# Copyright 2012 Free Software Foundation, Inc.
+@
+

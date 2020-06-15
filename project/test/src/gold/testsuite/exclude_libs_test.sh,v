@@ -1,0 +1,171 @@
+head	1.2;
+access;
+symbols
+	binutils-2_24-branch:1.2.0.14
+	binutils-2_24-branchpoint:1.2
+	binutils-2_21_1:1.2
+	binutils-2_23_2:1.2
+	binutils-2_23_1:1.2
+	binutils-2_23:1.2
+	binutils-2_23-branch:1.2.0.12
+	binutils-2_23-branchpoint:1.2
+	binutils-2_22_branch:1.2.0.10
+	binutils-2_22:1.2
+	binutils-2_22-branch:1.2.0.8
+	binutils-2_22-branchpoint:1.2
+	binutils-2_21:1.2
+	binutils-2_21-branch:1.2.0.6
+	binutils-2_21-branchpoint:1.2
+	binutils-2_20_1:1.2
+	binutils-2_20:1.2
+	binutils-2_20-branch:1.2.0.4
+	binutils-2_20-branchpoint:1.2
+	dje-cgen-play1-branch:1.2.0.2
+	dje-cgen-play1-branchpoint:1.2
+	binutils_latest_snapshot:1.2;
+locks; strict;
+comment	@# @;
+
+
+1.2
+date	2009.05.26.22.52.56;	author dougkwan;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2009.05.19.22.14.17;	author ccoutant;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@2009-05-26  Doug Kwan  <dougkwan@@google.com>
+
+        * options.cc (General_options::parse_exclude_libs).  Fix a comment.
+        (General_options::check_excluded_libs): Strip off directories in
+        archive name before matching like GNU ld does.
+        * testsuite/Makefile.am (MOSTLYCLEANFILES,
+        exclude_libs_test_DEPENDENCIES): Add alt/libexclude_libs_test_3.a
+        (exclude_libs_test_LDFLAGS): Add linker option
+        -Wl,--exclude-libs,libexclude_libs_test_3
+        (exclude_libs_test_LADD): Add alt/libexclude_libs_test_3.a as
+        an explicit archive without using -l.
+        (alt/libexclude_libs_test_3.a): New make rule.
+        * testsuite/Makefile.in: Regenerate.
+        * testsuite/exclude_libs_test.c : Declare lib3_default().
+        (main): Call it.
+        * exclude_libs_test.sh: Add tests for alt/exclude_libs_test_3.a.
+        * exclude_libs_test_3.c: New file.
+@
+text
+@#!/bin/sh
+
+# exclude_libs_test.sh -- test that library symbols are not exported.
+
+# Copyright 2009 Free Software Foundation, Inc.
+# Written by Doug Kwan <dougkwan@@google.com>
+
+# This file is part of gold.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+# MA 02110-1301, USA.
+
+# This file goes with exclude_libs_test.c, a C source file
+# linked with option -Wl,--exclude-libs. We run readelf on
+# the resulting executable and check that symbols from two test library
+# archives are correctly hidden or left unmodified.
+
+check()
+{
+    file=$1
+    sym=$2
+    vis=$3
+
+    found=`grep " $sym\$" $file`
+    if test -z "$found"; then
+	echo "Symbol $sym not found."
+	exit 1
+    fi
+
+    match_vis=`grep " $sym\$" $file | grep " $vis "`
+    if test -z "$match_vis"; then
+	echo "Expected symbol $sym to have visibility $vis but found"
+	echo "$found"
+	exit 1
+    fi
+}
+
+check "exclude_libs_test.syms" "lib1_default" "HIDDEN"
+check "exclude_libs_test.syms" "lib1_protected" "HIDDEN"
+check "exclude_libs_test.syms" "lib1_internal" "INTERNAL"
+check "exclude_libs_test.syms" "lib1_hidden" "HIDDEN"
+check "exclude_libs_test.syms" "lib2_default" "DEFAULT"
+check "exclude_libs_test.syms" "lib2_protected" "PROTECTED"
+check "exclude_libs_test.syms" "lib2_internal" "INTERNAL"
+check "exclude_libs_test.syms" "lib2_hidden" "HIDDEN"
+check "exclude_libs_test.syms" "lib3_default" "HIDDEN"
+check "exclude_libs_test.syms" "lib3_protected" "HIDDEN"
+check "exclude_libs_test.syms" "lib3_internal" "INTERNAL"
+check "exclude_libs_test.syms" "lib3_hidden" "HIDDEN"
+
+exit 0
+@
+
+
+1.1
+log
+@2009-05-19  Doug Kwan  <dougkwan@@google.com>
+
+	* archive.cc (Archive::Archive): Move constructor from archive.h
+	to here.  Initialize no_export_.
+	(Archive::get_elf_object_for_member): Set no_export flag of object.
+	* archive.h (Archive::Archive): Move constructor body to
+	archive.cc.
+	(Archive::no_export): New method.
+	(Archive::no_export_): New field.
+	* object.h (Object::Object): Initialize no_export_ to false.
+	(Object::no_export, Object::set_no_export): New methods.
+	(Object::no_export_): New field.
+	* options.cc (General_options::parse_exclude_libs): New method.
+	(General_options::check_excluded_libs) Same.
+	* options.h (exclude_libs): New option.
+	(General_options::check_excluded_libs): New method declaration.
+	(General_options::excluded_libs_): New field.
+	* symtab.cc (Symbol_table::add_from_relobj): Hide symbols with
+	default or protected visibility if an object has no-export flag set.
+	testsuite/Makefile.am (check_PROGRAMS): Add exclude_libs_test.
+	(check_SCRIPTS): Add exclude_libs_test.sh.
+	(check_DATA): Add exclude_libs_test.syms.
+	(MOSTLYCLEANFILES): Add exclude_libs_test.syms,
+	libexclude_libs_test_1.a and libexclude_libs_test_2.a.
+	(exclude_libs_test_SOURCES, exclude_libs_test_DEPENDENCIES,
+	exclude_libs_test_LDFLAGS and exclude_libs_test_LDADD): Define.
+	(exclude_libs_test.syms, libexclude_libs_test_1.a,
+	libexclude_libs_test_2.a): New rules.
+	* testsuite/Makefile.in: Regenerate.
+	* testsuite/exclude_libs_test.c: New file.
+	* testsuite/exclude_libs_test.sh: Ditto.
+	* testsuite/exclude_libs_test_1.c: Ditto.
+	* testsuite/exclude_libs_test_2.c: Ditto.
+@
+text
+@d58 4
+@
+

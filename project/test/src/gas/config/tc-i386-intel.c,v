@@ -1,0 +1,2503 @@
+head	1.23;
+access;
+symbols
+	binutils-2_24-branch:1.22.0.2
+	binutils-2_24-branchpoint:1.22
+	binutils-2_21_1:1.17
+	binutils-2_23_2:1.19
+	binutils-2_23_1:1.19
+	binutils-2_23:1.19
+	binutils-2_23-branch:1.19.0.2
+	binutils-2_23-branchpoint:1.19
+	binutils-2_22_branch:1.17.0.6
+	binutils-2_22:1.17
+	binutils-2_22-branch:1.17.0.4
+	binutils-2_22-branchpoint:1.17
+	binutils-2_21:1.17
+	binutils-2_21-branch:1.17.0.2
+	binutils-2_21-branchpoint:1.17
+	binutils-2_20_1:1.4.4.1
+	binutils-2_20:1.4.4.1
+	binutils-2_20-branch:1.4.0.4
+	binutils-2_20-branchpoint:1.4
+	dje-cgen-play1-branch:1.4.0.2
+	dje-cgen-play1-branchpoint:1.4
+	binutils_latest_snapshot:1.23;
+locks; strict;
+comment	@ * @;
+
+
+1.23
+date	2013.10.10.12.20.40;	author jbeulich;	state Exp;
+branches;
+next	1.22;
+
+1.22
+date	2013.07.26.17.20.21;	author hjl;	state Exp;
+branches;
+next	1.21;
+
+1.21
+date	2013.07.18.16.12.35;	author nickc;	state Exp;
+branches;
+next	1.20;
+
+1.20
+date	2012.11.09.08.29.32;	author hjl;	state Exp;
+branches;
+next	1.19;
+
+1.19
+date	2012.07.25.11.34.49;	author jbeulich;	state Exp;
+branches;
+next	1.18;
+
+1.18
+date	2012.07.25.11.33.23;	author jbeulich;	state Exp;
+branches;
+next	1.17;
+
+1.17
+date	2010.11.03.14.18.41;	author hjl;	state Exp;
+branches;
+next	1.16;
+
+1.16
+date	2010.07.29.19.23.38;	author hjl;	state Exp;
+branches;
+next	1.15;
+
+1.15
+date	2010.07.12.20.36.01;	author hjl;	state Exp;
+branches;
+next	1.14;
+
+1.14
+date	2010.06.22.07.43.40;	author jbeulich;	state Exp;
+branches;
+next	1.13;
+
+1.13
+date	2010.04.24.17.41.03;	author hjl;	state Exp;
+branches;
+next	1.12;
+
+1.12
+date	2010.04.22.03.10.48;	author hjl;	state Exp;
+branches;
+next	1.11;
+
+1.11
+date	2010.04.22.00.43.38;	author hjl;	state Exp;
+branches;
+next	1.10;
+
+1.10
+date	2010.04.21.18.09.51;	author hjl;	state Exp;
+branches;
+next	1.9;
+
+1.9
+date	2009.12.11.13.42.10;	author nickc;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2009.10.13.16.23.24;	author hjl;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2009.09.15.18.41.23;	author hjl;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2009.09.14.22.02.25;	author hjl;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2009.09.11.15.27.33;	author nickc;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2009.06.22.17.56.01;	author nickc;	state Exp;
+branches
+	1.4.4.1;
+next	1.3;
+
+1.3
+date	2009.06.01.16.30.59;	author hjl;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2009.04.21.16.23.12;	author hjl;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2009.04.20.06.31.49;	author jbeulich;	state Exp;
+branches;
+next	;
+
+1.4.4.1
+date	2009.09.11.15.28.43;	author nickc;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.23
+log
+@gas/
+2013-10-10  Jan Beulich <jbeulich@@suse.com>
+
+	* tc-i386-intel.c (i386_intel_simplify_register): Suppress base/index
+	swapping for bndmk, bndldx, and bndstx.
+@
+text
+@/* tc-i386.c -- Assemble Intel syntax code for ix86/x86-64
+   Copyright 2009, 2010
+   Free Software Foundation, Inc.
+
+   This file is part of GAS, the GNU Assembler.
+
+   GAS is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3, or (at your option)
+   any later version.
+
+   GAS is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with GAS; see the file COPYING.  If not, write to the Free
+   Software Foundation, 51 Franklin Street - Fifth Floor, Boston, MA
+   02110-1301, USA.  */
+
+static struct
+  {
+    operatorT op_modifier;	/* Operand modifier.  */
+    int is_mem;			/* 1 if operand is memory reference.  */
+    int is_indirect;		/* 1 if operand is indirect reference.  */
+    int has_offset;		/* 1 if operand has offset.  */
+    unsigned int in_offset;	/* >=1 if processing operand of offset.  */
+    unsigned int in_bracket;	/* >=1 if processing operand in brackets.  */
+    unsigned int in_scale;	/* >=1 if processing multipication operand
+				 * in brackets.  */
+    i386_operand_type reloc_types;	/* Value obtained from lex_got().  */
+    const reg_entry *base;	/* Base register (if any).  */
+    const reg_entry *index;	/* Index register (if any).  */
+    offsetT scale_factor;	/* Accumulated scale factor.  */
+    symbolS *seg;
+  }
+intel_state;
+
+/* offset X_add_symbol */
+#define O_offset O_md32
+/* offset X_add_symbol */
+#define O_short O_md31
+/* near ptr X_add_symbol */
+#define O_near_ptr O_md30
+/* far ptr X_add_symbol */
+#define O_far_ptr O_md29
+/* byte ptr X_add_symbol */
+#define O_byte_ptr O_md28
+/* word ptr X_add_symbol */
+#define O_word_ptr O_md27
+/* dword ptr X_add_symbol */
+#define O_dword_ptr O_md26
+/* qword ptr X_add_symbol */
+#define O_qword_ptr O_md25
+/* oword ptr X_add_symbol */
+#define O_oword_ptr O_md24
+/* fword ptr X_add_symbol */
+#define O_fword_ptr O_md23
+/* tbyte ptr X_add_symbol */
+#define O_tbyte_ptr O_md22
+/* xmmword ptr X_add_symbol */
+#define O_xmmword_ptr O_md21
+/* ymmword ptr X_add_symbol */
+#define O_ymmword_ptr O_md20
+/* zmmword ptr X_add_symbol */
+#define O_zmmword_ptr O_md19
+
+static struct
+  {
+    const char *name;
+    operatorT op;
+    unsigned int operands;
+  }
+const i386_operators[] =
+  {
+    { "and", O_bit_and, 2 },
+    { "eq", O_eq, 2 },
+    { "ge", O_ge, 2 },
+    { "gt", O_gt, 2 },
+    { "le", O_le, 2 },
+    { "lt", O_lt, 2 },
+    { "mod", O_modulus, 2 },
+    { "ne", O_ne, 2 },
+    { "not", O_bit_not, 1 },
+    { "offset", O_offset, 1 },
+    { "or", O_bit_inclusive_or, 2 },
+    { "shl", O_left_shift, 2 },
+    { "short", O_short, 1 },
+    { "shr", O_right_shift, 2 },
+    { "xor", O_bit_exclusive_or, 2 },
+    { NULL, O_illegal, 0 }
+  };
+
+static struct
+  {
+    const char *name;
+    operatorT op;
+    unsigned short sz[3];
+  }
+const i386_types[] =
+  {
+#define I386_TYPE(t, n) { #t, O_##t##_ptr, { n, n, n } }
+    I386_TYPE(byte, 1),
+    I386_TYPE(word, 2),
+    I386_TYPE(dword, 4),
+    I386_TYPE(fword, 6),
+    I386_TYPE(qword, 8),
+    I386_TYPE(tbyte, 10),
+    I386_TYPE(oword, 16),
+    I386_TYPE(xmmword, 16),
+    I386_TYPE(ymmword, 32),
+    I386_TYPE(zmmword, 64),
+#undef I386_TYPE
+    { "near", O_near_ptr, { 0xff04, 0xff02, 0xff08 } },
+    { "far", O_far_ptr, { 0xff06, 0xff05, 0xff06 } },
+    { NULL, O_illegal, { 0, 0, 0 } }
+  };
+
+operatorT i386_operator (const char *name, unsigned int operands, char *pc)
+{
+  unsigned int j;
+
+  if (!intel_syntax)
+    return O_absent;
+
+  if (!name)
+    {
+      if (operands != 2)
+	return O_illegal;
+      switch (*input_line_pointer)
+	{
+	case ':':
+	  ++input_line_pointer;
+	  return O_full_ptr;
+	case '[':
+	  ++input_line_pointer;
+	  return O_index;
+	case '@@':
+	  if (this_operand >= 0 && i.reloc[this_operand] == NO_RELOC)
+	    {
+	      int adjust = 0;
+	      char *gotfree_input_line = lex_got (&i.reloc[this_operand],
+						  &adjust,
+						  &intel_state.reloc_types);
+
+	      if (!gotfree_input_line)
+		break;
+	      free (gotfree_input_line);
+	      *input_line_pointer++ = '+';
+	      memset (input_line_pointer, '0', adjust - 1);
+	      input_line_pointer[adjust - 1] = ' ';
+	      return O_add;
+	    }
+	  break;
+	}
+      return O_illegal;
+    }
+
+  for (j = 0; i386_operators[j].name; ++j)
+    if (strcasecmp (i386_operators[j].name, name) == 0)
+      {
+	if (i386_operators[j].operands
+	    && i386_operators[j].operands != operands)
+	  return O_illegal;
+	return i386_operators[j].op;
+      }
+
+  for (j = 0; i386_types[j].name; ++j)
+    if (strcasecmp (i386_types[j].name, name) == 0)
+      break;
+  if (i386_types[j].name && *pc == ' ')
+    {
+      char *pname = ++input_line_pointer;
+      char c = get_symbol_end ();
+
+      if (strcasecmp (pname, "ptr") == 0)
+	{
+	  pname[-1] = *pc;
+	  *pc = c;
+	  if (intel_syntax > 0 || operands != 1)
+	    return O_illegal;
+	  return i386_types[j].op;
+	}
+
+      *input_line_pointer = c;
+      input_line_pointer = pname - 1;
+    }
+
+  return O_absent;
+}
+
+static int i386_intel_parse_name (const char *name, expressionS *e)
+{
+  unsigned int j;
+
+  if (! strcmp (name, "$"))
+    {
+      current_location (e);
+      return 1;
+    }
+
+  for (j = 0; i386_types[j].name; ++j)
+    if (strcasecmp(i386_types[j].name, name) == 0)
+      {
+	e->X_op = O_constant;
+	e->X_add_number = i386_types[j].sz[flag_code];
+	e->X_add_symbol = NULL;
+	e->X_op_symbol = NULL;
+	return 1;
+      }
+
+  return 0;
+}
+
+static INLINE int i386_intel_check (const reg_entry *rreg,
+				    const reg_entry *base,
+				    const reg_entry *iindex)
+{
+  if ((this_operand >= 0
+       && rreg != i.op[this_operand].regs)
+      || base != intel_state.base
+      || iindex != intel_state.index)
+    {
+      as_bad (_("invalid use of register"));
+      return 0;
+    }
+  return 1;
+}
+
+static INLINE void i386_intel_fold (expressionS *e, symbolS *sym)
+{
+  expressionS *exp = symbol_get_value_expression (sym);
+  if (S_GET_SEGMENT (sym) == absolute_section)
+    {
+      offsetT val = e->X_add_number;
+
+      *e = *exp;
+      e->X_add_number += val;
+    }
+  else
+    {
+      if (exp->X_op == O_symbol
+	  && strcmp (S_GET_NAME (exp->X_add_symbol),
+		     GLOBAL_OFFSET_TABLE_NAME) == 0)
+	sym = exp->X_add_symbol;
+      e->X_add_symbol = sym;
+      e->X_op_symbol = NULL;
+      e->X_op = O_symbol;
+    }
+}
+
+static int
+i386_intel_simplify_register (expressionS *e)
+{
+  int reg_num;
+
+  if (this_operand < 0 || intel_state.in_offset)
+    {
+      as_bad (_("invalid use of register"));
+      return 0;
+    }
+
+  if (e->X_op == O_register)
+    reg_num = e->X_add_number;
+  else
+    reg_num = e->X_md - 1;
+
+  if (!intel_state.in_bracket)
+    {
+      if (i.op[this_operand].regs)
+	{
+	  as_bad (_("invalid use of register"));
+	  return 0;
+	}
+      if (i386_regtab[reg_num].reg_type.bitfield.sreg3
+	  && i386_regtab[reg_num].reg_num == RegFlat)
+	{
+	  as_bad (_("invalid use of pseudo-register"));
+	  return 0;
+	}
+      i.op[this_operand].regs = i386_regtab + reg_num;
+    }
+  else if (!intel_state.index
+	   && (i386_regtab[reg_num].reg_type.bitfield.regxmm
+	       || i386_regtab[reg_num].reg_type.bitfield.regymm
+	       || i386_regtab[reg_num].reg_type.bitfield.regzmm))
+    intel_state.index = i386_regtab + reg_num;
+  else if (!intel_state.base && !intel_state.in_scale)
+    intel_state.base = i386_regtab + reg_num;
+  else if (!intel_state.index)
+    {
+      if (intel_state.in_scale
+	  || current_templates->start->base_opcode == 0xf30f1b /* bndmk */
+	  || (current_templates->start->base_opcode & ~1) == 0x0f1a /* bnd{ld,st}x */
+	  || i386_regtab[reg_num].reg_type.bitfield.baseindex)
+	intel_state.index = i386_regtab + reg_num;
+      else
+	{
+	  /* Convert base to index and make ESP/RSP the base.  */
+	  intel_state.index = intel_state.base;
+	  intel_state.base = i386_regtab + reg_num;
+	}
+    }
+  else
+    {
+      /* esp is invalid as index */
+      intel_state.index = i386_regtab + REGNAM_EAX + ESP_REG_NUM;
+    }
+  return 2;
+}
+
+static int i386_intel_simplify (expressionS *);
+
+static INLINE int i386_intel_simplify_symbol(symbolS *sym)
+{
+  int ret = i386_intel_simplify (symbol_get_value_expression (sym));
+
+  if (ret == 2)
+  {
+    S_SET_SEGMENT(sym, absolute_section);
+    ret = 1;
+  }
+  return ret;
+}
+
+static int i386_intel_simplify (expressionS *e)
+{
+  const reg_entry *the_reg = (this_operand >= 0
+			      ? i.op[this_operand].regs : NULL);
+  const reg_entry *base = intel_state.base;
+  const reg_entry *state_index = intel_state.index;
+  int ret;
+
+  if (!intel_syntax)
+    return 1;
+
+  switch (e->X_op)
+    {
+    case O_index:
+      if (e->X_add_symbol)
+	{
+	  if (!i386_intel_simplify_symbol (e->X_add_symbol)
+	      || !i386_intel_check(the_reg, intel_state.base,
+				   intel_state.index))
+	    return 0;
+	}
+      if (!intel_state.in_offset)
+	++intel_state.in_bracket;
+      ret = i386_intel_simplify_symbol (e->X_op_symbol);
+      if (!intel_state.in_offset)
+	--intel_state.in_bracket;
+      if (!ret)
+	return 0;
+      if (e->X_add_symbol)
+	e->X_op = O_add;
+      else
+	i386_intel_fold (e, e->X_op_symbol);
+      break;
+
+    case O_offset:
+      intel_state.has_offset = 1;
+      ++intel_state.in_offset;
+      ret = i386_intel_simplify_symbol (e->X_add_symbol);
+      --intel_state.in_offset;
+      if (!ret || !i386_intel_check(the_reg, base, state_index))
+	return 0;
+      i386_intel_fold (e, e->X_add_symbol);
+      return ret;
+
+    case O_byte_ptr:
+    case O_word_ptr:
+    case O_dword_ptr:
+    case O_fword_ptr:
+    case O_qword_ptr:
+    case O_tbyte_ptr:
+    case O_oword_ptr:
+    case O_xmmword_ptr:
+    case O_ymmword_ptr:
+    case O_zmmword_ptr:
+    case O_near_ptr:
+    case O_far_ptr:
+      if (intel_state.op_modifier == O_absent)
+	intel_state.op_modifier = e->X_op;
+      /* FALLTHROUGH */
+    case O_short:
+      if (symbol_get_value_expression (e->X_add_symbol)->X_op
+	  == O_register)
+	{
+	  as_bad (_("invalid use of register"));
+	  return 0;
+	}
+      if (!i386_intel_simplify_symbol (e->X_add_symbol))
+	return 0;
+      i386_intel_fold (e, e->X_add_symbol);
+      break;
+
+    case O_full_ptr:
+      if (symbol_get_value_expression (e->X_op_symbol)->X_op
+	  == O_register)
+	{
+	  as_bad (_("invalid use of register"));
+	  return 0;
+	}
+      if (!i386_intel_simplify_symbol (e->X_op_symbol)
+	  || !i386_intel_check(the_reg, intel_state.base,
+			       intel_state.index))
+	return 0;
+      if (!intel_state.in_offset)
+	intel_state.seg = e->X_add_symbol;
+      i386_intel_fold (e, e->X_op_symbol);
+      break;
+
+    case O_multiply:
+      if (this_operand >= 0 && intel_state.in_bracket)
+	{
+	  expressionS *scale = NULL;
+
+	  if (intel_state.index)
+	    --scale;
+
+	  if (!intel_state.in_scale++)
+	    intel_state.scale_factor = 1;
+
+	  ret = i386_intel_simplify_symbol (e->X_add_symbol);
+	  if (ret && !scale && intel_state.index)
+	    scale = symbol_get_value_expression (e->X_op_symbol);
+
+	  if (ret)
+	    ret = i386_intel_simplify_symbol (e->X_op_symbol);
+	  if (ret && !scale && intel_state.index)
+	    scale = symbol_get_value_expression (e->X_add_symbol);
+
+	  if (ret && scale && (scale + 1))
+	    {
+	      resolve_expression (scale);
+	      if (scale->X_op != O_constant
+		  || intel_state.index->reg_type.bitfield.reg16)
+		scale->X_add_number = 0;
+	      intel_state.scale_factor *= scale->X_add_number;
+	    }
+
+	  --intel_state.in_scale;
+	  if (!ret)
+	    return 0;
+
+	  if (!intel_state.in_scale)
+	    switch (intel_state.scale_factor)
+	      {
+	      case 1:
+		i.log2_scale_factor = 0;
+		break;
+	      case 2:
+		i.log2_scale_factor = 1;
+		break;
+	      case 4:
+		i.log2_scale_factor = 2;
+		break;
+	      case 8:
+		i.log2_scale_factor = 3;
+		break;
+	      default:
+		/* esp is invalid as index */
+		intel_state.index = i386_regtab + REGNAM_EAX + ESP_REG_NUM;
+		break;
+	      }
+
+	  break;
+	}
+      goto fallthrough;
+
+    case O_register:
+      ret = i386_intel_simplify_register (e);
+      if (ret == 2)
+	{
+	  gas_assert (e->X_add_number < (unsigned short) -1);
+	  e->X_md = (unsigned short) e->X_add_number + 1;
+	  e->X_op = O_constant;
+	  e->X_add_number = 0;
+	}
+      return ret;
+
+    case O_constant:
+      if (e->X_md)
+	return i386_intel_simplify_register (e);
+
+      /* FALLTHROUGH */
+    default:
+fallthrough:
+      if (e->X_add_symbol
+	  && !i386_intel_simplify_symbol (e->X_add_symbol))
+	return 0;
+      if (e->X_op == O_add || e->X_op == O_subtract)
+	{
+	  base = intel_state.base;
+	  state_index = intel_state.index;
+	}
+      if (!i386_intel_check (the_reg, base, state_index)
+	  || (e->X_op_symbol
+	      && !i386_intel_simplify_symbol (e->X_op_symbol))
+	  || !i386_intel_check (the_reg,
+				(e->X_op != O_add
+				 ? base : intel_state.base),
+				(e->X_op != O_add
+				 ? state_index : intel_state.index)))
+	return 0;
+      break;
+    }
+
+  if (this_operand >= 0
+      && e->X_op == O_symbol
+      && !intel_state.in_offset)
+    {
+      segT seg = S_GET_SEGMENT (e->X_add_symbol);
+
+      if (seg != absolute_section
+	  && seg != reg_section
+	  && seg != expr_section)
+	intel_state.is_mem |= 2 - !intel_state.in_bracket;
+    }
+
+  return 1;
+}
+
+int i386_need_index_operator (void)
+{
+  return intel_syntax < 0;
+}
+
+static int
+i386_intel_operand (char *operand_string, int got_a_float)
+{
+  char *saved_input_line_pointer, *buf;
+  segT exp_seg;
+  expressionS exp, *expP;
+  char suffix = 0;
+  int ret;
+
+  /* Handle vector immediates.  */
+  if (RC_SAE_immediate (operand_string))
+    return 1;
+
+  /* Initialize state structure.  */
+  intel_state.op_modifier = O_absent;
+  intel_state.is_mem = 0;
+  intel_state.is_indirect = 0;
+  intel_state.has_offset = 0;
+  intel_state.base = NULL;
+  intel_state.index = NULL;
+  intel_state.seg = NULL;
+  operand_type_set (&intel_state.reloc_types, ~0);
+  gas_assert (!intel_state.in_offset);
+  gas_assert (!intel_state.in_bracket);
+  gas_assert (!intel_state.in_scale);
+
+  saved_input_line_pointer = input_line_pointer;
+  input_line_pointer = buf = xstrdup (operand_string);
+
+  intel_syntax = -1;
+  memset (&exp, 0, sizeof(exp));
+  exp_seg = expression (&exp);
+  ret = i386_intel_simplify (&exp);
+  intel_syntax = 1;
+
+  SKIP_WHITESPACE ();
+
+  /* Handle vector operations.  */
+  if (*input_line_pointer == '{')
+    {
+      char *end = check_VecOperations (input_line_pointer, NULL);
+      if (end)
+	input_line_pointer = end;
+      else
+	ret = 0;
+    }
+
+  if (!is_end_of_line[(unsigned char) *input_line_pointer])
+    {
+      as_bad (_("junk `%s' after expression"), input_line_pointer);
+      ret = 0;
+    }
+  else if (exp.X_op == O_illegal || exp.X_op == O_absent)
+    {
+      as_bad (_("invalid expression"));
+      ret = 0;
+    }
+  else if (!intel_state.has_offset
+	   && input_line_pointer > buf
+	   && *(input_line_pointer - 1) == ']')
+    {
+      intel_state.is_mem |= 1;
+      intel_state.is_indirect = 1;
+    }
+
+  input_line_pointer = saved_input_line_pointer;
+  free (buf);
+
+  gas_assert (!intel_state.in_offset);
+  gas_assert (!intel_state.in_bracket);
+  gas_assert (!intel_state.in_scale);
+
+  if (!ret)
+    return 0;
+
+  if (intel_state.op_modifier != O_absent
+      && current_templates->start->base_opcode != 0x8d /* lea */)
+    {
+      i.types[this_operand].bitfield.unspecified = 0;
+
+      switch (intel_state.op_modifier)
+	{
+	case O_byte_ptr:
+	  i.types[this_operand].bitfield.byte = 1;
+	  suffix = BYTE_MNEM_SUFFIX;
+	  break;
+
+	case O_word_ptr:
+	  i.types[this_operand].bitfield.word = 1;
+	  if ((current_templates->start->name[0] == 'l'
+	       && current_templates->start->name[2] == 's'
+	       && current_templates->start->name[3] == 0)
+	      || current_templates->start->base_opcode == 0x62 /* bound */)
+	    suffix = BYTE_MNEM_SUFFIX; /* so it will cause an error */
+	  else if (got_a_float == 2)	/* "fi..." */
+	    suffix = SHORT_MNEM_SUFFIX;
+	  else
+	    suffix = WORD_MNEM_SUFFIX;
+	  break;
+
+	case O_dword_ptr:
+	  i.types[this_operand].bitfield.dword = 1;
+	  if ((current_templates->start->name[0] == 'l'
+	       && current_templates->start->name[2] == 's'
+	       && current_templates->start->name[3] == 0)
+	      || current_templates->start->base_opcode == 0x62 /* bound */)
+	    suffix = WORD_MNEM_SUFFIX;
+	  else if (flag_code == CODE_16BIT
+		   && (current_templates->start->opcode_modifier.jump
+		       || current_templates->start->opcode_modifier.jumpdword))
+	    suffix = LONG_DOUBLE_MNEM_SUFFIX;
+	  else if (got_a_float == 1)	/* "f..." */
+	    suffix = SHORT_MNEM_SUFFIX;
+	  else
+	    suffix = LONG_MNEM_SUFFIX;
+	  break;
+
+	case O_fword_ptr:
+	  i.types[this_operand].bitfield.fword = 1;
+	  if (current_templates->start->name[0] == 'l'
+	      && current_templates->start->name[2] == 's'
+	      && current_templates->start->name[3] == 0)
+	    suffix = LONG_MNEM_SUFFIX;
+	  else if (!got_a_float)
+	    {
+	      if (flag_code == CODE_16BIT)
+		add_prefix (DATA_PREFIX_OPCODE);
+	      suffix = LONG_DOUBLE_MNEM_SUFFIX;
+	    }
+	  else
+	    suffix = BYTE_MNEM_SUFFIX; /* so it will cause an error */
+	  break;
+
+	case O_qword_ptr:
+	  i.types[this_operand].bitfield.qword = 1;
+	  if (current_templates->start->base_opcode == 0x62 /* bound */
+	      || got_a_float == 1)	/* "f..." */
+	    suffix = LONG_MNEM_SUFFIX;
+	  else
+	    suffix = QWORD_MNEM_SUFFIX;
+	  break;
+
+	case O_tbyte_ptr:
+	  i.types[this_operand].bitfield.tbyte = 1;
+	  if (got_a_float == 1)
+	    suffix = LONG_DOUBLE_MNEM_SUFFIX;
+	  else
+	    suffix = BYTE_MNEM_SUFFIX; /* so it will cause an error */
+	  break;
+
+	case O_oword_ptr:
+	case O_xmmword_ptr:
+	  i.types[this_operand].bitfield.xmmword = 1;
+	  suffix = XMMWORD_MNEM_SUFFIX;
+	  break;
+
+	case O_ymmword_ptr:
+	  i.types[this_operand].bitfield.ymmword = 1;
+	  suffix = YMMWORD_MNEM_SUFFIX;
+	  break;
+
+	case O_zmmword_ptr:
+	  i.types[this_operand].bitfield.zmmword = 1;
+	  suffix = ZMMWORD_MNEM_SUFFIX;
+	  break;
+
+	case O_far_ptr:
+	  suffix = LONG_DOUBLE_MNEM_SUFFIX;
+	  /* FALLTHROUGH */
+	case O_near_ptr:
+	  if (!current_templates->start->opcode_modifier.jump
+	      && !current_templates->start->opcode_modifier.jumpdword)
+	    suffix = got_a_float /* so it will cause an error */
+		     ? BYTE_MNEM_SUFFIX
+		     : LONG_DOUBLE_MNEM_SUFFIX;
+	  break;
+
+	default:
+	  BAD_CASE (intel_state.op_modifier);
+	  break;
+	}
+
+      if (!i.suffix)
+	i.suffix = suffix;
+      else if (i.suffix != suffix)
+	{
+	  as_bad (_("conflicting operand size modifiers"));
+	  return 0;
+	}
+    }
+
+  /* Operands for jump/call need special consideration.  */
+  if (current_templates->start->opcode_modifier.jump
+      || current_templates->start->opcode_modifier.jumpdword
+      || current_templates->start->opcode_modifier.jumpintersegment)
+    {
+      if (i.op[this_operand].regs
+	  || intel_state.base
+	  || intel_state.index
+	  || intel_state.is_mem > 1)
+	i.types[this_operand].bitfield.jumpabsolute = 1;
+      else
+	switch (intel_state.op_modifier)
+	  {
+	  case O_near_ptr:
+	    if (intel_state.seg)
+	      i.types[this_operand].bitfield.jumpabsolute = 1;
+	    else
+	      intel_state.is_mem = 1;
+	    break;
+	  case O_far_ptr:
+	  case O_absent:
+	    if (!intel_state.seg)
+	      {
+		intel_state.is_mem = 1;
+		if (intel_state.op_modifier == O_absent)
+		  {
+		    if (intel_state.is_indirect == 1)
+		      i.types[this_operand].bitfield.jumpabsolute = 1;
+		    break;
+		  }
+		as_bad (_("cannot infer the segment part of the operand"));
+		return 0;
+	      }
+	    else if (S_GET_SEGMENT (intel_state.seg) == reg_section)
+	      i.types[this_operand].bitfield.jumpabsolute = 1;
+	    else
+	      {
+		i386_operand_type types;
+
+		if (i.imm_operands >= MAX_IMMEDIATE_OPERANDS)
+		  {
+		    as_bad (_("at most %d immediate operands are allowed"),
+			    MAX_IMMEDIATE_OPERANDS);
+		    return 0;
+		  }
+		expP = &im_expressions[i.imm_operands++];
+		memset (expP, 0, sizeof(*expP));
+		expP->X_op = O_symbol;
+		expP->X_add_symbol = intel_state.seg;
+		i.op[this_operand].imms = expP;
+
+		resolve_expression (expP);
+		operand_type_set (&types, ~0);
+		if (!i386_finalize_immediate (S_GET_SEGMENT (intel_state.seg),
+					      expP, types, operand_string))
+		  return 0;
+		if (i.operands < MAX_OPERANDS)
+		  {
+		    this_operand = i.operands++;
+		    i.types[this_operand].bitfield.unspecified = 1;
+		  }
+		if (suffix == LONG_DOUBLE_MNEM_SUFFIX)
+		  i.suffix = 0;
+		intel_state.seg = NULL;
+		intel_state.is_mem = 0;
+	      }
+	    break;
+	  default:
+	    i.types[this_operand].bitfield.jumpabsolute = 1;
+	    break;
+	  }
+      if (i.types[this_operand].bitfield.jumpabsolute)
+	intel_state.is_mem |= 1;
+    }
+  else if (intel_state.seg)
+    intel_state.is_mem |= 1;
+
+  if (i.op[this_operand].regs)
+    {
+      i386_operand_type temp;
+
+      /* Register operand.  */
+      if (intel_state.base || intel_state.index || intel_state.seg)
+	{
+	  as_bad (_("invalid operand"));
+	  return 0;
+	}
+
+      temp = i.op[this_operand].regs->reg_type;
+      temp.bitfield.baseindex = 0;
+      i.types[this_operand] = operand_type_or (i.types[this_operand],
+					       temp);
+      i.types[this_operand].bitfield.unspecified = 0;
+      ++i.reg_operands;
+    }
+  else if (intel_state.base
+	   || intel_state.index
+	   || intel_state.seg
+	   || intel_state.is_mem)
+    {
+      /* Memory operand.  */
+      if ((int) i.mem_operands
+	  >= 2 - !current_templates->start->opcode_modifier.isstring)
+	{
+	  /* Handle
+
+	     call	0x9090,0x90909090
+	     lcall	0x9090,0x90909090
+	     jmp	0x9090,0x90909090
+	     ljmp	0x9090,0x90909090
+	   */
+
+	  if ((current_templates->start->opcode_modifier.jumpintersegment
+	       || current_templates->start->opcode_modifier.jumpdword
+	       || current_templates->start->opcode_modifier.jump)
+	      && this_operand == 1
+	      && intel_state.seg == NULL
+	      && i.mem_operands == 1
+	      && i.disp_operands == 1
+	      && intel_state.op_modifier == O_absent)
+	    {
+	      /* Try to process the first operand as immediate,  */
+	      this_operand = 0;
+	      if (i386_finalize_immediate (exp_seg, i.op[0].imms,
+					   intel_state.reloc_types,
+					   NULL))
+		{
+		  this_operand = 1;
+		  expP = &im_expressions[0];
+		  i.op[this_operand].imms = expP;
+		  *expP = exp;
+
+		  /* Try to process the second operand as immediate,  */
+		  if (i386_finalize_immediate (exp_seg, expP,
+					       intel_state.reloc_types,
+					       NULL))
+		    {
+		      i.mem_operands = 0;
+		      i.disp_operands = 0;
+		      i.imm_operands = 2;
+		      i.types[0].bitfield.mem = 0;
+		      i.types[0].bitfield.disp16 = 0;
+		      i.types[0].bitfield.disp32 = 0;
+		      i.types[0].bitfield.disp32s = 0;
+		      return 1;
+		    }
+		}
+	    }
+
+	  as_bad (_("too many memory references for `%s'"),
+		  current_templates->start->name);
+	  return 0;
+	}
+
+      expP = &disp_expressions[i.disp_operands];
+      memcpy (expP, &exp, sizeof(exp));
+      resolve_expression (expP);
+
+      if (expP->X_op != O_constant
+	  || expP->X_add_number
+	  || (!intel_state.base
+	      && !intel_state.index))
+	{
+	  i.op[this_operand].disps = expP;
+	  i.disp_operands++;
+
+	  if (flag_code == CODE_64BIT)
+	    {
+	      i.types[this_operand].bitfield.disp32 = 1;
+	      if (!i.prefix[ADDR_PREFIX])
+		{
+		  i.types[this_operand].bitfield.disp64 = 1;
+		  i.types[this_operand].bitfield.disp32s = 1;
+		}
+	    }
+	  else if (!i.prefix[ADDR_PREFIX] ^ (flag_code == CODE_16BIT))
+	    i.types[this_operand].bitfield.disp32 = 1;
+	  else
+	    i.types[this_operand].bitfield.disp16 = 1;
+
+#if defined (OBJ_AOUT) || defined (OBJ_MAYBE_AOUT)
+	  /*
+	   * exp_seg is used only for verification in
+	   * i386_finalize_displacement, and we can end up seeing reg_section
+	   * here - but we know we removed all registers from the expression
+	   * (or error-ed on any remaining ones) in i386_intel_simplify.  I
+	   * consider the check in i386_finalize_displacement bogus anyway, in
+	   * particular because it doesn't allow for expr_section, so I'd
+	   * rather see that check (and the similar one in
+	   * i386_finalize_immediate) use SEG_NORMAL(), but not being an a.out
+	   * expert I can't really say whether that would have other bad side
+	   * effects.
+	   */
+	  if (OUTPUT_FLAVOR == bfd_target_aout_flavour
+	      && exp_seg == reg_section)
+	    exp_seg = expP->X_op != O_constant ? undefined_section
+					       : absolute_section;
+#endif
+
+	  if (!i386_finalize_displacement (exp_seg, expP,
+					   intel_state.reloc_types,
+					   operand_string))
+	    return 0;
+	}
+
+      if (intel_state.base || intel_state.index)
+	i.types[this_operand].bitfield.baseindex = 1;
+
+      if (intel_state.seg)
+	{
+	  for (;;)
+	    {
+	      expP = symbol_get_value_expression (intel_state.seg);
+	      if (expP->X_op != O_full_ptr)
+		break;
+	      intel_state.seg = expP->X_add_symbol;
+	    }
+	  if (expP->X_op != O_register)
+	    {
+	      as_bad (_("segment register name expected"));
+	      return 0;
+	    }
+	  if (!i386_regtab[expP->X_add_number].reg_type.bitfield.sreg2
+	      && !i386_regtab[expP->X_add_number].reg_type.bitfield.sreg3)
+	    {
+	      as_bad (_("invalid use of register"));
+	      return 0;
+	    }
+	  switch (i386_regtab[expP->X_add_number].reg_num)
+	    {
+	    case 0: i.seg[i.mem_operands] = &es; break;
+	    case 1: i.seg[i.mem_operands] = &cs; break;
+	    case 2: i.seg[i.mem_operands] = &ss; break;
+	    case 3: i.seg[i.mem_operands] = &ds; break;
+	    case 4: i.seg[i.mem_operands] = &fs; break;
+	    case 5: i.seg[i.mem_operands] = &gs; break;
+	    case RegFlat: i.seg[i.mem_operands] = NULL; break;
+	    }
+	}
+
+      /* Swap base and index in 16-bit memory operands like
+	 [si+bx]. Since i386_index_check is also used in AT&T
+	 mode we have to do that here.  */
+      if (intel_state.base
+	  && intel_state.index
+	  && intel_state.base->reg_type.bitfield.reg16
+	  && intel_state.index->reg_type.bitfield.reg16
+	  && intel_state.base->reg_num >= 6
+	  && intel_state.index->reg_num < 6)
+	{
+	  i.base_reg = intel_state.index;
+	  i.index_reg = intel_state.base;
+	}
+      else
+	{
+	  i.base_reg = intel_state.base;
+	  i.index_reg = intel_state.index;
+	}
+
+      if (!i386_index_check (operand_string))
+	return 0;
+
+      i.types[this_operand].bitfield.mem = 1;
+      ++i.mem_operands;
+    }
+  else
+    {
+      /* Immediate.  */
+      if (i.imm_operands >= MAX_IMMEDIATE_OPERANDS)
+	{
+	  as_bad (_("at most %d immediate operands are allowed"),
+		  MAX_IMMEDIATE_OPERANDS);
+	  return 0;
+	}
+
+      expP = &im_expressions[i.imm_operands++];
+      i.op[this_operand].imms = expP;
+      *expP = exp;
+
+      return i386_finalize_immediate (exp_seg, expP, intel_state.reloc_types,
+				      operand_string);
+    }
+
+  return 1;
+}
+@
+
+
+1.22
+log
+@Add Intel AVX-512 support
+
+binutils/
+
+2013-07-26  Sergey Guriev  <sergey.s.guriev@@intel.com>
+	    Alexander Ivchenko  <alexander.ivchenko@@intel.com>
+	    Maxim Kuznetsov  <maxim.kuznetsov@@intel.com>
+	    Sergey Lega  <sergey.s.lega@@intel.com>
+	    Anna Tikhonova  <anna.tikhonova@@intel.com>
+	    Ilya Tocar  <ilya.tocar@@intel.com>
+	    Andrey Turetskiy  <andrey.turetskiy@@intel.com>
+	    Ilya Verbin  <ilya.verbin@@intel.com>
+	    Kirill Yukhin  <kirill.yukhin@@intel.com>
+	    Michael Zolotukhin  <michael.v.zolotukhin@@intel.com>
+
+	* dwarf.c (dwarf_regnames_i386): Add k0-k7 registers and
+	numeration in comments.
+	(dwarf_regnames_x86_64): Add xmm16-31 and k0-k7 registers to
+	dwarf table.
+
+gas/
+
+2013-07-26  Sergey Guriev  <sergey.s.guriev@@intel.com>
+	    Alexander Ivchenko  <alexander.ivchenko@@intel.com>
+	    Maxim Kuznetsov  <maxim.kuznetsov@@intel.com>
+	    Sergey Lega  <sergey.s.lega@@intel.com>
+	    Anna Tikhonova  <anna.tikhonova@@intel.com>
+	    Ilya Tocar  <ilya.tocar@@intel.com>
+	    Andrey Turetskiy  <andrey.turetskiy@@intel.com>
+	    Ilya Verbin  <ilya.verbin@@intel.com>
+	    Kirill Yukhin  <kirill.yukhin@@intel.com>
+	    Michael Zolotukhin  <michael.v.zolotukhin@@intel.com>
+
+	* config/tc-i386-intel.c (O_zmmword_ptr): New.
+	(i386_types): Add zmmword.
+	(i386_intel_simplify_register): Allow regzmm.
+	(i386_intel_simplify): Handle zmmwords.
+	(i386_intel_operand): Handle RC/SAE, vector operations and
+	zmmwords.
+	* config/tc-i386.c (ZMMWORD_MNEM_SUFFIX): New.
+	(struct RC_Operation): New.
+	(struct Mask_Operation): New.
+	(struct Broadcast_Operation): New.
+	(vex_prefix): Size of bytes increased to 4 to support EVEX
+	encoding.
+	(enum i386_error): Add new error codes: unsupported_broadcast,
+	broadcast_not_on_src_operand, broadcast_needed,
+	unsupported_masking, mask_not_on_destination, no_default_mask,
+	unsupported_rc_sae, rc_sae_operand_not_last_imm,
+	invalid_register_operand, try_vector_disp8.
+	(struct _i386_insn): Add new fields vrex, need_vrex, mask,
+	rounding, broadcast, memshift.
+	(struct RC_name): New.
+	(RC_NamesTable): New.
+	(evexlig): New.
+	(evexwig): New.
+	(extra_symbol_chars): Add '{'.
+	(cpu_arch): Add AVX512F, AVX512CD, AVX512ER and AVX512PF.
+	(i386_operand_type): Add regzmm, regmask and vec_disp8.
+	(match_mem_size): Handle zmmwords.
+	(operand_type_match): Handle zmm-registers.
+	(mode_from_disp_size): Handle vec_disp8.
+	(fits_in_vec_disp8): New.
+	(md_begin): Handle {} properly.
+	(type_names): Add "rZMM", "Mask reg" and "Vector d8".
+	(build_vex_prefix): Handle vrex.
+	(build_evex_prefix): New.
+	(process_immext): Adjust to properly handle EVEX.
+	(md_assemble): Add EVEX encoding support.
+	(swap_2_operands): Correctly handle operands with masking,
+	broadcasting or RC/SAE.
+	(check_VecOperands): Support EVEX features.
+	(VEX_check_operands): Properly handle 16 upper [xyz]mm registers.
+	(match_template): Support regzmm and handle new error codes.
+	(process_suffix): Handle zmmwords and zmm-registers.
+	(check_byte_reg): Extend to zmm-registers.
+	(process_operands): Extend to zmm-registers.
+	(build_modrm_byte): Handle EVEX.
+	(output_insn): Adjust to properly handle EVEX case.
+	(disp_size): Handle vec_disp8.
+	(output_disp): Support compressed disp8*N evex feature.
+	(output_imm): Handle RC/SAE immediates properly.
+	(check_VecOperations): New.
+	(i386_immediate): Handle EVEX features.
+	(i386_index_check): Handle zmmwords and zmm-registers.
+	(RC_SAE_immediate): New.
+	(i386_att_operand): Handle EVEX features.
+	(parse_real_register): Add a check for ZMM/Mask registers.
+	(OPTION_MEVEXLIG): New.
+	(OPTION_MEVEXWIG): New.
+	(md_longopts): Add mevexlig and mevexwig.
+	(md_parse_option): Handle mevexlig and mevexwig options.
+	(md_show_usage): Add description for mevexlig and mevexwig.
+	* doc/c-i386.texi: Document avx512f/.avx512f, avx512cd/.avx512cd,
+	avx512er/.avx512er, avx512pf/.avx512pf, mevexlig and mevexwig.
+
+gas/testsuite/
+
+2013-07-26  Sergey Guriev  <sergey.s.guriev@@intel.com>
+	    Alexander Ivchenko  <alexander.ivchenko@@intel.com>
+	    Maxim Kuznetsov  <maxim.kuznetsov@@intel.com>
+	    Sergey Lega  <sergey.s.lega@@intel.com>
+	    Anna Tikhonova  <anna.tikhonova@@intel.com>
+	    Ilya Tocar  <ilya.tocar@@intel.com>
+	    Andrey Turetskiy  <andrey.turetskiy@@intel.com>
+	    Ilya Verbin  <ilya.verbin@@intel.com>
+	    Kirill Yukhin  <kirill.yukhin@@intel.com>
+	    Michael Zolotukhin  <michael.v.zolotukhin@@intel.com>
+
+	* gas/cfi/cfi-i386.s: Add tests for k0-k7.
+	* gas/cfi/cfi-i386.d: Change to reflect above mentioned changes.
+	* gas/cfi/cfi-x86_64.s: Add tests for xmm16-31, k0-7.
+	* gas/cfi/cfi-x86_64.d: Change to reflect above mentioned changes.
+	* gas/i386/ilp32/cfi/cfi-x86_64.d: Ditto.
+	* gas/i386/intel-regs.s: Add tests for zmm0 and xmm16 registers.
+	* gas/i386/intel-regs.d: Change correspondingly.
+	* gas/i386/prefetch-intel.d: Reflect implementation of prefetchwt1.
+	* gas/i386/prefetch.d: Ditto.
+	* gas/i386/x86-64-prefetch-intel.d: Ditto.
+	* gas/i386/x86-64-prefetch.d: Ditto.
+	* gas/i386/avx512f-intel.d: New.
+	* gas/i386/avx512f-nondef.d: New.
+	* gas/i386/avx512f-nondef.s: New.
+	* gas/i386/avx512f-opts-intel.d: New.
+	* gas/i386/avx512f-opts.d: New.
+	* gas/i386/avx512f-opts.s: New.
+	* gas/i386/avx512f.d: New.
+	* gas/i386/avx512f.s: New.
+	* gas/i386/avx512cd-intel.d: New.
+	* gas/i386/avx512cd.d: New.
+	* gas/i386/avx512cd.s: New.
+	* gas/i386/avx512er-intel.d: New.
+	* gas/i386/avx512er.d: New.
+	* gas/i386/avx512er.s: New.
+	* gas/i386/avx512pf-intel.d: New.
+	* gas/i386/avx512pf.d: New.
+	* gas/i386/avx512pf.s: New.
+	* gas/i386/evex-lig.s: New.
+	* gas/i386/evex-lig256-intel.d: New.
+	* gas/i386/evex-lig256.d: New.
+	* gas/i386/evex-lig512-intel.d: New.
+	* gas/i386/evex-lig512.d: New.
+	* gas/i386/evex-wig.s: New.
+	* gas/i386/evex-wig1-intel.d: New.
+	* gas/i386/evex-wig1.d: New.
+	* gas/i386/inval-avx512f.l: New.
+	* gas/i386/inval-avx512f.s: New.
+	* gas/i386/x86-64-avx512f-intel.d: New.
+	* gas/i386/x86-64-avx512f-nondef.d: New.
+	* gas/i386/x86-64-avx512f-nondef.s: New.
+	* gas/i386/x86-64-avx512f-opts-intel.d: New.
+	* gas/i386/x86-64-avx512f-opts.d: New.
+	* gas/i386/x86-64-avx512f-opts.s: New.
+	* gas/i386/x86-64-avx512f.d: New.
+	* gas/i386/x86-64-avx512f.s: New.
+	* gas/i386/x86-64-avx512cd-intel.d: New.
+	* gas/i386/x86-64-avx512cd.d: New.
+	* gas/i386/x86-64-avx512cd.s: New.
+	* gas/i386/x86-64-avx512er-intel.d: New.
+	* gas/i386/x86-64-avx512er.d: New.
+	* gas/i386/x86-64-avx512er.s: New.
+	* gas/i386/x86-64-avx512pf-intel.d: New.
+	* gas/i386/x86-64-avx512pf.d: New.
+	* gas/i386/x86-64-avx512pf.s: New.
+	* gas/i386/x86-64-evex-lig.s: New.
+	* gas/i386/x86-64-evex-lig256-intel.d: New.
+	* gas/i386/x86-64-evex-lig256.d: New.
+	* gas/i386/x86-64-evex-lig512-intel.d: New.
+	* gas/i386/x86-64-evex-lig512.d: New.
+	* gas/i386/x86-64-evex-wig.s: New.
+	* gas/i386/x86-64-evex-wig1-intel.d: New.
+	* gas/i386/x86-64-evex-wig1.d: New.
+	* gas/i386/x86-64-inval-avx512f.l: New.
+	* gas/i386/x86-64-inval-avx512f.s: New.
+	* gas/i386/i386.exp: Run new AVX-512 tests.
+
+opcodes/
+
+2013-07-26  Sergey Guriev  <sergey.s.guriev@@intel.com>
+	    Alexander Ivchenko  <alexander.ivchenko@@intel.com>
+	    Maxim Kuznetsov  <maxim.kuznetsov@@intel.com>
+	    Sergey Lega  <sergey.s.lega@@intel.com>
+	    Anna Tikhonova  <anna.tikhonova@@intel.com>
+	    Ilya Tocar  <ilya.tocar@@intel.com>
+	    Andrey Turetskiy  <andrey.turetskiy@@intel.com>
+	    Ilya Verbin  <ilya.verbin@@intel.com>
+	    Kirill Yukhin  <kirill.yukhin@@intel.com>
+	    Michael Zolotukhin  <michael.v.zolotukhin@@intel.com>
+
+	* i386-dis-evex.h: New.
+	* i386-dis.c (OP_Rounding): New.
+	(VPCMP_Fixup): New.
+	(OP_Mask): New.
+	(Rdq): New.
+	(XMxmmq): New.
+	(EXdScalarS): New.
+	(EXymm): New.
+	(EXEvexHalfBcstXmmq): New.
+	(EXxmm_mdq): New.
+	(EXEvexXGscat): New.
+	(EXEvexXNoBcst): New.
+	(VPCMP): New.
+	(EXxEVexR): New.
+	(EXxEVexS): New.
+	(XMask): New.
+	(MaskG): New.
+	(MaskE): New.
+	(MaskR): New.
+	(MaskVex): New.
+	(modes enum): Add evex_x_gscat_mode, evex_x_nobcst_mode,
+	evex_half_bcst_xmmq_mode, xmm_mdq_mode, ymm_mode,
+	evex_rounding_mode, evex_sae_mode, mask_mode.
+	(USE_EVEX_TABLE): New.
+	(EVEX_TABLE): New.
+	(EVEX enum): New.
+	(REG enum): Add REG_EVEX_0F72, REG_EVEX_0F73, REG_EVEX_0F38C6,
+	REG_EVEX_0F38C7.
+	(MOD enum): Add MOD_EVEX_0F10_PREFIX_1, MOD_EVEX_0F10_PREFIX_3,
+	MOD_EVEX_0F11_PREFIX_1, MOD_EVEX_0F11_PREFIX_3,
+	MOD_EVEX_0F12_PREFIX_0, MOD_EVEX_0F16_PREFIX_0, MOD_EVEX_0F38C6_REG_1,
+	MOD_EVEX_0F38C6_REG_2, MOD_EVEX_0F38C6_REG_5, MOD_EVEX_0F38C6_REG_6,
+	MOD_EVEX_0F38C7_REG_1, MOD_EVEX_0F38C7_REG_2,  MOD_EVEX_0F38C7_REG_5,
+	MOD_EVEX_0F38C7_REG_6.
+	(PREFIX enum): Add PREFIX_VEX_0F41, PREFIX_VEX_0F42, PREFIX_VEX_0F44,
+	PREFIX_VEX_0F45, PREFIX_VEX_0F46, PREFIX_VEX_0F47, PREFIX_VEX_0F4B,
+	PREFIX_VEX_0F90, PREFIX_VEX_0F91, PREFIX_VEX_0F92, PREFIX_VEX_0F93,
+	PREFIX_VEX_0F98, PREFIX_VEX_0F3A30, PREFIX_VEX_0F3A32,
+	PREFIX_VEX_0F3AF0, PREFIX_EVEX_0F10, PREFIX_EVEX_0F11,
+	PREFIX_EVEX_0F12, PREFIX_EVEX_0F13, PREFIX_EVEX_0F14,
+	PREFIX_EVEX_0F15, PREFIX_EVEX_0F16, PREFIX_EVEX_0F17,
+	PREFIX_EVEX_0F28, PREFIX_EVEX_0F29, PREFIX_EVEX_0F2A,
+	PREFIX_EVEX_0F2B, PREFIX_EVEX_0F2C, PREFIX_EVEX_0F2D,
+	PREFIX_EVEX_0F2E, PREFIX_EVEX_0F2F, PREFIX_EVEX_0F51,
+	PREFIX_EVEX_0F58, PREFIX_EVEX_0F59, PREFIX_EVEX_0F5A,
+	PREFIX_EVEX_0F5B, PREFIX_EVEX_0F5C, PREFIX_EVEX_0F5D,
+	PREFIX_EVEX_0F5E, PREFIX_EVEX_0F5F, PREFIX_EVEX_0F62,
+	PREFIX_EVEX_0F66, PREFIX_EVEX_0F6A, PREFIX_EVEX_0F6C,
+	PREFIX_EVEX_0F6D, PREFIX_EVEX_0F6E, PREFIX_EVEX_0F6F,
+	PREFIX_EVEX_0F70, PREFIX_EVEX_0F72_REG_0, PREFIX_EVEX_0F72_REG_1,
+	PREFIX_EVEX_0F72_REG_2, PREFIX_EVEX_0F72_REG_4,
+	PREFIX_EVEX_0F72_REG_6, PREFIX_EVEX_0F73_REG_2,
+	PREFIX_EVEX_0F73_REG_6, PREFIX_EVEX_0F76, PREFIX_EVEX_0F78,
+	PREFIX_EVEX_0F79, PREFIX_EVEX_0F7A, PREFIX_EVEX_0F7B,
+	PREFIX_EVEX_0F7E, PREFIX_EVEX_0F7F, PREFIX_EVEX_0FC2,
+	PREFIX_EVEX_0FC6, PREFIX_EVEX_0FD2, PREFIX_EVEX_0FD3,
+	PREFIX_EVEX_0FD4, PREFIX_EVEX_0FD6, PREFIX_EVEX_0FDB,
+	PREFIX_EVEX_0FDF, PREFIX_EVEX_0FE2, PREFIX_EVEX_0FE6 PREFIX_EVEX_0FE7,
+	PREFIX_EVEX_0FEB, PREFIX_EVEX_0FEF, PREFIX_EVEX_0FF2,
+	PREFIX_EVEX_0FF3, PREFIX_EVEX_0FF4, PREFIX_EVEX_0FFA, PREFIX_EVEX_0FFB,
+	PREFIX_EVEX_0FFE, PREFIX_EVEX_0F380C, PREFIX_EVEX_0F380D,
+	PREFIX_EVEX_0F3811, PREFIX_EVEX_0F3812, PREFIX_EVEX_0F3813,
+	PREFIX_EVEX_0F3814, PREFIX_EVEX_0F3815, PREFIX_EVEX_0F3816,
+	PREFIX_EVEX_0F3818, PREFIX_EVEX_0F3819, PREFIX_EVEX_0F381A,
+	PREFIX_EVEX_0F381B, PREFIX_EVEX_0F381E, PREFIX_EVEX_0F381F,
+	PREFIX_EVEX_0F3821, PREFIX_EVEX_0F3822, PREFIX_EVEX_0F3823,
+	PREFIX_EVEX_0F3824, PREFIX_EVEX_0F3825, PREFIX_EVEX_0F3827,
+	PREFIX_EVEX_0F3828, PREFIX_EVEX_0F3829, PREFIX_EVEX_0F382A,
+	PREFIX_EVEX_0F382C, PREFIX_EVEX_0F382D, PREFIX_EVEX_0F3831,
+	PREFIX_EVEX_0F3832, PREFIX_EVEX_0F3833, PREFIX_EVEX_0F3834,
+	PREFIX_EVEX_0F3835, PREFIX_EVEX_0F3836, PREFIX_EVEX_0F3837,
+	PREFIX_EVEX_0F3839, PREFIX_EVEX_0F383A, PREFIX_EVEX_0F383B,
+	PREFIX_EVEX_0F383D, PREFIX_EVEX_0F383F, PREFIX_EVEX_0F3840,
+	PREFIX_EVEX_0F3842, PREFIX_EVEX_0F3843, PREFIX_EVEX_0F3844,
+	PREFIX_EVEX_0F3845, PREFIX_EVEX_0F3846, PREFIX_EVEX_0F3847,
+	PREFIX_EVEX_0F384C, PREFIX_EVEX_0F384D, PREFIX_EVEX_0F384E,
+	PREFIX_EVEX_0F384F, PREFIX_EVEX_0F3858, PREFIX_EVEX_0F3859,
+	PREFIX_EVEX_0F385A, PREFIX_EVEX_0F385B, PREFIX_EVEX_0F3864,
+	PREFIX_EVEX_0F3865, PREFIX_EVEX_0F3876, PREFIX_EVEX_0F3877,
+	PREFIX_EVEX_0F387C, PREFIX_EVEX_0F387E, PREFIX_EVEX_0F387F,
+	PREFIX_EVEX_0F3888, PREFIX_EVEX_0F3889, PREFIX_EVEX_0F388A,
+	PREFIX_EVEX_0F388B, PREFIX_EVEX_0F3890, PREFIX_EVEX_0F3891,
+	PREFIX_EVEX_0F3892, PREFIX_EVEX_0F3893, PREFIX_EVEX_0F3896,
+	PREFIX_EVEX_0F3897, PREFIX_EVEX_0F3898, PREFIX_EVEX_0F3899,
+	PREFIX_EVEX_0F389A, PREFIX_EVEX_0F389B, PREFIX_EVEX_0F389C,
+	PREFIX_EVEX_0F389D, PREFIX_EVEX_0F389E, PREFIX_EVEX_0F389F,
+	PREFIX_EVEX_0F38A0, PREFIX_EVEX_0F38A1, PREFIX_EVEX_0F38A2,
+	PREFIX_EVEX_0F38A3, PREFIX_EVEX_0F38A6, PREFIX_EVEX_0F38A7,
+	PREFIX_EVEX_0F38A8, PREFIX_EVEX_0F38A9, PREFIX_EVEX_0F38AA,
+	PREFIX_EVEX_0F38AB, PREFIX_EVEX_0F38AC, PREFIX_EVEX_0F38AD,
+	PREFIX_EVEX_0F38AE, PREFIX_EVEX_0F38AF, PREFIX_EVEX_0F38B6,
+	PREFIX_EVEX_0F38B7, PREFIX_EVEX_0F38B8, PREFIX_EVEX_0F38B9,
+	PREFIX_EVEX_0F38BA, PREFIX_EVEX_0F38BB, PREFIX_EVEX_0F38BC,
+	PREFIX_EVEX_0F38BD, PREFIX_EVEX_0F38BE, PREFIX_EVEX_0F38BF,
+	PREFIX_EVEX_0F38C4, PREFIX_EVEX_0F38C6_REG_1,
+	PREFIX_EVEX_0F38C6_REG_2, PREFIX_EVEX_0F38C6_REG_5,
+	PREFIX_EVEX_0F38C6_REG_6, PREFIX_EVEX_0F38C7_REG_1,
+	PREFIX_EVEX_0F38C7_REG_2, PREFIX_EVEX_0F38C7_REG_5,
+	PREFIX_EVEX_0F38C7_REG_6, PREFIX_EVEX_0F38C8, PREFIX_EVEX_0F38CA,
+	PREFIX_EVEX_0F38CB, PREFIX_EVEX_0F38CC, PREFIX_EVEX_0F38CD,
+	PREFIX_EVEX_0F3A00,  PREFIX_EVEX_0F3A01, PREFIX_EVEX_0F3A03,
+	PREFIX_EVEX_0F3A04, PREFIX_EVEX_0F3A05, PREFIX_EVEX_0F3A08,
+	PREFIX_EVEX_0F3A09, PREFIX_EVEX_0F3A0A, PREFIX_EVEX_0F3A0B,
+	PREFIX_EVEX_0F3A17, PREFIX_EVEX_0F3A18, PREFIX_EVEX_0F3A19,
+	PREFIX_EVEX_0F3A1A, PREFIX_EVEX_0F3A1B, PREFIX_EVEX_0F3A1D,
+	PREFIX_EVEX_0F3A1E, PREFIX_EVEX_0F3A1F, PREFIX_EVEX_0F3A21,
+	PREFIX_EVEX_0F3A23, PREFIX_EVEX_0F3A25, PREFIX_EVEX_0F3A26,
+	PREFIX_EVEX_0F3A27, PREFIX_EVEX_0F3A38, PREFIX_EVEX_0F3A39,
+	PREFIX_EVEX_0F3A3A, PREFIX_EVEX_0F3A3B, PREFIX_EVEX_0F3A3E,
+	PREFIX_EVEX_0F3A3F, PREFIX_EVEX_0F3A43, PREFIX_EVEX_0F3A54,
+	PREFIX_EVEX_0F3A55.
+	(VEX_LEN enum): Add VEX_LEN_0F41_P_0, VEX_LEN_0F42_P_0, VEX_LEN_0F44_P_0,
+	VEX_LEN_0F45_P_0, VEX_LEN_0F46_P_0, VEX_LEN_0F47_P_0,
+	VEX_LEN_0F4B_P_2, VEX_LEN_0F90_P_0, VEX_LEN_0F91_P_0,
+	VEX_LEN_0F92_P_0, VEX_LEN_0F93_P_0, VEX_LEN_0F98_P_0,
+	VEX_LEN_0F3A30_P_2, VEX_LEN_0F3A32_P_2, VEX_W_0F41_P_0_LEN_1,
+	VEX_W_0F42_P_0_LEN_1, VEX_W_0F44_P_0_LEN_0, VEX_W_0F45_P_0_LEN_1,
+	VEX_W_0F46_P_0_LEN_1, VEX_W_0F47_P_0_LEN_1, VEX_W_0F4B_P_2_LEN_1,
+	VEX_W_0F90_P_0_LEN_0, VEX_W_0F91_P_0_LEN_0, VEX_W_0F92_P_0_LEN_0,
+	VEX_W_0F93_P_0_LEN_0, VEX_W_0F98_P_0_LEN_0, VEX_W_0F3A30_P_2_LEN_0,
+	VEX_W_0F3A32_P_2_LEN_0.
+	(VEX_W enum): Add EVEX_W_0F10_P_0, EVEX_W_0F10_P_1_M_0,
+	EVEX_W_0F10_P_1_M_1, EVEX_W_0F10_P_2, EVEX_W_0F10_P_3_M_0,
+	EVEX_W_0F10_P_3_M_1, EVEX_W_0F11_P_0, EVEX_W_0F11_P_1_M_0,
+	EVEX_W_0F11_P_1_M_1, EVEX_W_0F11_P_2, EVEX_W_0F11_P_3_M_0,
+	EVEX_W_0F11_P_3_M_1, EVEX_W_0F12_P_0_M_0, EVEX_W_0F12_P_0_M_1,
+	EVEX_W_0F12_P_1, EVEX_W_0F12_P_2, EVEX_W_0F12_P_3, EVEX_W_0F13_P_0,
+	EVEX_W_0F13_P_2, EVEX_W_0F14_P_0, EVEX_W_0F14_P_2, EVEX_W_0F15_P_0,
+	EVEX_W_0F15_P_2, EVEX_W_0F16_P_0_M_0, EVEX_W_0F16_P_0_M_1,
+	EVEX_W_0F16_P_1, EVEX_W_0F16_P_2, EVEX_W_0F17_P_0, EVEX_W_0F17_P_2,
+	EVEX_W_0F28_P_0, EVEX_W_0F28_P_2, EVEX_W_0F29_P_0, EVEX_W_0F29_P_2,
+	EVEX_W_0F2A_P_1, EVEX_W_0F2A_P_3, EVEX_W_0F2B_P_0, EVEX_W_0F2B_P_2,
+	EVEX_W_0F2E_P_0, EVEX_W_0F2E_P_2, EVEX_W_0F2F_P_0, EVEX_W_0F2F_P_2,
+	EVEX_W_0F51_P_0, EVEX_W_0F51_P_1, EVEX_W_0F51_P_2, EVEX_W_0F51_P_3,
+	EVEX_W_0F58_P_0, EVEX_W_0F58_P_1, EVEX_W_0F58_P_2, EVEX_W_0F58_P_3,
+	EVEX_W_0F59_P_0, EVEX_W_0F59_P_1, EVEX_W_0F59_P_2, EVEX_W_0F59_P_3,
+	EVEX_W_0F5A_P_0, EVEX_W_0F5A_P_1, EVEX_W_0F5A_P_2, EVEX_W_0F5A_P_3,
+	EVEX_W_0F5B_P_0, EVEX_W_0F5B_P_1, EVEX_W_0F5B_P_2, EVEX_W_0F5C_P_0,
+	EVEX_W_0F5C_P_1, EVEX_W_0F5C_P_2, EVEX_W_0F5C_P_3, EVEX_W_0F5D_P_0,
+	EVEX_W_0F5D_P_1, EVEX_W_0F5D_P_2, EVEX_W_0F5D_P_3, EVEX_W_0F5E_P_0,
+	EVEX_W_0F5E_P_1, EVEX_W_0F5E_P_2, EVEX_W_0F5E_P_3, EVEX_W_0F5F_P_0,
+	EVEX_W_0F5F_P_1, EVEX_W_0F5F_P_2, EVEX_W_0F5F_P_3, EVEX_W_0F62_P_2,
+	EVEX_W_0F66_P_2, EVEX_W_0F6A_P_2, EVEX_W_0F6C_P_2, EVEX_W_0F6D_P_2,
+	EVEX_W_0F6E_P_2, EVEX_W_0F6F_P_1, EVEX_W_0F6F_P_2, EVEX_W_0F70_P_2,
+	EVEX_W_0F72_R_2_P_2, EVEX_W_0F72_R_6_P_2, EVEX_W_0F73_R_2_P_2,
+	EVEX_W_0F73_R_6_P_2, EVEX_W_0F76_P_2, EVEX_W_0F78_P_0,
+	EVEX_W_0F79_P_0, EVEX_W_0F7A_P_1, EVEX_W_0F7A_P_3, EVEX_W_0F7B_P_1,
+	EVEX_W_0F7B_P_3, EVEX_W_0F7E_P_1, EVEX_W_0F7E_P_2, EVEX_W_0F7F_P_1,
+	EVEX_W_0F7F_P_2, EVEX_W_0FC2_P_0, EVEX_W_0FC2_P_1, EVEX_W_0FC2_P_2,
+	EVEX_W_0FC2_P_3, EVEX_W_0FC6_P_0, EVEX_W_0FC6_P_2, EVEX_W_0FD2_P_2,
+	EVEX_W_0FD3_P_2, EVEX_W_0FD4_P_2, EVEX_W_0FD6_P_2, EVEX_W_0FE6_P_1,
+	EVEX_W_0FE6_P_2, EVEX_W_0FE6_P_3, EVEX_W_0FE7_P_2, EVEX_W_0FF2_P_2,
+	EVEX_W_0FF3_P_2, EVEX_W_0FF4_P_2, EVEX_W_0FFA_P_2, EVEX_W_0FFB_P_2,
+	EVEX_W_0FFE_P_2, EVEX_W_0F380C_P_2, EVEX_W_0F380D_P_2,
+	EVEX_W_0F3811_P_1, EVEX_W_0F3812_P_1, EVEX_W_0F3813_P_1,
+	EVEX_W_0F3813_P_2, EVEX_W_0F3814_P_1, EVEX_W_0F3815_P_1,
+	EVEX_W_0F3818_P_2, EVEX_W_0F3819_P_2, EVEX_W_0F381A_P_2,
+	EVEX_W_0F381B_P_2, EVEX_W_0F381E_P_2, EVEX_W_0F381F_P_2,
+	EVEX_W_0F3821_P_1, EVEX_W_0F3822_P_1, EVEX_W_0F3823_P_1,
+	EVEX_W_0F3824_P_1, EVEX_W_0F3825_P_1, EVEX_W_0F3825_P_2,
+	EVEX_W_0F3828_P_2, EVEX_W_0F3829_P_2, EVEX_W_0F382A_P_1,
+	EVEX_W_0F382A_P_2, EVEX_W_0F3831_P_1, EVEX_W_0F3832_P_1,
+	EVEX_W_0F3833_P_1, EVEX_W_0F3834_P_1, EVEX_W_0F3835_P_1,
+	EVEX_W_0F3835_P_2, EVEX_W_0F3837_P_2, EVEX_W_0F383A_P_1,
+	EVEX_W_0F3840_P_2, EVEX_W_0F3858_P_2, EVEX_W_0F3859_P_2,
+	EVEX_W_0F385A_P_2, EVEX_W_0F385B_P_2, EVEX_W_0F3891_P_2,
+	EVEX_W_0F3893_P_2, EVEX_W_0F38A1_P_2, EVEX_W_0F38A3_P_2,
+	EVEX_W_0F38C7_R_1_P_2, EVEX_W_0F38C7_R_2_P_2, EVEX_W_0F38C7_R_5_P_2,
+	EVEX_W_0F38C7_R_6_P_2, EVEX_W_0F3A00_P_2, EVEX_W_0F3A01_P_2,
+	EVEX_W_0F3A04_P_2, EVEX_W_0F3A05_P_2, EVEX_W_0F3A08_P_2,
+	EVEX_W_0F3A09_P_2, EVEX_W_0F3A0A_P_2, EVEX_W_0F3A0B_P_2,
+	EVEX_W_0F3A18_P_2, EVEX_W_0F3A19_P_2, EVEX_W_0F3A1A_P_2,
+	EVEX_W_0F3A1B_P_2, EVEX_W_0F3A1D_P_2, EVEX_W_0F3A21_P_2,
+	EVEX_W_0F3A23_P_2, EVEX_W_0F3A38_P_2, EVEX_W_0F3A39_P_2,
+	EVEX_W_0F3A3A_P_2, EVEX_W_0F3A3B_P_2, EVEX_W_0F3A43_P_2.
+	(struct vex): Add fields evex, r, v, mask_register_specifier,
+	zeroing, ll, b.
+	(intel_names_xmm): Add upper 16 registers.
+	(att_names_xmm): Ditto.
+	(intel_names_ymm): Ditto.
+	(att_names_ymm): Ditto.
+	(names_zmm): New.
+	(intel_names_zmm): Ditto.
+	(att_names_zmm): Ditto.
+	(names_mask): Ditto.
+	(intel_names_mask): Ditto.
+	(att_names_mask): Ditto.
+	(names_rounding): Ditto.
+	(names_broadcast): Ditto.
+	(x86_64_table): Add escape to evex-table.
+	(reg_table): Include reg_table evex-entries from
+	i386-dis-evex.h.  Fix prefetchwt1 instruction.
+	(prefix_table): Add entries for new instructions.
+	(vex_table): Ditto.
+	(vex_len_table): Ditto.
+	(vex_w_table): Ditto.
+	(mod_table): Ditto.
+	(get_valid_dis386): Properly handle new instructions.
+	(print_insn): Handle zmm and mask registers, print mask operand.
+	(intel_operand_size): Support EVEX, new modes and sizes.
+	(OP_E_register): Handle new modes.
+	(OP_E_memory): Ditto.
+	(OP_G): Ditto.
+	(OP_XMM): Ditto.
+	(OP_EX): Ditto.
+	(OP_VEX): Ditto.
+	* i386-gen.c (cpu_flag_init): Update CPU_ANY_SSE_FLAGS and
+	CPU_ANY_AVX_FLAGS.  Add CPU_AVX512F_FLAGS, CPU_AVX512CD_FLAGS,
+	CPU_AVX512ER_FLAGS and CPU_AVX512PF_FLAGS.
+	(cpu_flags): Add CpuAVX512F, CpuAVX512CD, CpuAVX512ER,
+	CpuAVX512PF and CpuVREX.
+	(operand_type_init): Add OPERAND_TYPE_REGZMM,
+	OPERAND_TYPE_REGMASK and OPERAND_TYPE_VEC_DISP8.
+	(opcode_modifiers): Add EVex, Masking, VecESize, Broadcast,
+	StaticRounding, SAE, Disp8MemShift, NoDefMask.
+	(operand_types): Add RegZMM, RegMask, Vec_Disp8, Zmmword.
+	* i386-init.h: Regenerate.
+	* i386-opc.h (CpuAVX512F): New.
+	(CpuAVX512CD): New.
+	(CpuAVX512ER): New.
+	(CpuAVX512PF): New.
+	(CpuVREX): New.
+	(i386_cpu_flags): Add cpuavx512f, cpuavx512cd, cpuavx512er,
+	cpuavx512pf and cpuvrex fields.
+	(VecSIB): Add VecSIB512.
+	(EVex): New.
+	(Masking): New.
+	(VecESize): New.
+	(Broadcast): New.
+	(StaticRounding): New.
+	(SAE): New.
+	(Disp8MemShift): New.
+	(NoDefMask): New.
+	(i386_opcode_modifier): Add evex, masking, vecesize, broadcast,
+	staticrounding, sae, disp8memshift and nodefmask.
+	(RegZMM): New.
+	(Zmmword): Ditto.
+	(Vec_Disp8): Ditto.
+	(i386_operand_type): Add regzmm, regmask, zmmword and vec_disp8
+	fields.
+	(RegVRex): New.
+	* i386-opc.tbl: Add AVX512 instructions.
+	* i386-reg.tbl: Add 16 upper XMM and YMM registers, 32 new ZMM
+	registers, mask registers.
+	* i386-tbl.h: Regenerate.
+@
+text
+@d294 2
+@
+
+
+1.21
+log
+@	* ar.c (usage): Fix C conformance issue.
+
+	* config/tc-i386-intel.c (i386_intel_operand): Fixed signed vs
+	unsigned comparison.
+@
+text
+@d66 2
+d113 1
+d286 2
+a287 1
+	       || i386_regtab[reg_num].reg_type.bitfield.regymm))
+d378 1
+d537 4
+d564 11
+d689 5
+@
+
+
+1.20
+log
+@Remove trailing redundant `;'
+
+bfd/
+
+	* aout-tic30.c (MY_final_link_callback): Remove trailing
+	redundant `;'.
+	* coff-h8500.c (extra_case): Likewise.
+	(bfd_coff_reloc16_get_value): Likewise.
+	* dwarf2.c (_bfd_dwarf2_cleanup_debug_info): Likewise.
+	* elf.c (_bfd_elf_slurp_version_tables): Likewise.
+	* elf32-frv.c (elf32_frv_relocate_section): Likewise.
+	* elf32-v850.c (v850_elf_perform_relocation): Likewise.
+	* opncls.c (bfd_calc_gnu_debuglink_crc32): Likewise.
+	* plugin.c (add_symbols): Likewise.
+	* reloc.c (bfd_check_overflow): Likewise.
+	* vms-lib.c (_bfd_vms_lib_archive_p): Likewise.
+
+binutils/
+
+	* coffgrok.c (coff_grok): Remove trailing redundant `;'.
+	* resrc.c (open_input_stream): Likewise.
+
+gas/
+
+	* config/atof-ieee.c (gen_to_words): Remove trailing redundant
+	`;'.
+	* config/atof-vax.c (flonum_gen2vax): Likewise.
+	* config/tc-d10v.c (write_2_short): Likewise.
+	* config/tc-i386-intel.c (i386_intel_simplify): Likewise.
+	* config/tc-s390.c (tc_s390_force_relocation): Likewise.
+	* config/tc-v850.c (md_parse_option): Likewise.
+	* config/tc-xtensa.c (find_address_of_next_align_frag): Likewise.
+	* dwarf2dbg.c (out_header): Likewise.
+	* symbols.c (dollar_label_name): Likewise.
+	(fb_label_name): Likewise.
+
+ld/
+
+	* testplug.c (record_add_file): Remove trailing redundant `;'.
+
+opcodes/
+
+	* aarch64-opc.h (gen_mask): Remove trailing redundant `;'.
+	* ia64-gen.c (fetch_insn_class): Likewise.
+@
+text
+@d795 1
+a795 1
+      if (i.mem_operands
+@
+
+
+1.19
+log
+@MASM accepts ESP/RSP being specified second in a memory address
+operand, by silently making it the base register despite not being
+specified first.
+
+Consequently, we also permit an xmm/ymm index to be specified first
+(possibly alone), nevertheless putting it in as index register.
+
+2012-07-24  Jan Beulich <jbeulich@@suse.com>
+
+	* config/tc-i386-intel.c (i386_intel_simplify_register): Handle
+	xmm/ymm index register being specified first as well as esp/rsp
+	base register being specified last in a memory operand.
+@
+text
+@d340 1
+a340 1
+	    return 0;;
+@
+
+
+1.18
+log
+@Using the dedicated manifest constant is more descriptive.
+
+2012-07-24  Jan Beulich <jbeulich@@suse.com>
+
+	* config/tc-i386-intel.c (i386_intel_simplify_register):
+	Replace literal 4 by corresponding ESP_REG_NUM.
+@
+text
+@d281 4
+d288 11
+a298 1
+    intel_state.index = i386_regtab + reg_num;
+@
+
+
+1.17
+log
+@Properly fold _GLOBAL_OFFSET_TABLE_ in Intel syntax.
+
+gas/
+
+2010-11-03  H.J. Lu  <hongjiu.lu@@intel.com>
+
+	PR gas/12186
+	* config/tc-i386-intel.c (i386_intel_fold): Properly fold
+	_GLOBAL_OFFSET_TABLE_.
+
+gas/testsuite/
+
+2010-11-03  H.J. Lu  <hongjiu.lu@@intel.com>
+
+	PR gas/12186
+	* gas/i386/gotpc.s: Add more _GLOBAL_OFFSET_TABLE_ test.
+	* gas/i386/gotpc.d: Updated.
+@
+text
+@d288 1
+a288 1
+      intel_state.index = i386_regtab + REGNAM_EAX + 4;
+d443 1
+a443 1
+		intel_state.index = i386_regtab + REGNAM_EAX + 4;
+@
+
+
+1.16
+log
+@Reformat config/tc-i386-intel.c.
+
+2010-07-29  H.J. Lu  <hongjiu.lu@@intel.com>
+
+	* config/tc-i386-intel.c: Reformat.
+@
+text
+@d230 1
+d235 1
+a235 1
+      *e = *symbol_get_value_expression (sym);
+d240 4
+@
+
+
+1.15
+log
+@Restore fall through patch for O_multiply.
+
+2010-07-12  H.J. Lu  <hongjiu.lu@@intel.com>
+
+	PR gas/11806
+	* config/tc-i386-intel.c (i386_intel_simplify): Restore fall
+	through patch for O_multiply.
+@
+text
+@d2 1
+a2 1
+   Copyright 2009
+d217 4
+a220 2
+  if ((this_operand >= 0 && rreg != i.op[this_operand].regs)
+      || base != intel_state.base || iindex != intel_state.index)
+d304 2
+a305 1
+  const reg_entry *the_reg = this_operand >= 0 ? i.op[this_operand].regs : NULL;
+d319 2
+a320 1
+	      || !i386_intel_check(the_reg, intel_state.base, intel_state.index))
+d361 2
+a362 1
+      if (symbol_get_value_expression (e->X_add_symbol)->X_op == O_register)
+d373 2
+a374 1
+      if (symbol_get_value_expression (e->X_op_symbol)->X_op == O_register)
+d380 2
+a381 1
+	  || !i386_intel_check(the_reg, intel_state.base, intel_state.index))
+d464 2
+a465 1
+      if (e->X_add_symbol && !i386_intel_simplify_symbol (e->X_add_symbol))
+d473 2
+a474 1
+	  || (e->X_op_symbol && !i386_intel_simplify_symbol (e->X_op_symbol))
+d476 4
+a479 2
+				e->X_op != O_add ? base : intel_state.base,
+				e->X_op != O_add ? state_index : intel_state.index))
+d484 3
+a486 1
+  if (this_operand >= 0 && e->X_op == O_symbol && !intel_state.in_offset)
+d680 3
+a682 1
+      if (i.op[this_operand].regs || intel_state.base || intel_state.index
+d765 2
+a766 1
+      i.types[this_operand] = operand_type_or (i.types[this_operand], temp);
+d770 3
+a772 1
+  else if (intel_state.base || intel_state.index || intel_state.seg
+d833 4
+a836 2
+      if (expP->X_op != O_constant || expP->X_add_number
+	  || (!intel_state.base && !intel_state.index))
+@
+
+
+1.14
+log
+@gas/
+2010-06-22  Jan Beulich  <jbeulich@@novell.com>
+
+	PR gas/11732
+	* config/tc-i386-intel.c (i386_intel_parse_name): Handle pseudo
+	symbols named "$".
+	(i386_intel_operand): Remove bogus handling of pseudo symbols
+	named "$".
+	* expr.c (current_location): Remove 'static' and local
+	declaration.
+	* expr.h (current_location): Declare.
+
+gas/testsuite/
+2010-06-22  Jan Beulich  <jbeulich@@novell.com>
+
+	PR gas/11732
+	* gas/i386/jump.d: Adjust.
+	* gas/i386/jump.s: Add check for branch to 2+$.
+@
+text
+@d437 1
+d456 1
+@
+
+
+1.13
+log
+@Restore "call|jmp [xtrn]" in x86 assembler.
+
+gas/
+
+2010-04-24  H.J. Lu  <hongjiu.lu@@intel.com>
+
+	PR gas/11535
+	* config/tc-i386-intel.c (intel_state): Add is_indirect.
+	(i386_intel_operand): Initialize intel_state.is_indirect.  Check
+	intel_state.is_indirect for "call|jmp [symbol]".
+
+gas/testsuite/
+
+2010-04-24  H.J. Lu  <hongjiu.lu@@intel.com>
+
+	PR gas/11535
+	* gas/i386/intelok.s: Add tests for "call|jmp [xtrn]".
+	* gas/i386/intelok.d: Updated.
+@
+text
+@d194 6
+a513 5
+  /* A '$' followed by an identifier char is an identifier.  Otherwise,
+     it's operator '.' followed by an expression.  */
+  if (*buf == '$' && !is_identifier_char (buf[1]))
+    *buf = '.';
+
+@
+
+
+1.12
+log
+@Remove i386_is_register.
+
+2010-04-21  H.J. Lu  <hongjiu.lu@@intel.com>
+
+	* config/tc-i386.c (i386_is_register): Removed.
+	(x86_cons): Don't use i386_is_register.
+	(parse_register): Likewise.
+	* config/tc-i386-intel.c (i386_intel_simplify): Likewise.
+	(i386_intel_operand): Likewise.
+@
+text
+@d26 1
+d495 1
+d533 4
+a536 1
+    intel_state.is_mem |= 1;
+d682 5
+a686 1
+		  break;
+@
+
+
+1.11
+log
+@Remove is_intel_syntax from i386_is_register.
+
+2010-04-21  H.J. Lu  <hongjiu.lu@@intel.com>
+
+	* config/tc-i386.c (i386_is_register): Remove is_intel_syntax.
+	(x86_cons): Updated.
+	(parse_register): Likewise.
+	(tc_x86_parse_to_dw2regnum): Likewise.
+	* config/tc-i386-intel.c (i386_intel_simplify): Likewise.
+	(i386_intel_operand): Likewise.
+@
+text
+@d350 1
+a350 1
+      if (i386_is_register (symbol_get_value_expression (e->X_add_symbol)))
+d361 1
+a361 1
+      if (i386_is_register (symbol_get_value_expression (e->X_op_symbol)))
+d860 1
+a860 1
+	  if (!i386_is_register (expP))
+@
+
+
+1.10
+log
+@Properly handle ".equ symbol, reg + NUM" in x86 Intel syntax.
+
+gas/
+
+2010-04-21  H.J. Lu  <hongjiu.lu@@intel.com>
+
+	PR gas/11509
+	* config/tc-i386-intel.c (i386_intel_simplify_register): New.
+	(i386_intel_simplify): Use i386_is_register and
+	i386_intel_simplify_register. Set X_md for O_register and
+	check X_md for O_constant.
+	(i386_intel_operand): Use i386_is_register.
+
+	* config/tc-i386.c (i386_is_register): New.
+	(x86_cons): Initialize the X_md field.  Use i386_is_register.
+	(parse_register): Use i386_is_register.
+	(tc_x86_parse_to_dw2regnum): Likewise.
+
+gas/testsuite/
+
+2010-04-21  H.J. Lu  <hongjiu.lu@@intel.com>
+
+	PR gas/11509
+	* gas/i386/equ.s: Add tests for ".equ symbol, reg + NUM".
+	* gas/i386/equ.d: Updated.
+@
+text
+@d350 1
+a350 2
+      if (i386_is_register (symbol_get_value_expression (e->X_add_symbol),
+			    1))
+d361 1
+a361 2
+      if (i386_is_register (symbol_get_value_expression (e->X_op_symbol),
+			    1))
+d860 1
+a860 1
+	  if (!i386_is_register (expP, 1))
+@
+
+
+1.9
+log
+@Add -Wshadow to the gcc command line options used when compiling the binutils.
+Fix up all warnings generated by the addition of this switch.
+@
+text
+@d236 43
+d350 2
+a351 1
+      if (symbol_get_value_expression (e->X_add_symbol)->X_op == O_register)
+d362 2
+a363 1
+      if (symbol_get_value_expression (e->X_op_symbol)->X_op == O_register)
+a375 34
+    case O_register:
+      if (this_operand < 0 || intel_state.in_offset)
+	{
+	  as_bad (_("invalid use of register"));
+	  return 0;
+	}
+      if (!intel_state.in_bracket)
+	{
+	  if (i.op[this_operand].regs)
+	    {
+	      as_bad (_("invalid use of register"));
+	      return 0;
+	    }
+	  if (i386_regtab[e->X_add_number].reg_type.bitfield.sreg3
+	      && i386_regtab[e->X_add_number].reg_num == RegFlat)
+	    {
+	      as_bad (_("invalid use of pseudo-register"));
+	      return 0;
+	    }
+	  i.op[this_operand].regs = i386_regtab + e->X_add_number;
+	}
+      else if (!intel_state.base && !intel_state.in_scale)
+	intel_state.base = i386_regtab + e->X_add_number;
+      else if (!intel_state.index)
+	intel_state.index = i386_regtab + e->X_add_number;
+      else
+	{
+	  /* esp is invalid as index */
+	  intel_state.index = i386_regtab + REGNAM_EAX + 4;
+	}
+      e->X_op = O_constant;
+      e->X_add_number = 0;
+      return 2;
+
+d432 16
+d862 1
+a862 1
+	  if (expP->X_op != O_register)
+@
+
+
+1.8
+log
+@gas/
+
+2009-10-13  H.J. Lu  <hongjiu.lu@@intel.com>
+
+	PR gas/10740
+	* config/tc-i386-intel.c (i386_intel_operand): Handle call
+	and jump with 2 immediate operands.
+
+	* config/tc-i386.c (i386_finalize_immediate): Don't generate
+	error message if operand string is NULL.
+
+gas/testsuite/
+
+2009-10-13  H.J. Lu  <hongjiu.lu@@intel.com>
+
+	PR gas/10740
+	* gas/i386/jump.s: Add new tests.
+	* gas/i386/jump16.s: Likewise.
+
+	* gas/i386/jump.d: Updated.
+	* gas/i386/jump16.d: Likewise.
+@
+text
+@d157 1
+a157 1
+    if (strcasecmp(i386_operators[j].name, name) == 0)
+d166 1
+a166 1
+    if (strcasecmp(i386_types[j].name, name) == 0)
+d170 1
+a170 1
+      char *name = ++input_line_pointer;
+d173 1
+a173 1
+      if (strcasecmp (name, "ptr") == 0)
+d175 1
+a175 1
+	  name[-1] = *pc;
+d183 1
+a183 1
+      input_line_pointer = name - 1;
+d191 1
+a191 1
+  unsigned int i;
+d193 2
+a194 2
+  for (i = 0; i386_types[i].name; ++i)
+    if (strcasecmp(i386_types[i].name, name) == 0)
+d197 1
+a197 1
+	e->X_add_number = i386_types[i].sz[flag_code];
+d206 1
+a206 1
+static INLINE int i386_intel_check (const reg_entry *reg,
+d208 1
+a208 1
+				    const reg_entry *index)
+d210 2
+a211 2
+  if ((this_operand >= 0 && reg != i.op[this_operand].regs)
+      || base != intel_state.base || index != intel_state.index)
+d252 1
+a252 1
+  const reg_entry *reg = this_operand >= 0 ? i.op[this_operand].regs : NULL;
+d254 1
+a254 1
+  const reg_entry *index = intel_state.index;
+d266 1
+a266 1
+	      || !i386_intel_check(reg, intel_state.base, intel_state.index))
+d287 1
+a287 1
+      if (!ret || !i386_intel_check(reg, base, index))
+d324 1
+a324 1
+	  || !i386_intel_check(reg, intel_state.base, intel_state.index))
+d428 1
+a428 1
+	  index = intel_state.index;
+d430 1
+a430 1
+      if (!i386_intel_check (reg, base, index)
+d432 1
+a432 1
+	  || !i386_intel_check (reg,
+d434 1
+a434 1
+				e->X_op != O_add ? index : intel_state.index))
+@
+
+
+1.7
+log
+@gas/
+
+2009-09-15  H.J. Lu  <hongjiu.lu@@intel.com>
+
+	* config/tc-i386-intel.c (i386_intel_operand): Initialize
+	intel_state.has_offset to 0.
+
+gas/testsuite/
+
+2009-09-15  H.J. Lu  <hongjiu.lu@@intel.com>
+
+	* gas/i386/disp.s: Add an offset test.
+	* gas/i386/x86-64-disp.s: Likewise.
+
+	* gas/i386/intelbad.s: Comment out "byte ptr [1]" test.
+
+	* gas/i386/disp.d: Updated.
+	* gas/i386/disp-intel.d: Likewise.
+	* gas/i386/intelbad.l: Likewise.
+	* gas/i386/x86-64-disp.d: Likewise.
+	* gas/i386/x86-64-disp-intel.d: Likewise.
+@
+text
+@d724 45
+@
+
+
+1.6
+log
+@gas/
+
+2009-09-14  H.J. Lu  <hongjiu.lu@@intel.com>
+
+	PR gas/10637
+	* config/tc-i386-intel.c (intel_state): Add has_offset.
+	(i386_intel_simplify): Set intel_state.has_offset to 1 for
+	O_offset.
+	(i386_intel_operand): Turn on intel_state.is_mem if
+	intel_state.has_offset is 0 and the last char is ']'.
+
+gas/testsuite/
+
+2009-09-14  H.J. Lu  <hongjiu.lu@@intel.com>
+
+	PR gas/10637
+	* gas/i386/disp.s: Add tests for Intel syntax.
+	* gas/i386/x86-64-disp.s: Likewise.
+
+	* gas/i386/disp.d: Updated.
+	* gas/i386/intelok.d: Likewise.
+	* gas/i386/x86-64-disp.d: Likewise.
+
+	* gas/i386/disp-intel.d: New.
+	* gas/i386/x86-64-disp-intel.d: Likewise.
+
+	* gas/i386/i386.exp: Run disp-intel and x86-64-disp-intel.
+@
+text
+@d469 1
+@
+
+
+1.5
+log
+@        * po/bfd.pot: Updated by the Translation project.
+        * po/binutils.pot: Updated by the Translation project.
+        * po/gold.pot: Updated by the Translation project.
+        * po/gold.pot: Updated by the Translation project.
+        * po/gprof.pot: Updated by the Translation project.
+        * po/sv.po: Updated Swedish translation.
+        * po/ld.pot: Updated by the Translation project.
+        * po/fi.po: Updated Finnish translation.
+        * po/ld.pot: Updated by the Translation project.
+        * po/fi.po: Updated Finnish translation.
+
+        Updated sources to compile cleanly with -Wc++-compat:
+        * basic_blocks.c: Add casts.
+        * cg_dfn.c: Add cast.
+        * corefile.c: Add casts.
+        * gmon_io.c: Add casts.
+        * hist.c: Add cast.
+        * source.c: Add cast.
+        * sym_ids.c (struct match): Moved to top level.
+
+        Updated soruces in ld/* to compile cleanly with -Wc++-compat:
+        * ld.h (enum endian_enum,enum symbolic_enum,enum dynamic_list_enum): Move to top level.
+        * ldcref.c: Add casts.
+        * ldctor.c: Add casts.
+        * ldexp.c
+        * ldexp.h (enum node_tree_enum,enum phase_enum): Move to top level.
+        * ldlang.c: Add casts. (lang_insert_orphan): Use enum name instead of integer.
+        * ldlang.h (enum statement_enum): Move to top level.
+        * ldmain.c: Add casts.
+        * ldwrite.c: Add casts.
+        * lexsup.c: Add casts. (enum control_enum): Move to top level.
+        * mri.c: Add casts. (mri_draw_tree): Use enum name instead of integer.
+
+        Updated sources to compile cleanly with -Wc++-compat:
+        * basic_blocks.c: Add casts.
+        * cg_dfn.c: Add cast.
+        * corefile.c: Add casts.
+        * gmon_io.c: Add casts.
+        * hist.c: Add cast.
+        * source.c: Add cast.
+        * sym_ids.c (struct match): Moved to top level.
+
+        * as.c (main): Call dwarf2_init.
+        * config/obj-elf.c (struct group_list): New field.
+        (build_group_lists): Use hash lookup.
+        (free_section_idx): New function.
+        (elf_frob_file): Adjust.
+        * dwarf2dbg.c (all_segs_hash, last_seg_ptr): New variables.
+        (get_line_subseg): Adjust.
+        (dwarf2_init): New function.
+        * dwarf2dbg.h (dwarf2_init): New declaration.
+@
+text
+@d26 1
+d283 1
+d502 4
+@
+
+
+1.4
+log
+@        * gas/app, gas/as.c, gas/as.h, gas/atof-generic.c, gas/cgen.c,
+        gas/config/atof-ieee.c, gas/config/obj-aout.c,
+        gas/config/obj-coff.c, gas/config/obj-ecoff.c,
+        gas/config/obj-elf.c, gas/config/obj-som.c, gas/config/tc-alpha.c,
+        gas/config/tc-arc.c, gas/config/tc-arm.c, gas/config/tc-cr16.c,
+        gas/config/tc-cris.c, gas/config/tc-crx.c, gas/config/tc-d30v.c,
+        gas/config/tc-dlx.c, gas/config/tc-hppa.c, gas/config/tc-i370.c,
+        gas/config/tc-i386-intel.c, gas/config/tc-i386.c,
+        gas/config/tc-i860.c, gas/config/tc-i960.c, gas/config/tc-ia64.c,
+        gas/config/tc-iq2000.c, gas/config/tc-m32c.c,
+        gas/config/tc-m32r.c, gas/config/tc-m68hc11.c,
+        gas/config/tc-m68k.c, gas/config/tc-maxq.c, gas/config/tc-mcore.c,
+        gas/config/tc-mep.c, gas/config/tc-mips.c, gas/config/tc-mmix.c,
+        gas/config/tc-mn10300.c, gas/config/tc-moxie.c,
+        gas/config/tc-ns32k.c, gas/config/tc-pj.c, gas/config/tc-ppc.c,
+        gas/config/tc-s390.c, gas/config/tc-score.c,
+        gas/config/tc-score7.c, gas/config/tc-sh.c, gas/config/tc-sparc.c,
+        gas/config/tc-spu.c, gas/config/tc-tic30.c, gas/config/tc-vax.c,
+        gas/config/tc-xtensa.c, gas/config/xtensa-relax.c,
+        gas/dw2gencfi.c, gas/dwarf2dbg.c, gas/ehopt.c, gas/expr.c,
+        gas/frags.c, gas/input-file.c, gas/read.c, gas/sb.c,
+        gas/subsegs.c, gas/symbols.c, gas/write.c: Change the name of the
+        gas macro `assert' to `gas_assert'.
+@
+text
+@d68 1
+a68 1
+    operatorT operator;
+d94 1
+a94 1
+    operatorT operator;
+d161 1
+a161 1
+	return i386_operators[j].operator;
+d178 1
+a178 1
+	  return i386_types[j].operator;
+@
+
+
+1.4.4.1
+log
+@        * po/bfd.pot: Updated by the Translation project.
+        * po/binutils.pot: Updated by the Translation project.
+        * po/gold.pot: Updated by the Translation project.
+        * po/gold.pot: Updated by the Translation project.
+        * po/gprof.pot: Updated by the Translation project.
+        * po/sv.po: Updated Swedish translation.
+        * po/ld.pot: Updated by the Translation project.
+        * po/fi.po: Updated Finnish translation.
+        * po/ld.pot: Updated by the Translation project.
+        * po/fi.po: Updated Finnish translation.
+
+        Updated sources to compile cleanly with -Wc++-compat:
+        * basic_blocks.c: Add casts.
+        * cg_dfn.c: Add cast.
+        * corefile.c: Add casts.
+        * gmon_io.c: Add casts.
+        * hist.c: Add cast.
+        * source.c: Add cast.
+        * sym_ids.c (struct match): Moved to top level.
+
+        Updated soruces in ld/* to compile cleanly with -Wc++-compat:
+        * ld.h (enum endian_enum,enum symbolic_enum,enum dynamic_list_enum): Move to top level.
+        * ldcref.c: Add casts.
+        * ldctor.c: Add casts.
+        * ldexp.c
+        * ldexp.h (enum node_tree_enum,enum phase_enum): Move to top level.
+        * ldlang.c: Add casts. (lang_insert_orphan): Use enum name instead of integer.
+        * ldlang.h (enum statement_enum): Move to top level.
+        * ldmain.c: Add casts.
+        * ldwrite.c: Add casts.
+        * lexsup.c: Add casts. (enum control_enum): Move to top level.
+        * mri.c: Add casts. (mri_draw_tree): Use enum name instead of integer.
+
+        Updated sources to compile cleanly with -Wc++-compat:
+        * basic_blocks.c: Add casts.
+        * cg_dfn.c: Add cast.
+        * corefile.c: Add casts.
+        * gmon_io.c: Add casts.
+        * hist.c: Add cast.
+        * source.c: Add cast.
+        * sym_ids.c (struct match): Moved to top level.
+@
+text
+@d68 1
+a68 1
+    operatorT op;
+d94 1
+a94 1
+    operatorT op;
+d161 1
+a161 1
+	return i386_operators[j].op;
+d178 1
+a178 1
+	  return i386_types[j].op;
+@
+
+
+1.3
+log
+@gas/
+
+2009-06-01  H.J. Lu  <hongjiu.lu@@intel.com>
+
+	PR gas/10198
+	* config/tc-i386-intel.c (i386_intel_operand): Check '$' as '.'.
+
+gas/testsuite/
+
+2009-06-01  H.J. Lu  <hongjiu.lu@@intel.com>
+
+	PR gas/10198
+	* gas/i386/jump.s: Add test for "jmp $+2".
+	* gas/i386/jump16.s: Likewise.
+
+	* gas/i386/jump.d: Updated.
+	* gas/i386/jump16.d: Likewise.
+@
+text
+@d471 3
+a473 3
+  assert (!intel_state.in_offset);
+  assert (!intel_state.in_bracket);
+  assert (!intel_state.in_scale);
+d504 3
+a506 3
+  assert (!intel_state.in_offset);
+  assert (!intel_state.in_bracket);
+  assert (!intel_state.in_scale);
+@
+
+
+1.2
+log
+@2009-04-21  H.J. Lu  <hongjiu.lu@@intel.com>
+
+	* config/tc-i386-intel.c (O_XXX): Reorder.
+@
+text
+@d478 5
+@
+
+
+1.1
+log
+@gas/
+2009-04-20  Jan Beulich  <jbeulich@@novell.com>
+
+	* Makefile.am: Add explicit dependency of tc-i386.o on
+	tc-i386-intel.c.
+	* Makefile.in: Likewise.
+	* config/tc-i386.c (i386_finalize_immediate): Declare, broken
+	out from i386_immediate.
+	(i386_immediate): Slightly re-arrange, call
+	i386_finalize_immediate.
+	(i386_finalize_displacement): Declare, broken out from
+	i386_displacement.
+	(i386_displacement): Slightly re-arrange, call
+	i386_finalize_displacement.
+	(i386_intel_simplify, i386_intel_parse_name): Declare.
+	(this_operand): Initialize to -1.
+	(set_intel_syntax): Set expression rank for O_full_ptr.
+	(md_assemble): Set this_operand back to -1 after parsing
+	operands.
+	(x86_cons): Negate intel_syntax to indicate state. Call
+	i386_intel_simplify.
+	(md_operand): Convert if to switch. Handle '[' for Intel
+	syntax.
+	(i386_intel_operand): Delete, including all helper functions
+	and data.
+	* config/tc-i386-intel.c: New file, all new code.
+	* config/tc-i386.h (i386_operator): Declare.
+	(md_operator): Define to i386_operator.
+	(i386_need_index_operator): Declare.
+	(md_need_index_operator): Define to i386_need_index_operator.
+	(O_full_ptr): Define.
+
+gas/testsuite/
+2009-04-20  Jan Beulich  <jbeulich@@novell.com>
+
+	* gas/i386/equ.s: Adjust.
+	* gas/i386/equ.d: Remove reference to equ.e.
+	* gas/i386/equ.e: Delete.
+	* gas/i386/intel-expr.s: New.
+	* gas/i386/intel-expr.d: New.
+	* gas/i386/i386.exp: Run new test.
+	* gas/i386/intel.s: Adjust.
+	* gas/i386/intel.e: Remove no longer valid warning messages.
+	* gas/i386/intel16.s: Adjust.
+	* gas/i386/intel16.d: Remove reference to intel16.e.
+	* gas/i386/intel16.e: Delete.
+	* gas/i386/intelbad.s: Add more tests.
+	* gas/i386/intelbad.l: Adjust.
+	* gas/i386/intelok.s: Remove now unneeded equates. Add more
+	tests.
+	* gas/i386/intelok.d: Remove reference to intelok.e. Adjust.
+	* gas/i386/intelok.e: Delete.
+	* gas/i386/x86_64.s: Adjust.
+	* gas/i386/x86_64.d: Remove reference to x86_64.e.
+	* gas/i386/x86_64.e: Delete.
+@
+text
+@d40 6
+d47 1
+a47 1
+#define O_byte_ptr O_md31
+d49 1
+a49 1
+#define O_word_ptr O_md30
+d51 1
+a51 1
+#define O_dword_ptr O_md29
+d53 1
+a53 1
+#define O_qword_ptr O_md28
+d55 1
+a55 1
+#define O_oword_ptr O_md27
+d57 1
+a57 1
+#define O_fword_ptr O_md26
+d59 1
+a59 1
+#define O_tbyte_ptr O_md25
+d61 1
+a61 1
+#define O_xmmword_ptr O_md24
+d63 1
+a63 7
+#define O_ymmword_ptr O_md23
+/* near ptr X_add_symbol */
+#define O_near_ptr O_md22
+/* far ptr X_add_symbol */
+#define O_far_ptr O_md21
+/* offset X_add_symbol */
+#define O_short O_md20
+@
+

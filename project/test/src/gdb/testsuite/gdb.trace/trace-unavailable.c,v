@@ -1,0 +1,133 @@
+head	1.2;
+access;
+symbols;
+locks; strict;
+comment	@ * @;
+
+
+1.2
+date	2013.06.20.00.39.11;	author qiyao;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2013.06.07.00.29.19;	author qiyao;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@Teach -data-list-register-values to not include unavailable registers
+
+This patch adds an option --skip-unavailable to MI command
+-data-list-register-values, so that unavailable registers are not
+displayed (on the context of traceframes).
+
+The old -data-list-register-values command behaves like
+
+  -data-list-register-values x 0 8
+  ^done,register-values=[{number="0",value="<unavailable>"},{number="8",value="0x80483de"}]
+
+With this patch, an option --skip-unavailable is added,
+
+  -data-list-register-values --skip-unavailable x 0 8
+  ^done,register-values=[{number="8",value="0x80483de"}]
+
+gdb:
+
+2013-06-20  Pedro Alves  <pedro@@codesourcery.com>
+	    Yao Qi  <yao@@codesourcery.com>
+
+	* NEWS: Mention the new option '--skip-unavailable' of command
+	-data-list-register-values.
+	* mi/mi-main.c (mi_cmd_data_list_register_values): Accept the
+	--skip-unavailable option.  Adjust to use output_register.
+	(output_register): Add new 'skip_unavailable' parameter.
+	Handle it.
+
+gdb/doc:
+
+2013-06-20  Pedro Alves  <pedro@@codesourcery.com>
+
+	* gdb.texinfo (GDB/MI Data Manipulation)
+	<-data-list-register-values>: Document the --skip-unavailable
+	option.
+
+gdb/testsuite:
+
+2013-06-20  Yao Qi  <yao@@codesourcery.com>
+
+	* gdb.trace/mi-trace-unavailable.exp: Set tracepoint on 'foo'
+	and set an action.
+	(test_trace_unavailable): Test command -data-list-register-values
+	in the context of traceframe and with option --skip-unavailable.
+	* gdb.trace/trace-unavailable.c (foo): New.
+	(main): Call it.
+	* gdb.mi/gdb2549.exp: Update matching pattern.
+@
+text
+@/* This testcase is part of GDB, the GNU debugger.
+
+   Copyright 2013 Free Software Foundation, Inc.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+static void
+bar (int j, char *s)
+{
+  unsigned char array[2];
+  int i = 0;
+
+  array[0] = 'c';
+  array[1] = 'd';
+}
+
+static void
+foo (void)
+{}
+
+static void
+marker (void)
+{}
+
+int
+main (void)
+{
+  char s[4];
+
+  bar (4, s);
+  foo ();
+  marker ();
+  return 0;
+}
+@
+
+
+1.1
+log
+@gdb/testsuite/
+
+	* gdb.trace/mi-trace-unavailable.exp: New.
+	* gdb.trace/trace-unavailable.c: New.
+@
+text
+@d29 4
+d42 1
+@
+

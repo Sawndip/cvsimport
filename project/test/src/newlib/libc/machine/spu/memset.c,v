@@ -1,0 +1,245 @@
+head	1.3;
+access;
+symbols
+	cygwin-1_7_35-release:1.3
+	cygwin-1_7_34-release:1.3
+	newlib-2_2_0:1.3.0.10
+	cygwin-1_7_33-release:1.3
+	cygwin-1_7_32-release:1.3
+	cygwin-1_7_31-release:1.3
+	cygwin-1_7_30-release:1.3
+	cygwin-1_7_29-release:1.3
+	cygwin-1_7_28-release:1.3
+	newlib-2_1_0:1.3
+	cygwin-1_7_27-release:1.3
+	cygwin-1_7_26-release:1.3
+	cygwin-1_7_25-release:1.3
+	cygwin-1_7_24-release:1.3
+	cygwin-1_7_23-release:1.3
+	cygwin-1_7_22-release:1.3
+	cygwin-1_7_21-release:1.3
+	cygwin-1_7_20-release:1.3
+	cygwin-1_7_19-release:1.3
+	cygwin-64bit-postmerge:1.3
+	cygwin-64bit-premerge-branch:1.3.0.8
+	cygwin-64bit-premerge:1.3
+	cygwin-1_7_18-release:1.3
+	newlib-2_0_0:1.3
+	cygwin-1_7_17-release:1.3
+	cygwin-64bit-branch:1.3.0.6
+	cygwin-1_7_16-release:1.3
+	cygwin-1_7_15-release:1.3
+	cygwin-1_7_14_2-release:1.3
+	cygwin-1_7_14-release:1.3
+	cygwin-1_7_12-release:1.3
+	cygwin-1_7_11-release:1.3
+	cygwin-1_7_10-release:1.3
+	newlib-1_20_0:1.3
+	cygwin-1_7_9-release:1.3
+	cygwin-1_7_8-release:1.3
+	newlib-1_19_0:1.3
+	cygwin-1_7_7-release:1.3
+	cygwin-1_7_5-release:1.3
+	cygwin-1_7_4-release:1.3
+	cygwin-1_7_3-release:1.3
+	cygwin-1_7_2-release:1.3
+	newlib-1_18_0:1.3
+	cygwin-1_7_1-release:1.3
+	newlib-1_17_0-arc:1.3.0.4
+	binutils-arc-20080908-branch:1.3.0.2
+	binutils-arc-20080908-branchpoint:1.3
+	newlib-1_17_0:1.3
+	newlib-1_16_0:1.3
+	newlib-1_15_0:1.3;
+locks; strict;
+comment	@ * @;
+
+
+1.3
+date	2006.11.29.19.54.05;	author jjohnstn;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2006.11.22.21.19.56;	author jjohnstn;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2006.10.27.23.02.00;	author jjohnstn;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.3
+log
+@
+2006-11-29  Kazunori Asayama  <asayama@@sm.sony.co.jp>
+
+        * libc/machine/spu/memset.c: Fix type of explicit cast.
+        * libc/machine/spu/strncmp.c: Add explicit cast.
+        * libc/machine/spu/strrchr.c: Ditto.
+        * libc/machine/spu/strspn.c: Ditto.
+@
+text
+@/*
+  (C) Copyright 2001,2006,
+  International Business Machines Corporation,
+  Sony Computer Entertainment, Incorporated,
+  Toshiba Corporation,
+
+  All rights reserved.
+
+  Redistribution and use in source and binary forms, with or without
+  modification, are permitted provided that the following conditions are met:
+
+    * Redistributions of source code must retain the above copyright notice,
+  this list of conditions and the following disclaimer.
+    * Redistributions in binary form must reproduce the above copyright
+  notice, this list of conditions and the following disclaimer in the
+  documentation and/or other materials provided with the distribution.
+    * Neither the names of the copyright holders nor the names of their
+  contributors may be used to endorse or promote products derived from this
+  software without specific prior written permission.
+
+  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+  ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+  LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+  CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+  SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+  INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+  CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+  POSSIBILITY OF SUCH DAMAGE.
+*/
+#include <spu_intrinsics.h>
+#include <stddef.h>
+
+/* Fills the first n bytes of the memory area pointed to by s
+ * with the constant byte c. Returns a pointer to the memory area s.
+ */
+void * memset(void *s, int c, size_t n)
+{
+  int skip, cnt, i;
+  vec_uchar16 *vs;
+  vec_uchar16 vc, mask, one = spu_splats((unsigned char)-1);
+
+  vs = (vec_uchar16 *)(s);
+  vc = spu_splats((unsigned char)c);
+  cnt = (int)(n);
+
+  /* Handle any leading partial quadwords as well a
+   * very short settings (ie, such that the n characters
+   * all reside in a single quadword.
+   */
+  skip = (int)(s) & 15;
+  if (skip) {
+    mask = spu_rlmaskqwbyte(one, -skip);
+    cnt -= 16 - skip;
+    if (cnt < 0) {
+      mask = spu_and(mask, spu_slqwbyte(one, (unsigned int)(-cnt)));
+    }
+    *vs = spu_sel(*vs, vc, mask);
+    vs++;
+  }
+
+  /* Handle 8 quadwords at a time
+   */
+  for (i=127; i<cnt; cnt-=8*16) {
+    vs[0] = vc;
+    vs[1] = vc;
+    vs[2] = vc;
+    vs[3] = vc;
+    vs[4] = vc;
+    vs[5] = vc;
+    vs[6] = vc;
+    vs[7] = vc;
+    vs += 8;
+  }
+
+  /* Finish all remaining complete quadwords
+   */
+  for (i=15; i<cnt; cnt-=16) *vs++ = vc;
+
+  /* Handle any trailing partial quadwords
+   */
+  if (cnt > 0) {
+    mask = spu_slqwbyte(one, (unsigned int)(16-cnt));
+    *vs = spu_sel(*vs, vc, mask);
+  }
+
+  return (s);
+}
+@
+
+
+1.2
+log
+@
+2006-11-22  Luca Barbato  <lu_zero@@gentoo.org>
+
+        * libc/machine/spu/memcpy.c: Use spu_splats, explicit cast.
+        * libc/machine/spu/memmove.c: Use spu_splats, explicit cast.
+        * libc/machine/spu/memset.c: Use spu_splats, remove apple-cast.
+        * libc/machine/spu/strchr.c: Use spu_splats, remove apple-cast.
+        * libc/machine/spu/strncat.c: Explicit cast.
+        * libc/machine/spu/strncmp.c: Use spu_splats.
+        * libc/machine/spu/strncpy.c: Explicit cast.
+        * libc/machine/spu/strrchr.c: Use spu_splats.
+        * libc/machine/spu/strspn.c: Use spu_splats.
+@
+text
+@d43 1
+a43 1
+  vec_uchar16 vc, mask, one = spu_splats((unsigned int)-1);
+@
+
+
+1.1
+log
+@
+2006-10-27  Joel Schopp  <jschopp@@austin.ibm.com>
+
+        * libc/machine/spu/memcpy.c: Override generic function with vectorized
+        version optimized for the cell spu.
+        * libc/machine/spu/memmove.c: Ditto.
+        * libc/machine/spu/memset.c: Ditto.
+        * libc/machine/spu/strcat.c: Ditto.
+        * libc/machine/spu/strchr.c: Ditto.
+        * libc/machine/spu/strcmp.c: Ditto.
+        * libc/machine/spu/strcpy.c: Ditto.
+        * libc/machine/spu/strcspn.c: Ditto.
+        * libc/machine/spu/strlen.c: Ditto.
+        * libc/machine/spu/strncat.c: Ditto.
+        * libc/machine/spu/strncmp.c: Ditto.
+        * libc/machine/spu/strncpy.c: Ditto.
+        * libc/machine/spu/strpbrk.c: Ditto.
+        * libc/machine/spu/strrchr.c: Ditto.
+        * libc/machine/spu/strspn.c: Ditto.
+        * libc/machine/spu/strxfrm.c: Ditto.
+        * libc/machine/spu/vec_literal.h: Add abstraction of vector literals,
+        removing altivec style initializers.
+        * libc/machine/spu/Makefile.am: Add new files to list so they build
+        * libc/machine/spu/Makefile.in: Regenerate from new Makefile.am
+@
+text
+@d43 1
+a43 1
+  vec_uchar16 vc, mask;
+d55 1
+a55 1
+    mask = spu_rlmaskqwbyte((vec_uchar16)(-1), 0-skip);
+d58 1
+a58 1
+      mask = spu_and(mask, spu_slqwbyte((vec_uchar16)(-1), (unsigned int)(-cnt)));
+d85 1
+a85 1
+    mask = spu_slqwbyte((vec_uchar16)(-1), (unsigned int)(16-cnt));
+@
+

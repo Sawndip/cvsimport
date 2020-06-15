@@ -1,0 +1,482 @@
+head	1.7;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.6
+	gdb_7_6-2013-04-26-release:1.6
+	gdb_7_6-branch:1.6.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.6
+	gdb_7_5_1-2012-11-29-release:1.5
+	gdb_7_5-2012-08-17-release:1.5
+	gdb_7_5-branch:1.5.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.5
+	gdb_7_4_1-2012-04-26-release:1.1.2.1
+	gdb_7_4-2012-01-24-release:1.1.2.1
+	gdb_7_4-branch:1.1.0.2
+	gdb_7_4-2011-12-13-branchpoint:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.7
+date	2013.04.22.16.46.15;	author tromey;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2013.01.01.06.32.54;	author brobecke;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2012.03.13.15.02.23;	author jkratoch;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2012.03.13.15.00.33;	author jkratoch;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2012.02.27.16.22.14;	author palves;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2012.01.04.08.17.18;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2011.08.24.12.07.25;	author luisgpm;	state Exp;
+branches
+	1.1.2.1;
+next	;
+
+1.1.2.1
+date	2012.01.06.04.43.33;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.7
+log
+@	PR gdb/7912:
+	* Makefile.in (SFILES): Add filestuff.c
+	(COMMON_OBS): Add filestuff.o.
+	(filestuff.o): New target.
+	* auto-load.c (auto_load_objfile_script_1): Use
+	gdb_fopen_cloexec.
+	* auxv.c (procfs_xfer_auxv): Use gdb_open_cloexec.
+	* cli/cli-cmds.c (shell_escape): Call close_most_fds.
+	* cli/cli-dump.c (fopen_with_cleanup): Use gdb_fopen_cloexec.
+	* common/agent.c (gdb_connect_sync_socket): Use
+	gdb_socket_cloexec.
+	* common/filestuff.c: New file.
+	* common/filestuff.h: New file.
+	* common/linux-osdata.c (linux_common_core_of_thread)
+	(command_from_pid, commandline_from_pid, print_source_lines)
+	(linux_xfer_osdata_shm, linux_xfer_osdata_sem)
+	(linux_xfer_osdata_msg, linux_xfer_osdata_modules): Use
+	gdb_fopen_cloexec.
+	* common/linux-procfs.c (linux_proc_get_int)
+	(linux_proc_pid_has_state): Use gdb_fopen_cloexec.
+	* config.in, configure: Rebuild.
+	* configure.ac: Don't check for sys/socket.h.  Check for
+	fdwalk, pipe2.
+	* corelow.c (core_open): Use gdb_open_cloexec.
+	* dwarf2read.c (write_psymtabs_to_index): Use gdb_fopen_cloexec.
+	* fork-child.c (fork_inferior): Call close_most_fds.
+	* gdb_bfd.c (gdb_bfd_open): Use gdb_open_cloexec.
+	* inf-child.c (inf_child_fileio_readlink): Use gdb_open_cloexec.
+	* linux-nat.c (linux_nat_thread_name, linux_proc_pending_signals):
+	Use gdb_fopen_cloexec.
+	(linux_proc_xfer_partial, linux_proc_xfer_spu): Use
+	gdb_open_cloexec.
+	(linux_async_pipe): Use gdb_pipe_cloexec.
+	* remote-fileio.c (remote_fileio_func_open): Use
+	gdb_open_cloexec.
+	* remote.c (remote_file_put, remote_file_get): Use
+	gdb_fopen_cloexec.
+	* ser-pipe.c (pipe_open): Use gdb_socketpair_cloexec,
+	close_most_fds.
+	* ser-tcp.c (net_open): Use gdb_socket_cloexec.
+	* ser-unix.c (hardwire_open): Use gdb_open_cloexec.
+	* solib.c (solib_find): Use gdb_open_cloexec.
+	* source.c (openp, find_and_open_source): Use gdb_open_cloexec.
+	* tracepoint.c (tfile_start): Use gdb_fopen_cloexec.
+	(tfile_open): Use gdb_open_cloexec.
+	* tui/tui-io.c (tui_initialize_io): Use gdb_pipe_cloexec.
+	* ui-file.c (gdb_fopen): Use gdb_fopen_cloexec.
+	* xml-support.c (xml_fetch_content_from_file): Use
+	gdb_fopen_cloexec.
+	* main.c (captured_main): Call notice_open_fds.
+gdbserver
+	* Makefile.in (SFILES): Add filestuff.c.
+	(OBS): Add filestuff.o.
+	(filestuff.o): New target.
+	* config.in, configure: Rebuild.
+	* configure.ac: Check for fdwalk, pipe2.
+@
+text
+@/* Linux-specific PROCFS manipulation routines.
+   Copyright (C) 2009-2013 Free Software Foundation, Inc.
+
+   This file is part of GDB.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+#ifdef GDBSERVER
+#include "server.h"
+#else
+#include "defs.h"
+#include "gdb_string.h"
+#endif
+
+#include "linux-procfs.h"
+#include "filestuff.h"
+
+/* Return the TGID of LWPID from /proc/pid/status.  Returns -1 if not
+   found.  */
+
+static int
+linux_proc_get_int (pid_t lwpid, const char *field)
+{
+  size_t field_len = strlen (field);
+  FILE *status_file;
+  char buf[100];
+  int retval = -1;
+
+  snprintf (buf, sizeof (buf), "/proc/%d/status", (int) lwpid);
+  status_file = gdb_fopen_cloexec (buf, "r");
+  if (status_file == NULL)
+    {
+      warning (_("unable to open /proc file '%s'"), buf);
+      return -1;
+    }
+
+  while (fgets (buf, sizeof (buf), status_file))
+    if (strncmp (buf, field, field_len) == 0 && buf[field_len] == ':')
+      {
+	retval = strtol (&buf[field_len + 1], NULL, 10);
+	break;
+      }
+
+  fclose (status_file);
+  return retval;
+}
+
+/* Return the TGID of LWPID from /proc/pid/status.  Returns -1 if not
+   found.  */
+
+int
+linux_proc_get_tgid (pid_t lwpid)
+{
+  return linux_proc_get_int (lwpid, "Tgid");
+}
+
+/* See linux-procfs.h.  */
+
+pid_t
+linux_proc_get_tracerpid (pid_t lwpid)
+{
+  return linux_proc_get_int (lwpid, "TracerPid");
+}
+
+/* Return non-zero if 'State' of /proc/PID/status contains STATE.  */
+
+static int
+linux_proc_pid_has_state (pid_t pid, const char *state)
+{
+  char buffer[100];
+  FILE *procfile;
+  int retval;
+  int have_state;
+
+  xsnprintf (buffer, sizeof (buffer), "/proc/%d/status", (int) pid);
+  procfile = gdb_fopen_cloexec (buffer, "r");
+  if (procfile == NULL)
+    {
+      warning (_("unable to open /proc file '%s'"), buffer);
+      return 0;
+    }
+
+  have_state = 0;
+  while (fgets (buffer, sizeof (buffer), procfile) != NULL)
+    if (strncmp (buffer, "State:", 6) == 0)
+      {
+	have_state = 1;
+	break;
+      }
+  retval = (have_state && strstr (buffer, state) != NULL);
+  fclose (procfile);
+  return retval;
+}
+
+/* Detect `T (stopped)' in `/proc/PID/status'.
+   Other states including `T (tracing stop)' are reported as false.  */
+
+int
+linux_proc_pid_is_stopped (pid_t pid)
+{
+  return linux_proc_pid_has_state (pid, "T (stopped)");
+}
+
+/* See linux-procfs.h declaration.  */
+
+int
+linux_proc_pid_is_zombie (pid_t pid)
+{
+  return linux_proc_pid_has_state (pid, "Z (zombie)");
+}
+@
+
+
+1.6
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@d27 1
+d41 1
+a41 1
+  status_file = fopen (buf, "r");
+d87 1
+a87 1
+  procfile = fopen (buffer, "r");
+@
+
+
+1.5
+log
+@gdb/
+	* common/linux-procfs.c (linux_proc_get_int): New, from
+	linux_proc_get_tgid, change its LWPID type to pid_t, add parameter
+	field.
+	(linux_proc_get_tgid): Only call linux_proc_get_int.
+	(linux_proc_get_tracerpid): New.
+	(linux_proc_pid_has_state): New, from linux_proc_pid_is_zombie.
+	(linux_proc_pid_is_stopped, linux_proc_pid_is_zombie): Only call
+	linux_proc_pid_has_state.
+	* common/linux-procfs.h (linux_proc_get_tracerpid): New declaration.
+	* common/linux-ptrace.c: Include linux-procfs.h and buffer.h.
+	(linux_ptrace_attach_warnings): New.
+	* common/linux-ptrace.h (struct buffer, linux_ptrace_attach_warnings):
+	New declaration.
+	* linux-nat.c: Include exceptions.h, linux-ptrace.h and buffer.h.
+	(linux_nat_attach): New variables ex, buffer, message and message_s.
+	Wrap to_attach by TRY_CATCH and call linux_ptrace_attach_warnings.
+
+gdb/gdbserver/
+	* linux-low.c (linux_attach_lwp_1): New variable buffer.  Call
+	linux_ptrace_attach_warnings.
+
+gdb/testsuite/
+	* gdb.base/attach-twice.c: New files.
+	* gdb.base/attach-twice.exp: New files.
+@
+text
+@d2 1
+a2 1
+   Copyright (C) 2009-2012 Free Software Foundation, Inc.
+@
+
+
+1.4
+log
+@gdb/
+	* Makefile.in (linux-ptrace.o): New.
+	* common/linux-procfs.c (linux_proc_pid_is_zombie): New,
+	from linux-nat.c.
+	* common/linux-procfs.h (linux_proc_pid_is_zombie): New declaration.
+	* common/linux-ptrace.c: New file.
+	* config/alpha/alpha-linux.mh (NATDEPFILES): Add linux-ptrace.o.
+	* config/arm/linux.mh: Likewise.
+	* config/i386/linux.mh: Likewise.
+	* config/i386/linux64.mh: Likewise.
+	* config/ia64/linux.mh: Likewise.
+	* config/m32r/linux.mh: Likewise.
+	* config/m68k/linux.mh: Likewise.
+	* config/mips/linux.mh: Likewise.
+	* config/pa/linux.mh: Likewise.
+	* config/powerpc/linux.mh: Likewise.
+	* config/powerpc/ppc64-linux.mh: Likewise.
+	* config/powerpc/spu-linux.mh: Likewise.
+	* config/s390/s390.mh: Likewise.
+	* config/sparc/linux.mh: Likewise.
+	* config/sparc/linux64.mh: Likewise.
+	* config/xtensa/linux.mh: Likewise.
+	* linux-nat.c (linux_lwp_is_zombie): Remove, move it to
+	common/linux-procfs.c.
+	(wait_lwp): Rename linux_lwp_is_zombie to linux_proc_pid_is_zombie.
+
+gdb/gdbserver/
+	* Makefile.in (linux-ptrace.o): New.
+	* configure.srv (arm*-*-linux*, bfin-*-*linux*, crisv32-*-linux*)
+	(cris-*-linux*, i[34567]86-*-linux*, ia64-*-linux*, m32r*-*-linux*)
+	(m68*-*-linux*, m68*-*-uclinux*, mips*-*-linux*, powerpc*-*-linux*)
+	(s390*-*-linux*, sh*-*-linux*, sparc*-*-linux*, tic6x-*-uclinux)
+	(x86_64-*-linux*, xtensa*-*-linux*): Add linux-ptrace.o to SRV_TGTOBJ
+	of these targets.
+	* linux-low.c (linux_attach_lwp_1): Remove redundent else clause.
+@
+text
+@d31 2
+a32 2
+int
+linux_proc_get_tgid (int lwpid)
+d34 1
+d37 1
+a37 1
+  int tgid = -1;
+d41 1
+a41 1
+  if (status_file != NULL)
+d43 3
+a45 8
+      while (fgets (buf, sizeof (buf), status_file))
+	{
+	  if (strncmp (buf, "Tgid:", 5) == 0)
+	    {
+	      tgid = strtoul (buf + strlen ("Tgid:"), NULL, 10);
+	      break;
+	    }
+	}
+d47 6
+a52 2
+      fclose (status_file);
+    }
+d54 2
+a55 1
+  return tgid;
+d58 2
+a59 2
+/* Detect `T (stopped)' in `/proc/PID/status'.
+   Other states including `T (tracing stop)' are reported as false.  */
+d62 1
+a62 1
+linux_proc_pid_is_stopped (pid_t pid)
+d64 2
+a65 3
+  FILE *status_file;
+  char buf[100];
+  int retval = 0;
+d67 1
+a67 5
+  snprintf (buf, sizeof (buf), "/proc/%d/status", (int) pid);
+  status_file = fopen (buf, "r");
+  if (status_file != NULL)
+    {
+      int have_state = 0;
+d69 4
+a72 13
+      while (fgets (buf, sizeof (buf), status_file))
+	{
+	  if (strncmp (buf, "State:", 6) == 0)
+	    {
+	      have_state = 1;
+	      break;
+	    }
+	}
+      if (have_state && strstr (buf, "T (stopped)") != NULL)
+	retval = 1;
+      fclose (status_file);
+    }
+  return retval;
+d75 1
+a75 1
+/* See linux-procfs.h declaration.  */
+d77 2
+a78 2
+int
+linux_proc_pid_is_zombie (pid_t pid)
+d100 1
+a100 2
+  retval = (have_state
+	    && strcmp (buffer, "State:\tZ (zombie)\n") == 0);
+d104 17
+@
+
+
+1.3
+log
+@2012-02-27  Pedro Alves  <palves@@redhat.com>
+
+	gdb/gdbserver/
+	* linux-low.c (pid_is_stopped): Delete, moved to common/.
+	(linux_attach_lwp_1): Adjust to use linux_proc_pid_is_stopped.
+
+	gdb/
+	* linux-nat.c (pid_is_stopped): Delete, moved to common/.
+	(linux_nat_post_attach_wait): Adjust to use
+	linux_proc_pid_is_stopped.
+
+	* common/linux-procfs.h (linux_proc_pid_is_stopped): Declare.
+	* common/linux-procfs.c (linux_proc_pid_is_stopped): New function,
+	based on pid_is_stopped from both linux-nat.c and
+	gdbserver/linux-low.c, and renamed.
+@
+text
+@d87 31
+@
+
+
+1.2
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d56 31
+@
+
+
+1.1
+log
+@Move common linux procfs code to common/
+@
+text
+@d2 1
+a2 1
+   Copyright (C) 2009, 2010, 2011 Free Software Foundation, Inc.
+@
+
+
+1.1.2.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d2 1
+a2 1
+   Copyright (C) 2009-2012 Free Software Foundation, Inc.
+@
+
+

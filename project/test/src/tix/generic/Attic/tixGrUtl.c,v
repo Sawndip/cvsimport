@@ -1,0 +1,294 @@
+head	1.3;
+access;
+symbols
+	gdb_5_3-2002-12-12-release:1.2
+	gdb_5_3-branch:1.2.0.4
+	gdb_5_3-2002-09-04-branchpoint:1.2
+	gdb_5_2_1-2002-07-23-release:1.2
+	gdb_5_2-2002-04-29-release:1.2
+	gdb_5_2-branch:1.2.0.2
+	gdb_5_2-2002-03-03-branchpoint:1.2
+	gdb_5_1_1-2002-01-24-release:1.1.1.1
+	cygnus_cvs_20020108_pre:1.2
+	gdb_5_1_0_1-2002-01-03-branch:1.1.1.1.0.8
+	gdb_5_1_0_1-2002-01-03-branchpoint:1.1.1.1
+	gdb_5_1-2001-11-21-release:1.1.1.1
+	gdb_s390-2001-09-26-branch:1.1.1.1.0.6
+	gdb_s390-2001-09-26-branchpoint:1.1.1.1
+	TIX_TCL_8_3:1.1.1.1
+	NET:1.1.1
+	gdb_5_1-2001-07-29-branch:1.1.1.1.0.4
+	gdb_5_1-2001-07-29-branchpoint:1.1.1.1
+	insight-precleanup-2001-01-01:1.1.1.1
+	gdb_5_0-2000-05-19-release:1.1.1.1
+	gdb_4_18_2-2000-05-18-release:1.1.1.1
+	gdb_4_95_1-2000-05-11-snapshot:1.1.1.1
+	gdb_4_95_0-2000-04-27-snapshot:1.1.1.1
+	gdb_5_0-2000-04-10-branch:1.1.1.1.0.2
+	gdb_5_0-2000-04-10-branchpoint:1.1.1.1
+	repo-unification-2000-02-06:1.1.1.1
+	insight-2000-02-04:1.1.1.1
+	SNAPSHOT:1.1.1;
+locks; strict;
+comment	@ * @;
+expand	@o@;
+
+
+1.3
+date	2003.03.07.23.09.20;	author hunt;	state dead;
+branches;
+next	1.2;
+
+1.2
+date	2001.09.08.23.25.52;	author irox;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2000.02.07.00.19.28;	author jsm;	state Exp;
+branches
+	1.1.1.1;
+next	;
+
+1.1.1.1
+date	2000.02.07.00.19.28;	author jsm;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.3
+log
+@Remove directory.
+@
+text
+@/* 
+ * tixGrUtl.c --
+ *
+ *	Utility functions for Grid
+ *
+ * Copyright (c) 1996, Expert Interface Technologies
+ *
+ * See the file "license.terms" for information on usage and redistribution
+ * of this file, and for a DISCLAIMER OF ALL WARRANTIES.
+ *
+ */
+
+#include <tixPort.h>
+#include <tixInt.h>
+#include <tixDef.h>
+#include <tixGrid.h>
+
+#ifndef UCHAR
+#define UCHAR(c) ((unsigned char) (c))
+#endif
+
+/* string must be a real number plus "char". E.g, "3.0char" */
+int
+Tix_GetChars(interp, string, doublePtr)
+    Tcl_Interp *interp;		/* Use this for error reporting. */
+    char *string;		/* String describing a justification style. */
+    double *doublePtr;		/* Place to store converted result. */
+{
+    char *end;
+    double d;
+
+    d = strtod(string, &end);
+    if (end == string) {
+	goto error;
+    }
+    while ((*end != '\0') && isspace(*end)) {
+	end++;
+    }
+    if (strncmp(end, "char", 4) != 0) {
+	goto error;
+    }
+    for (end+=4; (*end != '\0') && isspace(UCHAR(*end)); end++) {
+	;
+    }
+    if (*end != '\0') {
+	goto error;
+    }
+    if (d < 0) {
+	goto error;
+    }
+
+    *doublePtr = d;
+    return TCL_OK;
+
+  error:
+    Tcl_AppendResult(interp, "bad screen distance \"", string,
+	"\"", (char *) NULL);
+    return TCL_ERROR;
+}
+
+
+int Tix_GrConfigSize(interp, wPtr, argc, argv, sizePtr, argcErrorMsg,
+	changed_ret)
+    Tcl_Interp *interp;
+    WidgetPtr wPtr;
+    int argc;
+    char **argv;
+    TixGridSize *sizePtr;
+    char * argcErrorMsg;
+    int *changed_ret;
+{
+    int pixels;
+    double chars;
+    int i;
+    TixGridSize newSize;
+    int changed = 0;
+
+    if (argc == 0) {
+	char buff[40];
+
+	Tcl_AppendResult(interp, "-size ", NULL);
+
+	switch (sizePtr->sizeType) {
+	  case TIX_GR_AUTO:
+	    Tcl_AppendResult(interp, "auto", NULL);
+	    break;
+
+	  case TIX_GR_DEFAULT:
+	    Tcl_AppendResult(interp, "default", NULL);
+	    break;
+
+	  case TIX_GR_DEFINED_PIXEL:
+	    sprintf(buff, "%d", sizePtr->sizeValue);
+	    Tcl_AppendResult(interp, buff, NULL);
+	    break;
+
+	  case TIX_GR_DEFINED_CHAR:
+	    sprintf(buff, "%fchar", sizePtr->charValue);
+	    Tcl_AppendResult(interp, buff, NULL);
+	    break;
+
+	  default:
+	    Tcl_AppendResult(interp, "default", NULL);
+	    break;
+	}
+
+	Tcl_AppendResult(interp, " -pad0 ", NULL);
+	sprintf(buff, "%d", sizePtr->pad0);
+	Tcl_AppendResult(interp, buff, NULL);
+
+	Tcl_AppendResult(interp, " -pad1 ", NULL);
+	sprintf(buff, "%d", sizePtr->pad1);
+	Tcl_AppendResult(interp, buff, NULL);
+
+	return TCL_OK;
+    }
+
+    if ((argc %2) != 0) {
+	Tcl_AppendResult(interp, "value missing for option \"",
+	    argv[argc-1], "\"", NULL);
+	return TCL_ERROR;
+    }
+
+    newSize = *sizePtr;
+
+    for (i=0; i<argc; i+=2) {
+
+	if (strncmp("-size", argv[i], strlen(argv[i])) == 0) {
+	    if (strcmp(argv[i+1], "auto")==0) {
+		newSize.sizeType  = TIX_GR_AUTO;
+		newSize.sizeValue = 0;
+	    }
+	    else if (strcmp(argv[i+1], "default")==0) {
+		newSize.sizeType  = TIX_GR_DEFAULT;
+		newSize.sizeValue = 0;
+	    }
+	    else if (Tk_GetPixels(interp, wPtr->dispData.tkwin, argv[i+1],
+		 &pixels) == TCL_OK) {
+
+		newSize.sizeType  = TIX_GR_DEFINED_PIXEL;
+		newSize.sizeValue = pixels;
+	    }
+	    else {
+		Tcl_ResetResult(interp);
+		if (Tix_GetChars(interp, argv[i+1], &chars) == TCL_OK) {
+		    newSize.sizeType  = TIX_GR_DEFINED_CHAR;
+		    newSize.charValue = chars;
+		}
+		else {
+		    return TCL_ERROR;
+		}
+	    }
+	}
+	else if (strcmp("-pad0", argv[i]) == 0) {
+	    if (Tk_GetPixels(interp, wPtr->dispData.tkwin, argv[i+1],
+		 &pixels) == TCL_OK) {
+
+		newSize.pad0 = pixels;
+	    }
+	    else {
+		return TCL_ERROR;
+	    }
+	}
+	else if (strcmp("-pad1", argv[i]) == 0) {
+	    if (Tk_GetPixels(interp, wPtr->dispData.tkwin, argv[i+1],
+		 &pixels) == TCL_OK) {
+
+		newSize.pad1 = pixels;
+	    }
+	    else {
+		return TCL_ERROR;
+	    }
+	}
+	else {
+	    Tcl_AppendResult(interp, "Unknown option \"", argv[i],
+		"\"; must be -pad0, -pad1 or -size", NULL);
+	    return TCL_ERROR;
+	}
+    }
+
+    if (changed_ret) {
+	if (sizePtr->sizeType  != newSize.sizeType) {
+	    changed = 1;
+	}
+	if (sizePtr->sizeValue != newSize.sizeValue) {
+	    changed = 1;
+	}
+	if (sizePtr->charValue != newSize.charValue) {
+	    changed = 1;
+	}
+	if (sizePtr->pad1      != newSize.pad0) {
+	    changed = 1;
+	}
+	if (sizePtr->pad1      != newSize.pad1) {
+	    changed = 1;
+	}
+	*changed_ret = changed;
+    }
+
+    *sizePtr = newSize;
+    return TCL_OK;
+}
+@
+
+
+1.2
+log
+@Touched all tix files to ease next import.
+@
+text
+@@
+
+
+1.1
+log
+@Initial revision
+@
+text
+@@
+
+
+1.1.1.1
+log
+@import insight-2000-02-04 snapshot (2nd try)
+@
+text
+@@

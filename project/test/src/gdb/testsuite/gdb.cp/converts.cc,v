@@ -1,0 +1,372 @@
+head	1.8;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.8
+	gdb_7_6-2013-04-26-release:1.8
+	gdb_7_6-branch:1.8.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.8
+	gdb_7_5_1-2012-11-29-release:1.3
+	gdb_7_5-2012-08-17-release:1.3
+	gdb_7_5-branch:1.3.0.4
+	gdb_7_5-2012-07-18-branchpoint:1.3
+	gdb_7_4_1-2012-04-26-release:1.3
+	gdb_7_4-2012-01-24-release:1.3
+	gdb_7_4-branch:1.3.0.2
+	gdb_7_4-2011-12-13-branchpoint:1.3
+	gdb_7_3_1-2011-09-04-release:1.2
+	gdb_7_3-2011-07-26-release:1.2
+	gdb_7_3-branch:1.2.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.2;
+locks; strict;
+comment	@// @;
+
+
+1.8
+date	2013.01.23.20.34.22;	author tromey;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2012.09.16.17.30.48;	author jkratoch;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2012.09.12.23.29.05;	author kseitz;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2012.09.10.17.12.52;	author kseitz;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2012.08.17.17.37.03;	author kseitz;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2011.10.14.20.22.50;	author kseitz;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2010.10.19.16.07.25;	author swagiaal;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2010.10.14.16.13.43;	author swagiaal;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.8
+log
+@	* gdb.cp/converts.cc (main): Initialize 'a'.
+@
+text
+@class A
+{
+public:
+  A() : member_ (0) {};
+  int member_;
+};
+class B : public A {};
+
+typedef A TA1;
+typedef A TA2;
+typedef TA2 TA3;
+
+enum my_enum {MY_A, MY_B, MY_C, MY_D};
+
+/* Without this variable older 'enum my_enum' incl. its 'MY_A' would be omitted
+   by older versions of GCC (~4.1) failing the testcase using it below.  */
+enum my_enum my_enum_var;
+
+int foo0_1 (TA1)  { return 1; }
+int foo0_2 (TA3)  { return 2; }
+int foo0_3 (A***) { return 3; }
+
+int foo1_1 (char *) {return 11;}
+int foo1_2 (char[]) {return 12;}
+int foo1_3 (int*)   {return 13;}
+int foo1_4 (A*)     {return 14;}
+int foo1_5 (void*)  {return 15;}
+int foo1_6 (void**) {return 16;}
+int foo1_7 (bool)   {return 17;}
+int foo1_8 (long)   {return 18;}
+
+int foo2_1 (char**  )  {return 21;}
+int foo2_2 (char[][1]) {return 22;}
+int foo2_3 (char *[])  {return 23;}
+int foo2_4 (int  *[])  {return 24;}
+
+int foo3_1 (int a, const char **b) { return 31; }
+int foo3_2 (int a, int b) { return 32; }
+int foo3_2 (int a, const char **b) { return 320; }
+
+int foo1_type_check (char *a) { return 1000; }
+int foo2_type_check (char *a, char *b) { return 1001; }
+int foo3_type_check (char *a, char *b, char *c) { return 1002; }
+
+int main()
+{
+
+  TA2 ta;      // typedef to..
+  foo0_1 (ta); // ..another typedef
+  foo0_2 (ta); // ..typedef of a typedef
+
+  B*** bppp;    // Pointer-to-pointer-to-pointer-to-derived..
+//foo0_3(bppp); // Pointer-to-pointer-to-pointer base.
+  foo0_3((A***)bppp); // to ensure that the function is emitted.
+
+  char av = 'a';
+  char *a = &av;       // pointer to..
+  B *bp;
+  foo1_1 (a);          // ..pointer
+  foo1_2 (a);          // ..array
+  foo1_3 ((int*)a);    // ..pointer of wrong type
+  foo1_3 ((int*)bp);   // ..pointer of wrong type
+  foo1_4 (bp);         // ..ancestor pointer
+  foo1_5 (bp);         // ..void pointer
+  foo1_6 ((void**)bp); // ..void pointer pointer
+  foo1_7 (bp);         // ..boolean
+  foo1_8 ((long)bp);   // ..long int
+
+  char **b;          // pointer pointer to..
+  char ba[1][1];
+  foo1_5 (b);        // ..void pointer
+  foo2_1 (b);        // ..pointer pointer
+  foo2_2 (ba);       // ..array of arrays
+  foo2_3 (b);        // ..array of pointers
+  foo2_4 ((int**)b); // ..array of wrong pointers
+
+  // X to boolean conversions allowed by the standard
+  int integer = 0;
+  long long_int = 1;
+  float fp = 1.0;
+  double dp = 1.0;
+  foo1_7 (integer);		// integer to boolean
+  foo1_7 (long_int);		// long to boolean
+  foo1_7 (*a);			// char to boolean
+  foo1_7 (MY_A);		// unscoped enum to boolean
+  /* converts.exp tests the next statement directly.  It is not compiled
+     here for verification because older versions of GCC (~4.1) fail to
+     compile it:
+
+     warning: the address of 'int foo1_7(bool)' will always evaluate as true
+     
+  foo1_7 (&foo1_7);		// pointer to boolean
+  */
+     
+  foo1_7 (&A::member_);		// pointer to member to boolean
+  foo1_7 (a);			// pointer to boolean
+  foo1_7 (fp);			// float to boolean
+  foo1_7 (dp);			// double  to boolean
+
+  foo3_1 (0, 0);
+  foo3_2 (0, static_cast<char const**> (0));
+  foo3_2 (0, 0);
+
+  foo1_type_check (a);
+  foo2_type_check (a, a);
+  foo3_type_check (a, a, a);
+
+  return 0;          // end of main
+}
+@
+
+
+1.7
+log
+@gdb/testsuite/
+	Fix compatibility with old GCC (~4.1).
+	* gdb.cp/converts.cc (my_enum_var): New variable.
+@
+text
+@d56 2
+a57 1
+  char *a;             // pointer to..
+@
+
+
+1.6
+log
+@	* gdb.cp/converts.cc (main): Comment out the pointer to boolean
+	conversion statement.
+@
+text
+@d15 4
+@
+
+
+1.5
+log
+@	PR gdb/13483
+	* gdbtypes.h (BOOL_PTR_CONVERSION_BADNESS): Rename to ...
+	(BOOL_CONVERSION_BADNESS): ... this.
+	* gdbtypes.c (BOOL_PTR_CONVERSION_BADNESS): Likewise.
+	(rank_one_type): Allow all boolean conversions
+	permitted by the standard.
+
+	* gdb.cp/converts.cc (A::A): Add ctor.
+	(A::member_): Add member.
+	(enum my_enum): New enumeration.
+	(main): Add calls to foo1_7 with various
+	permitted arguments.
+	* gdb.cp/converts.exp: Add tests for boolean
+	conversions permitted by the standard.
+@
+text
+@d81 6
+d88 2
+@
+
+
+1.4
+log
+@	PR c++/13356
+	* gdbtypes.c (strict_type_checking): New variable.
+	(show_strict_type_checking): New function.
+	(rank_one_type): Return NS_POINTER_INTEGER_CONVERSION_BADNESS
+	if strict type checking is disabled.
+	(_initialize_gdbtypes): Add "check type" subcommand.
+	* gdbtypes.h (NS_INTEGER_POINTER_CONVERSION_BADNESS): New struct.
+
+	PR c++/13356
+	* gdb.base/default.exp: Update all "check type" tests.
+	* gdb.base/help.exp: Likewise.
+	* gdb.base/setshow.exp: Likewise.
+	* gdb.cp/converts.cc (foo1_type_check): New function.
+	(foo2_type_check): New function.
+	(foo3_type_check): New function.
+	(main): Call new functions.
+	* converts.exp: Add tests for integer-to-pointer conversions
+	with/without strict type-checking.
+
+	PR c++/13356
+	* gdb.texinfo (Type and Range Checking): Remove warning.
+	Remove spurious commas.
+	Update text and examples for re-implementation of set/show
+	check type.
+	(C and C++ Type and Range Checks): Likewise.
+
+	* language.h (type_mode): Remove.
+	(type_check): Remove.
+	(struct language_defn): Remove la_type_check.
+	(STRICT_TYPE): Remove unused macro.
+	(type_error): Remove.
+	* language.c (set_type_range_case): Renamed to ...
+	(set_range_case): ... this.  Update all callers.
+	Remove type_mode/type_check.
+	(type_mode): Remove.
+	(type_check): Remove.
+	(show_type_command): Remove.
+	(set_type_command): Remove.
+	(language_info): Remove type checking output.
+	(type_error): Remove unused function.
+	(range_error): Update comment.
+	(unknown_language_defn): Remove la_type_check.
+	(auto_language_defn): Likewise.
+	(local_language_defn): Likewise.
+	(_initialize_language): Remove "check type" subcommand.
+	* ada-lang.c (ada_language_defn): Remove la_type_check.
+	* c-lang.c (c_language_defn): Likewise.
+	(cplus_language_defn): Likewise.
+	(asm_language_defn): Likewise.
+	(minimal_language_defn): Likewise.
+	* d-lang.c (d_language_defn): Likewise.
+	* f-lang.c (f_language_defn): Likewise.
+	* go-lang.c (go_language_defn): Likewise.
+	* jv-lang.c (java_language_defn): Likewise.
+	* m2-lang.c (m2_language_defn): Likewise.
+	* objc-lang.c (objc_language_defn): Likewise.
+	* opencl-lang.c (opencl_language_defn): Likewise.
+	* p-lang.c (pascal_language_defn): Likewise.
+@
+text
+@d1 6
+a6 1
+class A {};
+d13 2
+d72 15
+@
+
+
+1.3
+log
+@	PR c++/13225
+	* gdb.cp/converts.cc (foo3_1): New function.
+	(foo3_2): New functions.
+	* gdb.cp/converts.exp: Add tests for int to pointer conversion
+	and null pointer conversions of integer constant zero.
+	Add test to check if all arguments are checked for incompatible
+	conversion BADNESS.
+@
+text
+@d30 4
+d69 4
+@
+
+
+1.2
+log
+@Support pointer to bool conversion.
+
+2010-10-19  Sami Wagiaalla  <swagiaal@@redhat.com>
+
+	* gdbtypes.h: Introduce BOOL_PTR_CONVERSION_BADNESS.
+	* gdbtypes.c (rank_one_type): Use BOOL_PTR_CONVERSION_BADNESS
+	for conversion.
+	Make all other conversions illegal.
+
+2010-10-19  Sami Wagiaalla  <swagiaal@@redhat.com>
+
+	* gdb.cp/converts.exp: Test pointer to bool conversion.
+	Test pointer to long conversion.
+	* gdb.cp/oranking.exp: Removed relevant kfail.
+@
+text
+@d26 4
+d60 5
+@
+
+
+1.1
+log
+@Fixed void* vs int* overload issue (PR C++/10343).
+
+2010-10-14  Sami Wagiaalla  <swagiaal@@redhat.com>
+
+	* gdbtypes.h: Create BASE_PTR_CONVERSION_BADNESS.
+	* gdbtypes.c (rank_one_type): Move type comparison code out of here
+	to...
+	(types_equal): ...here. And changed it as follows:
+	Outside of typedefs type must be of the same TYPE_CODE.
+	When compairing two pointers or references they are equal if their
+	targets are equal.
+	Correct pointer conversions.
+
+2010-10-14  Sami Wagiaalla  <swagiaal@@redhat.com>
+
+	* gdb.cp/converts.cc: New test program.
+	* gdb.cp/converts.exp: New test.
+	* gdb.cp/overload.exp: Added test for void* vs int*.
+	* gdb.cp/overload.exp: Ditto.
+	* gdb.cp/oranking.exp: Removed related kfail.
+@
+text
+@d17 3
+a19 1
+int foo1_6 (void**) {return 15;}
+d45 3
+a47 1
+  foo1_6 ((void**)bp); // ..void pointer
+@
+

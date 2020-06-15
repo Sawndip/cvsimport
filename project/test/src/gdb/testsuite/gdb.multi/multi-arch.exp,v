@@ -1,0 +1,213 @@
+head	1.4;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.4
+	gdb_7_6-2013-04-26-release:1.4
+	gdb_7_6-branch:1.4.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.4;
+locks; strict;
+comment	@# @;
+
+
+1.4
+date	2013.01.01.06.41.25;	author brobecke;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2012.12.17.19.40.24;	author devans;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2012.12.13.20.40.33;	author devans;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2012.11.09.01.47.20;	author palves;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.4
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@# Copyright 2009-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# Test multi-exec / multi-process features that work for all configurations,
+# even ones that cannot run multiple processes simultaneously.
+
+set testfile "multi-arch"
+
+# The plain remote target can't do multiple inferiors.
+if [target_info exists use_gdb_stub] {
+    return
+}
+
+# The 64-bit compile may succeed for i386-linux, but gdb won't be able
+# to load the file.
+if [istarget "i?86-*linux*"] {
+    return
+}
+
+# Can't use standard_testfile, we want executables with specialized
+# names.
+set exec1 "ma-hello"
+set srcfile1 hello.c
+set binfile1 [standard_output_file ${exec1}]
+
+set exec2 "ma-hangout"
+set srcfile2 hangout.c
+set binfile2 [standard_output_file ${exec2}]
+
+# Build two executables, one for each arch.
+
+if [istarget "s390*-*-*"] {
+    set march1 "-m64"
+    set march2 "-m31"
+} else {
+    set march1 "-m64"
+    set march2 "-m32"
+}
+
+if { [prepare_for_testing ${testfile}.exp ${exec1} "${srcfile1}" \
+	  [list debug nowarnings additional_flags=${march1}]] } {
+    return -1
+}
+
+if { [prepare_for_testing ${testfile}.exp ${exec2} "${srcfile2}" \
+	  [list debug nowarnings additional_flags=${march2}]] } {
+    return -1
+}
+
+# Start inferior 1
+
+clean_restart ${exec1}
+if ![runto_main] then {
+    fail "starting inferior 1"
+}
+
+# Add and start inferior 2
+
+gdb_test "add-inferior" "Added inferior 2.*" "add empty inferior 2"
+gdb_test "inferior 2" "Switching to inferior 2.*" "switch to inferior 2"
+gdb_load ${binfile2}
+
+if ![runto_main] then {
+    fail "starting inferior 2"
+}
+
+# Check we do have two inferiors loaded.
+
+gdb_test "info inferiors" \
+    "Executable.*${exec2}.*${exec1}.*"
+@
+
+
+1.3
+log
+@Enable accidentally commented out code.
+@
+text
+@d1 1
+a1 1
+# Copyright 2009-2012 Free Software Foundation, Inc.
+@
+
+
+1.2
+log
+@	* gdb.multi/multi-arch-exec.exp: Skip for i*86-linux.
+	* gdb.multi/multi-arch.exp: Ditto.
+@
+text
+@d28 3
+a30 3
+#if [istarget "i?86-*linux*"] {
+#    return
+#}
+@
+
+
+1.1
+log
+@gdb/
+2012-11-09  Pedro Alves  <palves@@redhat.com>
+
+	* gdbarch.sh (target_gdbarch) <gdbarch.h>: Reimplement as macro.
+	(get_target_gdbarch) <gdbarch.h>: New function.
+	(startup_gdbarch) <gdbarch.h>: Declare.
+	<gdbarch.c> (target_gdbarch): Delete.
+	<gdbarch.c> (deprecated_target_gdbarch_select_hack): Set the
+	current inferior's gdbarch.
+	<gdbarch.c> (get_target_gdbarch): New function.
+	* inferior.c: Include target-descriptions.h.
+	(free_inferior): Free target description info.
+	(add_inferior_with_spaces): Set the inferior's initial
+	architecture.
+	(clone_inferior_command): Copy the original inferior's target
+	description if it was user specified.
+	(initialize_inferiors): Add comment.
+	* inferior.h (struct target_desc_info): Forward declare.
+	(struct inferior) <gdbarch>: New field.
+	* linux-nat.c: Include target-descriptions.h.
+	(linux_child_follow_fork): Copy the parent's architecture and
+	target description to the child.
+	* target-descriptions.c: Include inferior.h.
+	(struct target_desc_info): New structure, holding the equivalents
+	of ...
+	(target_desc_fetched, current_target_desc)
+	(target_description_filename): ... these removed globals.
+	(get_tdesc_info, target_desc_info_from_user_p)
+	(copy_inferior_target_desc_info, target_desc_info_free): New.
+	(target_desc_fetched, current_target_desc)
+	(target_description_filename): Reimplemented as convenience
+	macros.
+	(tdesc_filename_cmd_string): New global.
+	(set_tdesc_filename_cmd): Copy the string manipulated by the "set
+	tdescs filename ..." commands to the per-inferior equivalent.
+	(show_tdesc_filename_cmd): Get the value to show from the
+	per-inferior description filename.
+	(_initilize_target_descriptions): Change the "set/show tdesc
+	filename" commands' variable.
+	* target-descriptions.h (struct target_desc, struct target_desc_info)
+	(struct inferior): Forward declare.
+	(target_find_description, target_clear_description)
+	(target_current_description): Adjust comments.
+	(copy_inferior_target_desc_info, target_desc_info_free)
+	(target_desc_info_from_user_p). Declare.
+
+gdb/testsuite/
+2012-11-09  Pedro Alves  <palves@@redhat.com>
+
+	* gdb.multi/multi-arch.exp: New.
+@
+text
+@d26 6
+@
+

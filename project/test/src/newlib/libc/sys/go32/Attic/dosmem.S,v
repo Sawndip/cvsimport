@@ -1,0 +1,182 @@
+head	1.2;
+access;
+symbols
+	cygnus_cvs_20020108_pre:1.1.1.1
+	newlib-1_10_0:1.1.1.1
+	cygwin-1-3-6-4:1.1.1.1.0.2
+	newlib-1_9_0:1.1.1.1
+	cygwin-1_1_1:1.1.1.1
+	newlib-2000-02-17:1.1.1.1
+	SNAPSHOT:1.1.1;
+locks; strict;
+comment	@# @;
+expand	@o@;
+
+
+1.2
+date	2002.12.20.02.29.00;	author jjohnstn;	state dead;
+branches;
+next	1.1;
+
+1.1
+date	2000.02.17.19.39.49;	author cgf;	state Exp;
+branches
+	1.1.1.1;
+next	;
+
+1.1.1.1
+date	2000.02.17.19.39.49;	author cgf;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@
+2002-12-19  Jeff Johnston  <jjohnstn@@redhat.com>
+
+        * configure.host: Remove references to go32.
+        * libc/sys/go32/*: Removed.
+@
+text
+@/* DOSMEM.S */
+/*
+** Copyright (C) 1993 C.W. Sandmann
+**
+** This file may be freely distributed as long as the author's name remains.
+** Extender environment independent way to set up Real area 1Mb access.
+** Procedure takes a single argument %eax which contains the real area offset.
+** After call, access may be made with "%gs:(%eax)"
+*/
+	.text
+	.align	2
+	.globl dosmemsetup
+dosmemsetup:				/* no params, expected ASM call only */
+	pushl	%eax
+	movzwl	__core_select,%eax
+	testl	%eax,%eax
+	je	old_go32		/* Image run with pre-DPMI extender */
+	movw	%ax,%gs			/* Use real area selector */
+	popl	%eax			/* Plus real offset */
+	andl	$0x0fffffff,%eax	/* Clear any linear access bits */
+	ret
+	.align	2,0x90
+old_go32:
+	push	%ds
+	pop	%gs			/* Use arena selector */
+	popl	%eax
+	orl	$0xe0000000,%eax	/* Plus linear access area */
+	ret
+
+	.align	2
+	.globl _dosmemget
+_dosmemget:				/* long offset, long len, long *buf */
+	push	%gs
+	movl	8(%esp),%eax		/* offset */
+	call	dosmemsetup
+	movl	12(%esp),%ecx		/* length */
+	movl	16(%esp),%edx		/* arena offset */
+	pushl	%esi
+	pushl	%edi
+	movl	%eax,%esi
+	movl	%edx,%edi
+	push	%ds
+	push	%es
+	push	%ds
+	pop	%es
+	push	%gs
+	pop	%ds
+	cld
+	rep
+	movsb				/* move ECX bytes from Real area */
+	pop	%es
+	pop	%ds
+	popl	%edi
+	popl	%esi
+	pop	%gs
+	ret
+
+	.align	2
+	.globl _dosmemput
+_dosmemput:				/* long *buf, long len, long offset */
+	push	%gs
+	movl	16(%esp),%eax		/* offset */
+	call	dosmemsetup
+	movl	12(%esp),%ecx		/* length */
+	movl	8(%esp),%edx		/* arena offset */
+	pushl	%esi
+	pushl	%edi
+	movl	%eax,%edi
+	movl	%edx,%esi
+	push	%es
+	push	%gs
+	pop	%es
+	cld
+	rep
+	movsb				/* move ECX bytes to Real area */
+	pop	%es
+	popl	%edi
+	popl	%esi
+	pop	%gs
+	ret
+
+	.align	2			/* 8(bp)    12(bp)   16(bp)    20(bp)    24(bp) */
+	.globl	_movedata		/* src_sel, src_ofs, dest_sel, dest_ofs, len    */
+_movedata:
+	pushl	%ebp
+	movl	%esp,%ebp
+	pushw	%ds
+	pushw	%es
+	pushl	%esi
+	pushl	%edi
+
+	movl	8(%ebp),%eax
+	movw	%ax,%ds
+	movl	12(%ebp),%esi
+
+	movl	16(%ebp),%eax
+	movw	%ax,%es
+	movl	20(%ebp),%edi
+
+	movl	24(%ebp),%ecx
+	pushl	%ecx
+	shrl	$2,%ecx
+	jcxz	no_big_move
+	rep
+	movsl
+no_big_move:
+	popl	%ecx
+	andl	$3,%ecx
+	jcxz	no_little_move
+	rep
+	movsb
+no_little_move:
+
+	popl	%edi
+	popl	%esi
+	popw	%es
+	popw	%ds
+	leave
+	ret
+
+@
+
+
+1.1
+log
+@Initial revision
+@
+text
+@@
+
+
+1.1.1.1
+log
+@import newlib-2000-02-17 snapshot
+@
+text
+@@

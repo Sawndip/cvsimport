@@ -1,0 +1,299 @@
+head	1.2;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.2
+	gdb_7_6-2013-04-26-release:1.2
+	gdb_7_6-branch:1.2.0.10
+	gdb_7_6-2013-03-12-branchpoint:1.2
+	gdb_7_5_1-2012-11-29-release:1.2
+	gdb_7_5-2012-08-17-release:1.2
+	gdb_7_5-branch:1.2.0.8
+	gdb_7_5-2012-07-18-branchpoint:1.2
+	gdb_7_4_1-2012-04-26-release:1.2
+	gdb_7_4-2012-01-24-release:1.2
+	gdb_7_4-branch:1.2.0.6
+	gdb_7_4-2011-12-13-branchpoint:1.2
+	gdb_7_3_1-2011-09-04-release:1.2
+	gdb_7_3-2011-07-26-release:1.2
+	gdb_7_3-branch:1.2.0.4
+	gdb_7_3-2011-04-01-branchpoint:1.2
+	gdb_7_2-2010-09-02-release:1.2
+	gdb_7_2-branch:1.2.0.2
+	gdb_7_2-2010-07-07-branchpoint:1.2;
+locks; strict;
+comment	@// @;
+
+
+1.2
+date	2010.06.25.18.05.30;	author swagiaal;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2010.06.07.16.11.35;	author swagiaal;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@Added import loop test.
+
+2010-06-25  Sami Wagiaalla  <swagiaal@@redhat.com>
+
+	* gdb.cp/operator.cc: Created an import loop.
+	* gdb.cp/operator.exp: Added testcase for import loop.
+@
+text
+@class A
+{
+};
+
+int operator== (A, int)
+{
+  return 11;
+}
+
+int operator== (A, char)
+{
+  return 12;
+}
+
+//------------------
+
+namespace B
+{
+  class C
+  {
+  };
+
+  int operator== (C, int)
+  {
+    return 22;
+  }
+
+  int operator== (C, char)
+  {
+    return 23;
+  }
+
+  namespace BD
+  {
+    int operator== (C, int)
+    {
+      return 24;
+    }
+  }
+}
+
+//------------------
+
+class D
+{
+};
+namespace
+{
+  int operator== (D, int)
+  {
+    return 33;
+  }
+
+  int operator== (D, char)
+  {
+    return 34;
+  }
+}
+
+int operator== (D, float)
+{
+  return 35;
+}
+
+//------------------
+
+class E
+{
+};
+namespace F
+{
+  int operator== (E, int)
+  {
+    return 44;
+  }
+
+  int operator== (E, char)
+  {
+    return 45;
+  }
+}
+
+int operator== (E, float)
+{
+  return 46;
+}
+
+using namespace F;
+
+//-----------------
+
+class G
+{
+public:
+  int operator== (int)
+  {
+    return 55;
+  }
+};
+
+int operator== (G, char)
+{
+  return 56;
+}
+
+//------------------
+
+class H
+{
+};
+namespace I
+{
+  int operator== (H, int)
+  {
+    return 66;
+  }
+}
+
+namespace ALIAS = I;
+
+//------------------
+
+class J
+{
+};
+
+namespace K
+{
+  int i;
+  int operator== (J, int)
+  {
+    return 77;
+  }
+}
+
+using K::i;
+
+//------------------
+
+class L
+{
+};
+namespace M
+{
+  int operator== (L, int)
+  {
+    return 88;
+  }
+}
+
+namespace N
+{
+  using namespace M;
+}
+
+using namespace N;
+
+//------------------
+
+namespace O
+{
+  namespace P
+    {
+      using namespace ::O;
+    }
+  using namespace P;
+}
+
+using namespace O;
+
+class test { };
+test x;
+
+//------------------
+
+int main ()
+{
+  A a;
+  a == 1;
+  a == 'a';
+
+  B::C bc;
+  bc == 1;
+  bc == 'a';
+  B::BD::operator== (bc,'a');
+
+  D d;
+  d == 1;
+  d == 'a';
+  d == 1.0f;
+
+  E e;
+  e == 1;
+  e == 'a';
+  e == 1.0f;
+
+  G g;
+  g == 1;
+  g == 'a';
+
+  H h;
+  I::operator== (h, 1);
+
+  J j;
+  K::operator== (j, 1);
+
+  L l;
+  l == 1;
+
+  return 0;
+}
+@
+
+
+1.1
+log
+@Test and support all cpp operator types.
+
+2010-06-07  Sami Wagiaalla  <swagiaal@@redhat.com>
+
+	* value.h: Created oload_search_type enum.
+	(find_overload_match): Use oload_search_type enum.
+	* valops.c (find_overload_match): Support combined member and
+	non-member search.
+	* eval.c (evaluate_subexp_standard): Calls to
+	find_overload_match now use oload_search_type enum.
+	(oload_method_static): Verify index is a proper value.
+	* valarith.c (value_user_defined_cpp_op): Search for and handle
+	both member and non-member operators.
+	(value_user_defined_cpp_op): New function.
+	(value_user_defined_op): New function.
+	(value_x_unop): Use value_user_defined_op.
+	(value_x_binop): Ditto.
+	* cp-support.c (make_symbol_overload_list_using): Added block
+	iteration.
+	Add check for namespace aliases and imported declarations.
+
+2010-06-07  Sami Wagiaalla  <swagiaal@@redhat.com>
+
+	* gdb.cp/koenig.exp: Test for ADL operators.
+	* gdb.cp/koenig.cc: Added ADL operators.
+	* gdb.cp/operator.exp: New test.
+	* gdb.cp/operator.cc: New test.
+@
+text
+@d160 16
+@
+

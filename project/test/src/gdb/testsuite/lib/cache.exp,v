@@ -1,0 +1,177 @@
+head	1.2;
+access;
+symbols;
+locks; strict;
+comment	@# @;
+
+
+1.2
+date	2013.08.13.16.12.04;	author tromey;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2013.08.13.15.55.51;	author tromey;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@introduce parallel mode
+
+This introduces parallel mode for the test suite.
+
+It doesn't fully work yet in the sense that if you do a fully parallel
+run, you will encounter some file-name clashes, but this has to start
+somewhere, and it seemed best to add some infrastructure now, so that
+you can follow along and test subsequent patches if you care to.
+
+This patch has two parts.
+
+First, it checks for the GDB_PARALLEL variable.  If this is set (say,
+on the runtest command line), then the test suite assumes "parallel
+mode".  In this mode, files are put into a subdirectory named after
+the test.  That is, for DIR/TEST.exp, the outputs are put into
+./outputs/DIR/TEST/.
+
+This first part has various follow-on changes coming in subsequent
+patches.  This is why the code in this patch also makes "temp" and
+"cache" directories.
+
+Second, this adds an "inotify" mode.  If you have the inotifywait
+command (part of inotify-tools), you can set the GDB_INOTIFY variable.
+This will tell the test suite to watch for changes outside of the
+allowed output directories.
+
+This mode is useful for debugging the test suite, as it issues a
+report whenever a possibly parallel-unsafe file open is done.
+
+2013-08-13  Tom Tromey  <tromey@@redhat.com>
+	    Yao Qi  <yao@@codesourcery.com>
+
+	* lib/cache.exp (gdb_do_cache): Handle GDB_PARALLEL.
+	* lib/gdb.exp: Handle GDB_PARALLEL.
+	(default_gdb_version): Kill inotify_pid if it exists.
+	(default_gdb_exit): Emit warning if the inotify log is not
+	empty.
+	(standard_output_file): Respect GDB_PARALLEL.
+	(standard_temp_file): Likewise.
+	(gdb_init): Start inotifywait if requested.
+
+	* gdbint.texinfo (Testsuite): Use @@table, not @@itemize.
+	Document GDB_PARALLEL and GDB_INOTIFY.
+@
+text
+@# Copyright 2012, 2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+
+# The in-memory cache.
+array set gdb_data_cache {}
+
+# A helper for gdb_caching_proc that handles the caching.
+
+proc gdb_do_cache {name} {
+    global gdb_data_cache objdir
+    global GDB_PARALLEL
+
+    # See if some other process wrote the cache file.  Cache value per
+    # "board" to handle runs with multiple options
+    # (e.g. unix/{-m32,-64}) correctly.  We use "file join" here
+    # because we later use this in a real filename.
+    set cache_name [file join [target_info name] $name]
+
+    if {[info exists gdb_data_cache($cache_name)]} {
+	verbose "$name: returning '$gdb_data_cache($cache_name)' from cache" 2
+	return $gdb_data_cache($cache_name)
+    }
+
+    if {[info exists GDB_PARALLEL]} {
+	set cache_filename [file join $objdir cache $cache_name]
+	if {[file exists $cache_filename]} {
+	    set fd [open $cache_filename]
+	    set gdb_data_cache($cache_name) [read -nonewline $fd]
+	    close $fd
+	    verbose "$name: returning '$gdb_data_cache($cache_name)' from file cache" 2
+	    return $gdb_data_cache($cache_name)
+	}
+    }
+
+    set real_name gdb_real__$name
+    set gdb_data_cache($cache_name) [uplevel 1 $real_name]
+
+    if {[info exists GDB_PARALLEL]} {
+	verbose "$name: returning '$gdb_data_cache($cache_name)' and writing file" 2
+	file mkdir [file dirname $cache_filename]
+	# Make sure to write the results file atomically.
+	set fd [open $cache_filename.[pid] w]
+	puts $fd $gdb_data_cache($cache_name)
+	close $fd
+	file rename -force -- $cache_filename.[pid] $cache_filename
+    }
+    return $gdb_data_cache($cache_name)
+}
+
+# Define a new proc named NAME that takes no arguments.  BODY is the
+# body of the proc.  The proc will evaluate BODY and cache the
+# results, both in memory and, if GDB_PARALLEL is defined, in the
+# filesystem for use across invocations of dejagnu.
+
+proc gdb_caching_proc {name body} {
+    # Define the underlying proc that we'll call.
+    set real_name gdb_real__$name
+    proc $real_name {} $body
+
+    # Define the advertised proc.
+    proc $name {} [list gdb_do_cache $name]
+}
+@
+
+
+1.1
+log
+@add caching procs to test suite
+
+In the fully parallel mode, each .exp file can be run in parallel (at
+least conceptually -- the actual split may not be so severe).  This
+means that procs that compute a result and cache it are not going to
+function very well.  The test they run will be invoked over and over.
+
+This patch introduces a generic caching mechanism and changes various
+result-caching procs to use it.  This is a cleanup to introduce the
+basic change; the results aren't written to disk yet.
+
+A caching proc is defined using gdb_caching_proc, which works like
+"proc", except that it caches the result of the body.
+
+	* lib/cache.exp: New file.
+	* lib/cell.exp (skip_cell_tests): Use gdb_caching_proc.
+	* lib/gdb.exp: Load cache.exp.
+	(support_complex_tests, is_ilp32_target, is_lp64_target)
+	(is_amd64_regs_target, skip_altivec_tests, skip_vsx_tests)
+	(gdb_skip_xml_test): Use gdb_caching_proc.
+	* lib/opencl.exp (skip_opencl_tests): Use gdb_caching_proc.
+@
+text
+@d24 1
+d37 11
+d51 9
+@
+

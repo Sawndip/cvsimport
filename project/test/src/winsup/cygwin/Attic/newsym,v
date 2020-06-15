@@ -1,0 +1,328 @@
+head	1.8;
+access;
+symbols
+	pre-ripout-set_console_state_for_spawn:1.7
+	EOL_registry_mounts:1.7
+	preoverlapped:1.6
+	drop_9x_support_start:1.6
+	cr-0x5f1:1.6.0.8
+	cv-branch:1.6.0.6
+	pre-ptymaster-archetype:1.6
+	cr-0x3b58:1.6.0.4
+	cr-0x5ef:1.6.0.2
+	after-mmap-privanon-noreserve:1.6
+	after-mmap-revamp:1.6
+	before-mmap-revamp:1.6
+	cgf-more-exit-sync:1.6
+	post_wait_sig_exit:1.6
+	pre_wait_sig_exit:1.6
+	reparent-point:1.5
+	noreparent:1.5.0.16
+	cr-0x5e6:1.5.0.14
+	cr-0x9e:1.5.0.12
+	cr-0x9d:1.5.0.10
+	cgf-deleteme:1.5.0.8
+	pre-sigrewrite:1.5
+	corinna-01:1.5
+	cr-0x9c:1.5.0.6
+	cr-0x9b:1.5.0.4
+	cr-0x99:1.5
+	Z-emcb-cygwin_daemon:1.5.0.2
+	w32api-2_2:1.1
+	mingw-runtime-2_4:1.1
+	pre-cgf-merge:1.5
+	cgf-dev-branch:1.1.0.32
+	predaemon:1.1
+	cygwin_daemon_merge_HEAD:1.1
+	pregp02r1:1.1.0.10
+	cygnus_cvs_20020108_pre:1.1
+	Z-cygwin_daemon_merge_HEAD:1.1
+	cygwin_daemon:1.1.0.2
+	Z-cygwin_daemon_merge-new_HEAD:1.1;
+locks; strict;
+comment	@# @;
+
+
+1.8
+date	2009.04.12.03.19.52;	author cgf;	state dead;
+branches;
+next	1.7;
+
+1.7
+date	2008.01.01.18.51.23;	author cgf;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2005.05.02.03.50.07;	author cgf;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2003.07.07.05.30.33;	author cgf;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2003.07.07.05.23.35;	author cgf;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2003.07.07.00.14.58;	author cgf;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2003.07.06.23.24.13;	author cgf;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2001.12.20.02.55.08;	author cgf;	state Exp;
+branches
+	1.1.2.1
+	1.1.32.1;
+next	;
+
+1.1.2.1
+date	2002.01.04.03.56.09;	author rbcollins;	state Exp;
+branches;
+next	;
+
+1.1.32.1
+date	2003.07.10.01.06.23;	author cgf;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.8
+log
+@* mkimport: New script to perform all operations necessary to create
+libcygwin.a.
+* rmsym: Delete.
+* newsym: Delete.
+* Makefile.in (toolopts): New variable which holds options relating to
+binutils/gcc tools.
+(speclib): Use toolopts.  Add symbols to avoid copying to special libraries.
+(OBSOLETE_FUNCTIONS): Delete.
+(NEW_FUNCTIONS): Change to represent an argument to new mkimport script.
+(libcygwin.a): Use only new mkimport script to create libcygwin.a.  Only rely
+on ${LIBCOS}.
+(*/lib*.a): Simplify speclib dependencies.
+(speclib): Accept toolchain options.  Convert every argument to absolute path.
+Simplify parsing of nm output.  Accommodate new exclude option.
+@
+text
+@#!/bin/bash
+lib=$1; shift
+as=$1; shift
+ar=$1; shift
+rm -rf newsym.dir
+trap "rm -rf newsym.dir" 0 1 2 15
+mkdir newsym.dir
+while [ -n "$1" ]; do
+    newsym=$1; shift
+    oldsym=$1; shift
+    if [[ "$newsym" = *:d ]]; then
+	newsym=${newsym%:d}
+    else
+	cat <<EOF
+	.text
+	.global	_$newsym
+_$newsym:
+	jmp	*__imp__$oldsym
+EOF
+    fi > newsym.dir/$newsym.s
+
+    cat <<EOF >> newsym.dir/$newsym.s
+	.section .idata\$7
+	.long	__head_cygwin1_dll
+
+	.section .idata\$5
+	.global	__imp__$newsym
+__imp__$newsym:	.rva    1f
+
+	.section .idata\$4
+	.rva	1f
+
+	.section .idata\$6
+1:	.short	2
+	.asciz	"$oldsym"
+EOF
+    $as -o newsym.dir/$newsym.o newsym.dir/$newsym.s
+done
+$ar crus $lib newsym.dir/*.o
+@
+
+
+1.7
+log
+@* newsym: First stab at understanding data as well as functions.
+
+* pipe.cc (fhandler_pipe::init): Move more intelligence here.
+(fhandler_pipe::create): Simplify based on above change.
+
+* tty.cc (tty_list::allocate): Remove non-NT code.
+@
+text
+@@
+
+
+1.6
+log
+@white space and minor comment cleanup.
+@
+text
+@d1 1
+a1 1
+#!/bin/sh
+d11 5
+a15 2
+    cat <<EOF > newsym.dir/$newsym.s
+	.section .text
+a16 1
+	.global	__imp__$newsym
+d19 2
+d22 1
+d26 2
+a27 1
+	.section        .idata\$5
+@
+
+
+1.5
+log
+@* newsym: Reenable removal of tmp directory.  Just use ar to generate archive
+index.
+* Makefile.in: Don't send ranlib to newsym.
+@
+text
+@d21 1
+a21 1
+        .section        .idata\$5
+@
+
+
+1.4
+log
+@* newsym: Create objects that are closer to those created by dlltool so as not
+to confuse --export-all-symbols.
+* rmsym: Be a little more accepting of object filenames now that dlltool can
+create different format files.
+@
+text
+@a4 1
+ranlib=$1; shift
+d6 1
+a6 1
+# trap "rm -rf newsym.dir" 0 1 2 15
+d33 1
+a33 2
+$ar cru $lib newsym.dir/*.o
+$ranlib $lib
+@
+
+
+1.3
+log
+@* newsym: Oops.  Revert below change.
+@
+text
+@d1 1
+a1 1
+#!/bin/sh -x
+d7 1
+a7 1
+trap "rm -rf newsym.dir" 0 1 2 15
+a12 3
+	.section .idata$6
+	.extern	__imp__$oldsym
+	.extern __head_cygwin1_dll
+d15 1
+d18 13
+@
+
+
+1.2
+log
+@* newsym: Use correct prefix for generating imports.
+* pinfo.cc (_pinfo::commune_send): Don't wait forever for a response from
+another process.
+@
+text
+@d14 1
+a14 1
+	.extern	__imp_$oldsym
+@
+
+
+1.1
+log
+@* Makefile.in (VPATH): Add regex directory.
+(NM): new variable.
+(OBSOLETE_FUNCTIONS): Ditto.
+(NEW_FUNCTIONS): Ditto.
+(install-headers): Install regex.h.
+(install-man): New target.
+(install): Use new target.
+(DLL_OFILES): Add v8_reg* stuff.
+(new-cygwin1.dll): Eliminate stamp-cygwin-lib creation.
+(libcygwin.a): Remove obsolete functions from import lib.  Add new functions.
+* configure.in: Detect 'nm' tool.
+* configure: Regenerate.
+* cygwin.din: Export posix_reg* functions.  Eliminate export of v8 reg*
+functions.  This is now handled in object files themselves.
+* regex/*: New files.
+* regexp/v8_*.c: New files, renamed from non v8_ equivalents.
+@
+text
+@d14 1
+a14 1
+	.extern	__imp__$oldsym
+@
+
+
+1.1.32.1
+log
+@merge from trunk
+@
+text
+@d1 1
+a1 1
+#!/bin/sh
+d5 1
+d13 3
+a17 1
+	.global	__imp__$newsym
+a19 13
+
+	.section .idata\$7
+	.long	__head_cygwin1_dll
+
+        .section        .idata\$5
+__imp__$newsym:	.rva    1f
+
+	.section .idata\$4
+	.rva	1f
+
+	.section .idata\$6
+1:	.short	2
+	.asciz	"$oldsym"
+d23 2
+a24 1
+$ar crus $lib newsym.dir/*.o
+@
+
+
+1.1.2.1
+log
+@Merged changes from HEAD
+@
+text
+@@
+

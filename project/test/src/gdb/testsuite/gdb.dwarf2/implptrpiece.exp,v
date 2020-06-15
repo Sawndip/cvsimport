@@ -1,0 +1,196 @@
+head	1.1;
+access;
+symbols;
+locks; strict;
+comment	@# @;
+
+
+1.1
+date	2013.06.18.18.11.19;	author tromey;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.1
+log
+@Fix PR symtab/15391
+
+PR symtab/15391 is a failure with the DW_OP_GNU_implicit_pointer
+feature.
+
+I tracked it down to a logic error in read_pieced_value.  The code
+truncates this_size_bits according to the type size and offset too
+early -- it should do it after taking bits_to_skip into account.
+
+This patch fixes the bug.
+
+While testing this, I also tripped across a latent bug because
+indirect_pieced_value does not sign-extend where needed.  This patch
+fixes this bug as well.
+
+Finally, Pedro pointed out that a previous version implemented sign
+extension incorrectly.  This version introduces a new gdb_sign_extend
+function for this.  A couple of notes on this function:
+
+* It has the gdb_ prefix to avoid clashes with various libraries that
+  felt free to avoid proper namespacing.  There is a "sign_extend"
+  function in a Tile GX header, in an SOM-related BFD header (and in
+  sh64-tdep.c and as a macro in arm-wince-tdep.c, but those are
+  ours...)
+
+* I looked at all the sign extensions in gdb and didn't see ones that
+  I felt comfortable converting to use this function; in large part
+  because I don't have a good way to test the conversion.
+
+Built and regtested on x86-64 Fedora 18.  New test cases included;
+this required a minor addition to the DWARF assembler.  Note that the
+DWARF CU made by implptrpiece.exp uses a funny pointer size in order
+to show the sign-extension bug on all platforms.
+
+	* dwarf2loc.c (read_pieced_value): Truncate this_size_bits
+	after taking bits_to_skip into account.  Sign extend byte_offset.
+	* utils.h (gdb_sign_extend): Declare.
+	* utils.c (gdb_sign_extend): New function.
+
+	* gdb.dwarf2/implptrpiece.exp: New file.
+	* gdb.dwarf2/implptrconst.exp (d): New variable.
+	Print d.
+	* lib/dwarf2.exp (Dwarf::_location): Handle DW_OP_piece.
+@
+text
+@# Copyright 2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+load_lib dwarf.exp
+
+# This test can only be run on targets which support DWARF-2 and use gas.
+if {![dwarf2_support]} {
+    return 0  
+}
+
+if { [skip_cplus_tests] } { continue }
+
+standard_testfile main.c implptrpiece-dw.S
+
+# Make some DWARF for the test.
+set asm_file [standard_output_file $srcfile2]
+
+Dwarf::assemble $asm_file {
+    # Using a funny address size here and in the pointer type lets us
+    # also check for a sign-extension bug in the
+    # DW_OP_GNU_implicit_pointer code.
+    cu { addr_size 2 } {
+ 	compile_unit {} {
+	    declare_labels struct_label short_type_label
+	    declare_labels char_type_label ptr_label
+	    declare_labels var_label
+
+	    struct_label: structure_type {
+		{name S}
+		{byte_size 4 DW_FORM_sdata}
+	    } {
+		member {
+		    {name a}
+		    {type :$short_type_label}
+		    {data_member_location 0 DW_FORM_sdata}
+		}
+		member {
+		    {name b}
+		    {type :$char_type_label}
+		    {data_member_location 2 DW_FORM_sdata}
+		}
+		member {
+		    {name c}
+		    {type :$char_type_label}
+		    {data_member_location 3 DW_FORM_sdata}
+		}
+	    }
+
+	    short_type_label: base_type {
+		{name "short int"}
+		{encoding @@DW_ATE_signed}
+		{byte_size 2 DW_FORM_sdata}
+	    }
+
+	    char_type_label: base_type {
+		{name "signed char"}
+		{encoding @@DW_ATE_signed}
+		{byte_size 1 DW_FORM_sdata}
+	    }
+
+	    # See comment above to understand the pointer size.
+	    ptr_label: pointer_type {
+		{byte_size 2 DW_FORM_sdata}
+		{type :$char_type_label}
+	    }
+
+	    var_label: DW_TAG_variable {
+		{name s}
+		{type :$struct_label}
+		{location {
+		    const1u 1
+		    stack_value
+		    piece 2
+		    const1u 2
+		    stack_value
+		    piece 1
+		    const1u 3
+		    stack_value
+		    piece 1
+		} SPECIAL_expr}
+	    }
+
+	    DW_TAG_variable {
+		{name p}
+		{type :$ptr_label}
+		{location {
+		    GNU_implicit_pointer $var_label 2
+		} SPECIAL_expr}
+	    }
+	}
+    }
+}
+
+if  {[gdb_compile ${srcdir}/${subdir}/${srcfile} ${binfile}1.o \
+	  object {nodebug}] != ""} {
+    return -1
+}
+
+if  {[gdb_compile $asm_file ${binfile}2.o object {nodebug}] != ""} {
+    return -1
+}
+
+if  {[gdb_compile [list ${binfile}1.o ${binfile}2.o] \
+	  "${binfile}" executable {}] != ""} {
+    return -1
+}
+
+# We need --readnow because otherwise we never read in the CU we
+# created above.
+set saved_gdbflags $GDBFLAGS
+set GDBFLAGS "$GDBFLAGS -readnow"
+clean_restart ${testfile}
+set GDBFLAGS $saved_gdbflags
+
+if ![runto_main] {
+    return -1
+}
+
+gdb_test "print/d p\[-1\]" " = 0"
+@

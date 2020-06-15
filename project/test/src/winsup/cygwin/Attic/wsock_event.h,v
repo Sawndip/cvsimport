@@ -1,0 +1,218 @@
+head	1.5;
+access;
+symbols
+	cr-0x9e:1.1.0.16
+	cr-0x9d:1.1.0.14
+	cgf-deleteme:1.1.0.12
+	pre-sigrewrite:1.1
+	corinna-01:1.1
+	cr-0x9c:1.1.0.10
+	cr-0x9b:1.1.0.8
+	cr-0x99:1.1
+	Z-emcb-cygwin_daemon:1.1.0.4
+	w32api-2_2:1.1
+	mingw-runtime-2_4:1.1
+	pre-cgf-merge:1.1
+	cgf-dev-branch:1.1.0.26
+	predaemon:1.1
+	Z-cygwin_daemon_merge_HEAD:1.1
+	cygwin_daemon_merge_HEAD:1.1
+	cygwin_daemon:1.1.0.6
+	Z-cygwin_daemon_merge-new_HEAD:1.1
+	pregp02r1:1.1.0.2;
+locks; strict;
+comment	@ * @;
+
+
+1.5
+date	2004.05.07.07.51.31;	author corinna;	state dead;
+branches;
+next	1.4;
+
+1.4
+date	2004.04.03.19.07.59;	author corinna;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2004.04.01.09.48.15;	author corinna;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2004.03.29.19.41.17;	author corinna;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2002.02.09.10.40.48;	author corinna;	state Exp;
+branches
+	1.1.6.1;
+next	;
+
+1.1.6.1
+date	2002.02.28.12.53.29;	author rbcollins;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.5
+log
+@	Revert code reversion from 2004-04-03.  So, revert to async I/O again.
+	* fhandler.h (status): Add "closed" flag.
+	(prepare): New method declaration.
+	(wait): Ditto.
+	(release): Ditto.
+	* fhandler_socket.cc: Don't include wsock_event.h.
+	(fhandler_socket::prepare): New method, moved from wsock_event.
+	(fhandler_socket::wait): Ditto.
+	(fhandler_socket::release): New method.
+	(fhandler_socket::recvfrom): Simplify loop.
+	(fhandler_socket::recvmsg): Ditto.
+	(fhandler_socket::sendto): Ditto.
+	(fhandler_socket::sendmsg): Ditto.
+	* net.cc: Don't include wsock_event.h.
+	(wsock_event::prepare): Remove.
+	(wsock_event::wait): Ditto.
+	* wsock_event.h: Remove.
+@
+text
+@/* wsock_event.h: Defining the wsock_event class
+
+   Copyright 2002 Red Hat, Inc.
+
+This file is part of Cygwin.
+
+This software is a copyrighted work licensed under the terms of the
+Cygwin license.  Please consult the file "CYGWIN_LICENSE" for
+details. */
+
+#ifndef __WSOCK_EVENT_H__
+#define __WSOCK_EVENT_H__
+
+class wsock_event
+{
+  WSAEVENT		event;
+  WSAOVERLAPPED		ovr;
+public:
+  wsock_event () : event (NULL) {};
+  ~wsock_event ()
+    {
+      if (event)
+	WSACloseEvent (event);
+      event = NULL;
+    };
+
+  /* The methods are implemented in net.cc */
+  LPWSAOVERLAPPED prepare ();
+  int wait (int socket, LPDWORD flags);
+};
+
+#endif /* __WSOCK_EVENT_H__ */
+@
+
+
+1.4
+log
+@	* fhandler.h (class fhandler_socket): Remove has_been_closed member.
+	* fhandler_socket.cc (fhandler_socket::recvfrom): Revert to
+	overlapped I/O.
+	(fhandler_socket::recvmsg): Ditto.
+	(fhandler_socket::sendto): Ditto.
+	(fhandler_socket::sendmsg): Ditto.
+	* net.cc (wsock_event::prepare): Ditto.
+	(wsock_event::wait): Ditto.  Evaluate overlapped result also after
+	calling CancelIo (thanks to Patrick Samson <p_samson@@yahoo.com>).
+	(wsock_event::release): Remove.
+	* wsock_event.h: Revert to overlapped I/O.
+@
+text
+@@
+
+
+1.3
+log
+@	* fhandler_socket.cc (fhandler_socket::sendto): Drop out of loop if
+	has_been_closed gets set.
+	(fhandler_socket::sendmsg): Ditto.
+	* net.cc (wsock_event::wait): Don't initialize evts.  Don't try to
+	evaluate network events if WSAEnumNetworkEvents fails.
+	(wsock_event::release): Save last WSA error and set it again unless
+	resetting to blocking socket fails.
+	* wsock_event.h (class wsock_event): Remove destructor.
+@
+text
+@d17 1
+d20 6
+d28 2
+a29 3
+  bool prepare (int sock, long event_mask);
+  int wait (int sock, int &closed);
+  void release (int sock);
+@
+
+
+1.2
+log
+@	* fhandler.h (class fhandler_socket): Add has_been_closed member.
+	* fhandler_socket.cc (fhandler_socket::fhandler_socket): Initialize
+	has_been_closed to 0.
+	(fhandler_socket::recvfrom): Use new asynchronous I/O driven
+	wsock_event methods.
+	(fhandler_socket::recvmsg): Ditto.
+	(fhandler_socket::sendto): Ditto.
+	(fhandler_socket::sendmsg): Ditto.
+	* net.cc (wsock_event::prepare): Reimplement using asynchronous I/O.
+	(wsock_event::wait): Ditto.
+	(wsock_event::release): New method.
+	* wsock_event.h (class wsock_event): Remove ovr member.  Accomodate
+	new implementation of prepare and wait methods.  Add release method.
+@
+text
+@a18 6
+  ~wsock_event ()
+    {
+      if (event)
+	WSACloseEvent (event);
+      event = NULL;
+    };
+@
+
+
+1.1
+log
+@	* dtable.cc (dtable::dup2): Revert previous patch.
+	* fhandler.h: Ditto.
+	(fhandler_socket::recv): Define new method.
+	(fhandler_socket::send): Ditto.
+	* fhandler_socket.cc (fhandler_socket::recv): New method.
+	(fhandler_socket::send): Ditto.
+	(fhandler_socket::read): Call fhandler_socket::recv() now.
+	(fhandler_socket::write): Call fhandler_socket::send() now.
+	* net.cc (class wsock_event): Move definition to wsock_event.h.
+	(fdsock): Revert previous patch.
+	(cygwin_recv): Move implementation to fhandler_socket::recv().
+	(cygwin_send): Move implementation to fhandler_socket::send().
+	* wsock_event.h: New file.
+@
+text
+@a16 1
+  WSAOVERLAPPED		ovr;
+d27 3
+a29 2
+  LPWSAOVERLAPPED prepare ();
+  int wait (int socket, LPDWORD flags);
+@
+
+
+1.1.6.1
+log
+@Merged changes from HEAD
+@
+text
+@@
+

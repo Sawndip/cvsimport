@@ -1,0 +1,502 @@
+head	1.3;
+access;
+symbols
+	cagney_x86i386-20030821-branch:1.2.0.10
+	cagney_x86i386-20030821-branchpoint:1.2
+	carlton_dictionary-20030805-merge:1.2
+	carlton_dictionary-20030627-merge:1.2
+	gdb_6_0-branch:1.2.0.8
+	gdb_6_0-2003-06-23-branchpoint:1.2
+	jimb-ppc64-linux-20030613-branch:1.2.0.6
+	jimb-ppc64-linux-20030613-branchpoint:1.2
+	jimb-ppc64-linux-20030528-branch:1.2.0.4
+	jimb-ppc64-linux-20030528-branchpoint:1.2
+	carlton_dictionary-20030523-merge:1.2
+	cagney_fileio-20030521-branch:1.2.0.2
+	cagney_fileio-20030521-branchpoint:1.2
+	carlton_dictionary-branch:1.1.0.2;
+locks; strict;
+comment	@# @;
+
+
+1.3
+date	2003.08.23.03.55.59;	author chastain;	state dead;
+branches;
+next	1.2;
+
+1.2
+date	2003.05.20.04.08.19;	author carlton;	state Exp;
+branches
+	1.2.8.1;
+next	1.1;
+
+1.1
+date	2003.05.02.17.55.19;	author carlton;	state dead;
+branches
+	1.1.2.1;
+next	;
+
+1.1.2.1
+date	2003.05.02.17.55.19;	author carlton;	state Exp;
+branches;
+next	1.1.2.2;
+
+1.1.2.2
+date	2003.05.16.16.10.54;	author carlton;	state Exp;
+branches;
+next	1.1.2.3;
+
+1.1.2.3
+date	2003.05.16.23.32.27;	author carlton;	state Exp;
+branches;
+next	1.1.2.4;
+
+1.1.2.4
+date	2003.05.23.18.40.52;	author carlton;	state Exp;
+branches;
+next	1.1.2.5;
+
+1.1.2.5
+date	2003.08.30.03.40.34;	author chastain;	state dead;
+branches;
+next	;
+
+1.2.8.1
+date	2003.08.25.03.53.48;	author chastain;	state dead;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.3
+log
+@2003-08-22  Michael Chastain  <mec@@shout.net>
+
+	* gdb.cp: New directory.
+	* gdb.cp/*: Copy from gdb.c++/*.
+	* gdb.c++/*: Remove.
+	* Makefile.in: Change gdb.c++ to gdb.cp.
+	* configure.in:  Ditto.
+	* configure: Regnerate.
+@
+text
+@# Copyright 2003 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+# 
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  
+
+# This file is part of the gdb testsuite.
+
+# This contains tests for GDB's use of RTTI information.  This stems
+# from a bug reported in PR gdb/488 and other places, which leads to
+# statements like 'warning: can't find class named 'C::D', as given by
+# C++ RTTI'.  It arises from GDB not knowing about classes that are
+# defined in namespaces.
+
+# NOTE: carlton/2003-05-16: I suspect it could arise from nested class
+# issues, too, and even once we fix that, there might be situations
+# (involving templates, in particular) where this problem triggers
+# because GDB and GCC have different ideas what a class is called.
+
+if $tracelevel then {
+        strace $tracelevel
+        }
+
+if { [skip_cplus_tests] } { continue }
+
+#
+# test running programs
+#
+set prms_id 0
+set bug_id 0
+
+set testfile "rtti"
+set srcfile1 "${srcdir}/${subdir}/${testfile}1.cc"
+set objfile1 "${objdir}/${subdir}/${testfile}1.o"
+set srcfile2 "${srcdir}/${subdir}/${testfile}2.cc"
+set objfile2 "${objdir}/${subdir}/${testfile}2.o"
+set binfile ${objdir}/${subdir}/${testfile}
+
+# gdb_get_line_number needs this to be called srcfile.
+set srcfile "${srcfile1}"
+
+if  { [gdb_compile "${srcfile1}" "${objfile1}" object {debug c++}] != "" } {
+     gdb_suppress_entire_file "Testcase compile failed, so all tests in this file will automatically fail."
+}
+
+if  { [gdb_compile "${srcfile2}" "${objfile2}" object {debug c++}] != "" } {
+     gdb_suppress_entire_file "Testcase compile failed, so all tests in this file will automatically fail."
+}
+
+if  { [gdb_compile "${objfile1} ${objfile2}" "${binfile}" executable {debug c++}] != "" } {
+     gdb_suppress_entire_file "Testcase compile failed, so all tests in this file will automatically fail."
+}
+
+if [get_compiler_info ${binfile} "c++"] {
+    return -1
+}
+
+gdb_exit
+gdb_start
+gdb_reinitialize_dir $srcdir/$subdir
+gdb_load ${binfile}
+
+
+if ![runto_main] then {
+    perror "couldn't run to breakpoint"
+    continue
+}
+
+# First, run to after we've constructed the object:
+
+gdb_breakpoint [gdb_get_line_number "constructs-done"]
+gdb_continue_to_breakpoint "end of constructors"
+
+gdb_test_multiple "print *e1" "print *e1" {
+    -re "warning: can't find class named `n1::D1', as given by C\\+\\+ RTTI.*$gdb_prompt $" {
+	kfail "gdb/488" "print *e1"
+    }
+    -re "\\$\[0-9\]* = {<n1::Base1> = .*}\r\n$gdb_prompt $" {
+	pass "print *e1"
+    }
+    -re "\\$\[0-9\]* = {<Base1> = .*}\r\n$gdb_prompt $" {
+	# NOTE: carlton/2003-05-16: If code is compiled by GCC2, we
+	# don't print the warning (for no particular reason), but we
+	# still call the class via the wrong name; PR gdb/57 is our
+	# catch-all PR for nested type problems.
+	kfail "gdb/57" "print *e1"
+    }
+}
+
+# NOTE: carlton/2003-05-16: This test fails on my branch with an
+# "<incomplete type>" message because, within rtt1.cc, GDB has no way
+# of knowing that the class is called 'n2::D2' instead of just 'D2'.
+# This is an artifical test case, though: if we were using these
+# classes in a more substantial way, G++ would emit more debug info.
+# As is, I don't think there's anything that GDB can do about this
+# case until G++ starts emitting DW_TAG_namespace info; when that part
+# of the branch gets merged in, then we'll probably want to convert
+# that fail branch to an xfail.
+
+gdb_test_multiple "print *e2" "print *e2" {
+    -re "warning: can't find class named `n2::D2', as given by C\\+\\+ RTTI.*$gdb_prompt $" {
+	kfail "gdb/488" "print *e2"
+    }
+    -re "\\$\[0-9\]* = <incomplete type>\r\n$gdb_prompt $" {
+	# See above NOTE.
+	fail "print *e2"
+    }
+    -re "\\$\[0-9\]* = {<n2::Base2> = .*}\r\n$gdb_prompt $" {
+	pass "print *e2"
+    }
+    -re "\\$\[0-9\]* = {<Base2> = .*}\r\n$gdb_prompt $" {
+	kfail "gdb/57" "print *e2"
+    }
+}
+
+gdb_exit
+return 0
+@
+
+
+1.2
+log
+@2003-05-19  David Carlton  <carlton@@bactrian.org>
+
+	* gdb.c++/rtti.exp: New file, containing tests for PR c++/488.
+	* gdb.c++/rtti.h, gdb.c++/rtti1.cc, gdb.c++/rtti2.cc: Ditto.
+
+2003-05-19  David Carlton  <carlton@@bactrian.org>
+
+	* config/djgpp/fnchange.lst: Add testsuite/gdb.c++/rtti*.
+@
+text
+@@
+
+
+1.2.8.1
+log
+@2003-08-22  Michael Chastain  <mec@@shout.net>
+
+	* gdb.cp: New directory.
+	* gdb.cp/*: Copy from gdb.c++/*.
+	* gdb.c++/*: Remove.
+	* Makefile.in: Change gdb.c++ to gdb.cp.
+	* configure.in:  Ditto.
+	* configure: Regnerate.
+@
+text
+@@
+
+
+1.1
+log
+@file rtti.exp was initially added on branch carlton_dictionary-branch.
+@
+text
+@d1 127
+@
+
+
+1.1.2.1
+log
+@2003-05-02  David Carlton  <carlton@@bactrian.org>
+
+	* gdb.c++/rtti.h: New.
+	* gdb.c++/rtti2.cc: New.
+	* gdb.c++/rtti1.cc: New.
+	* gdb.c++/rtti.exp: New.
+
+2003-05-02  David Carlton  <carlton@@bactrian.org>
+
+	* config/djgpp/fnchange.lst: Add testsuite/gdb.c++/rtti files.
+@
+text
+@a0 112
+# Copyright 2003 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+# 
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  
+
+# This file is part of the gdb testsuite.
+
+# This contains tests for GDB's use of RTTI information.  This stems
+# from a bug reported in PR gdb/488 and other places, which leads to
+# statements like 'warning: can't find class named 'C::D', as given by
+# C++ RTTI.  It arises from GDB not knowing about classes that are
+# defined in namespaces.
+
+# NOTE: carlton/2003-05-02: I suspect it could arise from nested class
+# issues, too, and even once we fix that, there might be situations
+# (involving templates, in particular) where this problem triggers
+# because GDB and GCC have different ideas what a class is called.
+
+if $tracelevel then {
+        strace $tracelevel
+        }
+
+if { [skip_cplus_tests] } { continue }
+
+#
+# test running programs
+#
+set prms_id 0
+set bug_id 0
+
+set testfile "rtti"
+set srcfile1 "${srcdir}/${subdir}/${testfile}1.cc"
+set objfile1 "${objdir}/${subdir}/${testfile}1.o"
+set srcfile2 "${srcdir}/${subdir}/${testfile}2.cc"
+set objfile2 "${objdir}/${subdir}/${testfile}2.o"
+set binfile ${objdir}/${subdir}/${testfile}
+
+# gdb_get_line_number needs this to be called srcfile.
+set srcfile "${srcfile1}"
+
+if  { [gdb_compile "${srcfile1}" "${objfile1}" object {debug c++}] != "" } {
+     gdb_suppress_entire_file "Testcase compile failed, so all tests in this file will automatically fail."
+}
+
+if  { [gdb_compile "${srcfile2}" "${objfile2}" object {debug c++}] != "" } {
+     gdb_suppress_entire_file "Testcase compile failed, so all tests in this file will automatically fail."
+}
+
+if  { [gdb_compile "${objfile1} ${objfile2}" "${binfile}" executable {debug c++}] != "" } {
+     gdb_suppress_entire_file "Testcase compile failed, so all tests in this file will automatically fail."
+}
+
+if [get_compiler_info ${binfile} "c++"] {
+    return -1
+}
+
+gdb_exit
+gdb_start
+gdb_reinitialize_dir $srcdir/$subdir
+gdb_load ${binfile}
+
+
+if ![runto_main] then {
+    perror "couldn't run to breakpoint"
+    continue
+}
+
+# First, run to after we've constructed the object:
+
+gdb_breakpoint [gdb_get_line_number "constructs-done"]
+gdb_continue_to_breakpoint "end of constructors"
+
+gdb_test_multiple "print *e1" "print *e1" {
+    -re "warning: can't find class named `n1::D1', as given by C\\+\\+ RTTI.*$gdb_prompt $" {
+	kfail "gdb/488" "print *e1"
+    }
+    -re "\\$\[0-9\]* = {<n1::Base1> = .*}\r\n$gdb_prompt $" {
+	pass "print *e1"
+    }
+}
+
+# NOTE: carlton/2003-05-02: This test fails on my branch because,
+# within rtt1.cc, GDB has no way of knowing that the class is called
+# 'n2::D2' instead of just 'D2'.  This is an artifical test case,
+# though: if we were using these classes in a more substantial way,
+# G++ would emit more debug info.
+
+gdb_test_multiple "print *e2" "print *e2" {
+    -re "warning: can't find class named `n2::D2', as given by C\\+\\+ RTTI.*$gdb_prompt $" {
+	kfail "gdb/488" "print *e2"
+    }
+    -re "\\$\[0-9\]* = <incomplete type>\r\n$gdb_prompt $" {
+	kfail "gdb/TBA" "print *e2"
+    }
+    -re "\\$\[0-9\]* = {<n2::Base2> = .*}\r\n$gdb_prompt $" {
+	pass "print *e2"
+    }
+}
+
+gdb_exit
+return 0
+@
+
+
+1.1.2.2
+log
+@2003-05-16  David Carlton  <carlton@@bactrian.org>
+
+	* carlton_runnamespace: Run gdb.c++/rtti.exp, too.
+	* carlton_runtest (FASTTESTS): Add gdb.c++/breakpoint.exp and
+	gdb.c++/rtti.exp.
+	* gdb.c++/breakpoint.exp (test_breakpoint): Run to main for every
+	breakpoint.
+	* gdb.c++/rtti.exp: Add more KFAIL branches.
+@
+text
+@a90 6
+    -re "\\$\[0-9\]* = {<.*Base1> = .*}\r\n$gdb_prompt $" {
+	# NOTE: carlton/2003-05-09: Sometimes, the DWARF reader gets
+	# confused about names.  I've seen just Base1 or
+	# n1::D1::C1::Base1.
+	kfail "gdb/TBA" "print *e2"
+    }
+d97 1
+a97 3
+# G++ would emit more debug info.  Arguably, the "incomplete type"
+# kfail should really be an xfail, because it works using a compiler
+# that generates DW_TAG_namespace tags.
+a107 3
+    }
+    -re "\\$\[0-9\]* = {<.*Base2> = .*}\r\n$gdb_prompt $" {
+	kfail "gdb/TBA" "print *e2"
+@
+
+
+1.1.2.3
+log
+@2003-05-16  David Carlton  <carlton@@bactrian.org>
+
+	* dwarf2read.c (read_comp_unit): Separate code out into
+	read_die_and_children and read_die_and_siblings.
+	(read_die_and_children): New.
+	(read_die_and_siblings): New.
+	(read_full_die): Add HAS_CHILDREN argument.
+	struct die_info: Delete HAS_CHILDREN, NEXT members; add CHILD,
+	SIBLING, PARENT members.
+	(psymtab_to_symtab_1): Use new members of struct die_info.
+	(process_die, read_file_scope, read_func_scope)
+	(read_lexical_block_scope, read_structure_scope, read_enumeration)
+	(read_array_type, read_common_block, read_namespace)
+	(read_subroutine_type, read_die_and_children, free_die_list)
+	(dump_die, dump_die_list): Ditto.
+	(read_namespace): Separate code out into namespace_name.
+	(namespace_name): New.
+	(typename_concat): New.
+	(determine_prefix): New.
+	(read_type_die): Set prefix appropriately.
+	(class_name): New.
+
+2003-05-16  David Carlton  <carlton@@bactrian.org>
+
+	* gdb.c++/rtti.exp: Convert the gdb/488 kfail into a fail, and
+	delete the <.*BaseN> branches.
+@
+text
+@d86 1
+a86 2
+	#kfail "gdb/488" "print *e1"
+	fail "print *e1"
+d91 6
+d109 1
+a109 2
+	#kfail "gdb/488" "print *e2"
+	fail "print *e2"
+d116 3
+@
+
+
+1.1.2.4
+log
+@2003-05-23  David Carlton  <carlton@@bactrian.org>
+
+	* Merge with mainline; tag is carlton_dictionary-20030523-merge.
+@
+text
+@d22 1
+a22 1
+# C++ RTTI'.  It arises from GDB not knowing about classes that are
+d25 1
+a25 1
+# NOTE: carlton/2003-05-16: I suspect it could arise from nested class
+d94 7
+a100 9
+# NOTE: carlton/2003-05-16: This test fails on my branch with an
+# "<incomplete type>" message because, within rtt1.cc, GDB has no way
+# of knowing that the class is called 'n2::D2' instead of just 'D2'.
+# This is an artifical test case, though: if we were using these
+# classes in a more substantial way, G++ would emit more debug info.
+# As is, I don't think there's anything that GDB can do about this
+# case until G++ starts emitting DW_TAG_namespace info; when that part
+# of the branch gets merged in, then we'll probably want to convert
+# that fail branch to an xfail.
+@
+
+
+1.1.2.5
+log
+@2003-08-22  Michael Chastain  <mec@@shout.net>
+
+	* gdb.cp: New directory.
+	* gdb.cp/*: Copy from gdb.c++/*.
+	* gdb.c++/*: Remove.
+	* Makefile.in: Change gdb.c++ to gdb.cp.
+	* configure.in:  Ditto.
+	* carlton_runnamespace: Ditto.
+	* carlton_runtest: Ditto.
+	* configure: Regnerate.
+@
+text
+@@
+
+

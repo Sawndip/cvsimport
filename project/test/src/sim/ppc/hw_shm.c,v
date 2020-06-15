@@ -1,0 +1,338 @@
+head	1.3;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.3
+	gdb_7_6-2013-04-26-release:1.3
+	gdb_7_6-branch:1.3.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.3
+	gdb_7_5_1-2012-11-29-release:1.1
+	gdb_7_5-2012-08-17-release:1.1
+	gdb_7_5-branch:1.1.0.18
+	gdb_7_5-2012-07-18-branchpoint:1.1
+	gdb_7_4_1-2012-04-26-release:1.1
+	gdb_7_4-2012-01-24-release:1.1
+	gdb_7_4-branch:1.1.0.16
+	gdb_7_4-2011-12-13-branchpoint:1.1
+	gdb_7_3_1-2011-09-04-release:1.1
+	gdb_7_3-2011-07-26-release:1.1
+	gdb_7_3-branch:1.1.0.14
+	gdb_7_3-2011-04-01-branchpoint:1.1
+	gdb_7_2-2010-09-02-release:1.1
+	gdb_7_2-branch:1.1.0.12
+	gdb_7_2-2010-07-07-branchpoint:1.1
+	gdb_7_1-2010-03-18-release:1.1
+	gdb_7_1-branch:1.1.0.10
+	gdb_7_1-2010-02-18-branchpoint:1.1
+	gdb_7_0_1-2009-12-22-release:1.1
+	gdb_7_0-2009-10-06-release:1.1
+	gdb_7_0-branch:1.1.0.8
+	gdb_7_0-2009-09-16-branchpoint:1.1
+	msnyder-checkpoint-072509-branch:1.1.0.6
+	msnyder-checkpoint-072509-branchpoint:1.1
+	reverse-20081226-branch:1.1.0.4
+	reverse-20081226-branchpoint:1.1
+	multiprocess-20081120-branch:1.1.0.2
+	multiprocess-20081120-branchpoint:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.3
+date	2012.12.19.07.18.21;	author brobecke;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2012.12.19.07.12.02;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2008.11.18.21.30.37;	author joel;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.3
+log
+@[sim] Update old contact info in GPL license notices
+
+sim/ChangeLog:
+
+        Update old contact info in GPL license notices.
+@
+text
+@/*  This file is part of the program psim.
+
+    Copyright (C) 1997,2008, Joel Sherrill <joel@@OARcorp.com>
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+ 
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, see <http://www.gnu.org/licenses/>.
+ 
+    */
+
+
+#ifndef _HW_SHM_C_
+#define _HW_SHM_C_
+
+#include "device_table.h"
+
+#ifdef HAVE_STRING_H
+#include <string.h>
+#else
+#ifdef HAVE_STRINGS_H
+#include <strings.h>
+#endif
+#endif
+
+#include <sys/ipc.h>
+#include <sys/shm.h>
+
+
+/* DEVICE
+
+
+   shm - map unix shared memory into psim address space
+
+
+   DESCRIPTION
+
+
+   This device implements an area of memory which is mapped into UNIX
+   shared memory.
+
+
+   PROPERTIES
+
+
+   reg = <address> <size> (required)
+
+   Determine where the memory lives in the parents address space.
+   The SHM area is assumed to be of the same length.
+
+   key = <integer> (required)
+
+   This is the key of the unix shared memory area.
+
+   EXAMPLES
+
+
+   Enable tracing of the shm:
+
+   |  bash$ psim -t shm-device \
+
+
+   Configure a 512 kilobytes of UNIX shared memory with the key 0x12345678
+   mapped into psim address space at 0x0c000000.
+
+   |  -o '/shm@@0x0c000000/reg 0x0c000000 0x80000' \
+   |  -o '/shm@@0x0c000000/key 0x12345678' \
+
+   sim/ppc/run -o '/#address-cells 1' \
+         -o '/shm@@0x0c000000/reg 0x0c000000 0x80000' \
+         -o '/shm@@0x0c000000/key 0x12345678' ../psim-hello/hello
+
+   BUGS
+
+   None known.
+
+   */
+
+typedef struct _hw_shm_device {
+  unsigned_word physical_address;
+  char *shm_address;
+  unsigned sizeof_memory;
+  key_t key;
+  int id;
+} hw_shm_device;
+
+static void
+hw_shm_init_data(device *me)
+{
+  hw_shm_device *shm = (hw_shm_device*)device_data(me);
+  const device_unit *d;
+  reg_property_spec reg;
+  int i;
+
+  /* Obtain the Key Value */
+  if (device_find_property(me, "key") == NULL)
+    error("shm_init_data() required key property is missing\n");
+
+  shm->key = (key_t) device_find_integer_property(me, "key");
+  DTRACE(shm, ("shm key (0x%08x)\n", shm->key) );
+  
+  /* Figure out where this memory is in address space and how long it is */
+  if ( !device_find_reg_array_property(me, "reg", 0, &reg) )
+    error("hw_shm_init_data() no address registered\n");
+
+  /* Determine the address and length being as paranoid as possible */
+  shm->physical_address = 0xffffffff;
+  shm->sizeof_memory = 0xffffffff;
+
+  for ( i=0 ; i<reg.address.nr_cells; i++ ) {
+    if (reg.address.cells[0] == 0 && reg.size.cells[0] == 0)
+      continue;
+
+    if ( shm->physical_address != 0xffffffff )
+      device_error(me, "Only single celled address ranges supported\n");
+
+    shm->physical_address = reg.address.cells[i];
+    DTRACE(shm, ("shm physical_address=0x%x\n", shm->physical_address));
+
+    shm->sizeof_memory = reg.size.cells[i];
+    DTRACE(shm, ("shm length=0x%x\n", shm->sizeof_memory));
+  }
+
+  if ( shm->physical_address == 0xffffffff )
+    device_error(me, "Address not specified\n" );
+
+  if ( shm->sizeof_memory == 0xffffffff )
+    device_error(me, "Length not specified\n" );
+
+  /* Now actually attach to or create the shared memory area */
+  shm->id = shmget(shm->key, shm->sizeof_memory, IPC_CREAT | 0660);
+  if (shm->id == -1)
+    error("hw_shm_init_data() shmget failed\n");
+
+  shm->shm_address = shmat(shm->id, (char *)0, SHM_RND);
+  if (shm->shm_address == (void *)-1)
+    error("hw_shm_init_data() shmat failed\n");
+}
+
+static void
+hw_shm_attach_address_callback(device *me,
+				attach_type attach,
+				int space,
+				unsigned_word addr,
+				unsigned nr_bytes,
+				access_type access,
+				device *client) /*callback/default*/
+{
+  hw_shm_device *shm = (hw_shm_device*)device_data(me);
+
+  if (space != 0)
+    error("shm_attach_address_callback() invalid address space\n");
+
+  if (nr_bytes == 0)
+    error("shm_attach_address_callback() invalid size\n");
+}
+
+
+static unsigned
+hw_shm_io_read_buffer(device *me,
+			 void *dest,
+			 int space,
+			 unsigned_word addr,
+			 unsigned nr_bytes,
+			 cpu *processor,
+			 unsigned_word cia)
+{
+  hw_shm_device *shm = (hw_shm_device*)device_data(me);
+
+  /* do we need to worry about out of range addresses? */
+
+  DTRACE(shm, ("read %p %x %x %x\n", \
+     shm->shm_address, shm->physical_address, addr, nr_bytes) );
+
+  memcpy(dest, &shm->shm_address[addr - shm->physical_address], nr_bytes);
+  return nr_bytes;
+}
+
+
+static unsigned
+hw_shm_io_write_buffer(device *me,
+			  const void *source,
+			  int space,
+			  unsigned_word addr,
+			  unsigned nr_bytes,
+			  cpu *processor,
+			  unsigned_word cia)
+{
+  hw_shm_device *shm = (hw_shm_device*)device_data(me);
+
+  /* do we need to worry about out of range addresses? */
+
+  DTRACE(shm, ("write %p %x %x %x\n", \
+     shm->shm_address, shm->physical_address, addr, nr_bytes) );
+
+  memcpy(&shm->shm_address[addr - shm->physical_address], source, nr_bytes);
+  return nr_bytes;
+}
+
+static device_callbacks const hw_shm_callbacks = {
+  { generic_device_init_address, hw_shm_init_data },
+  { hw_shm_attach_address_callback, }, /* address */
+  { hw_shm_io_read_buffer,
+    hw_shm_io_write_buffer }, /* IO */
+  { NULL, }, /* DMA */
+  { NULL, }, /* interrupt */
+  { NULL, }, /* unit */
+  NULL,
+};
+
+static void *
+hw_shm_create(const char *name,
+		 const device_unit *unit_address,
+		 const char *args)
+{
+  hw_shm_device *shm = ZALLOC(hw_shm_device);
+  return shm;
+}
+
+
+
+const device_descriptor hw_shm_device_descriptor[] = {
+  { "shm", hw_shm_create, &hw_shm_callbacks },
+  { NULL },
+};
+
+#endif /* _HW_SHM_C_ */
+@
+
+
+1.2
+log
+@Update sim copyright headers from GPLv2-or-later to GPLv3-or-later.
+
+gdb/sim/ChangeLog:
+
+        Update the non-FSF-copyrighted files in sim to GPLv3 or later.
+@
+text
+@d16 1
+a16 2
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+@
+
+
+1.1
+log
+@2008-11-18  Joel Sherrill <joel.sherrill@@oarcorp.com>
+
+	* configure: Regenerated.
+	* configure.ac: Add test for System V shared memory and semaphore.
+	* debug.c, debug.h: Add trace support for new devices.
+	* hw_sem.c, hw_shm.c: New files.
+	* Makefile.in: Add hw_sem.c and hw_shm.c.
+@
+text
+@d7 1
+a7 1
+    the Free Software Foundation; either version 2 of the License, or
+@
+

@@ -1,0 +1,215 @@
+head	1.4;
+access;
+symbols
+	binutils-2_24-branch:1.4.0.8
+	binutils-2_24-branchpoint:1.4
+	binutils-2_21_1:1.2
+	binutils-2_23_2:1.4
+	binutils-2_23_1:1.4
+	binutils-2_23:1.4
+	binutils-2_23-branch:1.4.0.6
+	binutils-2_23-branchpoint:1.4
+	binutils-2_22_branch:1.4.0.4
+	binutils-2_22:1.4
+	binutils-2_22-branch:1.4.0.2
+	binutils-2_22-branchpoint:1.4
+	binutils-2_21:1.2
+	binutils-2_21-branch:1.2.0.2
+	binutils-2_21-branchpoint:1.2
+	binutils_latest_snapshot:1.4;
+locks; strict;
+comment	@# @;
+
+
+1.4
+date	2011.03.22.00.18.26;	author ian;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2011.03.21.23.11.45;	author ian;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2010.08.02.07.41.04;	author ian;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2010.06.01.23.37.58;	author tmsriram;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.4
+log
+@Fix copyright.
+@
+text
+@#!/bin/sh
+
+# final_layout.sh -- test --final-layout
+
+# Copyright 2010, 2011 Free Software Foundation, Inc.
+# Written by Sriraman Tallam <tmsriram@@google.com>.
+
+# This file is part of gold.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+# MA 02110-1301, USA.
+
+# The goal of this program is to verify if --section-ordering-file works as
+# intended.  File final_layout.cc is in this test.
+
+set -e
+
+check()
+{
+    awk "
+BEGIN { saw1 = 0; saw2 = 0; err = 0; }
+/.*$2\$/ { saw1 = 1; }
+/.*$3\$/ {
+     saw2 = 1;
+     if (!saw1)
+       {
+	  printf \"layout of $2 and $3 is not right\\n\";
+	  err = 1;
+	  exit 1;
+       }
+    }
+END {
+      if (!saw1 && !err)
+        {
+	  printf \"did not see $2\\n\";
+	  exit 1;
+	}
+      if (!saw2 && !err)
+	{
+	  printf \"did not see $3\\n\";
+	  exit 1;
+	}
+    }" $1
+}
+
+check final_layout.stdout "_Z3barv" "_Z3bazv"
+check final_layout.stdout "_Z3bazv" "_Z3foov"
+check final_layout.stdout "global_varb" "global_vara"
+check final_layout.stdout "global_vara" "global_varc"
+@
+
+
+1.3
+log
+@	* testsuite/final_layout.sh: Rewrite to not use dc.
+@
+text
+@d5 1
+a5 1
+# Copyright 2010 Free Software Foundation, Inc.
+@
+
+
+1.2
+log
+@	* testsuite/final_layout.sh: Use dc to convert from hex to
+	decimal.
+@
+text
+@d28 2
+d32 24
+a55 9
+    func_addr_1=`grep $2 $1 | awk '{print $1}' | tr 'abcdef' 'ABCDEF'`
+    func_addr_1=`echo 16i${func_addr_1}p | dc`
+    func_addr_2=`grep $3 $1 | awk '{print $1}' | tr 'abcdef' 'ABCDEF'`
+    func_addr_2=`echo 16i${func_addr_2}p | dc`
+    if [ $func_addr_1 -gt $func_addr_2 ]
+    then
+        echo "final layout of" $2 "and" $3 "is not right."
+	exit 1
+    fi
+@
+
+
+1.1
+log
+@	* gold.h (is_wildcard_string): New function.
+	* layout.cc (Layout::layout): Pass this pointer to add_input_section.
+	(Layout::layout_eh_frame): Ditto.
+	(Layout::find_section_order_index): New method.
+	(Layout::read_layout_from_file): New method.
+	* layout.h (Layout::find_section_order_index): New method.
+	(Layout::read_layout_from_file): New method.
+	(Layout::input_section_position_): New private member.
+	(Layout::input_section_glob_): New private member.
+	* main.cc (main): Call read_layout_from_file here.
+	* options.h (--section-ordering-file): New option.
+	* output.cc (Output_section::input_section_order_specified_): New
+	member.
+	(Output_section::Output_section): Initialize new member.
+	(Output_section::add_input_section): Add new parameter.
+	Keep input sections when --section-ordering-file is used.
+	(Output_section::set_final_data_size): Sort input sections when
+	section ordering file is specified.
+	(Output_section::Input_section_sort_entry): Add new parameter.
+	Check sorting type.
+	(Output_section::Input_section_sort_entry::compare_section_ordering):
+	New method.
+	(Output_section::Input_section_sort_compare::operator()): Change to
+	consider section_order_index.
+	(Output_section::Input_section_sort_init_fini_compare::operator()):
+	Change to consider section_order_index.
+	(Output_section::Input_section_sort_section_order_index_compare
+	::operator()): New method.
+	(Output_section::sort_attached_input_sections): Change to sort
+	according to section order when specified.
+	(Output_section::add_input_section<32, true>): Add new parameter.
+	(Output_section::add_input_section<64, true>): Add new parameter.
+	(Output_section::add_input_section<32, false>): Add new parameter.
+	(Output_section::add_input_section<64, false>): Add new parameter.
+	* output.h (Output_section::add_input_section): Add new parameter.
+	(Output_section::input_section_order_specified): New
+	method.
+	(Output_section::set_input_section_order_specified): New method.
+	(Input_section::Input_section): Initialize section_order_index_.
+	(Input_section::section_order_index): New method.
+	(Input_section::set_section_order_index): New method.
+	(Input_section::section_order_index_): New member.
+	(Input_section::Input_section_sort_section_order_index_compare): New
+	struct.
+	(Output_section::input_section_order_specified_): New member.
+	* script-sections.cc (is_wildcard_string): Delete and move modified
+	method to gold.h.
+	(Output_section_element_input::Output_section_element_input): Modify
+	call to is_wildcard_string.
+	(Output_section_element_input::Input_section_pattern
+	::Input_section_pattern): Ditto.
+	(Output_section_element_input::Output_section_element_input): Ditto.
+	* testsuite/Makefile.am (final_layout): New test case.
+	* testsuite/Makefile.in: Regenerate.
+	* testsuite/final_layout.cc: New file.
+	* testsuite/final_layout.sh: New file.
+@
+text
+@d30 4
+a33 2
+    func_addr_1=$((16#`grep $2 $1 | awk '{print $1}'`))
+    func_addr_2=$((16#`grep $3 $1 | awk '{print $1}'`))
+@
+

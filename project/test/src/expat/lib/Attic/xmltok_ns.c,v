@@ -1,0 +1,295 @@
+head	1.1;
+access;
+symbols
+	gdb-csl-symbian-6_4_50_20060226-12:1.1.4.1
+	gdb-csl-symbian-6_4_50_20060226-11:1.1.4.1
+	gdb-csl-sourcerygxx-4_1-17:1.1.4.1
+	gdb-csl-20060226-branch-local-2:1.1.4.1
+	gdb-csl-sourcerygxx-4_1-14:1.1.4.1
+	gdb-csl-sourcerygxx-4_1-13:1.1.4.1
+	gdb-csl-sourcerygxx-4_1-12:1.1.4.1
+	gdb-csl-sourcerygxx-3_4_4-21:1.1.4.1
+	gdb-csl-sourcerygxx-4_1-9:1.1.4.1
+	gdb-csl-sourcerygxx-4_1-8:1.1.4.1
+	gdb-csl-sourcerygxx-4_1-7:1.1.4.1
+	gdb-csl-arm-2006q1-6:1.1.4.1
+	gdb-csl-sourcerygxx-4_1-6:1.1.4.1
+	gdb-csl-symbian-6_4_50_20060226-10:1.1.4.1
+	gdb-csl-symbian-6_4_50_20060226-9:1.1.4.1
+	gdb-csl-symbian-6_4_50_20060226-8:1.1.4.1
+	gdb-csl-coldfire-4_1-11:1.1.4.1
+	gdb-csl-sourcerygxx-3_4_4-19:1.1.4.1
+	gdb-csl-coldfire-4_1-10:1.1.4.1
+	gdb-csl-sourcerygxx-4_1-5:1.1.4.1
+	gdb-csl-sourcerygxx-4_1-4:1.1.4.1
+	gdb-csl-sourcerygxx-3_4_4-17:1.1.4.1
+	gdb-csl-20060226-branch-merge-to-csl-symbian-1:1.1.4.1
+	gdb-csl-symbian-20060226-branch:1.1.4.1.0.2
+	gdb-csl-symbian-20060226-branchpoint:1.1.4.1
+	gdb-csl-20060226-branch-merge-to-csl-local-1:1.1.4.1
+	gdb-csl-20060226-branch:1.1.0.4
+	gdb-csl-available-20060303-branch:1.1.0.2;
+locks; strict;
+comment	@ * @;
+expand	@o@;
+
+
+1.1
+date	2006.03.03.20.17.12;	author drow;	state dead;
+branches
+	1.1.2.1
+	1.1.4.1;
+next	;
+
+1.1.2.1
+date	2006.03.03.20.17.12;	author drow;	state Exp;
+branches;
+next	;
+
+1.1.4.1
+date	2006.04.03.00.47.36;	author drow;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.1
+log
+@file xmltok_ns.c was initially added on branch gdb-csl-available-20060303-branch.
+@
+text
+@@
+
+
+1.1.4.1
+log
+@Merge XML and VFP support to this branch.
+@
+text
+@a0 106
+const ENCODING *
+NS(XmlGetUtf8InternalEncoding)(void)
+{
+  return &ns(internal_utf8_encoding).enc;
+}
+
+const ENCODING *
+NS(XmlGetUtf16InternalEncoding)(void)
+{
+#if BYTEORDER == 1234
+  return &ns(internal_little2_encoding).enc;
+#elif BYTEORDER == 4321
+  return &ns(internal_big2_encoding).enc;
+#else
+  const short n = 1;
+  return (*(const char *)&n
+          ? &ns(internal_little2_encoding).enc
+          : &ns(internal_big2_encoding).enc);
+#endif
+}
+
+static const ENCODING * const NS(encodings)[] = {
+  &ns(latin1_encoding).enc,
+  &ns(ascii_encoding).enc,
+  &ns(utf8_encoding).enc,
+  &ns(big2_encoding).enc,
+  &ns(big2_encoding).enc,
+  &ns(little2_encoding).enc,
+  &ns(utf8_encoding).enc /* NO_ENC */
+};
+
+static int PTRCALL
+NS(initScanProlog)(const ENCODING *enc, const char *ptr, const char *end,
+                   const char **nextTokPtr)
+{
+  return initScan(NS(encodings), (const INIT_ENCODING *)enc,
+                  XML_PROLOG_STATE, ptr, end, nextTokPtr);
+}
+
+static int PTRCALL
+NS(initScanContent)(const ENCODING *enc, const char *ptr, const char *end,
+                    const char **nextTokPtr)
+{
+  return initScan(NS(encodings), (const INIT_ENCODING *)enc,
+                  XML_CONTENT_STATE, ptr, end, nextTokPtr);
+}
+
+int
+NS(XmlInitEncoding)(INIT_ENCODING *p, const ENCODING **encPtr,
+                    const char *name)
+{
+  int i = getEncodingIndex(name);
+  if (i == UNKNOWN_ENC)
+    return 0;
+  SET_INIT_ENC_INDEX(p, i);
+  p->initEnc.scanners[XML_PROLOG_STATE] = NS(initScanProlog);
+  p->initEnc.scanners[XML_CONTENT_STATE] = NS(initScanContent);
+  p->initEnc.updatePosition = initUpdatePosition;
+  p->encPtr = encPtr;
+  *encPtr = &(p->initEnc);
+  return 1;
+}
+
+static const ENCODING *
+NS(findEncoding)(const ENCODING *enc, const char *ptr, const char *end)
+{
+#define ENCODING_MAX 128
+  char buf[ENCODING_MAX];
+  char *p = buf;
+  int i;
+  XmlUtf8Convert(enc, &ptr, end, &p, p + ENCODING_MAX - 1);
+  if (ptr != end)
+    return 0;
+  *p = 0;
+  if (streqci(buf, KW_UTF_16) && enc->minBytesPerChar == 2)
+    return enc;
+  i = getEncodingIndex(buf);
+  if (i == UNKNOWN_ENC)
+    return 0;
+  return NS(encodings)[i];
+}
+
+int
+NS(XmlParseXmlDecl)(int isGeneralTextEntity,
+                    const ENCODING *enc,
+                    const char *ptr,
+                    const char *end,
+                    const char **badPtr,
+                    const char **versionPtr,
+                    const char **versionEndPtr,
+                    const char **encodingName,
+                    const ENCODING **encoding,
+                    int *standalone)
+{
+  return doParseXmlDecl(NS(findEncoding),
+                        isGeneralTextEntity,
+                        enc,
+                        ptr,
+                        end,
+                        badPtr,
+                        versionPtr,
+                        versionEndPtr,
+                        encodingName,
+                        encoding,
+                        standalone);
+}
+@
+
+
+1.1.2.1
+log
+@Import unmodified expat 2.0.0.
+@
+text
+@a0 106
+const ENCODING *
+NS(XmlGetUtf8InternalEncoding)(void)
+{
+  return &ns(internal_utf8_encoding).enc;
+}
+
+const ENCODING *
+NS(XmlGetUtf16InternalEncoding)(void)
+{
+#if BYTEORDER == 1234
+  return &ns(internal_little2_encoding).enc;
+#elif BYTEORDER == 4321
+  return &ns(internal_big2_encoding).enc;
+#else
+  const short n = 1;
+  return (*(const char *)&n
+          ? &ns(internal_little2_encoding).enc
+          : &ns(internal_big2_encoding).enc);
+#endif
+}
+
+static const ENCODING * const NS(encodings)[] = {
+  &ns(latin1_encoding).enc,
+  &ns(ascii_encoding).enc,
+  &ns(utf8_encoding).enc,
+  &ns(big2_encoding).enc,
+  &ns(big2_encoding).enc,
+  &ns(little2_encoding).enc,
+  &ns(utf8_encoding).enc /* NO_ENC */
+};
+
+static int PTRCALL
+NS(initScanProlog)(const ENCODING *enc, const char *ptr, const char *end,
+                   const char **nextTokPtr)
+{
+  return initScan(NS(encodings), (const INIT_ENCODING *)enc,
+                  XML_PROLOG_STATE, ptr, end, nextTokPtr);
+}
+
+static int PTRCALL
+NS(initScanContent)(const ENCODING *enc, const char *ptr, const char *end,
+                    const char **nextTokPtr)
+{
+  return initScan(NS(encodings), (const INIT_ENCODING *)enc,
+                  XML_CONTENT_STATE, ptr, end, nextTokPtr);
+}
+
+int
+NS(XmlInitEncoding)(INIT_ENCODING *p, const ENCODING **encPtr,
+                    const char *name)
+{
+  int i = getEncodingIndex(name);
+  if (i == UNKNOWN_ENC)
+    return 0;
+  SET_INIT_ENC_INDEX(p, i);
+  p->initEnc.scanners[XML_PROLOG_STATE] = NS(initScanProlog);
+  p->initEnc.scanners[XML_CONTENT_STATE] = NS(initScanContent);
+  p->initEnc.updatePosition = initUpdatePosition;
+  p->encPtr = encPtr;
+  *encPtr = &(p->initEnc);
+  return 1;
+}
+
+static const ENCODING *
+NS(findEncoding)(const ENCODING *enc, const char *ptr, const char *end)
+{
+#define ENCODING_MAX 128
+  char buf[ENCODING_MAX];
+  char *p = buf;
+  int i;
+  XmlUtf8Convert(enc, &ptr, end, &p, p + ENCODING_MAX - 1);
+  if (ptr != end)
+    return 0;
+  *p = 0;
+  if (streqci(buf, KW_UTF_16) && enc->minBytesPerChar == 2)
+    return enc;
+  i = getEncodingIndex(buf);
+  if (i == UNKNOWN_ENC)
+    return 0;
+  return NS(encodings)[i];
+}
+
+int
+NS(XmlParseXmlDecl)(int isGeneralTextEntity,
+                    const ENCODING *enc,
+                    const char *ptr,
+                    const char *end,
+                    const char **badPtr,
+                    const char **versionPtr,
+                    const char **versionEndPtr,
+                    const char **encodingName,
+                    const ENCODING **encoding,
+                    int *standalone)
+{
+  return doParseXmlDecl(NS(findEncoding),
+                        isGeneralTextEntity,
+                        enc,
+                        ptr,
+                        end,
+                        badPtr,
+                        versionPtr,
+                        versionEndPtr,
+                        encodingName,
+                        encoding,
+                        standalone);
+}
+@
+

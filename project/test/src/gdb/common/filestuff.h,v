@@ -1,0 +1,197 @@
+head	1.3;
+access;
+symbols;
+locks; strict;
+comment	@ * @;
+
+
+1.3
+date	2013.05.10.17.01.00;	author tromey;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2013.04.23.15.49.25;	author tromey;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2013.04.22.16.46.15;	author tromey;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.3
+log
+@2013-05-10  Joel Brobecker  <brobecker@@adacore.com>
+	    Tom Tromey  <tromey@@redhat.com>
+
+	* common/filestuff.c (mark_fd_no_cloexec, unmark_fd_no_cloexec):
+	New functions.
+	* common/filestuff.c (mark_fd_no_cloexec, unmark_fd_no_cloexec):
+	Declare.
+	* darwin-nat.c (darwin_pre_ptrace): Use mark_fd_no_cloexec.
+	(darwin_ptrace_him): Use unmark_fd_no_cloexec.
+	* inf-ttrace.c (do_cleanup_pfds): Use unmark_fd_no_cloexec.
+	(inf_ttrace_prepare): Use mark_fd_no_cloexec.
+@
+text
+@/* Low-level file-handling.
+   Copyright (C) 2012, 2013 Free Software Foundation, Inc.
+
+   This file is part of GDB.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+#ifndef FILESTUFF_H
+#define FILESTUFF_H
+
+/* Note all the file descriptors which are open when this is called.
+   These file descriptors will not be closed by close_most_fds.  */
+
+extern void notice_open_fds (void);
+
+/* Mark a file descriptor as inheritable across an exec.  */
+
+extern void mark_fd_no_cloexec (int fd);
+
+/* Mark a file descriptor as no longer being inheritable across an
+   exec.  This is only meaningful when FD was previously passed to
+   mark_fd_no_cloexec.  */
+
+extern void unmark_fd_no_cloexec (int fd);
+
+/* Close all open file descriptors other than those marked by
+   'notice_open_fds', and stdin, stdout, and stderr.  Errors that
+   occur while closing are ignored.  */
+
+extern void close_most_fds (void);
+
+/* Like 'open', but ensures that the returned file descriptor has the
+   close-on-exec flag set.  */
+
+extern int gdb_open_cloexec (const char *filename, int flags,
+			     /* mode_t */ unsigned long mode);
+
+/* Like 'fopen', but ensures that the returned file descriptor has the
+   close-on-exec flag set.  */
+
+extern FILE *gdb_fopen_cloexec (const char *filename, const char *opentype);
+
+/* Like 'socketpair', but ensures that the returned file descriptors
+   have the close-on-exec flag set.  */
+
+extern int gdb_socketpair_cloexec (int namespace, int style, int protocol,
+				   int filedes[2]);
+
+/* Like 'socket', but ensures that the returned file descriptor has
+   the close-on-exec flag set.  */
+
+extern int gdb_socket_cloexec (int namespace, int style, int protocol);
+
+/* Like 'pipe', but ensures that the returned file descriptors have
+   the close-on-exec flag set.  */
+
+extern int gdb_pipe_cloexec (int filedes[2]);
+
+#endif /* FILESTUFF_H */
+@
+
+
+1.2
+log
+@	* common/filestuff.c: Check USE_WIN32API before including
+	sys/socket.h.
+	(HAVE_F_GETFD): New define.
+	(mark_cloexec): Check HAVE_F_GETFD.
+	(gdb_open_cloexec): Change 'mode' to unsigned long.
+	(gdb_socketpair_cloexec): Check HAVE_SOCKETPAIR.
+	(gdb_pipe_cloexec): Check HAVE_PIPE.
+	* common/filestuff.h (gdb_open_cloexec): Change 'mode' to unsigned
+	long.
+@
+text
+@d27 10
+@
+
+
+1.1
+log
+@	PR gdb/7912:
+	* Makefile.in (SFILES): Add filestuff.c
+	(COMMON_OBS): Add filestuff.o.
+	(filestuff.o): New target.
+	* auto-load.c (auto_load_objfile_script_1): Use
+	gdb_fopen_cloexec.
+	* auxv.c (procfs_xfer_auxv): Use gdb_open_cloexec.
+	* cli/cli-cmds.c (shell_escape): Call close_most_fds.
+	* cli/cli-dump.c (fopen_with_cleanup): Use gdb_fopen_cloexec.
+	* common/agent.c (gdb_connect_sync_socket): Use
+	gdb_socket_cloexec.
+	* common/filestuff.c: New file.
+	* common/filestuff.h: New file.
+	* common/linux-osdata.c (linux_common_core_of_thread)
+	(command_from_pid, commandline_from_pid, print_source_lines)
+	(linux_xfer_osdata_shm, linux_xfer_osdata_sem)
+	(linux_xfer_osdata_msg, linux_xfer_osdata_modules): Use
+	gdb_fopen_cloexec.
+	* common/linux-procfs.c (linux_proc_get_int)
+	(linux_proc_pid_has_state): Use gdb_fopen_cloexec.
+	* config.in, configure: Rebuild.
+	* configure.ac: Don't check for sys/socket.h.  Check for
+	fdwalk, pipe2.
+	* corelow.c (core_open): Use gdb_open_cloexec.
+	* dwarf2read.c (write_psymtabs_to_index): Use gdb_fopen_cloexec.
+	* fork-child.c (fork_inferior): Call close_most_fds.
+	* gdb_bfd.c (gdb_bfd_open): Use gdb_open_cloexec.
+	* inf-child.c (inf_child_fileio_readlink): Use gdb_open_cloexec.
+	* linux-nat.c (linux_nat_thread_name, linux_proc_pending_signals):
+	Use gdb_fopen_cloexec.
+	(linux_proc_xfer_partial, linux_proc_xfer_spu): Use
+	gdb_open_cloexec.
+	(linux_async_pipe): Use gdb_pipe_cloexec.
+	* remote-fileio.c (remote_fileio_func_open): Use
+	gdb_open_cloexec.
+	* remote.c (remote_file_put, remote_file_get): Use
+	gdb_fopen_cloexec.
+	* ser-pipe.c (pipe_open): Use gdb_socketpair_cloexec,
+	close_most_fds.
+	* ser-tcp.c (net_open): Use gdb_socket_cloexec.
+	* ser-unix.c (hardwire_open): Use gdb_open_cloexec.
+	* solib.c (solib_find): Use gdb_open_cloexec.
+	* source.c (openp, find_and_open_source): Use gdb_open_cloexec.
+	* tracepoint.c (tfile_start): Use gdb_fopen_cloexec.
+	(tfile_open): Use gdb_open_cloexec.
+	* tui/tui-io.c (tui_initialize_io): Use gdb_pipe_cloexec.
+	* ui-file.c (gdb_fopen): Use gdb_fopen_cloexec.
+	* xml-support.c (xml_fetch_content_from_file): Use
+	gdb_fopen_cloexec.
+	* main.c (captured_main): Call notice_open_fds.
+gdbserver
+	* Makefile.in (SFILES): Add filestuff.c.
+	(OBS): Add filestuff.o.
+	(filestuff.o): New target.
+	* config.in, configure: Rebuild.
+	* configure.ac: Check for fdwalk, pipe2.
+@
+text
+@d36 2
+a37 1
+extern int gdb_open_cloexec (const char *filename, int flags, mode_t mode);
+@
+

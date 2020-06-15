@@ -1,0 +1,370 @@
+head	1.9;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.5
+	gdb_7_6-2013-04-26-release:1.5
+	gdb_7_6-branch:1.5.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.5
+	gdb_7_5_1-2012-11-29-release:1.3
+	gdb_7_5-2012-08-17-release:1.3
+	gdb_7_5-branch:1.3.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.3;
+locks; strict;
+comment	@# @;
+
+
+1.9
+date	2013.10.02.11.44.20;	author palves;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2013.07.07.08.52.39;	author qiyao;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2013.07.05.08.50.22;	author qiyao;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2013.06.25.13.01.28;	author qiyao;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2013.01.01.06.33.04;	author brobecke;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2012.08.23.14.01.41;	author qiyao;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2012.06.22.07.45.56;	author qiyao;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2012.01.04.08.17.28;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2011.12.16.19.37.47;	author devans;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.9
+log
+@Teach the testsuite that GDBserver reliably reports program exits.
+
+Running catch-syscall.exp against a gdbserver that actually supports
+it, we get:
+
+ FAIL: gdb.base/catch-syscall.exp: continue until exit (the program exited)
+ FAIL: gdb.base/catch-syscall.exp: continue until exit (the program exited)
+ FAIL: gdb.base/catch-syscall.exp: continue until exit (the program exited)
+ FAIL: gdb.base/catch-syscall.exp: continue until exit at catch syscall with unused syscall (mlock) (the program exited)
+ FAIL: gdb.base/catch-syscall.exp: continue until exit (the program exited)
+
+The fail pattern is:
+
+ Catchpoint 2 (call to syscall exit_group), 0x000000323d4baa29 in _exit () from /lib64/libc.so.6
+ (gdb) PASS: gdb.base/catch-syscall.exp: program has called exit_group
+ delete breakpoints
+ Delete all breakpoints? (y or n) y
+ (gdb) info breakpoints
+ No breakpoints or watchpoints.
+ (gdb) break exit
+ Breakpoint 3 at 0x323d438bf0
+ (gdb) continue
+ Continuing.
+ [Inferior 1 (process 21081) exited normally]
+
+That "break exit" + "continue" comes from:
+
+> # gdb_continue_to_end:
+> #	The case where the target uses stubs has to be handled specially. If a
+> #       stub is used, we set a breakpoint at exit because we cannot rely on
+> #       exit() behavior of a remote target.
+> #
+
+The native-gdbserver.exp board, used to test against gdbserver in
+"target remote" mode, triggers that case ($use_gdb_stub is true).  So
+gdb_continue_to_end doesn't work for catch-syscall.exp as here we
+catch the exit_group and continue from that, expecting to see a real
+program exit.  I was about to post a patch that changes
+catch-syscall.exp to call a new function that just always does what
+gdb_continue_to_end does in the !$use_gdb_stub case.  But, since
+GDBserver doesn't really need this, in the end I thought it better to
+teach the testsuite that there are stubs that know how to report
+program exits, by adding a new "exit_is_reliable" board variable that
+then gdb_continue_to_end checks.
+
+Tested on x86_64 Fedora 17, native and gdbserver.
+
+gdb/testsuite/
+2013-10-02  Pedro Alves  <palves@@redhat.com>
+
+	* README (Board Settings): Document "exit_is_reliable".
+	* lib/gdb.exp (gdb_continue_to_end): Check whether the board says
+	running to exit reliably reports program exits.
+	* boards/native-gdbserver.exp: Set exit_is_reliable in the board
+	info.
+	* boards/native-stdio-gdbserver.exp: Likewise.
+@
+text
+@# Copyright 2011-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# This file is a dejagnu "board file" and is used to run the testsuite
+# natively with gdbserver.
+#
+# To use this file:
+# bash$ cd ${build_dir}/gdb
+# bash$ make check RUNTESTFLAGS="--target_board=native-gdbserver"
+
+load_generic_config "gdbserver"
+load_board_description "gdbserver-base"
+
+# This gdbserver can only run a process once per session.
+set_board_info gdb,do_reload_on_run 1
+
+# There's no support for argument-passing (yet).
+set_board_info noargs 1
+
+set_board_info sockethost "localhost:"
+set_board_info use_gdb_stub 1
+set_board_info exit_is_reliable 1
+
+# We will be using the standard GDB remote protocol.
+set_board_info gdb_protocol "remote"
+
+proc ${board}_spawn { board cmd } {
+    global board_info
+
+    set baseboard [lindex [split $board "/"] 0]
+
+    set board_info($baseboard,isremote) 0
+    set result [remote_spawn $board $cmd]
+    set board_info($baseboard,isremote) 1
+
+    return $result
+}
+
+proc ${board}_exec { hostname program args } {
+    global board_info
+
+    set baseboard [lindex [split $hostname "/"] 0]
+
+    set board_info($baseboard,isremote) 0
+    set result [remote_exec $hostname $program $args]
+    set board_info($baseboard,isremote) 1
+
+    return $result
+}
+@
+
+
+1.8
+log
+@gdb/testsuite/
+
+	* boards/native-gdbserver.exp: Move invoke of
+	process_multilib_options to gdbserver-base.exp.
+	Move set_board_info 'compiler', 'gdb,noinferiorio',
+	'gdb,nofileio', 'gdb_server_prog' and 'gdb,predefined_tsv' to
+	gdbserver-base.exp.
+	Move proc ${board}_download, ${board}_upload and
+	${board}_file to gdbserver-base.exp.
+	* boards/native-extended-gdbserver.exp: Likewise.
+	* boards/native-stdio-gdbserver.exp: Likewise.
+	* boards/gdbserver-base.exp: New file.
+@
+text
+@d34 1
+@
+
+
+1.7
+log
+@gdb/testsuite/
+
+	* boards/local-remote-host.exp: Remove obsolete comments.
+	* boards/native-extended-gdbserver.exp: Likewise.
+	* boards/native-gdbserver.exp: Likewise.
+	* boards/native-stdio-gdbserver.exp: Likewise.
+@
+text
+@d24 1
+a24 4
+process_multilib_options ""
+
+# The default compiler for this target.
+set_board_info compiler "[find_gcc]"
+a31 7
+# Can't do input (or output) in the current gdbserver.
+set_board_info gdb,noinferiorio 1
+
+# gdbserver does not intercept target file operations and perform them
+# on the host.
+set_board_info gdb,nofileio 1
+
+a36 2
+# Test the copy of gdbserver in the build directory.
+set_board_info gdb_server_prog "../gdbserver/gdbserver"
+a60 18
+
+proc ${board}_download { board host dest } {
+    return $host
+}
+
+proc ${board}_upload {dest srcfile args} {
+    return $srcfile
+}
+
+proc ${board}_file { dest op args } {
+    if { $op == "delete" } {
+	return 0
+    }
+    return [eval [list standard_file $dest $op] $args]
+}
+
+# The predefined TSVs in GDBserver.
+set_board_info gdb,predefined_tsv "\\\$trace_timestamp"
+@
+
+
+1.6
+log
+@Upload tsv earlier in remote_start_remote
+
+In extended-remote, when GDB connects the target, but target is not
+running, the TSVs are not uploaded.  When GDB attaches to a process,
+the TSVs are not uploaded either.  However, GDBserver has some
+builtin or predefined TSV to upload, such as $trace_timestamp.  This
+bug causes $trace_timestamp is never uploaded.
+
+gdb/
+
+2013-06-25  Yao Qi  <yao@@codesourcery.com>
+
+        * remote.c (remote_start_remote): Move code to upload tsv
+        earlier.
+
+gdb/testsuite/
+
+2013-06-25  Yao Qi  <yao@@codesourcery.com>
+
+	* boards/native-extended-gdbserver.exp: Set board_info
+	'gdb,predefined_tsv'.
+	* boards/native-gdbserver.exp: Likewise.
+	* boards/native-stdio-gdbserver.exp: Likewise.
+	* gdb.server/ext-attach.exp: Load trace-support.exp.  Check
+	uploaded TSVs if target supports tracing.
+	* gdb.trace/tsv.exp: Check uploaded TSVs if target supports
+	tracing and target has predefined tsv.
+
+gdb/doc/
+
+2013-06-25  Yao Qi  <yao@@codesourcery.com>
+
+	* gdbint.texinfo (Testsuite): Document 'gdb,predefined_tsv'.
+@
+text
+@a19 5
+# bash$ touch ${my_dejagnu_dir}/my-dejagnu.exp
+# bash$ export DEJAGNU=${my_dejagnu_dir}/my-dejagnu.exp
+# bash$ mkdir ${my_dejagnu_dir}/boards
+# bash$ cp ${src_dir}/gdb/testsuite/boards/native-gdbserver.exp \
+#   ${my_dejagnu_dir}/boards
+@
+
+
+1.5
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@d93 3
+@
+
+
+1.4
+log
+@gdb/testsuite/
+
+	* boards/native-gdbserver.exp (${board}_upload): New.
+	* boards/native-stdio-gdbserver.exp (${board}_upload): New.
+	* gdb.trace/tfile.exp: Don't check 'gdb,nofileio'.
+	Execute tfile on remote target.
+	Copy trace file from target to host.
+@
+text
+@d1 1
+a1 1
+# Copyright 2011-2012 Free Software Foundation, Inc.
+@
+
+
+1.3
+log
+@gdb/testsuite:
+
+	* boards/native-gdbserver.exp: New proc ${board}_exec.
+	* boards/native-stdio-gdbserver.exp: Likewise.
+@
+text
+@d83 4
+@
+
+
+1.2
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d67 12
+@
+
+
+1.1
+log
+@	* boards/native-gdbserver.exp: New file.
+@
+text
+@d1 1
+a1 1
+# Copyright 2011 Free Software Foundation, Inc.
+@
+

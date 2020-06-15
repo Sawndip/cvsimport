@@ -1,0 +1,228 @@
+head	1.1;
+access;
+symbols
+	binutils-2_24-branch:1.1.0.8
+	binutils-2_24-branchpoint:1.1
+	binutils-2_23_2:1.1
+	binutils-2_23_1:1.1
+	binutils-2_23:1.1
+	binutils-2_23-branch:1.1.0.6
+	binutils-2_23-branchpoint:1.1
+	binutils-2_22_branch:1.1.0.4
+	binutils-2_22:1.1
+	binutils-2_22-branch:1.1.0.2
+	binutils-2_22-branchpoint:1.1
+	binutils_latest_snapshot:1.1;
+locks; strict;
+comment	@# @;
+
+
+1.1
+date	2011.03.14.16.04.14;	author rsandifo;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.1
+log
+@include/elf/
+	* arm.h (R_ARM_IRELATIVE): New relocation.
+
+bfd/
+	* reloc.c (BFD_RELOC_ARM_IRELATIVE): New relocation.
+	* bfd-in2.h: Regenerate.
+	* elf32-arm.c (elf32_arm_howto_table_2): Rename existing definition
+	to elf32_arm_howto_table_3 and replace with a single R_ARM_IRELATIVE
+	entry.
+	(elf32_arm_howto_from_type): Update accordingly.
+	(elf32_arm_reloc_map): Map BFD_RELOC_ARM_IRELATIVE to R_ARM_IRELATIVE.
+	(elf32_arm_reloc_name_lookup): Handle elf32_arm_howto_table_3.
+	(arm_plt_info): New structure, split out from elf32_arm_link_hash_entry
+	with an extra noncall_refcount field.
+	(arm_local_iplt_info): New structure.
+	(elf_arm_obj_tdata): Add local_iplt.
+	(elf32_arm_local_iplt): New accessor macro.
+	(elf32_arm_link_hash_entry): Replace plt_thumb_refcount,
+	plt_maybe_thumb_refcount and plt_got_offset with an arm_plt_info.
+	Change tls_type to a bitfield and add is_iplt.
+	(elf32_arm_link_hash_newfunc): Update accordingly.
+	(elf32_arm_allocate_local_sym_info): New function.
+	(elf32_arm_create_local_iplt): Likewise.
+	(elf32_arm_get_plt_info): Likewise.
+	(elf32_arm_plt_needs_thumb_stub_p): Likewise.
+	(elf32_arm_get_local_dynreloc_list): Likewise.
+	(create_ifunc_sections): Likewise.
+	(elf32_arm_copy_indirect_symbol): Update after the changes to
+	elf32_arm_link_hash_entry.  Assert the is_iplt has not yet been set.
+	(arm_type_of_stub): Add an st_type argument.  Use elf32_arm_get_plt_info
+	to get PLT information.  Assert that all STT_GNU_IFUNC references
+	are turned into PLT references.
+	(arm_build_one_stub): Pass the symbol type to
+	elf32_arm_final_link_relocate.
+	(elf32_arm_size_stubs): Pass the symbol type to arm_type_of_stub.
+	(elf32_arm_allocate_irelocs): New function.
+	(elf32_arm_add_dynreloc): In static objects, use .rel.iplt for
+	all R_ARM_IRELATIVE.
+	(elf32_arm_allocate_plt_entry): New function.
+	(elf32_arm_populate_plt_entry): Likewise.
+	(elf32_arm_final_link_relocate): Add an st_type parameter.
+	Set srelgot to null for static objects.  Use separate variables
+	to record which st_value and st_type should be used when generating
+	a dynamic relocation.  Use elf32_arm_get_plt_info to find the
+	symbol's PLT information, setting has_iplt_entry, splt,
+	plt_offset and gotplt_offset accordingly.  Check whether
+	STT_GNU_IFUNC symbols should resolve to an .iplt entry, and change
+	the relocation target accordingly.  Broaden assert to include
+	.iplts.  Don't set sreloc for static relocations.  Assert that
+	we only generate dynamic R_ARM_RELATIVE relocations for R_ARM_ABS32
+	and R_ARM_ABS32_NOI.  Generate R_ARM_IRELATIVE relocations instead
+	of R_ARM_RELATIVE relocations if the target is an STT_GNU_IFUNC
+	symbol.  Pass the symbol type to arm_type_of_stub.  Conditionally
+	resolve GOT references to the .igot.plt entry.
+	(elf32_arm_relocate_section): Update the call to
+	elf32_arm_final_link_relocate.
+	(elf32_arm_gc_sweep_hook): Use elf32_arm_get_plt_info to get PLT
+	information.  Treat R_ARM_REL32 and R_ARM_REL32_NOI as call
+	relocations in shared libraries and relocatable executables.
+	Count non-call PLT references.  Use elf32_arm_get_local_dynreloc_list
+	to get the list of dynamic relocations for a local symbol.
+	(elf32_arm_check_relocs): Always create ifunc sections.  Set isym
+	at the same time as setting h.  Use elf32_arm_allocate_local_sym_info
+	to allocate local symbol information.  Treat R_ARM_REL32 and
+	R_ARM_REL32_NOI as call relocations in shared libraries and
+	relocatable executables.  Record PLT information for local
+	STT_GNU_IFUNC functions as well as global functions.   Count
+	non-call PLT references.  Use elf32_arm_get_local_dynreloc_list
+	to get the list of dynamic relocations for a local symbol.
+	(elf32_arm_adjust_dynamic_symbol): Handle STT_GNU_IFUNC symbols.
+	Don't remove STT_GNU_IFUNC PLTs unless all references have been
+	removed.  Update after the changes to elf32_arm_link_hash_entry.
+	(allocate_dynrelocs_for_symbol): Decide whether STT_GNU_IFUNC PLT
+	entries should live in .plt or .iplt.  Check whether the .igot.plt
+	and .got entries can be combined.  Use elf32_arm_allocate_plt_entry
+	to allocate .plt and .(i)got.plt entries.  Detect which .got
+	entries will need R_ARM_IRELATIVE relocations and use
+	elf32_arm_allocate_irelocs to allocate them.  Likewise other
+	non-.got dynamic relocations.
+	(elf32_arm_size_dynamic_sections): Allocate .iplt, .igot.plt
+	and dynamic relocations for local STT_GNU_IFUNC symbols.
+	Check whether the .igot.plt and .got entries can be combined.
+	Detect which .got entries will need R_ARM_IRELATIVE relocations
+	and use elf32_arm_allocate_irelocs to allocate them.  Use stashed
+	section pointers intead of strcmp checks.  Handle iplt and igotplt.
+	(elf32_arm_finish_dynamic_symbol): Use elf32_arm_populate_plt_entry
+	to fill in .plt, .got.plt and .rel(a).plt entries.  Point
+	STT_GNU_IFUNC symbols at an .iplt entry if non-call relocations
+	resolve to it.
+	(elf32_arm_output_plt_map_1): New function, split out from
+	elf32_arm_output_plt_map.  Handle .iplt entries.  Use
+	elf32_arm_plt_needs_thumb_stub_p.
+	(elf32_arm_output_plt_map): Call it.
+	(elf32_arm_output_arch_local_syms): Add mapping symbols for
+	local .iplt entries.
+	(elf32_arm_swap_symbol_in): Handle Thumb STT_GNU_IFUNC symbols.
+	(elf32_arm_swap_symbol_out): Likewise.
+	(elf32_arm_add_symbol_hook): New function.
+	(elf_backend_add_symbol_hook): Define for all targets.
+
+opcodes/
+	* arm-dis.c (get_sym_code_type): Treat STT_GNU_IFUNCs as code.
+
+gas/
+	* config/tc-arm.c (md_pcrel_from_section): Use S_FORCE_RELOC to
+	determine whether a relocation is needed.
+	(md_apply_fix, arm_apply_sym_value): Likewise.
+
+ld/testsuite/
+	* ld-arm/ifunc-1.s, ld-arm/ifunc-1.dd, ld-arm/ifunc-1.gd,
+	ld-arm/ifunc-1.rd, ld-arm/ifunc-2.s, ld-arm/ifunc-2.dd,
+	ld-arm/ifunc-2.gd, ld-arm/ifunc-2.rd, ld-arm/ifunc-3.s,
+	ld-arm/ifunc-3.dd, ld-arm/ifunc-3.gd, ld-arm/ifunc-3.rd,
+	ld-arm/ifunc-4.s, ld-arm/ifunc-4.dd, ld-arm/ifunc-4.gd,
+	ld-arm/ifunc-4.rd, ld-arm/ifunc-5.s, ld-arm/ifunc-5.dd,
+	ld-arm/ifunc-5.gd, ld-arm/ifunc-5.rd, ld-arm/ifunc-6.s,
+	ld-arm/ifunc-6.dd, ld-arm/ifunc-6.gd, ld-arm/ifunc-6.rd,
+	ld-arm/ifunc-7.s, ld-arm/ifunc-7.dd, ld-arm/ifunc-7.gd,
+	ld-arm/ifunc-7.rd, ld-arm/ifunc-8.s, ld-arm/ifunc-8.dd,
+	ld-arm/ifunc-8.gd, ld-arm/ifunc-8.rd, ld-arm/ifunc-9.s,
+	ld-arm/ifunc-9.dd, ld-arm/ifunc-9.gd, ld-arm/ifunc-9.rd,
+	ld-arm/ifunc-10.s, ld-arm/ifunc-10.dd, ld-arm/ifunc-10.gd,
+	ld-arm/ifunc-10.rd, ld-arm/ifunc-11.s, ld-arm/ifunc-11.dd,
+	ld-arm/ifunc-11.gd, ld-arm/ifunc-11.rd, ld-arm/ifunc-12.s,
+	ld-arm/ifunc-12.dd, ld-arm/ifunc-12.gd, ld-arm/ifunc-12.rd,
+	ld-arm/ifunc-13.s, ld-arm/ifunc-13.dd, ld-arm/ifunc-13.gd,
+	ld-arm/ifunc-13.rd, ld-arm/ifunc-14.s, ld-arm/ifunc-14.dd,
+	ld-arm/ifunc-14.gd, ld-arm/ifunc-14.rd, ld-arm/ifunc-15.s,
+	ld-arm/ifunc-15.dd, ld-arm/ifunc-15.gd, ld-arm/ifunc-15.rd,
+	ld-arm/ifunc-16.s, ld-arm/ifunc-16.dd, ld-arm/ifunc-16.gd,
+	ld-arm/ifunc-16.rd, ld-arm/ifunc-dynamic.ld,
+	ld-arm/ifunc-static.ld: New tests.
+	* ld-arm/farcall-group.d, ld-arm/farcall-group-size2.d,
+	ld-arm/farcall-mixed-lib-v4t.d, ld-arm/farcall-mixed-lib.d: Update
+	for new stub hashes.
+	* ld-arm/arm-elf.exp: Run them.
+@
+text
+@	.syntax unified
+	.arch armv6t2
+
+	.macro	define,name,type
+	.type	\name,%gnu_indirect_function
+	\type
+\name:
+	mov	pc,lr
+	.size	\name,.-\name
+	.endm
+
+	.macro	test_relocs,name
+	ldr	r4,1f
+	ldr	r4,2f
+1:
+	.word	\name(GOT)
+2:
+	.word	\name(GOT_PREL)
+	.endm
+
+	.global	f2
+	.global	f2t
+
+	.global	f3
+	.hidden	f3
+	.global	f3t
+	.hidden	f3t
+
+	define	f1,.arm
+	define	f2,.arm
+	define	f3,.arm
+
+	define	f1t,.thumb_func
+	define	f2t,.thumb_func
+	define	f3t,.thumb_func
+
+	.globl	_start
+_start:
+	test_relocs foo
+	test_relocs f1
+	test_relocs f2
+	test_relocs f3
+	test_relocs f1t
+	test_relocs f2t
+	test_relocs f3t
+	.size	_start,.-_start
+
+	.data
+foo:
+	.word	0x11223344
+	.word	f1
+	.word	f2
+	.word	f3
+	.word	f1t
+	.word	f2t
+	.word	f3t
+	.word	__irel_start
+	.word	__irel_end
+@

@@ -1,0 +1,162 @@
+head	1.1;
+access;
+symbols
+	cygwin-1_7_35-release:1.1
+	cygwin-1_7_34-release:1.1
+	newlib-2_2_0:1.1.0.12
+	cygwin-1_7_33-release:1.1
+	cygwin-1_7_32-release:1.1
+	cygwin-1_7_31-release:1.1
+	cygwin-1_7_30-release:1.1
+	cygwin-1_7_29-release:1.1
+	cygwin-1_7_28-release:1.1
+	newlib-2_1_0:1.1
+	cygwin-1_7_27-release:1.1
+	cygwin-1_7_26-release:1.1
+	cygwin-1_7_25-release:1.1
+	cygwin-1_7_24-release:1.1
+	cygwin-1_7_23-release:1.1
+	cygwin-1_7_22-release:1.1
+	cygwin-1_7_21-release:1.1
+	cygwin-1_7_20-release:1.1
+	cygwin-1_7_19-release:1.1
+	cygwin-64bit-postmerge:1.1
+	cygwin-64bit-premerge-branch:1.1.0.10
+	cygwin-64bit-premerge:1.1
+	cygwin-1_7_18-release:1.1
+	newlib-2_0_0:1.1
+	cygwin-1_7_17-release:1.1
+	cygwin-64bit-branch:1.1.0.8
+	cygwin-1_7_16-release:1.1
+	cygwin-1_7_15-release:1.1
+	cygwin-1_7_14_2-release:1.1
+	cygwin-1_7_14-release:1.1
+	cygwin-1_7_12-release:1.1
+	cygwin-1_7_11-release:1.1
+	cygwin-1_7_10-release:1.1
+	newlib-1_20_0:1.1
+	cygwin-1_7_9-release:1.1
+	cygwin-1_7_8-release:1.1
+	newlib-1_19_0:1.1
+	cygwin-1_7_7-release:1.1
+	cygwin-1_7_5-release:1.1
+	cygwin-1_7_4-release:1.1
+	cygwin-1_7_3-release:1.1
+	cygwin-1_7_2-release:1.1
+	newlib-1_18_0:1.1
+	cygwin-1_7_1-release:1.1
+	newlib-1_17_0-arc:1.1.0.6
+	binutils-arc-20080908-branch:1.1.0.4
+	binutils-arc-20080908-branchpoint:1.1
+	newlib-1_17_0:1.1
+	newlib-1_16_0:1.1
+	newlib-1_15_0:1.1
+	newlib-csl-sourcerygxx-3_4_4-25:1.1
+	cr-0x5f1:1.1.0.2;
+locks; strict;
+comment	@ * @;
+
+
+1.1
+date	2006.06.22.17.59.52;	author jjohnstn;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.1
+log
+@
+2006-06-22  Jeff Johnston  <jjohnstn@@redhat.com>
+
+        * libc/stdlib/Makefile.am: Add new gdtoa routines.
+        * libc/stdlib/Makefile.in: Regenerated.
+        * libc/stdlib/gd_qnan.h: New file.
+        * libc/stdlib/gdtoa-gethex.c: Ditto.
+        * libc/stdlib/gdtoa-hexnan.c: Ditto.
+        * libc/stdlib/gdtoa.h: Ditto.
+        * libc/stdlib/mprec.c: Add new helper routines needed by
+        the new gdtoa code.
+        * libc/stdlib/mprec.h: Integrate some defines and prototypes
+        used by gdtoa routines here.
+        * libc/stdlib/strtod.c: Rebased on David M. Gay's gdtoa-strtod.c
+        which adds C99 support such as nan, inf, and hexadecimal input
+        format.
+@
+text
+@/****************************************************************
+
+The author of this software is David M. Gay.
+
+Copyright (C) 1998 by Lucent Technologies
+All Rights Reserved
+
+Permission to use, copy, modify, and distribute this software and
+its documentation for any purpose and without fee is hereby
+granted, provided that the above copyright notice appear in all
+copies and that both that the copyright notice and this
+permission notice and warranty disclaimer appear in supporting
+documentation, and that the name of Lucent or any of its entities
+not be used in advertising or publicity pertaining to
+distribution of the software without specific, written prior
+permission.
+
+LUCENT DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE,
+INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS.
+IN NO EVENT SHALL LUCENT OR ANY OF ITS ENTITIES BE LIABLE FOR ANY
+SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER
+IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
+ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
+THIS SOFTWARE.
+
+****************************************************************/
+
+/* Please send bug reports to David M. Gay (dmg at acm dot org,
+ * with " at " changed at "@@" and " dot " changed to ".").	*/
+
+#ifndef GDTOA_H_INCLUDED
+#define GDTOA_H_INCLUDED
+
+
+ enum {	/* return values from strtodg */
+	STRTOG_Zero	= 0,
+	STRTOG_Normal	= 1,
+	STRTOG_Denormal	= 2,
+	STRTOG_Infinite	= 3,
+	STRTOG_NaN	= 4,
+	STRTOG_NaNbits	= 5,
+	STRTOG_NoNumber	= 6,
+	STRTOG_Retmask	= 7,
+
+	/* The following may be or-ed into one of the above values. */
+
+	STRTOG_Neg	= 0x08,
+	STRTOG_Inexlo	= 0x10,
+	STRTOG_Inexhi	= 0x20,
+	STRTOG_Inexact	= 0x30,
+	STRTOG_Underflow= 0x40,
+	STRTOG_Overflow	= 0x80
+	};
+
+ typedef struct
+FPI {
+	int nbits;
+	int emin;
+	int emax;
+	int rounding;
+	int sudden_underflow;
+	} FPI;
+
+enum {	/* FPI.rounding values: same as FLT_ROUNDS */
+	FPI_Round_zero = 0,
+	FPI_Round_near = 1,
+	FPI_Round_up = 2,
+	FPI_Round_down = 3
+	};
+
+#endif /* GDTOA_H_INCLUDED */
+@

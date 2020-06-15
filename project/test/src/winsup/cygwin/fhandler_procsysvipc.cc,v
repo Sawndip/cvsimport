@@ -1,0 +1,1593 @@
+head	1.10;
+access;
+symbols
+	cygwin-1_7_35-release:1.10
+	cygwin-1_7_34-release:1.10
+	cygwin-1_7_33-release:1.7.2.1
+	cygwin-1_7_32-release:1.7.2.1
+	cygwin-1_7_31-release:1.7.2.1
+	cygwin-1_7_30-release:1.7
+	cygwin-1_7_29-release:1.7
+	cygwin-1_7_29-release-branchpoint:1.7.0.2
+	cygwin-pre-user-db:1.7
+	cygwin-1_7_28-release:1.7
+	cygwin-1_7_27-release:1.7
+	cygwin-1_7_26-release:1.7
+	cygwin-1_7_25-release:1.7
+	cygwin-1_7_24-release:1.7
+	cygwin-1_7_23-release:1.7
+	cygwin-1_7_22-release:1.7
+	cygwin-1_7_21-release:1.7
+	cygwin-1_7_20-release:1.7
+	cygwin-1_7_19-release:1.7
+	cygwin-64bit-postmerge:1.7
+	cygwin-64bit-premerge-branch:1.6.0.2
+	cygwin-64bit-premerge:1.6
+	cygwin-1_7_18-release:1.6
+	post-ptmalloc3:1.5.2.5
+	pre-ptmalloc3:1.5.2.5
+	cygwin-1_7_17-release:1.5
+	cygwin-64bit-branch:1.5.0.2
+	cygwin-1_7_16-release:1.5
+	cygwin-1_7_15-release:1.5
+	cygwin-1_7_14_2-release:1.5
+	cygwin-1_7_14-release:1.5
+	cygwin-1_7_12-release:1.5
+	cygwin-1_7_11-release:1.5
+	cygwin-1_7_10-release:1.5
+	signal-rewrite:1.4.0.2
+	pre-notty:1.3;
+locks; strict;
+comment	@// @;
+
+
+1.10
+date	2014.10.09.13.24.37;	author corinna;	state Exp;
+branches;
+next	1.9;
+
+1.9
+date	2014.05.20.14.49.02;	author corinna;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2014.02.09.19.44.54;	author corinna;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2013.04.23.09.44.32;	author corinna;	state Exp;
+branches
+	1.7.2.1;
+next	1.6;
+
+1.6
+date	2013.01.21.04.34.51;	author cgf;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2011.12.03.21.43.25;	author cgf;	state Exp;
+branches
+	1.5.2.1;
+next	1.4;
+
+1.4
+date	2011.06.12.20.15.26;	author cgf;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2011.06.06.05.02.11;	author cgf;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2011.05.28.18.17.08;	author cgf;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2011.04.01.19.48.19;	author yselkowitz;	state Exp;
+branches;
+next	;
+
+1.7.2.1
+date	2014.07.16.09.54.55;	author corinna;	state Exp;
+branches;
+next	;
+
+1.5.2.1
+date	2012.08.13.20.04.33;	author corinna;	state Exp;
+branches;
+next	1.5.2.2;
+
+1.5.2.2
+date	2012.11.07.09.40.14;	author corinna;	state Exp;
+branches;
+next	1.5.2.3;
+
+1.5.2.3
+date	2012.11.07.09.43.10;	author corinna;	state Exp;
+branches;
+next	1.5.2.4;
+
+1.5.2.4
+date	2012.12.10.11.45.48;	author corinna;	state Exp;
+branches;
+next	1.5.2.5;
+
+1.5.2.5
+date	2013.01.21.13.52.05;	author corinna;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.10
+log
+@	* fhandler_proc.cc (fhandler_proc::readdir): Set dirent d_type.
+	* fhandler_process.cc (fhandler_process::readdir): Ditto.
+	* fhandler_procnet.cc (fhandler_procnet::readdir): Ditto.
+	* fhandler_procsys.cc (fhandler_procsys::readdir): Ditto.
+	* fhandler_procsysvipc.cc (fhandler_procsysvipc::readdir): Ditto.
+	*  fhandler_virtual.h (virt_ftype_to_dtype): Define new inline function
+	to generate dirent d_type from virtual_ftype_t.
+@
+text
+@/* fhandler_procsysvipc.cc: fhandler for /proc/sysvipc virtual filesystem
+
+   Copyright 2011, 2012, 2013, 2014 Red Hat, Inc.
+
+This file is part of Cygwin.
+
+This software is a copyrighted work licensed under the terms of the
+Cygwin license.  Please consult the file "CYGWIN_LICENSE" for
+details. */
+
+#include "winsup.h"
+#include <stdlib.h>
+#include <stdio.h>
+#include <sys/cygwin.h>
+#include "cygerrno.h"
+#include "cygserver.h"
+#include "security.h"
+#include "path.h"
+#include "fhandler.h"
+#include "fhandler_virtual.h"
+#include "pinfo.h"
+#include "shared_info.h"
+#include "dtable.h"
+#include "cygheap.h"
+#include "ntdll.h"
+#include "cygtls.h"
+#include "tls_pbuf.h"
+#include <sys/param.h>
+#include <ctype.h>
+
+#define _COMPILING_NEWLIB
+#include <dirent.h>
+
+#define _KERNEL
+#include <sys/ipc.h>
+#include <sys/msg.h>
+#include <sys/sem.h>
+#include <sys/shm.h>
+
+static off_t format_procsysvipc_msg (void *, char *&);
+static off_t format_procsysvipc_sem (void *, char *&);
+static off_t format_procsysvipc_shm (void *, char *&);
+
+static const virt_tab_t procsysvipc_tab[] =
+{
+  { _VN ("."),		FH_PROCSYSVIPC,   virt_directory, NULL },
+  { _VN (".."),		FH_PROCSYSVIPC,   virt_directory, NULL },
+  { _VN ("msg"),	FH_PROCSYSVIPC,   virt_file,   format_procsysvipc_msg },
+  { _VN ("sem"),	FH_PROCSYSVIPC,   virt_file,   format_procsysvipc_sem },
+  { _VN ("shm"),	FH_PROCSYSVIPC,   virt_file,   format_procsysvipc_shm },
+  { NULL, 0,		FH_NADA,		  virt_none,   NULL }
+};
+
+static const int PROCSYSVIPC_LINK_COUNT =
+  (sizeof (procsysvipc_tab) / sizeof (virt_tab_t)) - 1;
+
+/* Returns 0 if path doesn't exist, >0 if path is a directory,
+ * -1 if path is a file.
+ */
+virtual_ftype_t
+fhandler_procsysvipc::exists ()
+{
+  const char *path = get_name ();
+  debug_printf ("exists (%s)", path);
+  path += proc_len + 1;
+  while (*path != 0 && !isdirsep (*path))
+    path++;
+  if (*path == 0)
+    return virt_rootdir;
+
+  virt_tab_t *entry = virt_tab_search (path + 1, true, procsysvipc_tab,
+				       PROCSYSVIPC_LINK_COUNT);
+
+  cygserver_init ();
+
+  if (entry)
+    {
+      if (entry->type == virt_file)
+	{
+	  if (cygserver_running != CYGSERVER_OK)
+	    return virt_none;
+	}
+	  fileid = entry - procsysvipc_tab;
+	  return entry->type;
+	}
+  return virt_none;
+}
+
+fhandler_procsysvipc::fhandler_procsysvipc ():
+  fhandler_proc ()
+{
+}
+
+int __reg2
+fhandler_procsysvipc::fstat (struct stat *buf)
+{
+  fhandler_base::fstat (buf);
+  buf->st_mode &= ~_IFMT & NO_W;
+  int file_type = exists ();
+  switch (file_type)
+    {
+    case virt_none:
+      set_errno (ENOENT);
+      return -1;
+    case virt_directory:
+    case virt_rootdir:
+      buf->st_mode |= S_IFDIR | S_IXUSR | S_IXGRP | S_IXOTH;
+      buf->st_nlink = 2;
+      return 0;
+    case virt_file:
+    default:
+      buf->st_mode |= S_IFREG | S_IRUSR | S_IRGRP | S_IROTH;
+      return 0;
+    }
+}
+
+int
+fhandler_procsysvipc::readdir (DIR *dir, dirent *de)
+{
+  int res = ENMFILE;
+  if (dir->__d_position >= PROCSYSVIPC_LINK_COUNT)
+    goto out;
+  {
+    cygserver_init ();
+    if (cygserver_running != CYGSERVER_OK)
+      goto out;
+  }
+  strcpy (de->d_name, procsysvipc_tab[dir->__d_position].name);
+  de->d_type = virt_ftype_to_dtype (procsysvipc_tab[dir->__d_position].type);
+  dir->__d_position++;
+  dir->__flags |= dirent_saw_dot | dirent_saw_dot_dot;
+  res = 0;
+out:
+  syscall_printf ("%d = readdir(%p, %p) (%s)", res, dir, de, de->d_name);
+  return res;
+}
+
+int
+fhandler_procsysvipc::open (int flags, mode_t mode)
+{
+  int res = fhandler_virtual::open (flags, mode);
+  if (!res)
+    goto out;
+
+  nohandle (true);
+
+  const char *path;
+  path = get_name () + proc_len + 1;
+  pid = atoi (path);
+  while (*path != 0 && !isdirsep (*path))
+    path++;
+
+  if (*path == 0)
+    {
+      if ((flags & (O_CREAT | O_EXCL)) == (O_CREAT | O_EXCL))
+	{
+	  set_errno (EEXIST);
+	  res = 0;
+	  goto out;
+	}
+      else if (flags & O_WRONLY)
+	{
+	  set_errno (EISDIR);
+	  res = 0;
+	  goto out;
+	}
+      else
+	{
+	  flags |= O_DIROPEN;
+	  goto success;
+	}
+    }
+
+  virt_tab_t *entry;
+  entry = virt_tab_search (path + 1, true, procsysvipc_tab, PROCSYSVIPC_LINK_COUNT);
+  if (!entry)
+    {
+      set_errno ((flags & O_CREAT) ? EROFS : ENOENT);
+      res = 0;
+      goto out;
+    }
+  if (flags & O_WRONLY)
+    {
+      set_errno (EROFS);
+      res = 0;
+      goto out;
+    }
+
+  fileid = entry - procsysvipc_tab;
+  if (!fill_filebuf ())
+	{
+	  res = 0;
+	  goto out;
+	}
+
+  if (flags & O_APPEND)
+    position = filesize;
+  else
+    position = 0;
+
+success:
+  res = 1;
+  set_flags ((flags & ~O_TEXT) | O_BINARY);
+  set_open_status ();
+out:
+  syscall_printf ("%d = fhandler_proc::open(%p, 0%o)", res, flags, mode);
+  return res;
+}
+
+bool
+fhandler_procsysvipc::fill_filebuf ()
+{
+  if (procsysvipc_tab[fileid].format_func)
+    {
+      filesize = procsysvipc_tab[fileid].format_func (NULL, filebuf);
+      return true;
+    }
+  return false;
+}
+
+#define MSG_HEADLINE "       key      msqid perms      cbytes       qnum lspid lrpid   uid   gid  cuid  cgid      stime      rtime      ctime\n"
+
+static off_t
+format_procsysvipc_msg (void *, char *&destbuf)
+{
+  char *buf;
+  struct msginfo msginfo;
+  struct msqid_ds *xmsqids;
+
+  msgctl (0, IPC_INFO, (struct msqid_ds *) &msginfo);
+  /* Don't use tmp_pathbuf.  The required buffer sizes can be up to 128K! */
+  xmsqids = (struct msqid_ds *) malloc (sizeof (struct msqid_ds)
+					* msginfo.msgmni);
+  if (!xmsqids)
+    return 0;
+  /* buf size = sizeof headline + 128 bytes per msg queue entry. */
+  buf = (char *) malloc (sizeof (MSG_HEADLINE) + msginfo.msgmni * 128);
+  if (!buf)
+    {
+      free (xmsqids);
+      return 0;
+    }
+
+  char *bufptr = stpcpy (buf, MSG_HEADLINE);
+  msgctl (msginfo.msgmni, IPC_INFO, (struct msqid_ds *) xmsqids);
+  for (int i = 0; i < msginfo.msgmni; i++)
+    {
+      if (xmsqids[i].msg_qbytes != 0)
+	{
+	   bufptr += sprintf (bufptr,
+		     "%10llu %10u %5o %11u %10u %5d %5d %5u %5u %5u %5u "
+		     "%10ld %10ld %10ld\n",
+		     xmsqids[i].msg_perm.key,
+		     IXSEQ_TO_IPCID(i, xmsqids[i].msg_perm),
+		     xmsqids[i].msg_perm.mode,
+		     xmsqids[i].msg_cbytes,
+		     xmsqids[i].msg_qnum,
+		     xmsqids[i].msg_lspid,
+		     xmsqids[i].msg_lrpid,
+		     (unsigned) xmsqids[i].msg_perm.uid,
+		     (unsigned) xmsqids[i].msg_perm.gid,
+		     (unsigned) xmsqids[i].msg_perm.cuid,
+		     (unsigned) xmsqids[i].msg_perm.cgid,
+		     xmsqids[i].msg_stime,
+		     xmsqids[i].msg_rtime,
+		     xmsqids[i].msg_ctime);
+	}
+      }
+
+  off_t size = bufptr - buf;
+  destbuf = (char *) crealloc_abort (destbuf, size);
+  memcpy (destbuf, buf, size);
+  free (buf);
+  free (xmsqids);
+  return size;
+}
+
+#undef MSG_HEADLINE
+
+#define SEM_HEADLINE "       key      semid perms      nsems   uid   gid  cuid  cgid      otime      ctime\n"
+
+static off_t
+format_procsysvipc_sem (void *, char *&destbuf)
+{
+  char *buf;
+  union semun semun;
+  struct seminfo seminfo;
+  struct semid_ds *xsemids;
+
+  semun.buf = (struct semid_ds *) &seminfo;
+  semctl (0, 0, IPC_INFO, semun);
+  /* Don't use tmp_pathbuf.  The required buffer sizes can be up to 96K! */
+  xsemids = (struct semid_ds *) malloc (sizeof (struct semid_ds)
+					* seminfo.semmni);
+  if (!xsemids)
+    return 0;
+  /* buf size = sizeof headline + 96 bytes per semaphore entry. */
+  buf = (char *) malloc (sizeof (SEM_HEADLINE) + seminfo.semmni * 96);
+  if (!buf)
+    {
+      free (xsemids);
+      return 0;
+    }
+
+  char *bufptr = stpcpy (buf, SEM_HEADLINE);
+  semun.buf = xsemids;
+  semctl (seminfo.semmni, 0, IPC_INFO, semun);
+  for (int i = 0; i < seminfo.semmni; i++)
+    {
+      if ((xsemids[i].sem_perm.mode & SEM_ALLOC) != 0)
+	{
+	  bufptr += sprintf (bufptr,
+		    "%10llu %10u %5o %10d %5u %5u %5u %5u %10ld %10ld\n",
+		    xsemids[i].sem_perm.key,
+		    IXSEQ_TO_IPCID(i, xsemids[i].sem_perm),
+		    xsemids[i].sem_perm.mode,
+		    xsemids[i].sem_nsems,
+		    (unsigned) xsemids[i].sem_perm.uid,
+		    (unsigned) xsemids[i].sem_perm.gid,
+		    (unsigned) xsemids[i].sem_perm.cuid,
+		    (unsigned) xsemids[i].sem_perm.cgid,
+		    xsemids[i].sem_otime,
+		    xsemids[i].sem_ctime);
+	}
+    }
+
+  off_t size = bufptr - buf;
+  destbuf = (char *) crealloc_abort (destbuf, size);
+  memcpy (destbuf, buf, size);
+  free (buf);
+  free (xsemids);
+  return size;
+}
+
+#undef SEM_HEADLINE
+
+#define SHM_HEADLINE "       key      shmid perms       size  cpid  lpid nattch   uid   gid  cuid  cgid      atime      dtime      ctime\n"
+
+static off_t
+format_procsysvipc_shm (void *, char *&destbuf)
+{
+  char *buf;
+  struct shminfo shminfo;
+  struct shmid_ds *xshmids;
+
+  shmctl (0, IPC_INFO, (struct shmid_ds *) &shminfo);
+  /* Don't use tmp_pathbuf.  The required buffer sizes can be up to 120K! */
+  xshmids = (struct shmid_ds *) malloc (sizeof (struct shmid_ds)
+					* shminfo.shmmni);
+  if (!xshmids)
+    return 0;
+  /* buf size = sizeof headline + 120 bytes per shmem entry. */
+  buf = (char *) malloc (sizeof (SHM_HEADLINE) + shminfo.shmmni * 120);
+  if (!buf)
+    {
+      free (xshmids);
+      return 0;
+    }
+
+  char *bufptr = stpcpy (buf, SHM_HEADLINE);
+  shmctl (shminfo.shmmni, IPC_INFO, (struct shmid_ds *) xshmids);
+  for (int i = 0; i < shminfo.shmmni; i++)
+    {
+      if (xshmids[i].shm_perm.mode & 0x0800)
+	{
+	  bufptr += sprintf (bufptr,
+		    "%10llu %10u %5o %10u %5d %5d %6u %5u %5u %5u %5u "
+		    "%10ld %10ld %10ld\n",
+		    xshmids[i].shm_perm.key,
+		    IXSEQ_TO_IPCID(i, xshmids[i].shm_perm),
+		    xshmids[i].shm_perm.mode,
+		    xshmids[i].shm_segsz,
+		    xshmids[i].shm_cpid,
+		    xshmids[i].shm_lpid,
+		    xshmids[i].shm_nattch,
+		    (unsigned) xshmids[i].shm_perm.uid,
+		    (unsigned) xshmids[i].shm_perm.gid,
+		    (unsigned) xshmids[i].shm_perm.cuid,
+		    (unsigned) xshmids[i].shm_perm.cgid,
+		    xshmids[i].shm_atime,
+		    xshmids[i].shm_dtime,
+		    xshmids[i].shm_ctime);
+		    }
+	  }
+
+  off_t size = bufptr - buf;
+  destbuf = (char *) crealloc_abort (destbuf, size);
+  memcpy (destbuf, buf, size);
+  free (buf);
+  free (xshmids);
+  return size;
+}
+
+#undef SHM_HEADLINE
+@
+
+
+1.9
+log
+@	* fhandler_procsysvipc.cc (format_procsysvipc_msg): Rearrange code to
+	avoid resource leakage (CID 60002).  Don't use tmp_pathbuf, explain why.
+	Fix indentation.
+	(format_procsysvipc_sem): Ditto.
+	(format_procsysvipc_shm): Ditto (CID 60003).
+@
+text
+@d128 3
+a130 1
+  strcpy (de->d_name, procsysvipc_tab[dir->__d_position++].name);
+@
+
+
+1.8
+log
+@	Introduce reading passwd/group entries from SAM/AD.  Introduce
+	/etc/nsswitch.conf file to configure it.
+	* Makefile.in (DLL_OFILES): Add ldap.o.
+	* autoload.cc: Import ldap functions from wldap32.dll.
+	(DsEnumerateDomainTrustsW): Import.
+	(NetGroupGetInfo): Import.
+	* cygheap.h (class cygheap_domain_info): New class to keep global
+	domain info.
+	(class cygheap_pwdgrp): New class to keep passwd/group caches and
+	configuration info from /etc/nssswitch.conf.
+	(struct init_cygheap): Add cygheap_domain_info member "dom" and
+	cygheap_pwdgrp member "pg".
+	* cygtls.h (struct _local_storage): Remove unused member "res".
+	Rearrange slightly, Add members pwbuf and grbuf to implement non-caching
+	passwd/group fetching from SAM/AD.  Make pw_pos and pw_pos unsigned.
+	* fhandler_disk_file.cc (fhandler_base::fstat_by_nfs_ea): Add RFC 2307
+	uid/gid mapping.
+	* fhandler_process.cc: Drop including pwdgrp.h.
+	* fhandler_procsysvipc.cc: Ditto.
+	* fhandler_registry.cc (fhandler_registry::fstat): Set key uid/gid
+	to ILLEGAL_UID/ILLEGAL_GID rather than UNKNOWN_UID/UNKNOWN_GID.
+	* grp.cc (group_buf): Drop.
+	(gr): Drop.
+	(pwdgrp::parse_group): Fill pg_grp.
+	(pwdgrp::read_group): Remove.
+	(pwdgrp::init_grp): New method.
+	(pwdgrp::prep_tls_grbuf): New method.
+	(pwdgrp::find_group): New methods.
+	(internal_getgrsid): Convert to call new pwdgrp methods.
+	(internal_getgrnam): Ditto.
+	(internal_getgrgid): Ditto.
+	(getgrgid_r): Drop 2nd parameter from internal_getgrgid call.
+	(getgrgid32): Ditto.
+	(getgrnam_r): Ditto for internal_getgrnam.
+	(getgrnam32): Ditto.
+	(getgrent32): Convert to call new pwdgrp methods.
+	(internal_getgrent): Remove.
+	(internal_getgroups): Simplify, especially drop calls to
+	internal_getgrent.
+	* ldap.cc: New file implementing cyg_ldap class for LDAP access to AD
+	and RFC 2307 server.
+	* ldap.h: New header, declaring cyg_ldap class.
+	* passwd.cc (passwd_buf): Drop.
+	(pr): Drop.
+	(pwdgrp::parse_passwd): Fill pg_pwd.
+	(pwdgrp::read_passwd): Remove.
+	(pwdgrp::init_pwd): New method.
+	(pwdgrp::prep_tls_pwbuf): New method.
+	(find_user): New methods.
+	(internal_getpwsid): Convert to call new pwdgrp methods.
+	(internal_getpwnam): Ditto.
+	(internal_getpwuid): Ditto.
+	(getpwuid32): Drop 2nd parameter from internal_getpwuid call.
+	(getpwuid_r): Ditto.
+	(getpwnam): Ditto for internal_getpwnam.
+	(getpwnam_r): Ditto.
+	(getpwent): Convert to call new pwdgrp methods.
+	* path.cc (class etc): Remove all methods.
+	* path.h (class etc): Drop.
+	* pinfo.cc (pinfo_basic::pinfo_basic): Set gid to ILLEGAL_GID rather
+	than UNKNOWN_GID.
+	(pinfo_init): Ditto.
+	* pwdgrp.h (internal_getpwnam): Drop 2nd parameter from declaration.
+	(internal_getpwuid): Ditto.
+	(internal_getgrgid): Ditto.
+	(internal_getgrnam): Ditto.
+	(internal_getgrent): Drop declaration.
+	(enum fetch_user_arg_type_t): New type.
+	(struct fetch_user_arg_t): New type.
+	(struct pg_pwd): New type.
+	(struct pg_grp): New type.
+	(class pwdgrp): Rework to provide functions for file and db requests
+	and caching.
+	(class ugid_cache_t): New class to provide RFC 2307 uid map caching.
+	(ugid_cache): Declare.
+	* sec_acl.cc: Drop including pwdgrp.h.
+	* sec_auth.cc: Drop including dsgetdc.h and pwdgrp.h.
+	(get_logon_server): Convert third parameter to ULONG flags argument
+	to allow arbitrary flags values in DsGetDcNameW call and change calls
+	to this function throughout.  Use cached account domain name rather
+	than calling GetComputerNameW.
+	(get_unix_group_sidlist): Remove.
+	(get_server_groups): Drop call to get_unix_group_sidlist.
+	(verify_token): Rework token group check without calling
+	internal_getgrent.
+	* sec_helper.cc (cygpsid::pstring): New methods, like string() but
+	return pointer to end of string.
+	(cygsid::getfromstr): Add wide character implementation.
+	(get_sids_info): Add RFC 2307 uid/gid mapping for Samba shares.
+	* security.cc: Drop including pwdgrp.h.
+	* security.h (DEFAULT_UID): Remove.
+	(UNKNOWN_UID): Remove.
+	(UNKNOWN_GID): Remove.
+	(uinfo_init): Move here from winsup.h.
+	(ILLEGAL_UID): Ditto.
+	(ILLEGAL_GID): Ditto.
+	(UNIX_POSIX_OFFSET): Define.  Add lengthy comment.
+	(UNIX_POSIX_MASK): Ditto.
+	(MAP_UNIX_TO_CYGWIN_ID): Ditto.
+	(ILLEGAL_UID16): Move here from winsup.h.
+	(ILLEGAL_GID16): Ditto.
+	(uid16touid32): Ditto.
+	(gid16togid32): Ditto.
+	(sid_id_auth): New convenience macro for SID component access.
+	(sid_sub_auth_count): Ditto.
+	(sid_sub_auth): Ditto.
+	(sid_sub_auth_rid): Ditto.
+	(cygpsid::pstring): Declare.
+	(cygsid::getfromstr): Declare wide character variant.
+	(cygsid::operator=): Ditto.
+	(cygsid::operator*=): Ditto.
+	(get_logon_server): Change declaration according to source code.
+	* setlsapwd.cc (setlsapwd): Drop 2nd parameter from internal_getpwnam
+	call.
+	* shared.cc (memory_init): Call cygheap->pg.init in first process.
+	* syscalls.cc: Drop including pwdgrp.h.
+	* tlsoffsets.h: Regenerate.
+	* tlsoffsets64.h: Ditto.
+	* uinfo.cc (internal_getlogin): Drop gratuitious internal_getpwuid
+	call.  Fix debug output.  Overwrite user gid in border case of a
+	missing passwd file while a group file exists.
+	(pwdgrp::add_line): Allocate memory on cygheap.
+	(pwdgrp::load): Remove.
+	(ugid_cache): Define.
+	(cygheap_pwdgrp::init): New method.
+	(cygheap_pwdgrp::nss_init_line): New method.
+	(cygheap_pwdgrp::_nss_init): New method.
+	(cygheap_domain_info::init): New method.
+	(logon_sid): Define.
+	(get_logon_sid): New function.
+	(pwdgrp::add_account_post_fetch): New method.
+	(pwdgrp::add_account_from_file): New methods.
+	(pwdgrp::add_account_from_windows): New methods.
+	(pwdgrp::check_file): New method.
+	(pwdgrp::fetch_account_from_line): New method.
+	(pwdgrp::fetch_account_from_file): New method.
+	(pwdgrp::fetch_account_from_windows): New method.
+	* winsup.h: Move aforementioned macros and declarations to security.h.
+@
+text
+@d74 1
+a74 1
+  cygserver_init();
+d124 1
+a124 1
+    cygserver_init();
+d219 2
+d224 1
+a224 3
+  tmp_pathbuf tp;
+  char *buf = tp.c_get ();
+  char *bufptr = buf;
+a226 1
+  size_t xmsqids_len;
+d229 14
+a242 2
+  xmsqids_len = sizeof (struct msqid_ds) * msginfo.msgmni;
+  xmsqids = (struct msqid_ds *) malloc (xmsqids_len);
+d244 23
+d268 7
+a274 2
+  bufptr += __small_sprintf (bufptr,
+	    "       key      msqid perms      cbytes       qnum lspid lrpid   uid   gid  cuid  cgid      stime      rtime      ctime\n");
+d276 1
+a276 20
+  for (int i = 0; i < msginfo.msgmni; i++) {
+    if (xmsqids[i].msg_qbytes != 0) {
+       bufptr += sprintf (bufptr,
+		 "%10llu %10u %5o %11u %10u %5d %5d %5u %5u %5u %5u %10ld %10ld %10ld\n",
+		 xmsqids[i].msg_perm.key,
+		 IXSEQ_TO_IPCID(i, xmsqids[i].msg_perm),
+		 xmsqids[i].msg_perm.mode,
+		 xmsqids[i].msg_cbytes,
+		 xmsqids[i].msg_qnum,
+		 xmsqids[i].msg_lspid,
+		 xmsqids[i].msg_lrpid,
+		 (unsigned) xmsqids[i].msg_perm.uid,
+		 (unsigned) xmsqids[i].msg_perm.gid,
+		 (unsigned) xmsqids[i].msg_perm.cuid,
+		 (unsigned) xmsqids[i].msg_perm.cgid,
+		 xmsqids[i].msg_stime,
+		 xmsqids[i].msg_rtime,
+		 xmsqids[i].msg_ctime);
+    }
+  }
+d278 1
+a278 4
+  destbuf = (char *) crealloc_abort (destbuf, bufptr - buf);
+  memcpy (destbuf, buf, bufptr - buf);
+  return bufptr - buf;
+}
+d283 1
+a283 3
+  tmp_pathbuf tp;
+  char *buf = tp.c_get ();
+  char *bufptr = buf;
+a286 1
+  size_t xsemids_len;
+d290 14
+a303 2
+  xsemids_len = sizeof (struct semid_ds) * seminfo.semmni;
+  xsemids = (struct semid_ds *) malloc (xsemids_len);
+d306 17
+a322 17
+
+  bufptr += __small_sprintf (bufptr,
+	    "       key      semid perms      nsems   uid   gid  cuid  cgid      otime      ctime\n");
+  for (int i = 0; i < seminfo.semmni; i++) {
+    if ((xsemids[i].sem_perm.mode & SEM_ALLOC) != 0) {
+      bufptr += sprintf (bufptr,
+		"%10llu %10u %5o %10d %5u %5u %5u %5u %10ld %10ld\n",
+		xsemids[i].sem_perm.key,
+		IXSEQ_TO_IPCID(i, xsemids[i].sem_perm),
+		xsemids[i].sem_perm.mode,
+		xsemids[i].sem_nsems,
+		(unsigned) xsemids[i].sem_perm.uid,
+		(unsigned) xsemids[i].sem_perm.gid,
+		(unsigned) xsemids[i].sem_perm.cuid,
+		(unsigned) xsemids[i].sem_perm.cgid,
+		xsemids[i].sem_otime,
+		xsemids[i].sem_ctime);
+a323 1
+  }
+d325 6
+a330 3
+  destbuf = (char *) crealloc_abort (destbuf, bufptr - buf);
+  memcpy (destbuf, buf, bufptr - buf);
+  return bufptr - buf;
+d333 4
+d340 1
+a340 3
+  tmp_pathbuf tp;
+  char *buf = tp.c_get ();
+  char *bufptr = buf;
+a342 1
+  size_t xshmids_len;
+d345 14
+a358 2
+  xshmids_len = sizeof (struct shmid_ds) * shminfo.shmmni;
+  xshmids = (struct shmid_ds *) malloc (xshmids_len);
+d360 31
+d392 1
+a392 27
+  bufptr += __small_sprintf (bufptr,
+	    "       key      shmid perms       size  cpid  lpid nattch   uid   gid  cuid  cgid      atime      dtime      ctime\n");
+  for (int i = 0; i < shminfo.shmmni; i++) {
+    if (xshmids[i].shm_perm.mode & 0x0800) {
+      bufptr += sprintf (bufptr,
+		"%10llu %10u %5o %10u %5d %5d %6u %5u %5u %5u %5u %10ld %10ld %10ld\n",
+		xshmids[i].shm_perm.key,
+		IXSEQ_TO_IPCID(i, xshmids[i].shm_perm),
+		xshmids[i].shm_perm.mode,
+		xshmids[i].shm_segsz,
+		xshmids[i].shm_cpid,
+		xshmids[i].shm_lpid,
+		xshmids[i].shm_nattch,
+		(unsigned) xshmids[i].shm_perm.uid,
+		(unsigned) xshmids[i].shm_perm.gid,
+		(unsigned) xshmids[i].shm_perm.cuid,
+		(unsigned) xshmids[i].shm_perm.cgid,
+		xshmids[i].shm_atime,
+		xshmids[i].shm_dtime,
+		xshmids[i].shm_ctime);
+		}
+	}
+
+  destbuf = (char *) crealloc_abort (destbuf, bufptr - buf);
+  memcpy (destbuf, buf, bufptr - buf);
+  return bufptr - buf;
+}
+@
+
+
+1.7
+log
+@	* Merge in cygwin-64bit-branch.
+@
+text
+@d3 1
+a3 1
+   Copyright 2011, 2012, 2013 Red Hat, Inc.
+a26 1
+#include "pwdgrp.h"
+@
+
+
+1.7.2.1
+log
+@Add more missing patches
+@
+text
+@d3 1
+a3 1
+   Copyright 2011, 2012, 2013, 2014 Red Hat, Inc.
+d27 1
+d75 1
+a75 1
+  cygserver_init ();
+d125 1
+a125 1
+    cygserver_init ();
+a219 2
+#define MSG_HEADLINE "       key      msqid perms      cbytes       qnum lspid lrpid   uid   gid  cuid  cgid      stime      rtime      ctime\n"
+
+d223 3
+a225 1
+  char *buf;
+d228 1
+d231 2
+a232 14
+  /* Don't use tmp_pathbuf.  The required buffer sizes can be up to 128K! */
+  xmsqids = (struct msqid_ds *) malloc (sizeof (struct msqid_ds)
+					* msginfo.msgmni);
+  if (!xmsqids)
+    return 0;
+  /* buf size = sizeof headline + 128 bytes per msg queue entry. */
+  buf = (char *) malloc (sizeof (MSG_HEADLINE) + msginfo.msgmni * 128);
+  if (!buf)
+    {
+      free (xmsqids);
+      return 0;
+    }
+
+  char *bufptr = stpcpy (buf, MSG_HEADLINE);
+a233 23
+  for (int i = 0; i < msginfo.msgmni; i++)
+    {
+      if (xmsqids[i].msg_qbytes != 0)
+	{
+	   bufptr += sprintf (bufptr,
+		     "%10llu %10u %5o %11u %10u %5d %5d %5u %5u %5u %5u "
+		     "%10ld %10ld %10ld\n",
+		     xmsqids[i].msg_perm.key,
+		     IXSEQ_TO_IPCID(i, xmsqids[i].msg_perm),
+		     xmsqids[i].msg_perm.mode,
+		     xmsqids[i].msg_cbytes,
+		     xmsqids[i].msg_qnum,
+		     xmsqids[i].msg_lspid,
+		     xmsqids[i].msg_lrpid,
+		     (unsigned) xmsqids[i].msg_perm.uid,
+		     (unsigned) xmsqids[i].msg_perm.gid,
+		     (unsigned) xmsqids[i].msg_perm.cuid,
+		     (unsigned) xmsqids[i].msg_perm.cgid,
+		     xmsqids[i].msg_stime,
+		     xmsqids[i].msg_rtime,
+		     xmsqids[i].msg_ctime);
+	}
+      }
+d235 2
+a236 7
+  off_t size = bufptr - buf;
+  destbuf = (char *) crealloc_abort (destbuf, size);
+  memcpy (destbuf, buf, size);
+  free (buf);
+  free (xmsqids);
+  return size;
+}
+d238 20
+a257 1
+#undef MSG_HEADLINE
+d259 4
+a262 1
+#define SEM_HEADLINE "       key      semid perms      nsems   uid   gid  cuid  cgid      otime      ctime\n"
+d267 3
+a269 1
+  char *buf;
+d273 1
+d277 2
+a278 14
+  /* Don't use tmp_pathbuf.  The required buffer sizes can be up to 96K! */
+  xsemids = (struct semid_ds *) malloc (sizeof (struct semid_ds)
+					* seminfo.semmni);
+  if (!xsemids)
+    return 0;
+  /* buf size = sizeof headline + 96 bytes per semaphore entry. */
+  buf = (char *) malloc (sizeof (SEM_HEADLINE) + seminfo.semmni * 96);
+  if (!buf)
+    {
+      free (xsemids);
+      return 0;
+    }
+
+  char *bufptr = stpcpy (buf, SEM_HEADLINE);
+d281 17
+a297 17
+  for (int i = 0; i < seminfo.semmni; i++)
+    {
+      if ((xsemids[i].sem_perm.mode & SEM_ALLOC) != 0)
+	{
+	  bufptr += sprintf (bufptr,
+		    "%10llu %10u %5o %10d %5u %5u %5u %5u %10ld %10ld\n",
+		    xsemids[i].sem_perm.key,
+		    IXSEQ_TO_IPCID(i, xsemids[i].sem_perm),
+		    xsemids[i].sem_perm.mode,
+		    xsemids[i].sem_nsems,
+		    (unsigned) xsemids[i].sem_perm.uid,
+		    (unsigned) xsemids[i].sem_perm.gid,
+		    (unsigned) xsemids[i].sem_perm.cuid,
+		    (unsigned) xsemids[i].sem_perm.cgid,
+		    xsemids[i].sem_otime,
+		    xsemids[i].sem_ctime);
+	}
+d299 1
+d301 3
+a303 6
+  off_t size = bufptr - buf;
+  destbuf = (char *) crealloc_abort (destbuf, size);
+  memcpy (destbuf, buf, size);
+  free (buf);
+  free (xsemids);
+  return size;
+a305 4
+#undef SEM_HEADLINE
+
+#define SHM_HEADLINE "       key      shmid perms       size  cpid  lpid nattch   uid   gid  cuid  cgid      atime      dtime      ctime\n"
+
+d309 3
+a311 1
+  char *buf;
+d314 1
+d317 26
+a342 12
+  /* Don't use tmp_pathbuf.  The required buffer sizes can be up to 120K! */
+  xshmids = (struct shmid_ds *) malloc (sizeof (struct shmid_ds)
+					* shminfo.shmmni);
+  if (!xshmids)
+    return 0;
+  /* buf size = sizeof headline + 120 bytes per shmem entry. */
+  buf = (char *) malloc (sizeof (SHM_HEADLINE) + shminfo.shmmni * 120);
+  if (!buf)
+    {
+      free (xshmids);
+      return 0;
+    }
+d344 3
+a346 32
+  char *bufptr = stpcpy (buf, SHM_HEADLINE);
+  shmctl (shminfo.shmmni, IPC_INFO, (struct shmid_ds *) xshmids);
+  for (int i = 0; i < shminfo.shmmni; i++)
+    {
+      if (xshmids[i].shm_perm.mode & 0x0800)
+	{
+	  bufptr += sprintf (bufptr,
+		    "%10llu %10u %5o %10u %5d %5d %6u %5u %5u %5u %5u "
+		    "%10ld %10ld %10ld\n",
+		    xshmids[i].shm_perm.key,
+		    IXSEQ_TO_IPCID(i, xshmids[i].shm_perm),
+		    xshmids[i].shm_perm.mode,
+		    xshmids[i].shm_segsz,
+		    xshmids[i].shm_cpid,
+		    xshmids[i].shm_lpid,
+		    xshmids[i].shm_nattch,
+		    (unsigned) xshmids[i].shm_perm.uid,
+		    (unsigned) xshmids[i].shm_perm.gid,
+		    (unsigned) xshmids[i].shm_perm.cuid,
+		    (unsigned) xshmids[i].shm_perm.cgid,
+		    xshmids[i].shm_atime,
+		    xshmids[i].shm_dtime,
+		    xshmids[i].shm_ctime);
+		    }
+	  }
+
+  off_t size = bufptr - buf;
+  destbuf = (char *) crealloc_abort (destbuf, size);
+  memcpy (destbuf, buf, size);
+  free (buf);
+  free (xshmids);
+  return size;
+a347 2
+
+#undef SHM_HEADLINE
+@
+
+
+1.6
+log
+@Throughout, change __attribute__ ((regparm (N))) to just __regN.  Throughout,
+(mainly in fhandler*) start fixing gcc 4.7.2 mismatch between regparm
+definitions and declarations.
+* gendef: Define some functions to take @@ declaration to accommodate _regN
+defines which use __stdcall.
+* gentls_offsets: Define __regN macros as empty.
+* autoload.cc (wsock_init): Remove unneeded regparm attribute.
+* winsup.h (__reg1): Define.
+(__reg2): Define.
+(__reg3): Define.
+* advapi32.cc (DuplicateTokenEx): Coerce some initializers to avoid warnings
+from gcc 4.7.2.
+* exceptions.cc (status_info): Declare struct to use NTSTATUS.
+(cygwin_exception::dump_exception): Coerce e->ExceptionCode to NTSTATUS.
+* fhandler_clipboard.cc (cygnativeformat): Redefine as UINT to avoid gcc 4.7.2
+warnings.
+(fhandler_dev_clipboard::read): Ditto.
+@
+text
+@d3 1
+a3 1
+   Copyright 2011, 2013 Red Hat, Inc.
+d41 3
+a43 3
+static _off64_t format_procsysvipc_msg (void *, char *&);
+static _off64_t format_procsysvipc_sem (void *, char *&);
+static _off64_t format_procsysvipc_shm (void *, char *&);
+d96 1
+a96 1
+fhandler_procsysvipc::fstat (struct __stat64 *buf)
+d205 1
+a205 1
+  syscall_printf ("%d = fhandler_proc::open(%p, %d)", res, flags, mode);
+d220 1
+a220 1
+static _off64_t
+d241 1
+a241 1
+		 "%10llu %10u %5o %11lu %10lu %5d %5d %5lu %5lu %5lu %5lu %10ld %10ld %10ld\n",
+d249 4
+a252 4
+		 xmsqids[i].msg_perm.uid,
+		 xmsqids[i].msg_perm.gid,
+		 xmsqids[i].msg_perm.cuid,
+		 xmsqids[i].msg_perm.cgid,
+d264 1
+a264 1
+static _off64_t
+d287 1
+a287 1
+		"%10llu %10u %5o %10d %5lu %5lu %5lu %5lu %10ld %10ld\n",
+d292 4
+a295 4
+		xsemids[i].sem_perm.uid,
+		xsemids[i].sem_perm.gid,
+		xsemids[i].sem_perm.cuid,
+		xsemids[i].sem_perm.cgid,
+d306 1
+a306 1
+static _off64_t
+d326 1
+a326 1
+		"%10llu %10u %5o %10u %5d %5d %6u %5lu %5lu %5lu %5lu %10ld %10ld %10ld\n",
+d334 4
+a337 4
+		xshmids[i].shm_perm.uid,
+		xshmids[i].shm_perm.gid,
+		xshmids[i].shm_perm.cuid,
+		xshmids[i].shm_perm.cgid,
+@
+
+
+1.5
+log
+@Throughout, remove extra space after function name from debugging output.
+Throughout, change syscalls to report on return values using new %R format
+option.
+* smallprint.cc (__small_vsprintf): Add parsing for %R to report on return
+values and possible errno from syscalls.
+* errno.cc (errmap): Add PRIVILEGE_NOT_HELD.
+* fhandler_tty.cc (fhandler_pty_master::setup): When creating a thread use
+shorter name to reduce debuggging output.
+* select.cc (start_thread_pipe): Ditto.
+(start_thread_serial): Ditto.
+(start_thread_socket): Ditto.
+(start_thread_mailslot): Ditto.
+* sigproc.cc (talktome): Ditto.
+@
+text
+@d3 1
+a3 1
+   Copyright 2011 Red Hat, Inc.
+d95 1
+a95 1
+int
+@
+
+
+1.5.2.1
+log
+@	* include/cygwin/stat.h (struct __stat64): Drop entirely in favor of
+	struct stat.  Accommodate throughout Cygwin.
+	* include/cygwin/types.h: Throughout, drop current, internal types
+	used since Cygwin 1.5 with the base type they have been used for.
+	Throughout, define types based on bitsize-specific types where
+	appropriate.  Accommodate throughout Cygwin.
+	* include/sys/cygwin.h: Drop __uid32_t and __gid32_t in favor of
+	uid_t and gid_t.  Define uid/gid types based on bitsize-specific types.
+	(struct external_pinfo): Accommodate above change.
+	* cygtls.h (struct _local_storage): Drop unused members grp and
+	namearray,
+	* tlsoffsets.h: Regenerate.
+	* devices.h (_dev_t): Drop definition.  Use dev_t throughout instead.
+	* devices.cc: Regenerate.
+
+	Probably temporary patch to drop unneeded functionality on x86_64:
+	* fcntl.cc (_fcntl): Alias to fcntl64 on x86_64.
+	* glob.cc (CYGWIN_gl_stat): Simplify on x86_64.
+	* grp.cc (grp32togrp16): Don't define on x86_64.
+	(getgrgid): Alias to getgrgid32 on x86_64.
+	(getgrnam): Alias to getgrnam32 on x86_64.
+	(getgrent): Alias to getgrent32 on x86_64.
+	(getgroups): Alias to getgroups32 on x86_64.
+	(initgroups): Alias to initgroups32 on x86_64.
+	(setgroups): Alias to setgroups32 on x86_64.
+	* mmap.cc (mmap): Alias to mmap64 on x86_64.
+	* passwd.cc (getpwuid): Alias to getpwuid32 on x86_64.
+	(getpwuid_r): Alias to getpwuid_r32 on x86_64.
+	(getpwduid): Don't define on x86_64.
+	* syscalls.cc (lseek): Alias to lseek64 on x86_64.
+	(_lseek): Alias to lseek64 on x86_64.
+	(chown): Alias to chown32 on x86_64.
+	(lchown): Alias to lchown32 on x86_64.
+	(fchown): Alias to fchown32 on x86_64.
+	(stat64_to_stat32): Don't define on x86_64.
+	(fstat): Alias to fstat64 on x86_64.
+	(_fstat_r): Alias to _fstat64_r on x86_64.
+	(stat): Alias to stat64 on x86_64.
+	(_stat_r): Alias to _stat64_r on x86_64.
+	(lstat): Alias to lstat64 on x86_64.
+	(ftruncate): Alias to ftruncate64 on x86_64.
+	(truncate): Alias to truncate64 on x86_64.
+	(seteuid): Alias to seteuid32 on x86_64.
+	(setuid): Alias to setuid32 on x86_64.
+	(setreuid): Alias to setreuid32 on x86_64.
+	(setegid): Alias to setegid32 on x86_64.
+	(setgid): Alias to setgid32 on x86_64.
+	(setregid): Alias to setregid32 on x86_64.
+	* uinfo.cc (getuid): Alias to getuid32 on x86_64.
+	(getgid): Alias to getgid32 on x86_64.
+	(geteuid): Alias to geteuid32 on x86_64.
+	(getegid): Alias to getegid32 on x86_64.
+	* winsup.h (ILLEGAL_UID16): Don't define on x86_64.
+	(ILLEGAL_GID16): Ditto.
+	(uid16touid32): Don't declare on x86_64.
+	(gid16togid32): Don't declare on x86_64.
+@
+text
+@d41 3
+a43 3
+static off_t format_procsysvipc_msg (void *, char *&);
+static off_t format_procsysvipc_sem (void *, char *&);
+static off_t format_procsysvipc_shm (void *, char *&);
+d96 1
+a96 1
+fhandler_procsysvipc::fstat (struct stat *buf)
+d220 1
+a220 1
+static off_t
+d241 1
+a241 1
+		 "%10llu %10u %5o %11lu %10lu %5d %5d %5u %5u %5u %5u %10ld %10ld %10ld\n",
+d249 4
+a252 4
+		 (unsigned) xmsqids[i].msg_perm.uid,
+		 (unsigned) xmsqids[i].msg_perm.gid,
+		 (unsigned) xmsqids[i].msg_perm.cuid,
+		 (unsigned) xmsqids[i].msg_perm.cgid,
+d264 1
+a264 1
+static off_t
+d287 1
+a287 1
+		"%10llu %10u %5o %10d %5u %5u %5u %5u %10ld %10ld\n",
+d292 4
+a295 4
+		(unsigned) xsemids[i].sem_perm.uid,
+		(unsigned) xsemids[i].sem_perm.gid,
+		(unsigned) xsemids[i].sem_perm.cuid,
+		(unsigned) xsemids[i].sem_perm.cgid,
+d306 1
+a306 1
+static off_t
+d326 1
+a326 1
+		"%10llu %10u %5o %10u %5d %5d %6u %5u %5u %5u %5u %10ld %10ld %10ld\n",
+d334 4
+a337 4
+		(unsigned) xshmids[i].shm_perm.uid,
+		(unsigned) xshmids[i].shm_perm.gid,
+		(unsigned) xshmids[i].shm_perm.cuid,
+		(unsigned) xshmids[i].shm_perm.cgid,
+@
+
+
+1.5.2.2
+log
+@	* fhandler_procsysvipc.cc (format_procsysvipc_msg): Fix printf format
+	string for 64 bit.
+	* fhandler_registry.cc (fhandler_registry::readdir): Fix cast.
+	* fhandler_serial.cc (ibuf): Avoid compiler warning.
+	* include/cygwin/ipc.h: Include stdint.h.
+	* include/cygwin/msg.h (msgqnum_t): Define as uint32_t.
+	(msglen_t): Ditto.
+	(struct msginfo): Convert all long members to int32_t.
+	(struct msg_info): Ditto.
+	* include/cygwin/sem.h (struct seminfo): Ditto.
+	* include/cygwin/shm.h (shmatt_t): Define as uint32_t.
+	(struct shmid_ds): Define shm_segsz as uint32_t.
+	(struct shminfo): Convert all long members to int32_t.
+@
+text
+@a240 3
+#ifdef __x86_64__
+		 "%10llu %10u %5o %11u %10u %5d %5d %5u %5u %5u %5u %10ld %10ld %10ld\n",
+#else
+a241 1
+#endif
+@
+
+
+1.5.2.3
+log
+@	* fhandler_procsysvipc.cc (format_procsysvipc_msg): Fix printf format
+	string for 32 bit as well.
+@
+text
+@d241 1
+d243 3
+@
+
+
+1.5.2.4
+log
+@	* Throughout, fix format string of debug printf and api_fatal calls
+	to work in 32 and 64 bit environment, as well as to honor signedness.
+	Use %y instead of 0x%x.
+	* fhandler.h (class fhandler_dev_mem): Change type of mem_size from
+	DWORD to SIZE_T.
+	* fhandler_mem.cc: Throughout, cast mem_size in comparisons to make
+	GCC happy.
+	* fhandler_process.cc (format_process_maps): Change type of ret_len
+	to SIZE_T.
+	(get_mem_values): Ditto for n and length.
+	* mmap.cc (MapView): Ditto for commitsize and viewsize.
+	(class mmap_record): Ditto for len.  Use SIZE_T througout for memory
+	size in method args and return types.
+	* ntdll.h (NtLockVirtualMemory): Fix type of memory size parameters
+	to SIZE_T.
+	(NtMapViewOfSection): Ditto.
+	(NtQueryVirtualMemory): Ditto.
+	(NtUnlockVirtualMemory): Ditto.
+	(RtlFreeHeap): Change type of first parameter to HANDLE.
+	* shm.cc (shmat): Change type of viewsize to SIZE_T.
+	* timer.cc (timer_thread): Change type of sleep_ms to LONG.
+	(ualarm): Drop casts to unsigned int in timer value computation.
+@
+text
+@d3 1
+a3 1
+   Copyright 2011, 2012 Red Hat, Inc.
+d205 1
+a205 1
+  syscall_printf ("%d = fhandler_proc::open(%p, 0%o)", res, flags, mode);
+@
+
+
+1.5.2.5
+log
+@Pull in changes from HEAD
+@
+text
+@d3 1
+a3 1
+   Copyright 2011, 2012, 2013 Red Hat, Inc.
+d95 1
+a95 1
+int __reg2
+@
+
+
+1.4
+log
+@Rename FH_BAD to FH_NADA throughout.
+* devices.h (FH_ERROR): New value.
+(iscons_dev): Extend to detect all the console device types.
+* devices.in: Set aside storage for FH_ERROR.
+* dtable.cc (dtable::init_std_file_from_handle): Use iscons_dev to detect when
+device is a console.
+(fh_alloc): Pass device to console constructor.
+(build_fh_pc): Short circuit when we detect that the constructor saw an error.
+* fhandler.h (fhandler_console::fhandler_console): Accept fh_devices parameter.
+(get_tty_stuff): Change to void.
+* fhandler_console (fhandler_console::set_unit): Set device to FH_ERROR on
+attempt to access anything other than the current console.
+(fhandler_console::get_tty_stuff): Change to void return.
+(fhandler_console::open): Return EPERM on FH_ERROR device type.
+(fhandler_console::fhandler_console): Set the device type appropriately before
+calling get_tty_stuff and rely on that function to reset it if necessary.
+@
+text
+@d133 1
+a133 1
+  syscall_printf ("%d = readdir (%p, %p) (%s)", res, dir, de, de->d_name);
+d205 1
+a205 1
+  syscall_printf ("%d = fhandler_proc::open (%p, %d)", res, flags, mode);
+@
+
+
+1.3
+log
+@whitespace elimination
+@
+text
+@d52 1
+a52 1
+  { NULL, 0,		FH_BAD,		  virt_none,   NULL }
+@
+
+
+1.2
+log
+@* autoload.cc: Call _api_fatal in asm.
+* child_info.h: Redefine CURR_CHILD_INFO_MAGIC.
+(child_info_fork::abort): Rename from handle_failure.  Change arguments.
+* cygtls.h (_local_storage::ttybuf): New field.
+* dcrt0.cc (vapi_fatal): Split api_fatal.  Add "in forked process" to message
+when appropriate.
+(api_fatal): Use vapi_fatal.
+* devices.h: Make multiple inclusion safe.
+(fh_devices): Add FH_CONS* stuff.  Reorder slightly.
+(device): Eliminate anonymous union.  Add more ways to access minor/major.
+(device::setunit): Accommodate no-longer-anonymous union.
+(device::is_fs): Ditto.
+(device::is_fs_special): Ditto.
+(device::major): New function.
+(device::minor): Ditto.
+(device::is_device): New function.
+(device::not_device): Ditto.
+(device::operator int): New operator.
+(device::operator fh_devices): Ditto.
+(device::operator bool): Ditto.
+(device::operator DWORD): Ditto.
+(device::operator =): Ditto.
+(isproc_dev): New function.
+(isprocsys_dev): Ditto.
+(iscons_dev): Ditto.
+(istty_slave_dev): Ditto.
+* devices.in: Add new "/dev/cons*" strings.  Accommodate no-longer-anonymous
+union throughout.
+(BRACK): Use more precise method for initialization.
+* devices.cc: Regenerate.
+* dtable.cc (dtable::stdio_init): Use get_cttyp instead of get_tty.
+(dtable::find_archetype): Use new DWORD operator in device to test archetypes.
+(dtable::init_std_file_from_handle): Use different method to initialize 'dev'.
+Adapt to different ctty handling and accommodate /dev/cons*.
+(fh_alloc): Accommodate no-longer-anonymous union.  Adapt to new /dev/cons*.
+(build_fh_pc): Make debugging output more useful.
+* exceptions.cc (ctrl_c_handler): Use get_cttyp instead of get_tty.
+* external.cc (fillout_pinfo): Accommodate new cons* stuff.
+* fhandler.cc (fhandler_base::read): Eliminate is_slow() test.
+* fhandler.h (fhandler_base::*): Adapt to changes in device.h.
+(fhandler_*::is_slow): Delete.
+( fhandler_proc::get_proc_fhandler): Return fh_devices type.
+* fhandler_console.cc (open_shared_console): New function.
+(console_unit): New class.
+(console_unit::console_unit): New constructor.
+(enum_windows): New function.  Declare as friend to console_unit.
+(fhandler_console::set_unit): New function.
+(fhandler_console::get_tty_stuff): Call set_unit to set the unit number and
+determine if initialization is needed.  Eliminate flags parameter.
+(tty_list::get_cttyp): Rename (sorta) from get_tty.  Return pointer to correct
+tty_min.
+(fhandler_console::open): Adapt to elimination of argument to get_tty_stuff.
+(fhandler_console::output_tcsetattr): Properly detect error condition.
+(fhandler_console::fixup_after_fork_exec): Adapt to get_tty_stuff() setting tc
+automatically.
+* fhandler_proc.cc: Use FH_BAD rather than 0 throughout where using fh_devices
+enum.
+(fhandler_proc::get_proc_fhandler): Return fh_devices.  Adapt to devices.h
+changes.
+* fhandler_process.cc: Adapt to devices.h changes.  Use FH_BAD rather than 0
+throughout where using fh_devices enum.
+* fhandler_procnet.cc: Ditto.
+* fhandler_procsys.cc: Ditto.
+* fhandler_procsysvipc.cc: Ditto.
+* fhandler_tape.cc (fhandler_dev_tape::fhandler_dev_tape): Ditto.
+* fhandler_termios.cc (handler_termios::bg_check): Use tc->ttyname() rather
+than assuming that we can construct a tty.
+* fhandler_tty.cc (fhandler_tty_master::fhandler_tty_master): Just return
+get_minor() of dev.
+(fhandler_pty_master::process_slave_output): Add slightly more debugging info.
+(fhandler_tty_slave::fhandler_tty_slave): Change name from ntty to unit.
+(fhandler_pty_master::open): Ditto.
+(fhandler_tty_slave::ioctl): Adapt to change which causes ctty to represent a
+complete device.
+(fhandler_tty_master::init_console): Add debugging for failure path.
+(fhandler_pty_master::setup): Use get_unit() to retrieve unit number rather
+than relying on raw ntty.
+(fhandler_pty_master::setup): Ditto.
+* fhandler_virtual.h (virt_tab_t): Redefine fhandler as fh_devices.
+* fork.cc: Remove obsolete vfork stuff.
+(frok::child): Don't assume that a ctty == 0 is valid.
+* mount.cc (mount_info::conv_to_win32_path): Adapt to device struct changes.
+(mount_info::conv_to_win32_path): Ditto.
+* path.cc (path_conv::check): Retrive major/minor numbers via a method rather
+than accessing them directly from device.  Rely on dev operators to
+set/retrieve device information as required by device struct change.
+* path.h (isproc_dev): Move to devices.h.
+(isprocsys_dev): Ditto.
+(isvirtual_dev): Ditto.
+(path_conv:{isdevice,isfifo,isspecial,iscygdrive,issocket,get_devn,get_unitn}):
+Use device methods to access/manipulate devices.
+* pinfo.cc (pinfo::exit): Don't assume that ctty == 0 is valid.  Use iscons_dev
+to determine if a device is a console.
+(_pinfo::_ctty): Use device::parse to generate tty/cons name.
+(_pinfo::set_ctty): Don't assume that ctty == 0 is valid.  Remove redundant
+info from debugging.
+* shared.cc (offsets): Remove console offset.
+* shared_info.h (shared_locations): Ditto.
+* syscalls.cc (umask): Use device methods to manipulate device information.
+(ctermid): Use device::parse to generate term device name.
+* tlsoffsets.h: Regenerate.
+* tty.cc (ttyslot): Return minor number of ctty since ctty now represents a
+full device.
+(tty::create_master): Set ctty to a complete device.
+(tty_list::attach): Rework to detect new /dev/cons* stuff.
+(tty_list::terminate): Adapt to changes to ctty.
+(tty_list::init): Adapt to change to setntty - pass in device major number.
+(tty::exists): Use get_unit() to retrive tty unit number.
+(tty::open_mutex): Ditto.
+(tty::open_inuse): Ditto.
+(tty::create_inuse): Ditto.
+(tty::get_event): Ditto.
+(tty_min::ttyname): Define new function.
+* tty.h (tty_min::ntty): Redefine as fh_devices.
+(tty::exists): Use get_unit() to retrive tty unit number.
+(tty::open_mutex): Ditto.
+(tty::open_inuse): Ditto.
+(tty::create_inuse): Ditto.
+(tty::get_event): Ditto.
+(tty_min::ttyname): Declare new function.
+(tty::getntty): Declare as const.
+(tty_list::operator []): Assure that only minor part of argument is used.
+* dll_init.cc (dll_list::alloc): Detect mismatch of data segments early issuing
+an explicit error message if necessary.
+* heap.cc (heap_init): Adapt to changes from fork->handle_failure to
+fork->abort.
+* pinfo.h (EXITCODE_FORK_FAILED): New enum.  (from Ryan Johnson)
+* sigproc.cc (child_info_fork::abort): Rename from handle_failure.  Change
+arguments to allow passing in a printf-like message.
+* winsup.h (api_fatal): Delete macro definition.
+(api_fatal): Redefine from __api_fatal.
+(vapi_fatal): Declare new function.
+* include/sys/strace.h (strace_vprintf): Define new macro.
+* ntdll.h (_SYSTEM_INFORMATION_CLASS): Add SystemHandleInformation.
+@
+text
+@d47 6
+a52 6
+  { _VN ("."),          FH_PROCSYSVIPC,   virt_directory, NULL },
+  { _VN (".."),         FH_PROCSYSVIPC,   virt_directory, NULL },
+  { _VN ("msg"),        FH_PROCSYSVIPC,   virt_file,   format_procsysvipc_msg },
+  { _VN ("sem"),        FH_PROCSYSVIPC,   virt_file,   format_procsysvipc_sem },
+  { _VN ("shm"),        FH_PROCSYSVIPC,   virt_file,   format_procsysvipc_shm },
+  { NULL, 0,	        FH_BAD,           virt_none,      NULL }
+d80 4
+a83 4
+        {
+          if (cygserver_running != CYGSERVER_OK)
+            return virt_none;
+        }
+d236 1
+a236 1
+            "       key      msqid perms      cbytes       qnum lspid lrpid   uid   gid  cuid  cgid      stime      rtime      ctime\n");
+d241 15
+a255 15
+                 "%10llu %10u %5o %11lu %10lu %5d %5d %5lu %5lu %5lu %5lu %10ld %10ld %10ld\n",
+                 xmsqids[i].msg_perm.key,
+                 IXSEQ_TO_IPCID(i, xmsqids[i].msg_perm),
+                 xmsqids[i].msg_perm.mode,
+                 xmsqids[i].msg_cbytes,
+                 xmsqids[i].msg_qnum,
+                 xmsqids[i].msg_lspid,
+                 xmsqids[i].msg_lrpid,
+                 xmsqids[i].msg_perm.uid,
+                 xmsqids[i].msg_perm.gid,
+                 xmsqids[i].msg_perm.cuid,
+                 xmsqids[i].msg_perm.cgid,
+                 xmsqids[i].msg_stime,
+                 xmsqids[i].msg_rtime,
+                 xmsqids[i].msg_ctime);
+d283 1
+a283 1
+            "       key      semid perms      nsems   uid   gid  cuid  cgid      otime      ctime\n");
+d287 11
+a297 11
+                "%10llu %10u %5o %10d %5lu %5lu %5lu %5lu %10ld %10ld\n",
+                xsemids[i].sem_perm.key,
+                IXSEQ_TO_IPCID(i, xsemids[i].sem_perm),
+                xsemids[i].sem_perm.mode,
+                xsemids[i].sem_nsems,
+                xsemids[i].sem_perm.uid,
+                xsemids[i].sem_perm.gid,
+                xsemids[i].sem_perm.cuid,
+                xsemids[i].sem_perm.cgid,
+                xsemids[i].sem_otime,
+                xsemids[i].sem_ctime);
+d322 1
+a322 1
+            "       key      shmid perms       size  cpid  lpid nattch   uid   gid  cuid  cgid      atime      dtime      ctime\n");
+d326 15
+a340 15
+                "%10llu %10u %5o %10u %5d %5d %6u %5lu %5lu %5lu %5lu %10ld %10ld %10ld\n",
+                xshmids[i].shm_perm.key,
+                IXSEQ_TO_IPCID(i, xshmids[i].shm_perm),
+                xshmids[i].shm_perm.mode,
+                xshmids[i].shm_segsz,
+                xshmids[i].shm_cpid,
+                xshmids[i].shm_lpid,
+                xshmids[i].shm_nattch,
+                xshmids[i].shm_perm.uid,
+                xshmids[i].shm_perm.gid,
+                xshmids[i].shm_perm.cuid,
+                xshmids[i].shm_perm.cgid,
+                xshmids[i].shm_atime,
+                xshmids[i].shm_dtime,
+                xshmids[i].shm_ctime);
+@
+
+
+1.1
+log
+@Implement /proc/sysvipc/*
+* devices.in (dev_procsysvipc_storage): Add.
+* devices.cc: Regenerate.
+* devices.h (fh_devices): Add FH_PROCSYSVIPC.
+* dtable.cc (build_fh_pc): Add case FH_PROCSYSVIPC.
+* fhandler.h (class fhandler_procsysvipc): Declare.
+(fhandler_union): Add __procsysvipc.
+* fhandler_proc.cc (proc_tab): Add sysvipc virt_directory.
+* fhandler_procsysvipc.cc: New file.
+* Makefile.in (DLL_OFILES): Add fhandler_procsysvipc.o.
+* path.h (isproc_dev): Add FH_PROCSYSVIPC to conditional.
+@
+text
+@d52 1
+a52 1
+  { NULL, 0,	        0,                virt_none,      NULL }
+@
+

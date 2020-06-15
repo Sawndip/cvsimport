@@ -1,0 +1,425 @@
+head	1.5;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.5
+	gdb_7_6-2013-04-26-release:1.5
+	gdb_7_6-branch:1.5.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.5
+	gdb_7_5_1-2012-11-29-release:1.4
+	gdb_7_5-2012-08-17-release:1.4
+	gdb_7_5-branch:1.4.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.4
+	gdb_7_4_1-2012-04-26-release:1.3.4.1
+	gdb_7_4-2012-01-24-release:1.3.4.1
+	gdb_7_4-branch:1.3.0.4
+	gdb_7_4-2011-12-13-branchpoint:1.3
+	gdb_7_3_1-2011-09-04-release:1.3
+	gdb_7_3-2011-07-26-release:1.3
+	gdb_7_3-branch:1.3.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.3
+	gdb_7_2-2010-09-02-release:1.2
+	gdb_7_2-branch:1.2.0.4
+	gdb_7_2-2010-07-07-branchpoint:1.2
+	gdb_7_1-2010-03-18-release:1.2
+	gdb_7_1-branch:1.2.0.2
+	gdb_7_1-2010-02-18-branchpoint:1.2
+	gdb_7_0_1-2009-12-22-release:1.1
+	gdb_7_0-2009-10-06-release:1.1
+	gdb_7_0-branch:1.1.0.4
+	gdb_7_0-2009-09-16-branchpoint:1.1
+	msnyder-checkpoint-072509-branch:1.1.0.2
+	msnyder-checkpoint-072509-branchpoint:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.5
+date	2013.01.01.06.41.37;	author brobecke;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2012.01.04.08.28.12;	author brobecke;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2011.01.01.15.34.01;	author brobecke;	state Exp;
+branches
+	1.3.4.1;
+next	1.2;
+
+1.2
+date	2010.01.01.10.03.31;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2009.05.18.13.25.35;	author jbeniston;	state Exp;
+branches;
+next	;
+
+1.3.4.1
+date	2012.01.06.04.54.50;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.5
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@/*  Lattice Mico32 timer model.
+    Contributed by Jon Beniston <jon@@beniston.com>
+    
+   Copyright (C) 2009-2013 Free Software Foundation, Inc.
+
+   This file is part of GDB.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+#include "sim-main.h"
+#include "hw-main.h"
+#include "sim-assert.h"
+
+struct lm32timer
+{
+  unsigned base;		/* Base address of this timer.  */
+  unsigned limit;		/* Limit address of this timer.  */
+  unsigned int status;
+  unsigned int control;
+  unsigned int period;
+  unsigned int snapshot;
+  struct hw_event *event;
+};
+
+/* Timer registers.  */
+#define LM32_TIMER_STATUS       0x0
+#define LM32_TIMER_CONTROL      0x4
+#define LM32_TIMER_PERIOD       0x8
+#define LM32_TIMER_SNAPSHOT     0xc
+
+/* Timer ports.  */
+
+enum
+{
+  INT_PORT
+};
+
+static const struct hw_port_descriptor lm32timer_ports[] = {
+  {"int", INT_PORT, 0, output_port},
+  {}
+};
+
+static void
+do_timer_event (struct hw *me, void *data)
+{
+  struct lm32timer *timer = hw_data (me);
+
+  /* Is timer started? */
+  if (timer->control & 0x4)
+    {
+      if (timer->snapshot)
+	{
+	  /* Decrement timer.  */
+	  timer->snapshot--;
+	}
+      else if (timer->control & 1)
+	{
+	  /* Restart timer.  */
+	  timer->snapshot = timer->period;
+	}
+    }
+  /* Generate interrupt when timer is at 0, and interrupt enable is 1.  */
+  if ((timer->snapshot == 0) && (timer->control & 1))
+    {
+      /* Generate interrupt.  */
+      hw_port_event (me, INT_PORT, 1);
+    }
+  /* If timer is started, schedule another event to decrement the timer again.  */
+  if (timer->control & 4)
+    hw_event_queue_schedule (me, 1, do_timer_event, 0);
+}
+
+static unsigned
+lm32timer_io_write_buffer (struct hw *me,
+			   const void *source,
+			   int space, unsigned_word base, unsigned nr_bytes)
+{
+  struct lm32timer *timers = hw_data (me);
+  int timer_reg;
+  const unsigned char *source_bytes = source;
+  int value = 0;
+
+  HW_TRACE ((me, "write to 0x%08lx length %d with 0x%x", (long) base,
+	     (int) nr_bytes, value));
+
+  if (nr_bytes == 4)
+    value = (source_bytes[0] << 24)
+      | (source_bytes[1] << 16) | (source_bytes[2] << 8) | (source_bytes[3]);
+  else
+    hw_abort (me, "write with invalid number of bytes: %d", nr_bytes);
+
+  timer_reg = base - timers->base;
+
+  switch (timer_reg)
+    {
+    case LM32_TIMER_STATUS:
+      timers->status = value;
+      break;
+    case LM32_TIMER_CONTROL:
+      timers->control = value;
+      if (timers->control & 0x4)
+	{
+	  /* Timer is started.  */
+	  hw_event_queue_schedule (me, 1, do_timer_event, 0);
+	}
+      break;
+    case LM32_TIMER_PERIOD:
+      timers->period = value;
+      break;
+    default:
+      hw_abort (me, "invalid register address: 0x%x.", timer_reg);
+    }
+
+  return nr_bytes;
+}
+
+static unsigned
+lm32timer_io_read_buffer (struct hw *me,
+			  void *dest,
+			  int space, unsigned_word base, unsigned nr_bytes)
+{
+  struct lm32timer *timers = hw_data (me);
+  int timer_reg;
+  int value;
+  unsigned char *dest_bytes = dest;
+
+  HW_TRACE ((me, "read 0x%08lx length %d", (long) base, (int) nr_bytes));
+
+  timer_reg = base - timers->base;
+
+  switch (timer_reg)
+    {
+    case LM32_TIMER_STATUS:
+      value = timers->status;
+      break;
+    case LM32_TIMER_CONTROL:
+      value = timers->control;
+      break;
+    case LM32_TIMER_PERIOD:
+      value = timers->period;
+      break;
+    case LM32_TIMER_SNAPSHOT:
+      value = timers->snapshot;
+      break;
+    default:
+      hw_abort (me, "invalid register address: 0x%x.", timer_reg);
+    }
+
+  if (nr_bytes == 4)
+    {
+      dest_bytes[0] = value >> 24;
+      dest_bytes[1] = value >> 16;
+      dest_bytes[2] = value >> 8;
+      dest_bytes[3] = value;
+    }
+  else
+    hw_abort (me, "read of unsupported number of bytes: %d", nr_bytes);
+
+  return nr_bytes;
+}
+
+static void
+attach_lm32timer_regs (struct hw *me, struct lm32timer *timers)
+{
+  unsigned_word attach_address;
+  int attach_space;
+  unsigned attach_size;
+  reg_property_spec reg;
+
+  if (hw_find_property (me, "reg") == NULL)
+    hw_abort (me, "Missing \"reg\" property");
+  if (!hw_find_reg_array_property (me, "reg", 0, &reg))
+    hw_abort (me, "\"reg\" property must contain three addr/size entries");
+  hw_unit_address_to_attach_address (hw_parent (me),
+				     &reg.address,
+				     &attach_space, &attach_address, me);
+  timers->base = attach_address;
+  hw_unit_size_to_attach_size (hw_parent (me), &reg.size, &attach_size, me);
+  timers->limit = attach_address + (attach_size - 1);
+  hw_attach_address (hw_parent (me),
+		     0, attach_space, attach_address, attach_size, me);
+}
+
+static void
+lm32timer_finish (struct hw *me)
+{
+  struct lm32timer *timers;
+  int i;
+
+  timers = HW_ZALLOC (me, struct lm32timer);
+  set_hw_data (me, timers);
+  set_hw_io_read_buffer (me, lm32timer_io_read_buffer);
+  set_hw_io_write_buffer (me, lm32timer_io_write_buffer);
+  set_hw_ports (me, lm32timer_ports);
+
+  /* Attach ourself to our parent bus.  */
+  attach_lm32timer_regs (me, timers);
+
+  /* Initialize the timers.  */
+  timers->status = 0;
+  timers->control = 0;
+  timers->period = 0;
+  timers->snapshot = 0;
+}
+
+const struct hw_descriptor dv_lm32timer_descriptor[] = {
+  {"lm32timer", lm32timer_finish,},
+  {NULL},
+};
+@
+
+
+1.4
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d4 1
+a4 1
+   Copyright (C) 2009-2012 Free Software Foundation, Inc.
+@
+
+
+1.3
+log
+@run copyright.sh for 2011.
+@
+text
+@d4 1
+a4 1
+   Copyright (C) 2009, 2010, 2011 Free Software Foundation, Inc.
+@
+
+
+1.3.4.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d4 1
+a4 1
+   Copyright (C) 2009-2012 Free Software Foundation, Inc.
+@
+
+
+1.2
+log
+@Update copyright notices to add year 2010.
+@
+text
+@d4 1
+a4 1
+   Copyright (C) 2009, 2010 Free Software Foundation, Inc.
+@
+
+
+1.1
+log
+@gdb/
+2009-05-18  Jon Beniston <jon@@beniston.com>
+
+        * MAINTAINERS: Add lm32 target.
+        * Makefile.in: Add lm32 dependencies.
+        * NEWS: Indicate lm32 is a new target.
+        * configure.tgt: Add lm32 targets.
+        * lm32-tdep.c: New file.
+
+gdb/testsuite
+2009-05-18  Jon Beniston <jon@@beniston.com>
+
+        * gdb.asm/asm-source.exp: Add lm32 target.
+
+include/gdb/
+2009-05-18  Jon Beniston <jon@@beniston.com>
+
+        * sim-lm32.h: New file.
+
+sim/
+2009-05-18  Jon Beniston <jon@@beniston.com>
+
+        * MAINTAINERS: Add Jon Beniston as maintainer of lm32 sim.
+        * configure.ac: Add lm32 target.
+        * lm32: New directory.
+
+sim/common
+2009-05-18  Jon Beniston <jon@@beniston.com>
+
+        * gennltvals.sh: Add lm32 target.
+        * nltvals.def: Add lm32 syscall definitions.
+
+sim/lm32/
+2009-05-18  Jon Beniston <jon@@beniston.com>
+
+        * Makefile.in: New file.
+        * arch.c: New file.
+        * arch.h: New file.
+        * config.in: New file.
+        * configure: New file.
+        * configure.ac: New file.
+        * cpu.c: New file.
+        * cpu.h: New file.
+        * cpuall.h: New file.
+        * decode.c: New file.
+        * decode.h: New file.
+        * dv-lm32cpu.c: New file.
+        * dv-lm32timer.c: New file.
+        * dv-lm32uart.c: New file.
+        * lm32.c: New file.
+        * lm32-sim.h: New file.
+        * mloop.in: New file.
+        * model.c: New file.
+        * sem.c: New file.
+        * sem-switch.c: New file.
+        * sim-if.c: New file.
+        * sim-main.c: New file.
+        * tconfig.in: New file.
+        * traps.c: New file.
+        * user.c: New file.
+@
+text
+@d4 1
+a4 1
+   Copyright (C) 2009 Free Software Foundation, Inc.
+@
+

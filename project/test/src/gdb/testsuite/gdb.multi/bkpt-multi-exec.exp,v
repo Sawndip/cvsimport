@@ -1,0 +1,402 @@
+head	1.9;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.9
+	gdb_7_6-2013-04-26-release:1.9
+	gdb_7_6-branch:1.9.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.9
+	gdb_7_5_1-2012-11-29-release:1.8
+	gdb_7_5-2012-08-17-release:1.8
+	gdb_7_5-branch:1.8.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.8
+	gdb_7_4_1-2012-04-26-release:1.5.4.1
+	gdb_7_4-2012-01-24-release:1.5.4.1
+	gdb_7_4-branch:1.5.0.4
+	gdb_7_4-2011-12-13-branchpoint:1.5
+	gdb_7_3_1-2011-09-04-release:1.5
+	gdb_7_3-2011-07-26-release:1.5
+	gdb_7_3-branch:1.5.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.5
+	gdb_7_2-2010-09-02-release:1.4
+	gdb_7_2-branch:1.4.0.2
+	gdb_7_2-2010-07-07-branchpoint:1.4
+	gdb_7_1-2010-03-18-release:1.2
+	gdb_7_1-branch:1.2.0.2
+	gdb_7_1-2010-02-18-branchpoint:1.2;
+locks; strict;
+comment	@# @;
+
+
+1.9
+date	2013.01.01.06.41.25;	author brobecke;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2012.06.25.21.07.32;	author tromey;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2012.05.03.02.05.15;	author qiyao;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2012.01.04.08.17.55;	author brobecke;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2011.01.01.15.33.48;	author brobecke;	state Exp;
+branches
+	1.5.4.1;
+next	1.4;
+
+1.4
+date	2010.06.18.15.08.29;	author palves;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2010.06.10.19.48.19;	author msnyder;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2010.01.01.07.32.04;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2009.10.19.09.56.34;	author palves;	state Exp;
+branches;
+next	;
+
+1.5.4.1
+date	2012.01.06.04.44.10;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.9
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@# Copyright 2009-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+if { [is_remote target] || ![isnative] } then {
+    continue
+}
+
+# Until "catch exec" is implemented on other targets...
+#
+if {![istarget "hppa*-hp-hpux*"] && ![istarget "*-linux*"]} then {
+    continue
+}
+
+set testfile "bkpt-multi-exec"
+
+set exec1 "bkpt-multi-exec"
+set srcfile1 ${exec1}.c
+set binfile1 [standard_output_file ${exec1}]
+
+set exec2 "crashme"
+set srcfile2 ${exec2}.c
+set binfile2 [standard_output_file ${exec2}]
+
+if { [build_executable ${testfile}.exp ${exec1} "${srcfile1}" {debug nowarnings}] == -1 } {
+    return -1
+}
+
+if { [build_executable ${testfile}.exp ${exec2} "${srcfile2}" {debug nowarnings}] == -1 } {
+    return -1
+}
+
+# Start with a fresh gdb
+
+clean_restart ${exec1}
+
+# Start the program running, and stop at main.
+#
+if ![runto_main] then {
+    perror "Couldn't run ${binfile1}"
+    return
+}
+
+delete_breakpoints
+
+# continuing should exec and trigger the bug
+gdb_test "continue" "SIGSEGV.*"
+
+# Start over, but this time, set a breakpoint before the app crashes.
+
+clean_restart ${exec1}
+
+gdb_test "add-inferior -exec ${binfile2}" \
+    "Added inferior 2.*" \
+    "add inferior 2 with -exec ${exec2}"
+
+set bp_location [gdb_get_line_number "set breakpoint here" ${srcfile2}]
+
+gdb_test "inferior 2"
+gdb_test "break ${srcfile2}:${bp_location}" ".*"
+
+# Start the program running, and stop at main.
+#
+gdb_test "inferior 1"
+
+# Now run to the breakpoint.  This should cross the exec, and stop at
+# the breakpoint before the crash.
+gdb_test "run" "${srcfile2}:${bp_location}.*set breakpoint here.*"
+
+return 0
+@
+
+
+1.8
+log
+@	* gdb.multi/watchpoint-multi.exp: Use standard_testfile.
+	* gdb.multi/bkpt-multi-exec.exp: Use standard_output_file.  Use
+	build_executable, not prepare_for_testing.
+	* gdb.multi/base.exp: Use standard_output_file.  Use
+	build_executable,  not prepare_for_testing.
+@
+text
+@d1 1
+a1 1
+# Copyright 2009-2012 Free Software Foundation, Inc.
+@
+
+
+1.7
+log
+@gdb/testsuite:
+
+	* gdb.base/catch-syscall.exp: Skip it before compilation if target
+	doesn't support.
+	* gdb.base/foll-exec.exp, gdb.base/foll-fork.exp: Likewise.
+	* gdb.base/foll-vfork.exp, gdb.multi/bkpt-multi-exec.exp: Likewise.
+@
+text
+@d30 1
+a30 1
+set binfile1 ${objdir}/${subdir}/${exec1}
+d34 1
+a34 1
+set binfile2 ${objdir}/${subdir}/${exec2}
+d36 1
+a36 1
+if { [prepare_for_testing ${testfile}.exp ${exec1} "${srcfile1}" {debug nowarnings}] } {
+d40 1
+a40 1
+if { [prepare_for_testing ${testfile}.exp ${exec2} "${srcfile2}" {debug nowarnings}] } {
+@
+
+
+1.6
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d20 6
+a42 5
+# Until "catch exec" is implemented on other targets...
+#
+if {![istarget "hppa*-hp-hpux*"] && ![istarget "*-linux*"]} then {
+    continue
+}
+@
+
+
+1.5
+log
+@run copyright.sh for 2011.
+@
+text
+@d1 1
+a1 1
+# Copyright 2009, 2010, 2011 Free Software Foundation, Inc.
+@
+
+
+1.5.4.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d1 1
+a1 1
+# Copyright 2009-2012 Free Software Foundation, Inc.
+@
+
+
+1.4
+log
+@	* gdb.multi/base.exp, gdb.multi/bkpt-multi-exec.exp: Use
+	clean_restart, make sure every test has a distinct message, and
+	that messages don't include the executable' full path.
+@
+text
+@d1 1
+a1 1
+# Copyright 2009, 2010 Free Software Foundation, Inc.
+@
+
+
+1.3
+log
+@2010-06-08  Michael Snyder  <msnyder@@vmware.com>
+
+	* gdb.ada/assign_1.exp: Use ".*" instead of "" as wildcard regexp.
+	* gdb.ada/boolean_expr.exp:
+	* gdb.ada/frame_args.exp: Ditto.
+	* gdb.ada/lang_switch.exp: Ditto.
+	* gdb.ada/ptype_arith_binop.exp: Ditto.
+	* gdb.ada/ref_param.exp: Ditto.
+	* gdb.ada/type_coercion.exp:Ditto.
+
+	* gdb.asm/asm-source.exp: Ditto.
+
+	* gdb.base/attach.exp: Ditto.
+	* gdb.base/bitfields2.exp: Ditto.
+	* gdb.base/call-signal-resume.exp: Ditto.
+	* gdb.base/callfuncs.exp: Ditto.
+	* gdb.base/commands.exp: Ditto.
+	* gdb.base/dbx.exp: Ditto.
+	* gdb.base/default.exp: Ditto.
+	* gdb.base/dump.exp: Ditto.
+	* gdb.base/exprs.exp: Ditto.
+	* gdb.base/freebpcmd.exp: Ditto.
+	* gdb.base/interrupt.exp: Ditto.
+	* gdb.base/list.exp: Ditto.
+	* gdb.base/long_long.exp: Ditto.
+	* gdb.base/maint.exp: Ditto.
+	* gdb.base/ptype.exp: Ditto.
+	* gdb.base/return.exp: Ditto.
+	* gdb.base/setshow.exp: Ditto.
+	* gdb.base/sigbpt.exp: Ditto.
+	* gdb.base/sigrepeat.exp: Ditto.
+
+	* gdb.cp/classes.exp: Ditto.
+
+	* gdb.dwarf2/dw2-restore.exp: Ditto.
+
+	* gdb.gdb/selftest.exp: Ditto.
+
+	* gdb.multi/base.exp: Ditto.
+	* gdb.multi/bkpt-multi-exec.exp: Ditto.
+
+	* gdb.python/py-block.exp: Ditto.
+	* gdb.python/py-prettyprint.exp: Ditto.
+	* gdb.python/py-template.exp: Ditto.
+
+	* gdb.server/ext-attach.exp: Ditto.
+	* gdb.server/ext-run.exp: Ditto.
+	* gdb.server/server-mon.exp: Ditto.
+
+	* gdb.threads/fork-thread-pending.exp: Ditto.
+	* gdb.threads/hand-call-in-threads.exp: Ditto.
+	* gdb.threads/interrupted-hand-call.exp: Ditto.
+	* gdb.threads/linux-dp.exp: Ditto.
+	* gdb.threads/manythreads.exp: Ditto.
+	* gdb.threads/print-threads.exp: Ditto.
+	* gdb.threads/pthreads.exp: Ditto.
+	* gdb.threads/schedlock.exp: Ditto.
+	* gdb.threads/thread-unwindonsignal.exp: Ditto.
+	* gdb.threads/threadapply.exp: Ditto.
+@
+text
+@d45 1
+a45 4
+gdb_exit
+gdb_start
+gdb_reinitialize_dir $srcdir/$subdir
+gdb_load ${binfile1}
+d61 1
+a61 4
+gdb_exit
+gdb_start
+gdb_reinitialize_dir $srcdir/$subdir
+gdb_load ${binfile1}
+d63 3
+a65 1
+gdb_test "add-inferior -exec ${binfile2}"
+@
+
+
+1.2
+log
+@Update copyright year in most headers.
+
+Automatic update by copyright.sh.
+@
+text
+@d74 1
+a74 1
+gdb_test "break ${srcfile2}:${bp_location}" ""
+@
+
+
+1.1
+log
+@Adding files to HEAD that cvs had declared dead due to existing on
+the branch only.
+
+       gdb/testsuite/
+	* gdb.base/foll-vfork.exp: Adjust to spell out "follow-fork".
+	* gdb.base/foll-exec.exp: Adjust to expect a process id before
+	"Executing new program".
+	* gdb.base/foll-fork.exp: Adjust to spell out "follow-fork".
+	* gdb.base/multi-forks.exp: Ditto.  Adjust to the inferior being
+	left listed after having been killed.
+	* gdb.base/attach.exp: Adjust to spell out "symbol-file".
+	* gdb.base/maint.exp: Adjust test.
+
+	* Makefile.in (ALL_SUBDIRS): Add gdb.multi.
+	* gdb.multi/Makefile.in: New.
+	* gdb.multi/base.exp: New.
+	* gdb.multi/goodbye.c: New.
+	* gdb.multi/hangout.c: New.
+	* gdb.multi/hello.c: New.
+	* gdb.multi/bkpt-multi-exec.c: New.
+	* gdb.multi/bkpt-multi-exec.exp: New.
+	* gdb.multi/crashme.c: New.
+@
+text
+@d1 1
+a1 1
+# Copyright 2009 Free Software Foundation, Inc.
+@
+

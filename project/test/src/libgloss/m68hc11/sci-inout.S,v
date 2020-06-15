@@ -1,0 +1,285 @@
+head	1.2;
+access;
+symbols
+	newlib-2_2_0:1.2.0.10
+	newlib-2_1_0:1.2
+	newlib-2_0_0:1.2
+	newlib-1_20_0:1.2
+	newlib-1_19_0:1.2
+	newlib-1_18_0:1.2
+	newlib-1_17_0-arc:1.2.0.8
+	binutils-arc-20080908-branch:1.2.0.6
+	binutils-arc-20080908-branchpoint:1.2
+	newlib-1_17_0:1.2
+	newlib-1_16_0:1.2
+	newlib-1_15_0:1.2
+	newlib-csl-coldfire-4_1-32:1.2
+	newlib-csl-sourcerygxx-4_1-32:1.2
+	newlib-csl-innovasic-fido-3_4_4-33:1.2
+	newlib-csl-coldfire-4_1-30:1.2
+	newlib-csl-sourcerygxx-4_1-30:1.2
+	newlib-csl-coldfire-4_1-28:1.2
+	newlib-csl-sourcerygxx-4_1-28:1.2
+	newlib-csl-arm-2006q3-27:1.2
+	newlib-csl-sourcerygxx-4_1-27:1.2
+	newlib-csl-arm-2006q3-26:1.2
+	newlib-csl-sourcerygxx-4_1-26:1.2
+	newlib-csl-sourcerygxx-4_1-24:1.2
+	newlib-csl-sourcerygxx-4_1-23:1.2
+	newlib-csl-sourcerygxx-4_1-21:1.2
+	newlib-csl-arm-2006q3-21:1.2
+	newlib-csl-arm-2006q3-19:1.2
+	newlib-csl-sourcerygxx-4_1-19:1.2
+	newlib-csl-sourcerygxx-4_1-18:1.2
+	newlib-csl-sourcerygxx-3_4_4-25:1.2
+	newlib-csl-sourcerygxx-4_1-17:1.2
+	newlib-csl-sourcerygxx-4_1-14:1.2
+	newlib-csl-sourcerygxx-4_1-13:1.2
+	newlib-csl-sourcerygxx-4_1-12:1.2
+	newlib-csl-sourcerygxx-4_1-9:1.2
+	newlib-csl-sourcerygxx-4_1-8:1.2
+	newlib-csl-sourcerygxx-4_1-7:1.2
+	newlib-csl-arm-2006q1-6:1.2
+	newlib-csl-sourcerygxx-4_1-6:1.2
+	newlib-csl-sourcerygxx-4_1-5:1.2
+	newlib-csl-sourcerygxx-4_1-4:1.2
+	newlib-autotools-branch:1.2.0.4
+	newlib-csl-20060320-branch:1.2.0.2
+	newlib-csl-20060320-branchpoint:1.2
+	newlib-1_14_0:1.2
+	newlib-csl-arm-2005-q1b:1.2
+	newlib-csl-arm-2005-q1a:1.2
+	newlib-1_13_0:1.2
+	csl-arm-2004-q3:1.2
+	csl-arm-2004-q1a:1.2
+	csl-arm-2004-q1:1.2
+	newlib-1_12_0:1.1
+	csl-arm-2003-q4:1.1
+	newlib-1_11_0:1.1;
+locks; strict;
+comment	@# @;
+
+
+1.2
+date	2004.03.04.00.35.03;	author jjohnstn;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2002.07.23.21.56.27;	author jjohnstn;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@
+2004-03-03  Stephane Carrez  <stcarrez@@nerim.fr>
+
+        * m68hc11/sci-inout.S: Supports -mlong-calls.
+        * m68hc11/sim-valid-m68hc11.ld (.tramp): New section for trampolines.
+        (.text): Mark the .installN and .finiN section with KEEP.
+        (.vectors): Likewise for .vectors.
+        (.gcc_except_table): New section.
+        * m68hc11/sim-valid-m68hc12.ld (.tramp): New section for trampolines.
+        (.text): Mark the .installN and .finiN section with KEEP.
+        (.vectors): Likewise for .vectors.
+        (.gcc_except_table): New section.
+@
+text
+@/* M68HC11/M68HC12 serial line operations
+ * Copyright (C) 1999, 2001, 2003, 2004 Stephane Carrez (stcarrez@@nerim.fr)
+ *
+ * The authors hereby grant permission to use, copy, modify, distribute,
+ * and license this software and its documentation for any purpose, provided
+ * that existing copyright notices are retained in all copies and that this
+ * notice is included verbatim in any distributions. No written agreement,
+ * license, or royalty fee is required for any of the authorized uses.
+ * Modifications to this software may be copyrighted by their authors
+ * and need not follow the licensing terms described here, provided that
+ * the new terms are clearly indicated on the first page of each file where
+ * they apply.
+ */
+
+#ifdef __HAVE_SHORT_INT__
+	.mode mshort
+#else
+	.mode mlong
+#endif
+
+#if defined(__USE_RTC__)
+	.macro ret
+#if defined(mc68hc12)
+	rtc
+#else
+	jmp __return_32
+#endif
+	.endm
+#else
+	.macro ret
+	rts
+	.endm
+#endif
+#ifdef mc68hc12
+	SC0CR1 = 0xC2
+	SC0CR2 = 0xC3
+	SC0SR1 = 0xC4
+	SC0DRL = 0xC7
+	SC0BD  = 0xC0
+
+	.sect .data
+	.globl _m68hc12_ports
+_m68hc12_ports:	.word	0
+
+	.sect .text
+	.globl outbyte
+;;;
+;;; int outbyte(char c);
+;;;
+;;; B :	Character to send
+;;; 
+outbyte:
+	bsr	_sci_init
+L1:
+	ldaa	SC0SR1,x
+	bge	L1
+	stab	SC0DRL,x
+	ldab	SC0CR2,x
+	orab	#0x8
+	stab	SC0CR2,x
+	ret
+
+	.sect .text
+	.globl inbyte
+;;;
+;;; char inbyte(void);
+;;; 
+inbyte:
+	bsr	_sci_init
+	ldaa	SC0SR1,x
+	bita	#0x20
+	beq	inbyte
+	ldab	SC0CR2,x
+	ret
+
+	.globl _sci_init
+	.sect .text
+_sci_init:
+	ldx	_m68hc12_ports
+	beq	do_init
+	dex
+	rts
+do_init:
+	ldx	#0x1
+	stx	_m68hc12_ports
+	dex
+	ldd	#26
+	std	SC0BD,x
+	ldaa	#0
+	staa	SC0CR1,x
+	ldaa	#0xC
+	staa	SC0CR2,x
+	rts
+#else	
+	BAUD = 0x2b
+	SCCR1= 0x2c
+	SCCR2= 0x2d
+	SCSR = 0x2e
+	SCDR = 0x2f
+
+	.sect .data
+	.globl _m68hc11_ports
+_m68hc11_ports:	.word	0
+
+	.sect .text
+	.globl outbyte
+;;;
+;;; int outbyte(char c);
+;;;
+;;; B :	Character to send
+;;; 
+outbyte:
+	bsr	_sci_init
+L1:
+	ldaa	SCSR,x
+	bge	L1
+	stab	SCDR,x
+	ldab	SCCR2,x
+	orab	#0x8
+	stab	SCCR2,x
+	ret
+
+	.sect .text
+	.globl inbyte
+;;;
+;;; char inbyte(void);
+;;; 
+inbyte:
+	bsr	_sci_init
+	ldaa	SCSR,x
+	bita	#0x20
+	beq	inbyte
+	ldab	SCDR,x
+	ret
+
+	.globl _sci_init
+	.sect .text
+_sci_init:
+	ldx	_m68hc11_ports
+	beq	do_init
+	rts
+do_init:
+	ldx	#0x1000
+	stx	_m68hc11_ports
+	ldaa	#0x30
+	staa	BAUD,x
+	clra
+	staa	SCCR1,x
+	ldaa	#0xC
+	staa	SCCR2,x
+	rts
+
+#endif
+@
+
+
+1.1
+log
+@
+2002-07-23  Stephane Carrez  <stcarrez@@nerim.fr>
+
+        * README: Mention 68HC11/68HC12 support.
+        * configure.in: Recognize m6811-elf and m6812-elf.
+        * configure: Regenerated.
+        * m68hc11/Makefile.in: New file.
+        * m68hc11/configure.in: New file.
+        * m68hc11/configure: New file.
+        * m68hc11/crt0.S: New file.
+        * m68hc11/sci-inout.S: New file for 68hc11/68hc12 sio.
+        * m68hc11/sim-valid-m68hc11.ld: New file.
+        * m68hc11/sim-valid-m68hc12.ld: New file.
+        * m68hc11/syscalls.c: New file.
+@
+text
+@d2 1
+a2 1
+ * Copyright (C) 1999, 2001 Stephane Carrez (stcarrez@@nerim.fr)	
+d15 19
+d61 1
+a61 1
+	rts
+d74 1
+a74 1
+	rts
+d121 1
+a121 1
+	rts
+d134 1
+a134 1
+	rts
+@
+

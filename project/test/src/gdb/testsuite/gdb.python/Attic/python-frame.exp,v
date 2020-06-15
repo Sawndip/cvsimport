@@ -1,0 +1,212 @@
+head	1.3;
+access;
+symbols
+	msnyder-checkpoint-072509-branch:1.2.0.2
+	msnyder-checkpoint-072509-branchpoint:1.2;
+locks; strict;
+comment	@# @;
+
+
+1.3
+date	2009.09.09.17.45.42;	author brobecke;	state dead;
+branches;
+next	1.2;
+
+1.2
+date	2009.04.13.20.54.59;	author tromey;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2009.03.30.19.54.33;	author bauermann;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.3
+log
+@Checking in this patch for Thiago: Rename python-* files into py-*,
+more 8+3 friendly.
+
+
+gdb/
+        * Makefile.in (py-cmd.o): Renamed from python-cmd.o.  Updated
+        references.
+        (py-frame.o): Renamed from python-frame.o.  Updated references.
+        (py-function.o): Renamed from python-function.o.  Updated references.
+        (py-objfile.o): Renamed from python-objfile.o.  Updated references.
+        (py-prettyprint.o): Renamed from python-prettyprint.o.  Updated
++references.
+        (py-type.o): Renamed from python-type.o.  Updated references.
+        (py-utils.o): Renamed from python-utils.o.  Updated references.
+        (py-value.o): Renamed from python-value.o.  Updated references.
+        * py-cmd.o: Renamed from python-cmd.o.
+        * py-frame.o: Renamed from python-frame.o.
+        * py-function.o: Renamed from python-function.o.
+        * py-objfile.o: Renamed from python-objfile.o.
+        * py-prettyprint.o: Renamed from python-prettyprint.o.
+        * py-type.o: Renamed from python-type.o.
+        * py-utils.o: Renamed from python-utils.o.
+        * py-value.o: Renamed from python-value.o.
+
+gdb/testsuite/
+        * gdb.python/Makefile.in (EXECUTABLES): Adjust to new executable
+        names, add missing ones.
+        * gdb.python/py-cmd.exp: Rename from python-cmd.exp.
+        * gdb.python/py-frame.c: Rename from python-frame.c.
+        * gdb.python/py-frame.exp: Rename from python-frame.exp.  Adjust
+        testfile name.
+        * gdb.python/py-function.exp: Rename from python-function.exp.
+        * gdb.python/py-mi.exp: Rename from python-mi.exp.  Adjust
+        testfile name.
+        * gdb.python/py-prettyprint.c: Rename from python-prettyprint.c.
+        * gdb.python/py-prettyprint.exp: Rename from python-prettyprint.exp.
+        Adjust testfile name.
+        * gdb.python/py-prettyprint.py: Rename from python-prettyprint.py.
+        * gdb.python/py-template.cc: Rename from python-template.cc.
+        * gdb.python/py-template.exp: Rename from python-template.exp.
+        Adjust testfile name.
+        * gdb.python/py-value.c: Rename from python-value.c.
+        * gdb.python/py-value.exp: Rename from python-value.exp.  Adjust
+        testfile name.
+@
+text
+@# Copyright (C) 2009 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# This file is part of the GDB testsuite.  It tests the mechanism
+# exposing values to Python.
+
+if $tracelevel then {
+    strace $tracelevel
+}
+
+set testfile "python-frame"
+set srcfile ${testfile}.c
+set binfile ${objdir}/${subdir}/${testfile}
+if { [gdb_compile "${srcdir}/${subdir}/${srcfile}" "${binfile}" executable {debug}] != "" } {
+    untested "Couldn't compile ${srcfile}"
+    return -1
+}
+
+# Run a command in GDB, and report a failure if a Python exception is thrown.
+# If report_pass is true, report a pass if no exception is thrown.
+proc gdb_py_test_silent_cmd {cmd name report_pass} {
+  global gdb_prompt
+
+  gdb_test_multiple $cmd $name {
+      -re "Traceback.*$gdb_prompt $"  { fail $name }
+      -re "$gdb_prompt $"	      { if $report_pass { pass $name } }
+  }
+}
+
+# Start with a fresh gdb.
+
+gdb_exit
+gdb_start
+gdb_reinitialize_dir $srcdir/$subdir
+gdb_load ${binfile}
+
+gdb_test_multiple "python print 'hello, world!'" "verify python support" {
+    -re "not supported.*$gdb_prompt $"	{
+      unsupported "python support is disabled"
+      return -1
+    }
+    -re "$gdb_prompt $"	{}
+}
+
+# The following tests require execution.
+
+if ![runto_main] then {
+    fail "Can't run to main"
+    return 0
+}
+
+gdb_breakpoint "f2"
+gdb_continue_to_breakpoint "breakpoint at f2"
+gdb_test "up" "" ""
+
+gdb_py_test_silent_cmd "python f1 = gdb.selected_frame ()" "get second frame" 0
+gdb_py_test_silent_cmd "python f0 = f1.newer ()" "get first frame" 0
+
+gdb_test "python print 'result =', f0 == f1" " = False" "test equality comparison (false)"
+gdb_test "python print 'result =', f0 == f0" " = True" "test equality comparison (true)"
+gdb_test "python print 'result =', f0 != f1" " = True" "test inequality comparison (true)"
+gdb_test "python print 'result =', f0 != f0" " = False" "test inequality comparison (false)"
+gdb_test "python print 'result =', f0.is_valid ()" " = True" "test Frame.is_valid"
+gdb_test "python print 'result =', f0.name ()" " = f2" "test Frame.name"
+gdb_test "python print 'result =', f0.type () == gdb.NORMAL_FRAME" " = True" "test Frame.type"
+gdb_test "python print 'result =', f0.unwind_stop_reason () == gdb.FRAME_UNWIND_NO_REASON" " = True" "test Frame.type"
+gdb_test "python print 'result =', gdb.frame_stop_reason_string (gdb.FRAME_UNWIND_INNER_ID)" " = previous frame inner to this frame \\(corrupt stack\\?\\)" "test gdb.frame_stop_reason_string"
+gdb_test "python print 'result =', f0.pc ()" " = \[0-9\]+" "test Frame.pc"
+gdb_test "python print 'result =', f0.older () == f1" " = True" "test Frame.older"
+gdb_test "python print 'result =', f1.newer () == f0" " = True" "test Frame.newer"
+gdb_test "python print 'result =', f0.read_var ('variable_which_surely_doesnt_exist')" \
+  "ValueError: variable 'variable_which_surely_doesnt_exist' not found.*Error while executing Python code." \
+  "test Frame.read_var - error"
+gdb_test "python print 'result =', f0.read_var ('a')" " = 1" "test Frame.read_var - success"
+
+gdb_test "python print 'result =', gdb.selected_frame () == f1" " = True" "test gdb.selected_frame"
+@
+
+
+1.2
+log
+@gdb
+	* python/python-frame.c (frapy_richcompare): Return
+	Py_NotImplemented, not an error.  Handle Py_NE as well.
+gdb/testsuite
+	* gdb.python/python-frame.exp (gdb_py_test_silent_cmd): Test !=
+	operator on Frame.
+@
+text
+@@
+
+
+1.1
+log
+@gdb/
+	Expose frames to Python.
+	* Makefile.in (SUBDIR_PYTHON_OBS): Add python-frame.o.
+	(SUBDIR_PYTHON_SRCS): Add python-frame.c.
+	(python-frame.o): New target.
+	* python/python-frame.c: New file.
+	* python/python-internal.h (gdbpy_frames, gdbpy_newest_frame,
+	gdbpy_frame_stop_reason_string, gdbpy_selected_frame,
+	gdbpy_initialize_frames): New prototypes.
+	* python/python.c (_initialize_python): Call gdbpy_initialize_frames.
+	(GdbMethods): Add `selected_frame' and `frame_stop_reason_string'
+	entries.
+	* stack.c (find_frame_funname): New function, factored out of
+	print_frame.
+	(print_frame): Call find_frame_funname.
+	* stack.h (find_frame_funname): Add prototype.
+
+gdb/doc/
+	* gdb.texinfo (Frames in Python): New node.
+	(Python API): Update.
+
+gdb/testsuite/
+	* gdb.python/python-frame.c: New file.
+	* gdb.python/python-frame.exp: New file.
+@
+text
+@d73 2
+@
+

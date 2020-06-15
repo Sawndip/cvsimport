@@ -1,0 +1,312 @@
+head	1.3;
+access;
+symbols
+	gdb_5_3-2002-12-12-release:1.2
+	gdb_5_3-branch:1.2.0.4
+	gdb_5_3-2002-09-04-branchpoint:1.2
+	gdb_5_2_1-2002-07-23-release:1.2
+	gdb_5_2-2002-04-29-release:1.2
+	gdb_5_2-branch:1.2.0.2
+	gdb_5_2-2002-03-03-branchpoint:1.2
+	gdb_5_1_1-2002-01-24-release:1.1.1.1
+	cygnus_cvs_20020108_pre:1.2
+	gdb_5_1_0_1-2002-01-03-branch:1.1.1.1.0.8
+	gdb_5_1_0_1-2002-01-03-branchpoint:1.1.1.1
+	gdb_5_1-2001-11-21-release:1.1.1.1
+	gdb_s390-2001-09-26-branch:1.1.1.1.0.6
+	gdb_s390-2001-09-26-branchpoint:1.1.1.1
+	TIX_TCL_8_3:1.1.1.1
+	NET:1.1.1
+	gdb_5_1-2001-07-29-branch:1.1.1.1.0.4
+	gdb_5_1-2001-07-29-branchpoint:1.1.1.1
+	insight-precleanup-2001-01-01:1.1.1.1
+	gdb_5_0-2000-05-19-release:1.1.1.1
+	gdb_4_18_2-2000-05-18-release:1.1.1.1
+	gdb_4_95_1-2000-05-11-snapshot:1.1.1.1
+	gdb_4_95_0-2000-04-27-snapshot:1.1.1.1
+	gdb_5_0-2000-04-10-branch:1.1.1.1.0.2
+	gdb_5_0-2000-04-10-branchpoint:1.1.1.1
+	repo-unification-2000-02-06:1.1.1.1
+	insight-2000-02-04:1.1.1.1
+	SNAPSHOT:1.1.1;
+locks; strict;
+comment	@# @;
+expand	@o@;
+
+
+1.3
+date	2003.03.07.23.09.21;	author hunt;	state dead;
+branches;
+next	1.2;
+
+1.2
+date	2001.09.08.23.25.52;	author irox;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2000.02.07.00.19.28;	author jsm;	state Exp;
+branches
+	1.1.1.1;
+next	;
+
+1.1.1.1
+date	2000.02.07.00.19.28;	author jsm;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.3
+log
+@Remove directory.
+@
+text
+@# DirBox.tcl --
+#
+#	Implements the tixDirSelectBox widget.
+#
+# 	   - overrides the -browsecmd and -command options of the
+#	     HList subwidget
+#
+# Copyright (c) 1996, Expert Interface Technologies
+#
+# See the file "license.terms" for information on usage and redistribution
+# of this file, and for a DISCLAIMER OF ALL WARRANTIES.
+#
+
+tixWidgetClass tixDirSelectBox {
+    -classname TixDirSelectBox
+    -superclass tixPrimitive
+    -method {
+    }
+    -flag {
+	-command -disablecallback -value
+    }
+    -configspec {
+	{-command command Command ""}
+	{-disablecallback disableCallback DisableCallback 0 tixVerifyBoolean}
+	{-label label Label "Directory:"}
+	{-value value Value ""}
+    }
+    -forcecall {
+	-value -label
+    }
+    -default {
+	{*combo*listbox.height 		5}
+	{*combo.label.anchor		w}
+	{*combo.labelSide		top}
+	{*combo.hostory			true}
+	{*combo.historyLimit		20}
+    }
+}
+
+proc tixDirSelectBox:InitWidgetRec {w} {
+    upvar #0 $w data
+    tixChainMethod $w InitWidgetRec
+}
+
+proc tixDirSelectBox:ConstructWidget {w} {
+    upvar #0 $w data
+
+    tixChainMethod $w ConstructWidget
+    set data(w:dircbx) [tixFileComboBox $w.dircbx]
+    set data(w:dirlist)  [tixDirList $w.dirlist]
+
+    pack $data(w:dircbx) -side top -fill x -padx 4 -pady 2
+    pack $data(w:dirlist) -side top -fill both -expand yes -padx 4 -pady 2
+
+    if ![string comp $data(-value) ""] {
+	set data(-value) [tixFSPWD]
+    }
+}
+
+proc tixDirSelectBox:SetBindings {w} {
+    upvar #0 $w data
+
+    tixChainMethod $w SetBindings
+
+    $data(w:dircbx) config -command "tixDirSelectBox:Cmd-DirCbx $w"
+    $data(w:dirlist) config -command "tixDirSelectBox:Cmd-DirList $w"\
+	-browsecmd "tixDirSelectBox:Browse-DirList $w"
+}
+
+#----------------------------------------------------------------------
+# Incoming event: User
+#----------------------------------------------------------------------
+
+# User activates the FileComboBox
+#
+#
+proc tixDirSelectBox:Cmd-DirCbx {w args} {
+    upvar #0 $w data
+
+    set fInfo [tixEvent value]
+    set path [lindex $fInfo 0]
+
+    if {![file exists $path]} {
+	tk_dialog .tix_error "" "Directory \"$path\" does not exist." \
+	    error 0 Ok
+	$data(w:dircbx) config \
+	    -text [tixFSDisplayName [tixFSNormDir $data(-value)]] \
+	    -directory $data(-value)
+	return
+
+	#
+	# The following code is not used because directories cannot be created
+	# on Windows
+	#
+
+	# 1.1 Check for validity. The pathname cannot contain invalid chars
+	#
+	if ![tixFSIsValid $path] {
+	    tk_dialog .tix_error "Error" \
+		"\"$path\" is not a valid directory name" \
+		error 0 Ok
+	    $data(w:dircbx) config \
+		-text [tixFSDisplayName [tixFSNormDir $data(-value)]] \
+		-directory $data(-value)
+	    return
+	}
+
+	# 1.2 Prompt for creation
+	#
+	set choice [tk_dialog .tix_error "" \
+	    "Directory \"$path\" does not exist. Do you want to create it?" \
+	    question 1 Yes No]
+	if {$choice == 1} {
+	    $data(w:dircbx) config \
+		-text [tixFSDisplayName [tixFSNormDir $data(-value)]] \
+		-directory $data(-value)
+	    return
+	} else {
+	    if ![tixFSCreateDirs $path] {
+		tk_dialog .tix_error "Error" \
+		    "Cannot create directory \"$path\". Permission denied" \
+		    error 0 Ok
+		$data(w:dircbx) config \
+		    -text [tixFSDisplayName [tixFSNormDir $data(-value)]] \
+		    -directory $data(-value)
+		return
+	    }
+	    tixDirSelectBox:SetValue $w $path 1 1
+	}
+    } elseif {![file isdirectory $path]} {
+	# 2.1: Can't choose a non-directory file
+	#
+	tk_dialog .tix_error "Error" \
+	    "\"$path\" is not a directory." \
+	    error 0 Ok
+	$data(w:dircbx) config \
+	    -text [tixFSDisplayName [tixFSNormDir $data(-value)]] \
+	    -directory $data(-value)
+	return
+    } else {
+	# OK. It is an existing directory
+	#
+	tixDirSelectBox:SetValue $w $path 1 1
+    }
+}
+
+# User activates the dir list
+#
+#
+proc tixDirSelectBox:Cmd-DirList {w args} {
+    upvar #0 $w data
+
+    set dir $data(-value)
+    catch {
+	set dir [tixEvent flag V]
+    }
+    set dir [tixFSNormDir $dir]
+    tixDirSelectBox:SetValue $w $dir 0 0
+}
+
+# User browses the dir list
+#
+#
+proc tixDirSelectBox:Browse-DirList {w args} {
+    upvar #0 $w data
+
+    set dir $data(-value)
+    catch {
+	set dir [tixEvent flag V]
+    }
+    set dir [tixFSNormDir $dir]
+    tixDirSelectBox:SetValue $w $dir 0 0
+}
+
+#----------------------------------------------------------------------
+# Incoming event: Application
+#----------------------------------------------------------------------
+proc tixDirSelectBox:config-value {w value} {
+    upvar #0 $w data
+    set value [tixFSNormDir $value]
+
+    tixDirSelectBox:SetValue $w $value 1 1
+    return $value
+}
+
+proc tixDirSelectBox:config-label {w value} {
+    upvar #0 $w data
+
+    $data(w:dircbx) subwidget combo config -label $value
+}
+
+#----------------------------------------------------------------------
+#
+#			Internal functions
+#
+#----------------------------------------------------------------------
+
+# Arguments:
+#	callback:Bool	Should we invoke the the -command.
+# 	setlist:Bool	Should we set the -value of the DirList subwidget.
+#
+proc tixDirSelectBox:SetValue {w dir callback setlist} {
+    upvar #0 $w data
+
+    set data(-value) $dir
+    $data(w:dircbx) config -text [tixFSDisplayName $dir] \
+	-directory [tixFSDisplayName $dir] 
+    if {$setlist && [file isdirectory $dir]} {
+	tixSetSilent $data(w:dirlist) $dir
+    }
+
+    if {$callback} {
+	if {!$data(-disablecallback) && ![tixStrEq $data(-command) ""]} {
+	    set bind(specs) {%V}
+	    set bind(%V)    $data(-value)
+
+	    tixEvalCmdBinding $w $data(-command) bind $data(-value)
+	}
+    }
+}
+@
+
+
+1.2
+log
+@Touched all tix files to ease next import.
+@
+text
+@@
+
+
+1.1
+log
+@Initial revision
+@
+text
+@@
+
+
+1.1.1.1
+log
+@import insight-2000-02-04 snapshot (2nd try)
+@
+text
+@@

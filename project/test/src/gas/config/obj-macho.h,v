@@ -1,0 +1,627 @@
+head	1.11;
+access;
+symbols
+	binutils-2_24-branch:1.11.0.4
+	binutils-2_24-branchpoint:1.11
+	binutils-2_21_1:1.1
+	binutils-2_23_2:1.11
+	binutils-2_23_1:1.11
+	binutils-2_23:1.11
+	binutils-2_23-branch:1.11.0.2
+	binutils-2_23-branchpoint:1.11
+	binutils-2_22_branch:1.1.0.8
+	binutils-2_22:1.1
+	binutils-2_22-branch:1.1.0.6
+	binutils-2_22-branchpoint:1.1
+	binutils-2_21:1.1
+	binutils-2_21-branch:1.1.0.4
+	binutils-2_21-branchpoint:1.1
+	binutils-2_20_1:1.1
+	binutils-2_20:1.1
+	binutils-2_20-branch:1.1.0.2
+	binutils-2_20-branchpoint:1.1
+	binutils_latest_snapshot:1.11;
+locks; strict;
+comment	@ * @;
+
+
+1.11
+date	2012.02.21.13.39.37;	author iains;	state Exp;
+branches;
+next	1.10;
+
+1.10
+date	2012.02.21.09.13.02;	author iains;	state Exp;
+branches;
+next	1.9;
+
+1.9
+date	2012.02.20.20.11.32;	author iains;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2012.01.13.15.19.08;	author iains;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2012.01.13.11.55.01;	author iains;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2012.01.12.14.03.09;	author iains;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2012.01.09.10.47.47;	author iains;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2012.01.03.13.18.48;	author iains;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2011.12.29.10.53.10;	author iains;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2011.12.14.10.30.09;	author gingold;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2009.07.02.08.09.35;	author gingold;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.11
+log
+@provide a hook to allow checking errors just before we output the file.
+
+gas:
+
+	* write.c (write_object_file): Add md_pre_output_hook.
+	* config/obj-macho.c (obj_mach_o_check_before_writing): New.
+	(obj_mach_o_pre_output_hook): New.
+	* config/obj-macho.h (md_pre_output_hook): Define.
+	(obj_mach_o_pre_output_hook): Declare.
+@
+text
+@/* Mach-O object file format for gas, the assembler.
+   Copyright 2009, 2011, 2012 Free Software Foundation, Inc.
+
+   This file is part of GAS, the GNU Assembler.
+
+   GAS is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as
+   published by the Free Software Foundation; either version 3,
+   or (at your option) any later version.
+
+   GAS is distributed in the hope that it will be useful, but
+   WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See
+   the GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with GAS; see the file COPYING.  If not, write to the Free
+   Software Foundation, 51 Franklin Street - Fifth Floor, Boston, MA
+   02110-1301, USA.  */
+
+#ifndef _OBJ_MACH_O_H
+#define _OBJ_MACH_O_H
+
+/* Tag to validate Mach-O object file format processing */
+#define OBJ_MACH_O 1
+
+#include "bfd/mach-o.h"
+
+#include "targ-cpu.h"
+
+#define OUTPUT_FLAVOR bfd_target_mach_o_flavour
+
+/* We want to control how the sections are pre-defined on startup.  */
+#define obj_begin() mach_o_begin ()
+extern void mach_o_begin (void);
+
+/* All our align expressions are power of two.  */
+#define USE_ALIGN_PTWO 1
+
+/* Common symbols can carry alignment information.  */
+#ifndef S_SET_ALIGN
+#define S_SET_ALIGN(S,V) do {\
+  bfd_mach_o_asymbol *___s = (bfd_mach_o_asymbol *) symbol_get_bfdsym (S);\
+  ___s->n_desc = (___s->n_desc & 0xf0ff) | (((V) & 0x0f) << 8);\
+} while (0)
+#endif
+
+extern const pseudo_typeS mach_o_pseudo_table[];
+
+#ifndef obj_pop_insert
+#define obj_pop_insert() pop_insert (mach_o_pseudo_table)
+#endif
+
+#define obj_sec_sym_ok_for_reloc(SEC)	1
+
+#define obj_read_begin_hook()	{;}
+#define obj_symbol_new_hook(s)	{;}
+
+#define EMIT_SECTION_SYMBOLS		0
+
+struct obj_mach_o_symbol_data
+{
+  /* If the symbol represents a subsection, this is the size of the subsection.
+     This is used to check whether a local symbol belongs to a subsection.  */
+  valueT subsection_size;
+};
+#define OBJ_SYMFIELD_TYPE struct obj_mach_o_symbol_data
+
+#define obj_frob_colon obj_mach_o_frob_colon
+extern void obj_mach_o_frob_colon (const char *);
+
+/* Called when a label is defined.  Mach-O uses this to create subsections.  */
+#define obj_frob_label obj_mach_o_frob_label
+extern void obj_mach_o_frob_label (symbolS *);
+
+#define obj_frob_symbol(s, punt) punt = obj_mach_o_frob_symbol(s)
+extern int obj_mach_o_frob_symbol (struct symbol *);
+
+#define OBJ_PROCESS_STAB(SEG,W,S,T,O,D)	obj_mach_o_process_stab(W,S,T,O,D)
+extern void obj_mach_o_process_stab (int, const char *,int, int, int);
+
+struct obj_mach_o_frag_data
+{
+  /* Symbol that corresponds to the subsection.  */
+  symbolS *subsection;
+};
+  
+#define OBJ_FRAG_TYPE struct obj_mach_o_frag_data
+
+#define md_pre_output_hook obj_mach_o_pre_output_hook()
+extern void obj_mach_o_pre_output_hook(void);
+
+#define md_pre_relax_hook obj_mach_o_pre_relax_hook()
+extern void obj_mach_o_pre_relax_hook (void);
+
+#define md_post_relax_hook obj_mach_o_post_relax_hook()
+extern void obj_mach_o_post_relax_hook (void);
+
+#define obj_frob_file_after_relocs obj_mach_o_frob_file_after_relocs
+extern void obj_mach_o_frob_file_after_relocs (void);
+
+#define SET_SECTION_RELOCS(sec, relocs, n) \
+  obj_mach_o_reorder_section_relocs (sec, relocs, n)
+extern void obj_mach_o_reorder_section_relocs (asection *, arelent **,
+					       unsigned int);
+
+/* Emit relocs for local subtracts, to cater for subsections-via-symbols.  */
+#define md_allow_local_subtract(LEFT, RIGHT, SECTION) \
+ obj_mach_o_allow_local_subtract (LEFT, RIGHT, SECTION)
+extern int obj_mach_o_allow_local_subtract (expressionS *, expressionS *,
+					    segT);
+
+struct fix;
+extern int obj_mach_o_in_different_subsection (symbolS *a, symbolS *b);
+extern int obj_mach_o_force_reloc (struct fix *fix);
+extern int obj_mach_o_force_reloc_sub_same (struct fix *fix, segT seg);
+extern int obj_mach_o_force_reloc_sub_local (struct fix *fix, segT seg);
+
+#endif /* _OBJ_MACH_O_H */
+@
+
+
+1.10
+log
+@
+2012-02-21  Tristan Gingold  <gingold@@adacore.com>
+
+	* config/tc-i386.h (OBJ_MACH_O): New section.
+	(TC_FORCE_RELOCATION): Use obj_mach_o_force_reloc.
+	(TC_FORCE_RELOCATION_SUB_SAME): New
+	(TC_FORCE_RELOCATION_SUB_LOCAL): New.
+	(TC_VALIDATE_FIX_SUB): New.
+	* frags.h (struct frag): OBJ_FRAG_TYPE, new field.
+	* symbols.c (colon): obj_frob_colon: New hook.
+	* write.c (write_object_file): md_pre_relax_hook, new
+	hook.
+	* config/obj-macho.c (obj_mach_o_frob_colon): New.
+	(obj_mach_o_frob_label): Record sub-section labels.
+	(obj_mach_o_frob_symbol): Rename from obj_macho_frob_symbol.
+	(obj_mach_o_set_subsections): New.
+	(obj_mach_o_pre_relax_hook): New.
+	(obj_mach_o_in_different_subsection): New.
+	(obj_mach_o_force_reloc_sub_same): New.
+	(obj_mach_o_force_reloc_sub_local): New.
+	(obj_mach_o_force_reloc): New.
+	* config/obj-macho.h (OBJ_SYMFIELD_TYPE): New.
+	(obj_frob_colon): New Define.
+	(obj_mach_o_frob_label): Renamed.
+	(obj_mach_o_frob_symbol): Renamed.
+	(OBJ_FRAG_TYPE): New.
+	(obj_mach_o_in_different_subsection, obj_mach_o_force_reloc,
+	 obj_mach_o_force_reloc_sub_same,
+	 obj_mach_o_force_reloc_sub_local): New declarations.
+@
+text
+@d90 3
+@
+
+
+1.9
+log
+@
+gas:
+
+	* config/obj-macho.c (obj_mach_o_is_frame_section): New.
+	(obj_mach_o_allow_local_subtract): New.
+	* config/obj-macho.h (md_allow_local_subtract): Define.
+	(obj_mach_o_allow_local_subtract): Declare.
+@
+text
+@d38 1
+a38 1
+#define USE_ALIGN_PTWO
+d59 22
+a80 2
+#define obj_frob_label(s) obj_macho_frob_label(s)
+extern void obj_macho_frob_label (struct symbol *);
+d82 10
+a91 2
+#define obj_frob_symbol(s, punt) punt = obj_macho_frob_symbol(s)
+extern int obj_macho_frob_symbol (struct symbol *);
+d94 1
+a94 1
+void obj_mach_o_post_relax_hook (void);
+a98 2
+void obj_mach_o_reorder_section_relocs (asection *, arelent **, unsigned int);
+
+d101 2
+d110 5
+a114 4
+#define EMIT_SECTION_SYMBOLS		0
+
+#define OBJ_PROCESS_STAB(SEG,W,S,T,O,D)	obj_mach_o_process_stab(W,S,T,O,D)
+extern void obj_mach_o_process_stab (int, const char *,int, int, int);
+@
+
+
+1.8
+log
+@
+reverse the order of relocs in mach-o gas output.
+
+gas:
+
+	* config/obj-macho.c (obj_mach_o_reorder_section_relocs): New.
+	* config/obj-macho.h (SET_SECTION_RELOCS): Define.
+	(obj_mach_o_reorder_section_relocs): Declare.
+
+gas/testsuite:
+
+	* gas/all/redef2.d: Skip for Darwin.
+	* gas/all/redef3.d: Likewise.
+	* gas/all/weakref1.d: Likewise.
+	* gas/macros/irp.d: Likewise.
+	* gas/macros/repeat.d: Likewise.
+	* gas/macros/rept.d: Likewise.
+	* gas/macros/test2.d: Likewise.
+	* gas/macros/vararg.d: Likewise.
+	* gas/mach-o/macro-irp.d: New.
+	* gas/mach-o/macro-repeat.d: New.
+	* gas/mach-o/macro-rept.d: New.
+	* gas/mach-o/macro-test2.d: New.
+	* gas/mach-o/macro-vararg.d: New.
+	* gas/mach-o/redef2.d: New.
+	* gas/mach-o/redef3.d: New.
+@
+text
+@d76 6
+@
+
+
+1.7
+log
+@set vma on mach-o sections.
+
+gas:
+
+	* config/obj-macho.c (obj_mach_o_set_vma_data): New type.
+	(obj_mach_o_set_section_vma): New.
+	(obj_mach_o_post_relax_hook): New.
+	* config/obj-macho.h (md_post_relax_hook): Define.
+	(obj_mach_o_post_relax_hook): Declare.
+
+gas/testsuite:
+
+	* gas/mach-o/dysymtab-2.d: Update to include the set VMA.
+	* gas/mach-o/symbols-1-64.d: Likewise.
+	* gas/mach-o/symbols-1.d: Likewise.
+	* gas/mach-o/symbols-6.d: Likewise.
+	* gas/mach-o/zerofill-1.d: Likewise.
+	* gas/mach-o/zerofill-2.d: Likewise.
+@
+text
+@d71 5
+@
+
+
+1.6
+log
+@
+add indirect_symbol to mach-o port.
+
+bfd:
+
+	* mach-o.c (bfd_mach_o_count_indirect_symbols): New.
+	(bfd_mach_o_build_dysymtab_command): Populate indirect symbol table.
+	* mach-o.h (bfd_mach_o_asymbol): Move declaration to start of the
+	file. (bfd_mach_o_section): Add indirect_syms field.
+
+gas:
+
+	* config/obj-macho.c (obj_mach_o_set_symbol_qualifier): Switch off
+	lazy when the symbol is private_extern.
+	(obj_mach_o_indirect_sym): New type.
+	(obj_mach_o_indirect_symbol): New.
+	(mach_o_pseudo_table): Use obj_mach_o_indirect_symbol.
+	(obj_macho_frob_label): Adjust to avoid adding bsyms for locals.
+	(obj_macho_frob_label): Likewise.  Adjust external and comm
+	symbol tests.
+	(obj_mach_o_set_indirect_symbols): New.
+	(obj_mach_o_frob_file_after_relocs): New.
+	*config/obj-macho.h (obj_frob_file_after_relocs): Define.
+	(obj_mach_o_frob_file_after_relocs): Declare.
+
+include/mach-o:
+
+	* loader.h (BFD_MACH_O_INDIRECT_SYM_LOCAL): New.
+	(BFD_MACH_O_INDIRECT_SYM_ABS): New
+
+gas/testsuite:
+
+	* gas/mach-o/dysymtab-2.d: New.
+	* gas/mach-o/err-syms-4.s: New.
+	* gas/mach-o/err-syms-5.s: New.
+	* gas/mach-o/err-syms-6.s: New.
+	* gas/mach-o/symbols-6-64.d: New.
+	* gas/mach-o/symbols-6-64.s: New.
+	* gas/mach-o/symbols-6.d: New.
+	* gas/mach-o/symbols-6.s: New.
+@
+text
+@d65 3
+@
+
+
+1.5
+log
+@
+add symbol qualifiers for mach-o to bfd/gas
+
+bfd:
+
+	* mach-o.c (bfd_mach_o_bfd_copy_private_symbol_data): Implement.
+	(bfd_mach_o_write_symtab): Remove handling for indirect syms.
+	(bfd_mach_o_primary_symbol_sort_key): Likewise.
+	(bfd_mach_o_cf_symbols): Likewise.
+	(bfd_mach_o_sort_symbol_table): Remove.
+	(bfd_mach_o_mangle_symbols): Adjust arguments, remove handling
+	for indirect and dysymtab counts.  Do the symbol sorting here.
+	(bfd_mach_o_build_dysymtab_command): Count the symbol types here.
+	Make the indirect symbols a TODO.
+	(bfd_mach_o_build_commands): Adjust call to bfd_mach_o_mangle_symbols.
+	(bfd_mach_o_make_empty_symbol): Specifically flag unset symbols with
+	a non-zero value.
+	(bfd_mach_o_read_symtab_symbol): Record the symbol index.
+	(bfd_mach_o_read_symtab_symbol): Adjust recording of global status.
+	* mach-o.h (mach_o_data_struct): Remove indirect and dysymtab entries.
+	(IS_MACHO_INDIRECT): Remove.
+	(SYM_MACHO_FIELDS_UNSET, SYM_MACHO_FIELDS_NOT_VALIDATED): New.
+
+gas:
+
+	* config/obj-macho.c (obj_mach_o_weak): Remove.
+	(obj_mach_o_common_parse): Set symbol qualifiers.
+	(LAZY, REFE): New macros.
+	(obj_mach_o_symbol_type): New enum.
+	(obj_mach_o_set_symbol_qualifier): New.
+	(obj_mach_o_sym_qual): New.
+	(mach_o_pseudo_table): Add symbol qualifiers, set indirect_symbol to
+	a dummy function.
+	(obj_mach_o_type_for_symbol): New.
+	(obj_macho_frob_label): New.
+	(obj_macho_frob_symbol): New.
+	* config/obj-macho.h (S_SET_ALIGN): Amend temorary var name.
+	(obj_frob_label, obj_macho_frob_label): Declare.
+	(obj_frob_symbol, obj_macho_frob_symbol): Declare.
+
+gas/testsuite:
+
+	* gas/mach-o/err-syms-1.s: New.
+	* gas/mach-o/err-syms-2.s: New.
+	* gas/mach-o/err-syms-3.s: New.
+	* gas/mach-o/symbols-2.d: New.
+	* gas/mach-o/symbols-2.s: New.
+	* gas/mach-o/symbols-3.s: New.
+	* gas/mach-o/symbols-4.s: New.
+	* gas/mach-o/symbols-5.d: New.
+	* gas/mach-o/symbols-5.s: New.
+@
+text
+@d65 3
+@
+
+
+1.4
+log
+@
+support stabs on mach-o GAS.
+
+bfd:
+
+	* mach-o.c (bfd_mach_o_mangle_symbols): Put in the section index
+	for stabd symbols.
+	(bfd_mach_o_primary_symbol_sort_key): Adjust for stabs.
+	(bfd_mach_o_cf_symbols): Likewise.
+
+gas:
+
+	* config/obj-macho.c (obj_macho_process_stab): New.
+	* config/obj-macho.h (OBJ_PROCESS_STAB): Define.
+	(obj_macho_process_stab): Declare.
+@
+text
+@d43 2
+a44 2
+  bfd_mach_o_asymbol *s = (bfd_mach_o_asymbol *) symbol_get_bfdsym (S);\
+  s->n_desc = (s->n_desc & 0xf0ff) | (((V) & 0x0f) << 8);\
+d59 6
+@
+
+
+1.3
+log
+@
+adjust mach-o default GAS sections.
+
+gas:
+
+	* as.c (perform_an_assembly_pass): Do not create text, data and bss
+	sections for MACH-O.  Do not switch to the text section.
+	* config/obj-macho.c (obj_mach_o_segT_from_bfd_name): Forward decl.
+	(mach_o_begin): Startup with only text section unless suppressed.
+	* config/obj-macho.h (obj_begin): define to mach_o_begin ().
+
+gas/testsuite:
+
+	* gas/mach-o/sections-1.d: Amend to recognize that bss is not emitted
+	by default.
+	* gas/mach-o/sections-2.d: New.
+@
+text
+@d2 1
+a2 1
+   Copyright 2009, 2011 Free Software Foundation, Inc.
+d61 3
+@
+
+
+1.2
+log
+@bfd/
+2011-12-14  Iain Sandoe  <iains@@gcc.gnu.org>
+
+	* mach-o-i386.c (text_section_names_xlat): New table.
+	(data_section_names_xlat): Likewise.
+	(import_section_names_xlat): Likewise.
+	(mach_o_i386_segsec_names_xlat): Likewise.
+	(bfd_mach_o_tgt_seg_table): Use new tables.
+	* mach-o-x86-64.c (bfd_mach_o_tgt_seg_table): Set NULL.
+	* mach-o.c (mach_o_section_name_xlat, mach_o_segment_name_xlat):
+	Move to mach-o.h as   typedefs.
+	(text_section_names_xlat): Update for current GCC usage.
+	(data_section_names_xlat): Likewise.
+	(dwarf_section_names_xlat): Likewise.
+	(objc_section_names_xlat): New table.
+	(segsec_names_xlat): Add objc table.
+	(bfd_mach_o_normalize_section_name):  Replace with...
+	(bfd_mach_o_section_data_for_mach_sect): New.
+	(bfd_mach_o_section_data_for_bfd_name): New.
+	(bfd_mach_o_section_data_for_bfd_name): Update to use additional data.
+	(bfd_mach_o_convert_section_name_to_mach_o): Likewise.
+	(bfd_mach_o_bfd_copy_private_section_data): Implement.
+	(bfd_mach_o_write_symtab): Write a zero-length string as the first entry
+	for compatibility with system tools.
+	(bfd_mach_o_build_commands): Update section alignment info.
+	(bfd_mach_o_new_section_hook): Use translation table data to define
+	default section flags, type, attributes and alignment, when available.
+	(bfd_mach_o_init_section_from_mach_o): Add TODO comment.
+	(bfd_mach_o_section_type_name): Add 'symbol_stubs'.
+	(bfd_mach_o_section_attribute_name): Add 'self_modifying_code'.
+	(bfd_mach_o_get_section_type_from_name): Change "not-found" return
+	value.
+	(bfd_mach_o_tgt_seg_table): Set default NULL.
+	* mach-o.h (bfd_mach_o_segment_command):  Use define for name length.
+	(bfd_mach_o_backend_data): Move until after contents are defined.
+	(bfd_mach_o_normalize_section_name): Remove.
+	(bfd_mach_o_convert_section_name_to_bfd): Declare.
+	(mach_o_section_name_xlat): Declare.
+	(mach_o_segment_name_xlat): Declare.
+	(bfd_mach_o_section_data_for_mach_sect): Declare.
+	(bfd_mach_o_section_data_for_bfd_name): Declare.
+
+include/
+2011-12-14  Iain Sandoe  <iains@@gcc.gnu.org>
+
+	* mach-o/loader.h (bfd_mach_o_section_type): define
+	BFD_MACH_O_S_ATTR_NONE to 0.
+
+
+gas/
+2011-12-14  Iain Sandoe  <iains@@gcc.gnu.org>
+
+	* config/obj-macho.c: Add some more top-level comments.
+	(collect_16char_name): New.
+	(obj_mach_o_section): Amend to allow syntax compatible with existing system
+	tools.  Use section translation data when available.
+	(obj_mach_o_segT_from_bfd_name): New.
+	(known_sections): Update.
+	(obj_mach_o_known_section): Use obj_mach_o_segT_from_bfd_name.
+	(objc_sections): New.
+	(obj_mach_o_objc_section): New.
+	(debug_sections): New.
+	(obj_mach_o_debug_section): New.
+	(tgt_sections): New.
+	(obj_mach_o_opt_tgt_section): New.
+	(obj_mach_o_base_section): New.
+	(obj_mach_o_common_parse): Update to create BSS on demand and to handle
+	lcomm optional alignment param.
+	(obj_mach_o_comm): Update parameter name.
+	(obj_mach_o_placeholder): New.
+	(mach_o_pseudo_table): Update for GCC section directives.
+	* config/obj-macho.h (_OBJ_MACH_O_H): New.
+	(USE_ALIGN_PTWO): Define.
+	(S_SET_ALIGN) Define.
+@
+text
+@d33 4
+@
+
+
+1.1
+log
+@2009-07-02  Tristan Gingold  <gingold@@adacore.com>
+
+	* Makefile.am (OBJ_FORMATS): Add macho.
+	(CPU_OBJ_VALID): Ditto.
+	(OBJ_FORMAT_CFILES): Add config/obj-macho.c
+	(OBJ_FORMAT_HFILES): Add config/obj-macho.h
+	(obj-macho.o): New rule.
+	* Makefile.in: Regenerated.
+	* configure.tgt (generic_target): Add i386-*-darwin*.
+	* config/tc-i386.h: Use i386_target_format for Mach-O.
+	* config/tc-i386.c (i386_target_format): Define it for Mach-O.
+	(i386_target_format): Add a case for bfd_target_mach_o_flavour.
+	* config/obj-macho.h: New file.
+	* config/obj-macho.c: New file.
+@
+text
+@d2 1
+a2 1
+   Copyright 2009 Free Software Foundation, Inc.
+d21 3
+d27 2
+d33 11
+d56 2
+@
+

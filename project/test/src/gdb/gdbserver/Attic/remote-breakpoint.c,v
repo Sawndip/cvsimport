@@ -1,0 +1,505 @@
+head	1.1;
+access;
+symbols
+	reverse-20080717-branch:1.1.0.4
+	msnyder-reverse-20080609-branch:1.1.0.2;
+locks; strict;
+comment	@ * @;
+
+
+1.1
+date	2008.06.21.19.41.01;	author msnyder;	state dead;
+branches
+	1.1.2.1
+	1.1.4.1;
+next	;
+
+1.1.2.1
+date	2008.06.21.19.41.01;	author msnyder;	state Exp;
+branches;
+next	1.1.2.2;
+
+1.1.2.2
+date	2008.06.24.03.05.27;	author msnyder;	state Exp;
+branches;
+next	;
+
+1.1.4.1
+date	2008.09.07.04.09.34;	author msnyder;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.1
+log
+@file remote-breakpoint.c was initially added on branch msnyder-reverse-20080609-branch.
+@
+text
+@@
+
+
+1.1.4.1
+log
+@2008-06-25  Michael Snyder  <msnyder@@specifix.com>
+
+	* gdbfreeplay-back.c (frame_find_request): Rewrite loop to
+	avoid fencepost error on last frame.
+
+2008-06-23  Michael Snyder  <msnyder@@specifix.com>
+
+	* gdbfreeplay.h: Replace all address values with unsigned long long.
+	* gdbfreeplay-i386.c: Ditto.
+	* gdbfreeplay-mips64.c: Ditto.
+	* gdbfreeplay-back.c: Ditto.
+	* remote-break.c: Ditto.
+	* remote-break.h: Ditto.
+
+	* configure.srv: Add configuration for mips64-linux.
+	* gdbfreeplay-mips64.c: New file, back-end for mips64.
+	* Makefile.in: Add rules for mips and intel back-ends.
+
+2008-06-21  Michael Snyder  <msnyder@@specifix.com>
+
+	* gdbfreeplay-back.c (scan_gdbreplay_file): Add support for 'W'
+	reply (exiting), but not for 'X' (terminated).
+	(freeplay_find_event): Make sure we always advance by at least
+	one frame, unles it's the first or last frame.
+	(handle_special_case): Add support for 'S' and 'C' requests.
+
+	* gdbfreeplay-back.c (handle_special_case): No need to re-compose
+	a T packet (with doctored PC) on any stop signal except SIGTRAP.
+
+	Fix stepping/breakpoint off-by-one issues.
+	* gdbfreeplay-back.c (freeplay_find_event): Fix off-by-one error
+	on last_cached_frame.
+	(freeplay_show_next_commands): Ditto.
+	(handle_special_case): Ditto, plus don't pass breakpoint_p == TRUE
+	to target_compose_T_packet if we're stopped at the end of the
+	event cache.
+
+	* gdbfreeplay-back.c (handle_special_case): Silence gcc warning.
+	* gdbfreeplay-i386.c (target_compose_g_packet): Ditto.
+
+	Add monitor gdbreplay-next command.
+	* gdbfreeplay-back.c (freeplay_show_next_commands): New function.
+	Echo the next set of gdb commands, in the manner of gdbreplay.
+	(handle_special_case): Handle monitor gdbreplay-next command.
+	(fallbacks): Catch any unhandled qRcmd requests.
+
+	Add support for 'R' packet (restart).
+	* gdbfreeplay-back.c (handle_special_case).  Add support for 'R'.
+	Remove support for "monitor gdbfreeplay-echo".
+
+	Add support for 'O' packet output.
+	* remote-breakpoint.h (PLAY_O_PACKETS): New enum const.
+	* gdbfreeplay-back.c (StopFrame): Discard gpos, replace with Opos.
+	(scan_gdbreplay_file): Record Opos for frame if 'O' packet found.
+	(frame_replay_O_packets): New function.
+	(freeplay_find_event): Call frame_replay_O_packets.
+	(handle_special_case): Pass PLAY_O_PACKETS to freeplay_find_event.
+	Add temporary support for "monitor gdbfreeplay-echo" command
+	(just for testing).
+
+	* gdbfreeplay-back.c: Clean up round, comments, remove #if 0 etc.
+	* gdbfreeplay-i386.c: Ditto.
+
+	* gdbfreeplay-i386.c (target_pc_from_g): Accept a char * instead
+	of a FILE *.
+	* gdbfreeplay.h (target_pc_from_g): Change prototype.
+	* gdbfreeplay-back.c (scan_gdbreplay_file): Change call.
+
+	* gdbfreeplay-i386.c (target_compose_T_packet): Add default return.
+	(target_compose_g_packet): New function.
+	* gdbfreeplay.h (target_compose_g_packet): Export.
+	* gdbfreeplay-back.c (handle_special_case): Give correct args
+	for target_compose_T_packet.
+	(fallbacks): Add handling for 'G', 'M', 'X', and 'g'.
+
+	* gdbfreeplay-front.c: New file.  Extended gdbreplay.
+	* gdbfreeplay-back.c: New file.
+	* gdbfreeplay-i386.c: New file.
+	* gdbfreeplay.h: New file.
+	* remote-breakpoint.c: New file.
+	* remote-breakpoint.h: New file.
+	* Makefile.in: Add rules for gdb-freeplay.
+	* configure.srv: Ditto.
+	* configure.ac: Ditto.
+	* configure: Regenerate.
+@
+text
+@a0 159
+/*
+ * remote-breakpoint.c
+ *
+ * A breakpoint list for a remote gdb target.
+ */
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <ctype.h>
+#include <string.h>
+
+#include "remote-breakpoint.h"
+
+static breakpoint *bplist[5];
+
+extern int verbose;
+
+/*
+ * insert_breakpoint
+ *
+ * returns: FAIL/PASS
+ */
+
+static enum successcode
+insert_breakpoint (enum breakpoint_type bptype,
+		   unsigned long long   addr,
+		   unsigned long        len)
+{
+  breakpoint *this_bp;
+
+  switch (bptype) {
+  case ACCESS_BP:
+  case HARDWARE_BP:
+  case READ_BP:
+  case WRITE_BP:
+  default:
+    /* Can't do those.  */
+    return FAIL;
+    break;
+  case SOFTWARE_BP:
+    this_bp = malloc (sizeof (breakpoint));
+    this_bp->addr = addr;
+    this_bp->len  = len;
+    this_bp->next = bplist[bptype];
+    bplist[bptype] = this_bp;
+    return PASS;
+  }
+}
+			 
+/*
+ * unlink_breakpoint
+ *
+ * returns: 0 for fail, 1 for success
+ */
+
+static int
+unlink_breakpoint (enum breakpoint_type bptype,
+		   unsigned long long   addr,
+		   unsigned long        len)
+{
+  breakpoint *this_bp, *tmp;
+
+  switch (bptype) {
+  case ACCESS_BP:
+  case HARDWARE_BP:
+  case READ_BP:
+  case WRITE_BP:
+  default:
+    /* Can't do those.  */
+    return FAIL;
+    break;
+  case SOFTWARE_BP:
+    /* Special case - list is empty.  */
+    if (bplist[bptype] == NULL)
+      return FAIL;
+
+    /* Start from list head.  */
+    this_bp = bplist[bptype];
+    /* Special case -- remove head of list.  */
+    if (this_bp->addr == addr &&
+	this_bp->len  == len)
+      {
+	bplist[bptype] = this_bp->next;
+	return PASS;
+      }
+
+    /* Scan list.  */
+    for (; this_bp && this_bp->next; this_bp = this_bp->next)
+      if (this_bp->next->addr == addr &&
+	  this_bp->next->len  == len)
+	{
+	  /* Remove from middle of list.  */
+	  tmp = this_bp->next->next;
+	  free (this_bp->next);
+	  this_bp->next = tmp;
+	  return PASS;
+	}
+
+    /* Not found.  */
+    return FAIL;
+  }    
+}
+			 
+
+extern enum successcode
+remote_remove_breakpoint (enum breakpoint_type bptype,
+			  unsigned long long   addr,
+			  unsigned long        len)
+{
+  if (verbose)
+    fprintf (stdout, "remote-breakpoint: Remove sw breakpoint type %d\n", 
+	     bptype);
+  if (unlink_breakpoint (bptype, addr, len) == 0)
+    {
+      fprintf (stderr, "       FAILED!\n");
+      return FAIL;
+    }
+  return PASS;
+}
+
+extern enum successcode
+remote_set_breakpoint (enum breakpoint_type bptype,
+		       unsigned long long   addr,
+		       unsigned long        len)
+{
+  if (verbose)
+    fprintf (stdout, "remote-breakpoint: Set sw breakpoint type %d\n", 
+	     bptype);
+  if (insert_breakpoint (bptype, addr, len) == 0)
+    {
+      fprintf (stderr, "       FAILED!\n");
+      return FAIL;
+    }
+  return PASS;
+}
+
+/*
+ * remote_breakpoint_here_p
+ *
+ * Scan the list of breakpoints of type BPTYPE.
+ * Return PASS if there is one that matches ADDR, else FAIL.
+ *
+ * FIXME: do I need to consider the length?
+ */
+
+enum successcode 
+remote_breakpoint_here_p (enum breakpoint_type bptype,
+			  unsigned long long addr)
+{
+  breakpoint *bp = bplist[bptype];
+
+  while (bp != NULL)
+    {
+      if (bp->addr == addr)
+	return PASS;
+      bp = bp->next;
+    }
+  return FAIL;
+}
+@
+
+
+1.1.2.1
+log
+@2008-06-21  Michael Snyder  <msnyder@@specifix.com>
+
+	* gdbfreeplay-front.c: New file.  Extended gdbreplay.
+	* gdbfreeplay-back.c: New file.
+	* gdbfreeplay-i386.c: New file.
+	* gdbfreeplay.h: New file.
+	* remote-breakpoint.c: New file.
+	* remote-breakpoint.h: New file.
+	* Makefile.in: Add rules for gdb-freeplay.
+	* configure.srv: Ditto.
+	* configure.ac: Ditto.
+	* configure: Regenerate.
+@
+text
+@a0 159
+/*
+ * remote-breakpoint.c
+ *
+ * A breakpoint list for a remote gdb target.
+ */
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <ctype.h>
+#include <string.h>
+
+#include "remote-breakpoint.h"
+
+static breakpoint *bplist[5];
+
+extern int verbose;
+
+/*
+ * insert_breakpoint
+ *
+ * returns: FAIL/PASS
+ */
+
+static enum successcode
+insert_breakpoint (enum breakpoint_type bptype,
+		   unsigned long        addr,
+		   unsigned long        len)
+{
+  breakpoint *this_bp;
+
+  switch (bptype) {
+  case ACCESS_BP:
+  case HARDWARE_BP:
+  case READ_BP:
+  case WRITE_BP:
+  default:
+    /* Can't do those.  */
+    return FAIL;
+    break;
+  case SOFTWARE_BP:
+    this_bp = malloc (sizeof (breakpoint));
+    this_bp->addr = addr;
+    this_bp->len  = len;
+    this_bp->next = bplist[bptype];
+    bplist[bptype] = this_bp;
+    return PASS;
+  }
+}
+			 
+/*
+ * unlink_breakpoint
+ *
+ * returns: 0 for fail, 1 for success
+ */
+
+static int
+unlink_breakpoint (enum breakpoint_type bptype,
+		   unsigned long        addr,
+		   unsigned long        len)
+{
+  breakpoint *this_bp, *tmp;
+
+  switch (bptype) {
+  case ACCESS_BP:
+  case HARDWARE_BP:
+  case READ_BP:
+  case WRITE_BP:
+  default:
+    /* Can't do those.  */
+    return FAIL;
+    break;
+  case SOFTWARE_BP:
+    /* Special case - list is empty.  */
+    if (bplist[bptype] == NULL)
+      return FAIL;
+
+    /* Start from list head.  */
+    this_bp = bplist[bptype];
+    /* Special case -- remove head of list.  */
+    if (this_bp->addr == addr &&
+	this_bp->len  == len)
+      {
+	bplist[bptype] = this_bp->next;
+	return PASS;
+      }
+
+    /* Scan list.  */
+    for (; this_bp && this_bp->next; this_bp = this_bp->next)
+      if (this_bp->next->addr == addr &&
+	  this_bp->next->len  == len)
+	{
+	  /* Remove from middle of list.  */
+	  tmp = this_bp->next->next;
+	  free (this_bp->next);
+	  this_bp->next = tmp;
+	  return PASS;
+	}
+
+    /* Not found.  */
+    return FAIL;
+  }    
+}
+			 
+
+extern enum successcode
+remote_remove_breakpoint (enum breakpoint_type bptype,
+			  unsigned long        addr,
+			  unsigned long        len)
+{
+  if (verbose)
+    fprintf (stdout, "remote-breakpoint: Remove sw breakpoint type %d\n", 
+	     bptype);
+  if (unlink_breakpoint (bptype, addr, len) == 0)
+    {
+      fprintf (stderr, "       FAILED!\n");
+      return FAIL;
+    }
+  return PASS;
+}
+
+extern enum successcode
+remote_set_breakpoint (enum breakpoint_type bptype,
+		       unsigned long        addr,
+		       unsigned long        len)
+{
+  if (verbose)
+    fprintf (stdout, "remote-breakpoint: Set sw breakpoint type %d\n", 
+	     bptype);
+  if (insert_breakpoint (bptype, addr, len) == 0)
+    {
+      fprintf (stderr, "       FAILED!\n");
+      return FAIL;
+    }
+  return PASS;
+}
+
+/*
+ * remote_breakpoint_here_p
+ *
+ * Scan the list of breakpoints of type BPTYPE.
+ * Return PASS if there is one that matches ADDR, else FAIL.
+ *
+ * FIXME: do I need to consider the length?
+ */
+
+enum successcode 
+remote_breakpoint_here_p (enum breakpoint_type bptype,
+			  unsigned long addr)
+{
+  breakpoint *bp = bplist[bptype];
+
+  while (bp != NULL)
+    {
+      if (bp->addr == addr)
+	return PASS;
+      bp = bp->next;
+    }
+  return FAIL;
+}
+@
+
+
+1.1.2.2
+log
+@2008-06-23  Michael Snyder  <msnyder@@specifix.com>
+
+	* gdbfreeplay.h: Replace all address values with unsigned long long.
+	* gdbfreeplay-i386.c: Ditto.
+	* gdbfreeplay-mips64.c: Ditto.
+	* gdbfreeplay-back.c: Ditto.
+	* remote-break.c: Ditto.
+	* remote-break.h: Ditto.
+@
+text
+@d26 1
+a26 1
+		   unsigned long long   addr,
+d58 1
+a58 1
+		   unsigned long long   addr,
+d107 1
+a107 1
+			  unsigned long long   addr,
+d123 1
+a123 1
+		       unsigned long long   addr,
+d148 1
+a148 1
+			  unsigned long long addr)
+@
+
+

@@ -1,0 +1,374 @@
+head	1.3;
+access;
+symbols
+	cygwin-1_7_35-release:1.3
+	cygwin-1_7_34-release:1.3
+	newlib-2_2_0:1.3.0.2
+	cygwin-1_7_33-release:1.3
+	cygwin-1_7_32-release:1.3
+	cygwin-1_7_31-release:1.3
+	cygwin-1_7_30-release:1.3
+	cygwin-1_7_29-release:1.3
+	cygwin-1_7_28-release:1.3
+	newlib-2_1_0:1.3
+	cygwin-1_7_27-release:1.3
+	cygwin-1_7_26-release:1.3
+	cygwin-1_7_25-release:1.2
+	cygwin-1_7_24-release:1.2
+	cygwin-1_7_23-release:1.2
+	cygwin-1_7_22-release:1.2
+	cygwin-1_7_21-release:1.2
+	cygwin-1_7_20-release:1.2
+	cygwin-1_7_19-release:1.2
+	cygwin-64bit-postmerge:1.2
+	cygwin-64bit-premerge-branch:1.2.0.4
+	cygwin-64bit-premerge:1.2
+	cygwin-1_7_18-release:1.2
+	newlib-2_0_0:1.2
+	cygwin-1_7_17-release:1.2
+	cygwin-64bit-branch:1.2.0.2
+	cygwin-1_7_16-release:1.2
+	cygwin-1_7_15-release:1.2
+	cygwin-1_7_14_2-release:1.2
+	cygwin-1_7_14-release:1.2
+	cygwin-1_7_12-release:1.2
+	cygwin-1_7_11-release:1.2
+	cygwin-1_7_10-release:1.2
+	newlib-1_20_0:1.2
+	cygwin-1_7_9-release:1.1
+	cygwin-1_7_8-release:1.1
+	newlib-1_19_0:1.1
+	cygwin-1_7_7-release:1.1
+	cygwin-1_7_5-release:1.1
+	cygwin-1_7_4-release:1.1
+	cygwin-1_7_3-release:1.1
+	cygwin-1_7_2-release:1.1
+	newlib-1_18_0:1.1
+	cygwin-1_7_1-release:1.1
+	newlib-1_17_0-arc:1.1.0.2
+	newlib-1_17_0:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.3
+date	2013.11.20.16.25.50;	author joel;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2011.08.23.11.59.56;	author corsepiu;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2008.10.31.21.03.41;	author jjohnstn;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.3
+log
+@2013-11-20  Chirayu Desai  <chirayudesai1@@gmail.com>
+
+	* libc/include/regex.h, libc/posix/regcomp.c,
+	libc/posix/regerror.c, libc/posix/regex.3
+	libc/posix/regexec.c: Add restrict keyword.
+@
+text
+@/*-
+ * Copyright (c) 1992, 1993, 1994 Henry Spencer.
+ * Copyright (c) 1992, 1993, 1994
+ *	The Regents of the University of California.  All rights reserved.
+ *
+ * This code is derived from software contributed to Berkeley by
+ * Henry Spencer.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ * 4. Neither the name of the University nor the names of its contributors
+ *    may be used to endorse or promote products derived from this software
+ *    without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+ * SUCH DAMAGE.
+ *
+ *	@@(#)regexec.c	8.3 (Berkeley) 3/20/94
+ */
+
+#ifndef _NO_REGEX
+
+#if defined(LIBC_SCCS) && !defined(lint)
+static char sccsid[] = "@@(#)regexec.c	8.3 (Berkeley) 3/20/94";
+#endif /* LIBC_SCCS and not lint */
+#include <sys/cdefs.h>
+
+/*
+ * the outer shell of regexec()
+ *
+ * This file includes engine.c *twice*, after muchos fiddling with the
+ * macros that code uses.  This lets the same code operate on two different
+ * representations for state sets.
+ */
+#include <sys/types.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <limits.h>
+#include <ctype.h>
+#include <regex.h>
+
+#include "utils.h"
+#include "regex2.h"
+
+#ifndef NDEBUG
+static int nope = 0;		/* for use in asserts; shuts lint up */
+#endif
+
+/* macros for manipulating states, small version */
+#define	states	long
+#define	states1	states		/* for later use in regexec() decision */
+#define	CLEAR(v)	((v) = 0)
+#define	SET0(v, n)	((v) &= ~((unsigned long)1 << (n)))
+#define	SET1(v, n)	((v) |= (unsigned long)1 << (n))
+#define	ISSET(v, n)	(((v) & ((unsigned long)1 << (n))) != 0)
+#define	ASSIGN(d, s)	((d) = (s))
+#define	EQ(a, b)	((a) == (b))
+#define	STATEVARS	long dummy	/* dummy version */
+#define	STATESETUP(m, n)	/* nothing */
+#define	STATETEARDOWN(m)	/* nothing */
+#define	SETUP(v)	((v) = 0)
+#define	onestate	long
+#define	INIT(o, n)	((o) = (unsigned long)1 << (n))
+#define	INC(o)	((o) <<= 1)
+#define	ISSTATEIN(v, o)	(((v) & (o)) != 0)
+/* some abbreviations; note that some of these know variable names! */
+/* do "if I'm here, I can also be there" etc without branches */
+#define	FWD(dst, src, n)	((dst) |= ((unsigned long)(src)&(here)) << (n))
+#define	BACK(dst, src, n)	((dst) |= ((unsigned long)(src)&(here)) >> (n))
+#define	ISSETBACK(v, n)	(((v) & ((unsigned long)here >> (n))) != 0)
+/* function names */
+#define SNAMES			/* engine.c looks after details */
+
+#include "engine.c"
+
+/* now undo things */
+#undef	states
+#undef	CLEAR
+#undef	SET0
+#undef	SET1
+#undef	ISSET
+#undef	ASSIGN
+#undef	EQ
+#undef	STATEVARS
+#undef	STATESETUP
+#undef	STATETEARDOWN
+#undef	SETUP
+#undef	onestate
+#undef	INIT
+#undef	INC
+#undef	ISSTATEIN
+#undef	FWD
+#undef	BACK
+#undef	ISSETBACK
+#undef	SNAMES
+
+/* macros for manipulating states, large version */
+#define	states	char *
+#define	CLEAR(v)	memset(v, 0, m->g->nstates)
+#define	SET0(v, n)	((v)[n] = 0)
+#define	SET1(v, n)	((v)[n] = 1)
+#define	ISSET(v, n)	((v)[n])
+#define	ASSIGN(d, s)	memcpy(d, s, m->g->nstates)
+#define	EQ(a, b)	(memcmp(a, b, m->g->nstates) == 0)
+#define	STATEVARS	long vn; char *space
+#define	STATESETUP(m, nv)	{ (m)->space = malloc((nv)*(m)->g->nstates); \
+				if ((m)->space == NULL) return(REG_ESPACE); \
+				(m)->vn = 0; }
+#define	STATETEARDOWN(m)	{ free((m)->space); }
+#define	SETUP(v)	((v) = &m->space[m->vn++ * m->g->nstates])
+#define	onestate	long
+#define	INIT(o, n)	((o) = (n))
+#define	INC(o)	((o)++)
+#define	ISSTATEIN(v, o)	((v)[o])
+/* some abbreviations; note that some of these know variable names! */
+/* do "if I'm here, I can also be there" etc without branches */
+#define	FWD(dst, src, n)	((dst)[here+(n)] |= (src)[here])
+#define	BACK(dst, src, n)	((dst)[here-(n)] |= (src)[here])
+#define	ISSETBACK(v, n)	((v)[here - (n)])
+/* function names */
+#define	LNAMES			/* flag */
+
+#include "engine.c"
+
+/*
+ - regexec - interface for matching
+ = extern int regexec(const regex_t *__restrict, const char *__restrict,
+ =					size_t, regmatch_t [__restrict], int);
+ = #define	REG_NOTBOL	00001
+ = #define	REG_NOTEOL	00002
+ = #define	REG_STARTEND	00004
+ = #define	REG_TRACE	00400	// tracing of execution
+ = #define	REG_LARGE	01000	// force large representation
+ = #define	REG_BACKR	02000	// force use of backref code
+ *
+ * We put this here so we can exploit knowledge of the state representation
+ * when choosing which matcher to call.  Also, by this point the matchers
+ * have been prototyped.
+ */
+int				/* 0 success, REG_NOMATCH failure */
+regexec(preg, string, nmatch, pmatch, eflags)
+const regex_t *__restrict preg;
+const char *__restrict string;
+size_t nmatch;
+regmatch_t pmatch[__restrict];
+int eflags;
+{
+	struct re_guts *g = preg->re_g;
+#ifdef REDEBUG
+#	define	GOODFLAGS(f)	(f)
+#else
+#	define	GOODFLAGS(f)	((f)&(REG_NOTBOL|REG_NOTEOL|REG_STARTEND))
+#endif
+
+	if (preg->re_magic != MAGIC1 || g->magic != MAGIC2)
+		return(REG_BADPAT);
+	assert(!(g->iflags&BAD));
+	if (g->iflags&BAD)		/* backstop for no-debug case */
+		return(REG_BADPAT);
+	eflags = GOODFLAGS(eflags);
+
+	if (g->nstates <= CHAR_BIT*sizeof(states1) && !(eflags&REG_LARGE))
+		return(smatcher(g, (char *)string, nmatch, pmatch, eflags));
+	else
+		return(lmatcher(g, (char *)string, nmatch, pmatch, eflags));
+}
+
+#endif /* !_NO_REGEX  */
+@
+
+
+1.2
+log
+@2011-08-23  Ralf Corsépius  <ralf.corsepius@@rtems.org>
+
+	* libc/posix/regexec.c: Define "nope" only #ifndef NDEBUG.
+	* libc/stdio/vfscanf.c: Define "state" only #ifdef _MB_CAPABLE.
+	* libc/string/wcwidth.c: Include <wctypes.h> for "iswprint" and
+	"iswcntrl".
+@
+text
+@d143 2
+a144 2
+ = extern int regexec(const regex_t *, const char *, size_t, \
+ =					regmatch_t [], int);
+d158 2
+a159 2
+const regex_t *preg;
+const char *string;
+d161 1
+a161 1
+regmatch_t pmatch[];
+@
+
+
+1.1
+log
+@
+2008-10-31  Jeff Johnston  <jjohnstn@@redhat.com>
+
+        * libc/include/limits.h: Add ARG_MAX, PATH_MAX, and _POSIX2_RE_DUP_MAX.
+        * libc/include/envlock.h: New file.
+        * libc/include/fnmatch.h: Ditto.
+        * libc/include/glob.h: Ditto.
+        * libc/include/regex.h: Ditto.
+        * libc/include/wordexp.h: Ditto.
+        * libc/posix/Makefile.am: Add new files moved from
+        libc/sys/linux/stdlib.
+        * libc/posix/Makefile.in: Regenerated.
+        * libc/posix/COPYRIGHT: New file moved from libc/sys/linux/stdlib.
+        * libc/posix/cclass.h: Ditto.
+        * libc/posix/cname.h: Ditto.
+        * libc/posix/collate.c: Ditto.
+        * libc/posix/collate.h: Ditto.
+        * libc/posix/collcmp.c: Ditto.
+        * libc/posix/engine.c: Ditto.
+        * libc/posix/fnmatch.3: Ditto.
+        * libc/posix/glob.3: Ditto.
+        * libc/posix/fnmatch.c: Ditto.
+        * libc/posix/glob.c: Ditto.
+        * libc/posix/namespace.h: Ditto.
+        * libc/posix/reallocf.c: Ditto.
+        * libc/posix/regcomp.c: Ditto.
+        * libc/posix/regerror.c: Ditto.
+        * libc/posix/regex.3: Ditto.
+        * libc/posix/regex2.h: Ditto.
+        * libc/posix/regexec.c: Ditto.
+        * libc/posix/regfree.c: Ditto.
+        * libc/posix/rune.h: Ditto.
+        * libc/posix/runetype.h: Ditto.
+        * libc/posix/scandir.c: Remove advertising clause which is not in
+        effect.
+        * libc/posix/sysexits.h: Ditto.
+        * libc/posix/un-namespace.h: Ditto.
+        * libc/posix/utils.h: Ditto.
+        * libc/posix/wordexp.c: Ditto.
+        * libc/posix/wordfree.c: Ditto.
+        * libc/posix/execl.c: Add !_NO_EXECVE flag check.
+        * libc/posix/execle.c: Ditto.
+        * libc/posix/execlp.c: Ditto.
+        * libc/posix/execv.c: Ditto.
+        * libc/posix/execve.c: Ditto.
+        * libc/posix/execvp.c: Ditto.
+        * libc/posix/popen.c: Add !_NO_POPEN flag check.
+        * libc/sys/linux/configure: Regenerated.
+        * libc/sys/linux/configure.in: Remove stdlib.
+        * libc/sys/linux/include/limits.h: Add include of linux/limits.h.
+        * libc/sys/linux/stdlib/Makefile.am: Removed.
+        * libc/sys/linux/stdlib/Makefile.in: Ditto.
+        * libc/sys/linux/stdlib/COPYRIGHT: Moved to libc/posix.
+        * libc/sys/linux/stdlib/cclass.h: Ditto.
+        * libc/sys/linux/stdlib/cname.h: Ditto.
+        * libc/sys/linux/stdlib/collate.c: Ditto.
+        * libc/sys/linux/stdlib/collate.h: Ditto.
+        * libc/sys/linux/stdlib/collcmp.c: Ditto.
+        * libc/sys/linux/stdlib/engine.c: Ditto.
+        * libc/sys/linux/stdlib/fnmatch.3: Ditto.
+        * libc/sys/linux/stdlib/fnmatch.c: Ditto.
+        * libc/sys/linux/stdlib/glob.3: Ditto.
+        * libc/sys/linux/stdlib/glob.c: Ditto.
+        * libc/sys/linux/stdlib/reallocf.c: Ditto.
+        * libc/sys/linux/stdlib/regcomp.c: Ditto.
+        * libc/sys/linux/stdlib/regerror.c: Ditto.
+        * libc/sys/linux/stdlib/regex.3: Ditto.
+        * libc/sys/linux/stdlib/regex2.h: Ditto.
+        * libc/sys/linux/stdlib/regexec.c: Ditto.
+        * libc/sys/linux/stdlib/regfree.c: Ditto.
+        * libc/sys/linux/stdlib/utils.h: Ditto.
+        * libc/sys/linux/stdlib/wordexp.c: Ditto.
+        * libc/sys/linux/stdlib/wordfree.c: Ditto.
+@
+text
+@d61 1
+d63 1
+@
+

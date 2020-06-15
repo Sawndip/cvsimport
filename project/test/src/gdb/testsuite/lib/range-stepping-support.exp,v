@@ -1,0 +1,115 @@
+head	1.2;
+access;
+symbols;
+locks; strict;
+comment	@# @;
+
+
+1.2
+date	2013.05.24.09.57.12;	author qiyao;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2013.05.23.17.19.05;	author palves;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@gdb/testsuite/
+
+	* gdb.base/range-stepping.exp: Skip the rest of tests if the
+	test fails.
+	* lib/range-stepping-support.exp (exec_cmd_expect_vCont_count):
+	Return 0 if the test passes, otherwise return 1.
+@
+text
+@# Copyright 2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# Execute command CMD and check that GDB sends the expected number of
+# vCont;s and vCont;r packets.  Returns 0 if the test passes,
+# otherwise returns 1.
+
+proc exec_cmd_expect_vCont_count { cmd exp_vCont_s exp_vCont_r } {
+    global gdb_prompt
+
+    gdb_test_no_output "set debug remote 1" ""
+
+    set test "${cmd}: vCont;s=${exp_vCont_s} vCont;r=${exp_vCont_r}"
+    set r_counter 0
+    set s_counter 0
+    set ret 1
+    gdb_test_multiple $cmd $test {
+	-re "vCont;s\[^\r\n\]*Packet received: T\[\[:xdigit:\]\]\[\[:xdigit:\]\]" {
+	    incr s_counter
+	    exp_continue
+	}
+	-re "vCont;r\[^\r\n\]*Packet received: T\[\[:xdigit:\]\]\[\[:xdigit:\]\]" {
+	    incr r_counter
+	    exp_continue
+	}
+	-re "\r\n" {
+	    # Prevent overflowing the expect buffer.
+	    exp_continue
+	}
+	-re "$gdb_prompt $" {
+	    if { $r_counter == ${exp_vCont_r} && $s_counter == ${exp_vCont_s} } {
+		pass $test
+		set ret 0
+	    } else {
+		fail $test
+	    }
+	}
+    }
+
+    gdb_test_no_output "set debug remote 0" ""
+    return $ret
+}
+@
+
+
+1.1
+log
+@range stepping: tests
+
+This adds tests to verify range stepping is used as expected, by
+inspecting the RSP traffic, looking for vCont;s and vCont;r packets.
+
+gdb/testsuite/
+2013-05-23  Yao Qi  <yao@@codesourcery.com>
+	    Pedro Alves  <palves@@redhat.com>
+
+	* gdb.base/range-stepping.c: New file.
+	* gdb.base/range-stepping.exp: New file.
+	* gdb.trace/range-stepping.c: New file.
+	* gdb.trace/range-stepping.exp: New file.
+	* lib/range-stepping-support.exp: New file.
+@
+text
+@d17 2
+a18 1
+# vCont;s and vCont;r packets.
+d28 1
+d45 1
+d53 1
+@
+

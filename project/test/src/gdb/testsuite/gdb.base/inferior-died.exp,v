@@ -1,0 +1,182 @@
+head	1.4;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.3
+	gdb_7_6-2013-04-26-release:1.3
+	gdb_7_6-branch:1.3.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.3
+	gdb_7_5_1-2012-11-29-release:1.2
+	gdb_7_5-2012-08-17-release:1.2
+	gdb_7_5-branch:1.2.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.2;
+locks; strict;
+comment	@# @;
+
+
+1.4
+date	2013.06.27.18.51.31;	author tromey;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2013.01.01.06.33.25;	author brobecke;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2012.02.20.21.03.05;	author jkratoch;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2012.02.16.14.35.00;	author tromey;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.4
+log
+@test suite update - gdb.base/[h-m]
+
+Convert files gdb.base/[h-m]*.exp to use standard_output_file et al.
+
+	* hook-stop-continue.exp, hook-stop-frame.exp, huge.exp,
+	included.exp, inferior-died.exp, infnan.exp, info-fun.exp,
+	info-macros.exp, info-os.exp, info-proc.exp, info-target.exp,
+	infoline.exp, interp.exp, interrupt.exp, jit-simple.exp,
+	jit-so.exp, jump.exp, kill-after-signal.exp, label.exp, langs.exp,
+	lineinc.exp, list.exp, logical.exp, long_long.exp, longjmp.exp,
+	macscp.exp, maint.exp, memattr.exp, mips_pro.exp, miscexprs.exp,
+	morestack.exp, moribund-step.exp, multi-forks.exp: Use
+	standard_testfile, standard_output_file, prepare_for_testing,
+	clean_restart.
+@
+text
+@# Copyright 2012-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+if { [is_remote target] || ![isnative] } then {
+    unsupported "inferior-died.exp"
+    continue
+}
+
+# Until "set follow-fork-mode" and "catch fork" are implemented on
+# other targets...
+#
+if {![istarget "hppa*-hp-hpux*"] && ![istarget "*-*-linux*"]} then {
+    unsupported "inferior-died.exp"
+    continue
+}
+
+if { ![support_displaced_stepping] } {
+    unsupported "inferior-died.exp"
+    return -1
+}
+
+standard_testfile .c
+
+if { [prepare_for_testing ${testfile}.exp ${testfile} ${testfile}.c] } {
+    return -1
+}
+
+gdb_test_no_output "set detach-on-fork off"
+gdb_test_no_output "set target-async on"
+gdb_test_no_output "set non-stop on"
+
+if ![runto_main] {
+    return
+}
+
+set line [gdb_get_line_number "Break here"]
+gdb_breakpoint $srcfile:$line
+
+gdb_continue_to_breakpoint "breakpoint"
+
+gdb_test "inferior 2" "Switching to inferior 2.*"
+
+# The inferior 1 exit may come unexpectedly in any moment.
+set test "continue"
+set seen 0
+gdb_test_multiple $test $test {
+    -re "($gdb_prompt |\\\[Inferior \[^\r\n\]* exited normally\\\])" {
+	incr seen
+	if {$seen < 3} {
+	    exp_continue
+	}
+	pass $test
+    }
+}
+
+# Internal error may show up after all the messages above.
+gdb_test "p 1" " = 1"
+@
+
+
+1.3
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@d34 1
+a34 3
+set testfile "inferior-died"
+set srcfile ${testfile}.c
+set binfile ${objdir}/${subdir}/${testfile}
+@
+
+
+1.2
+log
+@gdb/testsuite/
+	Fix racy FAILs.
+	* gdb.base/inferior-died.c (main): Add return of 0.
+	* gdb.base/inferior-died.exp (continue): Fix expectation of
+	asynchronous events.
+	(p 1): New test.
+@
+text
+@d1 1
+a1 1
+# Copyright 2012 Free Software Foundation, Inc.
+@
+
+
+1.1
+log
+@	PR c++/13653:
+	* thread.c (struct current_thread_cleanup) <was_removable>: New
+	field.
+	(do_restore_current_thread_cleanup): Restore 'removable' field.
+	(restore_current_thread_cleanup_dtor): Likewise.
+	(make_cleanup_restore_current_thread): Initialize new field.
+testsuite/gdb
+	* gdb.base/inferior-died.c: New file.
+	* gdb.base/inferior-died.exp: New file.
+@
+text
+@d56 16
+a71 1
+gdb_test "continue" "exited normally.*"
+@
+

@@ -1,0 +1,1214 @@
+head	1.9;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.9
+	gdb_7_6-2013-04-26-release:1.9
+	gdb_7_6-branch:1.9.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.9
+	gdb_7_5_1-2012-11-29-release:1.7
+	gdb_7_5-2012-08-17-release:1.7
+	gdb_7_5-branch:1.7.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.7
+	gdb_7_4_1-2012-04-26-release:1.4.4.1
+	gdb_7_4-2012-01-24-release:1.4.4.1
+	gdb_7_4-branch:1.4.0.4
+	gdb_7_4-2011-12-13-branchpoint:1.4
+	gdb_7_3_1-2011-09-04-release:1.4
+	gdb_7_3-2011-07-26-release:1.4
+	gdb_7_3-branch:1.4.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.4;
+locks; strict;
+comment	@ * @;
+
+
+1.9
+date	2013.01.01.06.32.45;	author brobecke;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2012.08.16.23.55.02;	author brobecke;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2012.06.14.18.19.40;	author brobecke;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2012.05.24.16.51.34;	author palves;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2012.01.04.08.17.04;	author brobecke;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2011.01.14.13.53.02;	author brobecke;	state Exp;
+branches
+	1.4.4.1;
+next	1.3;
+
+1.3
+date	2011.01.13.16.24.42;	author brobecke;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2011.01.13.16.24.27;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2011.01.13.16.24.12;	author brobecke;	state Exp;
+branches;
+next	;
+
+1.4.4.1
+date	2012.01.06.04.43.16;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.9
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@/* Copyright (C) 2010-2013 Free Software Foundation, Inc.
+
+   This file is part of GDB.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+#include "defs.h"
+#include "ia64-tdep.h"
+#include "inferior.h"
+#include "inf-ttrace.h"
+#include "regcache.h"
+#include "solib-ia64-hpux.h"
+
+#include <ia64/sys/uregs.h>
+#include <sys/ttrace.h>
+
+/* The offsets used with ttrace to read the value of the raw registers.  */
+
+static int u_offsets[] =
+{ /* Static General Registers.  */
+  -1,     __r1,   __r2,   __r3,   __r4,   __r5,   __r6,   __r7,
+  __r8,   __r9,   __r10,  __r11,  __r12,  __r13,  __r14,  __r15,
+  __r16,  __r17,  __r18,  __r19,  __r20,  __r21,  __r22,  __r23,
+  __r24,  __r25,  __r26,  __r27,  __r28,  __r29,  __r30,  __r31,
+  -1,     -1,     -1,     -1,     -1,     -1,     -1,     -1,
+  -1,     -1,     -1,     -1,     -1,     -1,     -1,     -1,
+  -1,     -1,     -1,     -1,     -1,     -1,     -1,     -1,
+  -1,     -1,     -1,     -1,     -1,     -1,     -1,     -1,
+  -1,     -1,     -1,     -1,     -1,     -1,     -1,     -1,
+  -1,     -1,     -1,     -1,     -1,     -1,     -1,     -1,
+  -1,     -1,     -1,     -1,     -1,     -1,     -1,     -1,
+  -1,     -1,     -1,     -1,     -1,     -1,     -1,     -1,
+  -1,     -1,     -1,     -1,     -1,     -1,     -1,     -1,
+  -1,     -1,     -1,     -1,     -1,     -1,     -1,     -1,
+  -1,     -1,     -1,     -1,     -1,     -1,     -1,     -1,
+  -1,     -1,     -1,     -1,     -1,     -1,     -1,     -1,
+
+  /* Static Floating-Point Registers.  */
+    -1,     -1,   __f2,   __f3,   __f4,   __f5,   __f6,   __f7,
+  __f8,   __f9,   __f10,  __f11,  __f12,  __f13,  __f14,  __f15,
+  __f16,  __f17,  __f18,  __f19,  __f20,  __f21,  __f22,  __f23,
+  __f24,  __f25,  __f26,  __f27,  __f28,  __f29,  __f30,  __f31,
+  __f32,  __f33,  __f34,  __f35,  __f36,  __f37,  __f38,  __f39,
+  __f40,  __f41,  __f42,  __f43,  __f44,  __f45,  __f46,  __f47,
+  __f48,  __f49,  __f50,  __f51,  __f52,  __f53,  __f54,  __f55,
+  __f56,  __f57,  __f58,  __f59,  __f60,  __f61,  __f62,  __f63,
+  __f64,  __f65,  __f66,  __f67,  __f68,  __f69,  __f70,  __f71,
+  __f72,  __f73,  __f74,  __f75,  __f76,  __f77,  __f78,  __f79,
+  __f80,  __f81,  __f82,  __f83,  __f84,  __f85,  __f86,  __f87,
+  __f88,  __f89,  __f90,  __f91,  __f92,  __f93,  __f94,  __f95,
+  __f96,  __f97,  __f98,  __f99,  __f100, __f101, __f102, __f103,
+  __f104, __f105, __f106, __f107, __f108, __f109, __f110, __f111,
+  __f112, __f113, __f114, __f115, __f116, __f117, __f118, __f119,
+  __f120, __f121, __f122, __f123, __f124, __f125, __f126, __f127,
+
+  -1,     -1,     -1,     -1,     -1,     -1,     -1,     -1,
+  -1,     -1,     -1,     -1,     -1,     -1,     -1,     -1,
+  -1,     -1,     -1,     -1,     -1,     -1,     -1,     -1,
+  -1,     -1,     -1,     -1,     -1,     -1,     -1,     -1,
+  -1,     -1,     -1,     -1,     -1,     -1,     -1,     -1,
+  -1,     -1,     -1,     -1,     -1,     -1,     -1,     -1,
+  -1,     -1,     -1,     -1,     -1,     -1,     -1,     -1,
+  -1,     -1,     -1,     -1,     -1,     -1,     -1,     -1,
+
+  /* Branch Registers.  */
+  __b0,   __b1,   __b2,   __b3,   __b4,   __b5,   __b6,   __b7,
+
+  /* Virtual frame pointer and virtual return address pointer.  */
+  -1, -1,
+
+  /* Other registers.  */
+  __pr, __ip, __cr_ipsr, __cfm,
+
+  /* Kernel registers.  */
+  -1,   -1,   -1,   -1,
+  -1,   -1,   -1,   -1,
+
+  -1, -1, -1, -1, -1, -1, -1, -1,
+
+  /* Some application registers.  */
+  __ar_rsc, __ar_bsp, __ar_bspstore, __ar_rnat,
+
+  -1,
+  -1,  /* Not available: FCR, IA32 floating control register.  */
+  -1, -1,
+
+  -1,         /* Not available: EFLAG.  */
+  -1,         /* Not available: CSD.  */
+  -1,         /* Not available: SSD.  */
+  -1,         /* Not available: CFLG.  */
+  -1,         /* Not available: FSR.  */
+  -1,         /* Not available: FIR.  */
+  -1,         /* Not available: FDR.  */
+  -1,
+  __ar_ccv, -1, -1, -1, __ar_unat, -1, -1, -1,
+  __ar_fpsr, -1, -1, -1,
+  -1,         /* Not available: ITC.  */
+  -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+  -1, -1, -1, -1, -1, -1, -1, -1, -1,
+  __ar_pfs, __ar_lc, __ar_ec,
+  -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+  -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+  -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+  -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+  -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+  -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+  -1
+  /* All following registers, starting with nat0, are handled as
+     pseudo registers, and hence are handled separately.  */
+};
+
+/* Some register have a fixed value and can not be modified.
+   Store their value in static constant buffers that can be used
+   later to fill the register cache.  */
+static const char r0_value[8] = {0x00, 0x00, 0x00, 0x00,
+                                 0x00, 0x00, 0x00, 0x00};
+static const char f0_value[16] = {0x00, 0x00, 0x00, 0x00,
+                                  0x00, 0x00, 0x00, 0x00,
+                                  0x00, 0x00, 0x00, 0x00,
+                                  0x00, 0x00, 0x00, 0x00};
+static const char f1_value[16] = {0x00, 0x00, 0x00, 0x00,
+                                  0x00, 0x00, 0xff, 0xff,
+                                  0x80, 0x00, 0x00, 0x00,
+                                  0x00, 0x00, 0x00, 0x00};
+
+/* The "to_wait" routine from the "inf-ttrace" layer.  */
+
+static ptid_t (*super_to_wait) (struct target_ops *, ptid_t,
+				struct target_waitstatus *, int);
+
+/* The "to_wait" target_ops routine routine for ia64-hpux.  */
+
+static ptid_t
+ia64_hpux_wait (struct target_ops *ops, ptid_t ptid,
+		struct target_waitstatus *ourstatus, int options)
+{
+  ptid_t new_ptid;
+
+  new_ptid = super_to_wait (ops, ptid, ourstatus, options);
+
+  /* If this is a DLD event (hard-coded breakpoint instruction
+     that was activated by the solib-ia64-hpux module), we need to
+     process it, and then resume the execution as if the event did
+     not happen.  */
+  if (ourstatus->kind == TARGET_WAITKIND_STOPPED
+      && ourstatus->value.sig == GDB_SIGNAL_TRAP
+      && ia64_hpux_at_dld_breakpoint_p (new_ptid))
+    {
+      ia64_hpux_handle_dld_breakpoint (new_ptid);
+
+      target_resume (new_ptid, 0, GDB_SIGNAL_0);
+      ourstatus->kind = TARGET_WAITKIND_IGNORE;
+    }
+
+  return new_ptid;
+}
+
+/* Fetch the RNAT register and supply it to the REGCACHE.  */
+
+static void
+ia64_hpux_fetch_rnat_register (struct regcache *regcache)
+{
+  CORE_ADDR addr;
+  gdb_byte buf[8];
+  int status;
+
+  /* The value of RNAT is stored at bsp|0x1f8, and must be read using
+     TT_LWP_RDRSEBS.  */
+
+  regcache_raw_read_unsigned (regcache, IA64_BSP_REGNUM, &addr);
+  addr |= 0x1f8;
+
+  status = ttrace (TT_LWP_RDRSEBS, ptid_get_pid (inferior_ptid),
+		   ptid_get_lwp (inferior_ptid), addr, sizeof (buf),
+		   (uintptr_t) buf);
+  if (status < 0)
+    error (_("failed to read RNAT register at %s"),
+	   paddress (get_regcache_arch(regcache), addr));
+
+  regcache_raw_supply (regcache, IA64_RNAT_REGNUM, buf);
+}
+
+/* Read the value of the register saved at OFFSET in the save_state_t
+   structure, and store its value in BUF.  LEN is the size of the register
+   to be read.  */
+
+static int
+ia64_hpux_read_register_from_save_state_t (int offset, gdb_byte *buf, int len)
+{
+  int status;
+
+ status = ttrace (TT_LWP_RUREGS, ptid_get_pid (inferior_ptid),
+		  ptid_get_lwp (inferior_ptid), offset, len, (uintptr_t) buf);
+
+  return status;
+}
+
+/* Fetch register REGNUM from the inferior.  */
+
+static void
+ia64_hpux_fetch_register (struct regcache *regcache, int regnum)
+{
+  struct gdbarch *gdbarch = get_regcache_arch (regcache);
+  int offset, len, status;
+  gdb_byte *buf;
+
+  if (regnum == IA64_GR0_REGNUM)
+    {
+      /* r0 is always 0.  */
+      regcache_raw_supply (regcache, regnum, r0_value);
+      return;
+    }
+
+  if (regnum == IA64_FR0_REGNUM)
+    {
+      /* f0 is always 0.0.  */
+      regcache_raw_supply (regcache, regnum, f0_value);
+      return;
+    }
+
+  if (regnum == IA64_FR1_REGNUM)
+    {
+      /* f1 is always 1.0.  */
+      regcache_raw_supply (regcache, regnum, f1_value);
+      return;
+    }
+
+  if (regnum == IA64_RNAT_REGNUM)
+    {
+      ia64_hpux_fetch_rnat_register (regcache);
+      return;
+    }
+
+  /* Get the register location. If the register can not be fetched,
+     then return now.  */
+  offset = u_offsets[regnum];
+  if (offset == -1)
+    return;
+
+  len = register_size (gdbarch, regnum);
+  buf = alloca (len * sizeof (gdb_byte));
+  status = ia64_hpux_read_register_from_save_state_t (offset, buf, len);
+  if (status < 0)
+    warning (_("Failed to read register value for %s."),
+             gdbarch_register_name (gdbarch, regnum));
+
+  regcache_raw_supply (regcache, regnum, buf);
+}
+
+/* The "to_fetch_registers" target_ops routine for ia64-hpux.  */
+
+static void
+ia64_hpux_fetch_registers (struct target_ops *ops,
+			   struct regcache *regcache, int regnum)
+{
+  if (regnum == -1)
+    for (regnum = 0;
+	 regnum < gdbarch_num_regs (get_regcache_arch (regcache));
+	 regnum++)
+      ia64_hpux_fetch_register (regcache, regnum);
+  else
+    ia64_hpux_fetch_register (regcache, regnum);
+}
+
+/* Save register REGNUM (stored in BUF) in the save_state_t structure.
+   LEN is the size of the register in bytes.
+
+   Return the value from the corresponding ttrace call (a negative value
+   means that the operation failed).  */
+
+static int
+ia64_hpux_write_register_to_saved_state_t (int offset, gdb_byte *buf, int len)
+{
+  return ttrace (TT_LWP_WUREGS, ptid_get_pid (inferior_ptid),
+		 ptid_get_lwp (inferior_ptid), offset, len, (uintptr_t) buf);
+}
+
+/* Store register REGNUM into the inferior.  */
+
+static void
+ia64_hpux_store_register (const struct regcache *regcache, int regnum)
+{
+  struct gdbarch *gdbarch = get_regcache_arch (regcache);
+  int offset = u_offsets[regnum];
+  gdb_byte *buf;
+  int len, status;
+
+  /* If the register can not be stored, then return now.  */
+  if (offset == -1)
+    return;
+
+  /* I don't know how to store that register for now.  So just ignore any
+     request to store it, to avoid an internal error.  */
+  if (regnum == IA64_PSR_REGNUM)
+    return;
+
+  len = register_size (gdbarch, regnum);
+  buf = alloca (len * sizeof (gdb_byte));
+  regcache_raw_collect (regcache, regnum, buf);
+
+  status = ia64_hpux_write_register_to_saved_state_t (offset, buf, len);
+
+  if (status < 0)
+    error (_("failed to write register value for %s."),
+           gdbarch_register_name (gdbarch, regnum));
+}
+
+/* The "to_store_registers" target_ops routine for ia64-hpux.  */
+
+static void
+ia64_hpux_store_registers (struct target_ops *ops,
+			   struct regcache *regcache, int regnum)
+{
+  if (regnum == -1)
+    for (regnum = 0;
+	 regnum < gdbarch_num_regs (get_regcache_arch (regcache));
+	 regnum++)
+      ia64_hpux_store_register (regcache, regnum);
+  else
+    ia64_hpux_store_register (regcache, regnum);
+}
+
+/* The "xfer_partial" routine from the "inf-ttrace" target layer.
+   Ideally, we would like to use this routine for all transfer
+   requests, but this platforms has a lot of special cases that
+   need to be handled manually.  So we override this routine and
+   delegate back if we detect that we are not in a special case.  */
+
+static LONGEST (*super_xfer_partial) (struct target_ops *, enum target_object,
+				      const char *, gdb_byte *,
+				      const gdb_byte *, ULONGEST, LONGEST);
+
+/* The "xfer_partial" routine for a memory region that is completely
+   outside of the backing-store region.  */
+
+static LONGEST
+ia64_hpux_xfer_memory_no_bs (struct target_ops *ops, const char *annex,
+			     gdb_byte *readbuf, const gdb_byte *writebuf,
+			     CORE_ADDR addr, LONGEST len)
+{
+  /* Memory writes need to be aligned on 16byte boundaries, at least
+     when writing in the text section.  On the other hand, the size
+     of the buffer does not need to be a multiple of 16bytes.
+
+     No such restriction when performing memory reads.  */
+
+  if (writebuf && addr & 0x0f)
+    {
+      const CORE_ADDR aligned_addr = addr & ~0x0f;
+      const int aligned_len = len + (addr - aligned_addr);
+      gdb_byte *aligned_buf = alloca (aligned_len * sizeof (gdb_byte));
+      LONGEST status;
+
+      /* Read the portion of memory between ALIGNED_ADDR and ADDR, so
+         that we can write it back during our aligned memory write.  */
+      status = super_xfer_partial (ops, TARGET_OBJECT_MEMORY, annex,
+				   aligned_buf /* read */,
+				   NULL /* write */,
+				   aligned_addr, addr - aligned_addr);
+      if (status <= 0)
+	return 0;
+      memcpy (aligned_buf + (addr - aligned_addr), writebuf, len);
+
+      return super_xfer_partial (ops, TARGET_OBJECT_MEMORY, annex,
+				 NULL /* read */, aligned_buf /* write */,
+				 aligned_addr, aligned_len);
+    }
+  else
+    /* Memory read or properly aligned memory write.  */
+    return super_xfer_partial (ops, TARGET_OBJECT_MEMORY, annex, readbuf,
+			       writebuf, addr, len);
+}
+
+/* Read LEN bytes at ADDR from memory, and store it in BUF.  This memory
+   region is assumed to be inside the backing store.
+
+   Return zero if the operation failed.  */
+
+static int
+ia64_hpux_read_memory_bs (gdb_byte *buf, CORE_ADDR addr, int len)
+{
+  gdb_byte tmp_buf[8];
+  CORE_ADDR tmp_addr = addr & ~0x7;
+
+  while (tmp_addr < addr + len)
+    {
+      int status;
+      int skip_lo = 0;
+      int skip_hi = 0;
+
+      status = ttrace (TT_LWP_RDRSEBS, ptid_get_pid (inferior_ptid),
+		       ptid_get_lwp (inferior_ptid), tmp_addr,
+		       sizeof (tmp_buf), (uintptr_t) tmp_buf);
+      if (status < 0)
+        return 0;
+
+      if (tmp_addr < addr)
+        skip_lo = addr - tmp_addr;
+
+      if (tmp_addr + sizeof (tmp_buf) > addr + len)
+        skip_hi = (tmp_addr + sizeof (tmp_buf)) - (addr + len);
+
+      memcpy (buf + (tmp_addr + skip_lo - addr),
+              tmp_buf + skip_lo,
+              sizeof (tmp_buf) - skip_lo - skip_hi);
+
+      tmp_addr += sizeof (tmp_buf);
+    }
+
+  return 1;
+}
+
+/* Write LEN bytes from BUF in memory at ADDR.  This memory region is assumed
+   to be inside the backing store.
+
+   Return zero if the operation failed.  */
+
+static int
+ia64_hpux_write_memory_bs (const gdb_byte *buf, CORE_ADDR addr, int len)
+{
+  gdb_byte tmp_buf[8];
+  CORE_ADDR tmp_addr = addr & ~0x7;
+
+  while (tmp_addr < addr + len)
+    {
+      int status;
+      int lo = 0;
+      int hi = 7;
+
+      if (tmp_addr < addr || tmp_addr + sizeof (tmp_buf) > addr + len)
+	/* Part of the 8byte region pointed by tmp_addr needs to be preserved.
+	   So read it in before we copy the data that needs to be changed.  */
+	if (!ia64_hpux_read_memory_bs (tmp_buf, tmp_addr, sizeof (tmp_buf)))
+	  return 0;
+
+      if (tmp_addr < addr)
+        lo = addr - tmp_addr;
+
+      if (tmp_addr + sizeof (tmp_buf) > addr + len)
+        hi = addr - tmp_addr + len - 1;
+
+      memcpy (tmp_buf + lo, buf + tmp_addr - addr  + lo, hi - lo + 1);
+
+      status = ttrace (TT_LWP_WRRSEBS, ptid_get_pid (inferior_ptid),
+		       ptid_get_lwp (inferior_ptid), tmp_addr,
+		       sizeof (tmp_buf), (uintptr_t) tmp_buf);
+      if (status < 0)
+        return 0;
+
+      tmp_addr += sizeof (tmp_buf);
+    }
+
+  return 1;
+}
+
+/* The "xfer_partial" routine for a memory region that is completely
+   inside of the backing-store region.  */
+
+static LONGEST
+ia64_hpux_xfer_memory_bs (struct target_ops *ops, const char *annex,
+			  gdb_byte *readbuf, const gdb_byte *writebuf,
+			  CORE_ADDR addr, LONGEST len)
+{
+  int success;
+
+  if (readbuf)
+    success = ia64_hpux_read_memory_bs (readbuf, addr, len);
+  else
+    success = ia64_hpux_write_memory_bs (writebuf, addr, len);
+
+  if (success)
+    return len;
+  else
+    return 0;
+}
+
+/* Get a register value as a unsigned value directly from the system,
+   instead of going through the regcache.
+
+   This function is meant to be used when inferior_ptid is not
+   a thread/process known to GDB.  */
+
+static ULONGEST
+ia64_hpux_get_register_from_save_state_t (int regnum, int reg_size)
+{
+  gdb_byte *buf = alloca (reg_size);
+  int offset = u_offsets[regnum];
+  int status;
+
+  /* The register is assumed to be available for fetching.  */
+  gdb_assert (offset != -1);
+
+  status = ia64_hpux_read_register_from_save_state_t (offset, buf, reg_size);
+  if (status < 0)
+    {
+      /* This really should not happen.  If it does, emit a warning
+	 and pretend the register value is zero.  Not exactly the best
+	 error recovery mechanism, but better than nothing.  We will
+	 try to do better if we can demonstrate that this can happen
+	 under normal circumstances.  */
+      warning (_("Failed to read value of register number %d."), regnum);
+      return 0;
+    }
+
+  return extract_unsigned_integer (buf, reg_size, BFD_ENDIAN_BIG);
+}
+
+/* The "xfer_partial" target_ops routine for ia64-hpux, in the case
+   where the requested object is TARGET_OBJECT_MEMORY.  */
+
+static LONGEST
+ia64_hpux_xfer_memory (struct target_ops *ops, const char *annex,
+		       gdb_byte *readbuf, const gdb_byte *writebuf,
+		       CORE_ADDR addr, LONGEST len)
+{
+  CORE_ADDR bsp, bspstore;
+  CORE_ADDR start_addr, short_len;
+  int status = 0;
+
+  /* The back-store region cannot be read/written by the standard memory
+     read/write operations.  So we handle the memory region piecemeal:
+       (1) and (2) The regions before and after the backing-store region,
+           which can be treated as normal memory;
+       (3) The region inside the backing-store, which needs to be
+           read/written specially.  */
+
+  if (in_inferior_list (ptid_get_pid (inferior_ptid)))
+    {
+      struct regcache *regcache = get_current_regcache ();
+
+      regcache_raw_read_unsigned (regcache, IA64_BSP_REGNUM, &bsp);
+      regcache_raw_read_unsigned (regcache, IA64_BSPSTORE_REGNUM, &bspstore);
+    }
+  else
+    {
+      /* This is probably a child of our inferior created by a fork.
+	 Because this process has not been added to our inferior list
+	 (we are probably in the process of handling that child
+	 process), we do not have a regcache to read the registers
+	 from.  So get those values directly from the kernel.  */
+      bsp = ia64_hpux_get_register_from_save_state_t (IA64_BSP_REGNUM, 8);
+      bspstore =
+	ia64_hpux_get_register_from_save_state_t (IA64_BSPSTORE_REGNUM, 8);
+    }
+
+  /* 1. Memory region before BSPSTORE.  */
+
+  if (addr < bspstore)
+    {
+      short_len = len;
+      if (addr + len > bspstore)
+        short_len = bspstore - addr;
+
+      status = ia64_hpux_xfer_memory_no_bs (ops, annex, readbuf, writebuf,
+					    addr, short_len);
+      if (status <= 0)
+        return 0;
+    }
+
+  /* 2. Memory region after BSP.  */
+
+  if (addr + len > bsp)
+    {
+      start_addr = addr;
+      if (start_addr < bsp)
+        start_addr = bsp;
+      short_len = len + addr - start_addr;
+
+      status = ia64_hpux_xfer_memory_no_bs
+		(ops, annex,
+		 readbuf ? readbuf + (start_addr - addr) : NULL,
+		 writebuf ? writebuf + (start_addr - addr) : NULL,
+		 start_addr, short_len);
+      if (status <= 0)
+	return 0;
+    }
+
+  /* 3. Memory region between BSPSTORE and BSP.  */
+
+  if (bspstore != bsp
+      && ((addr < bspstore && addr + len > bspstore)
+	  || (addr + len <= bsp && addr + len > bsp)))
+    {
+      start_addr = addr;
+      if (addr < bspstore)
+        start_addr = bspstore;
+      short_len = len + addr - start_addr;
+
+      if (start_addr + short_len > bsp)
+        short_len = bsp - start_addr;
+
+      gdb_assert (short_len > 0);
+
+      status = ia64_hpux_xfer_memory_bs
+		 (ops, annex,
+		  readbuf ? readbuf + (start_addr - addr) : NULL,
+		  writebuf ? writebuf + (start_addr - addr) : NULL,
+		  start_addr, short_len);
+      if (status < 0)
+	return 0;
+    }
+
+  return len;
+}
+
+/* Handle the transfer of TARGET_OBJECT_HPUX_UREGS objects on ia64-hpux.
+   ANNEX is currently ignored.
+
+   The current implementation does not support write transfers (because
+   we do not currently do not need these transfers), and will raise
+   a failed assertion if WRITEBUF is not NULL.  */
+
+static LONGEST
+ia64_hpux_xfer_uregs (struct target_ops *ops, const char *annex,
+		      gdb_byte *readbuf, const gdb_byte *writebuf,
+		      ULONGEST offset, LONGEST len)
+{
+  int status;
+
+  gdb_assert (writebuf == NULL);
+
+  status = ia64_hpux_read_register_from_save_state_t (offset, readbuf, len);
+  if (status < 0)
+    return -1;
+  return len;
+}
+
+/* Handle the transfer of TARGET_OBJECT_HPUX_SOLIB_GOT objects on ia64-hpux.
+
+   The current implementation does not support write transfers (because
+   we do not currently do not need these transfers), and will raise
+   a failed assertion if WRITEBUF is not NULL.  */
+
+static LONGEST
+ia64_hpux_xfer_solib_got (struct target_ops *ops, const char *annex,
+			  gdb_byte *readbuf, const gdb_byte *writebuf,
+			  ULONGEST offset, LONGEST len)
+{
+  CORE_ADDR fun_addr;
+  /* The linkage pointer.  We use a uint64_t to make sure that the size
+     of the object we are returning is always 64 bits long, as explained
+     in the description of the TARGET_OBJECT_HPUX_SOLIB_GOT object.
+     This is probably paranoia, but we do not use a CORE_ADDR because
+     it could conceivably be larger than uint64_t.  */
+  uint64_t got;
+
+  gdb_assert (writebuf == NULL);
+
+  if (offset > sizeof (got))
+    return 0;
+
+  fun_addr = string_to_core_addr (annex);
+  got = ia64_hpux_get_solib_linkage_addr (fun_addr);
+
+  if (len > sizeof (got) - offset)
+    len = sizeof (got) - offset;
+  memcpy (readbuf, &got + offset, len);
+
+  return len;
+}
+
+/* The "to_xfer_partial" target_ops routine for ia64-hpux.  */
+
+static LONGEST
+ia64_hpux_xfer_partial (struct target_ops *ops, enum target_object object,
+			const char *annex, gdb_byte *readbuf,
+			const gdb_byte *writebuf, ULONGEST offset, LONGEST len)
+{
+  LONGEST val;
+
+  if (object == TARGET_OBJECT_MEMORY)
+    val = ia64_hpux_xfer_memory (ops, annex, readbuf, writebuf, offset, len);
+  else if (object == TARGET_OBJECT_HPUX_UREGS)
+    val = ia64_hpux_xfer_uregs (ops, annex, readbuf, writebuf, offset, len);
+  else if (object == TARGET_OBJECT_HPUX_SOLIB_GOT)
+    val = ia64_hpux_xfer_solib_got (ops, annex, readbuf, writebuf, offset,
+				    len);
+  else
+    val = super_xfer_partial (ops, object, annex, readbuf, writebuf, offset,
+			      len);
+
+  return val;
+}
+
+/* The "to_can_use_hw_breakpoint" target_ops routine for ia64-hpux.  */
+
+static int
+ia64_hpux_can_use_hw_breakpoint (int type, int cnt, int othertype)
+{
+  /* No hardware watchpoint/breakpoint support yet.  */
+  return 0;
+}
+
+/* The "to_mourn_inferior" routine from the "inf-ttrace" target_ops layer.  */
+
+static void (*super_mourn_inferior) (struct target_ops *);
+
+/* The "to_mourn_inferior" target_ops routine for ia64-hpux.  */
+
+static void
+ia64_hpux_mourn_inferior (struct target_ops *ops)
+{
+  const int pid = ptid_get_pid (inferior_ptid);
+  int status;
+
+  super_mourn_inferior (ops);
+
+  /* On this platform, the process still exists even after we received
+     an exit event.  Detaching from the process isn't sufficient either,
+     as it only turns the process into a zombie.  So the only solution
+     we found is to kill it.  */
+  ttrace (TT_PROC_EXIT, pid, 0, 0, 0, 0);
+  wait (&status);
+}
+
+/* Prevent warning from -Wmissing-prototypes.  */
+void _initialize_ia64_hpux_nat (void);
+
+void
+_initialize_ia64_hpux_nat (void)
+{
+  struct target_ops *t;
+
+  t = inf_ttrace_target ();
+  super_to_wait = t->to_wait;
+  super_xfer_partial = t->to_xfer_partial;
+  super_mourn_inferior = t->to_mourn_inferior;
+
+  t->to_wait = ia64_hpux_wait;
+  t->to_fetch_registers = ia64_hpux_fetch_registers;
+  t->to_store_registers = ia64_hpux_store_registers;
+  t->to_xfer_partial = ia64_hpux_xfer_partial;
+  t->to_can_use_hw_breakpoint = ia64_hpux_can_use_hw_breakpoint;
+  t->to_mourn_inferior = ia64_hpux_mourn_inferior;
+  t->to_attach_no_wait = 1;
+
+  add_target (t);
+}
+@
+
+
+1.8
+log
+@fix internal_error during fork event handling.
+
+When running on ia64-hpux a program that calls fork, GDB currently
+reports the following internal error:
+
+    internal-error: Can't determine the current address space of thread process 1882
+
+Here is what happens:
+  1. GDB receives a "fork" event;
+  2. handle_inferior_event calls detach_breakpoints for the child process;
+  3. detach_breakpoints calls ia64's gdbarch remove_breakpoint hook,
+     which needs to read an entire instruction slot in order to remove
+     a breakpoint instruction from memory;
+  4. To read inferior memory, the ia64-hpux code needs to know where
+     that memory is located relative to the bsp..bspstore area,
+     and thus needs to read the value of those registers;
+  5. To get the value of those registers, ia64_hpux_xfer_memory current
+     uses the current regcache.
+
+The problem is that at the time we are trying to remove the breakpoints
+from the child, the child process is not part of the list of inferiors
+really known to GDB (it has not been added to inferior_list), so trying
+to create a regcache for it triggers an internal error when creating
+address space for the regcache (as the address space is ultimately
+fetched from the inferior).
+
+To work around this limitation, ia64_hpux_xfer_memory has been modified
+to detect the fact the current inferior is not in our inferior list,
+and to go, in that case, straight to the source to fetch the registers
+it needs.
+
+gdb/ChangeLog:
+
+        * ia64-hpux-nat.c (ia64_hpux_get_register_from_save_state_t):
+        New function.
+        (ia64_hpux_xfer_memory): Check if inferior_ptid is known before
+        using the regache.  Use ia64_hpux_get_register_from_save_state_t
+        to access the bsp and bspstore registers if not.
+@
+text
+@d1 1
+a1 1
+/* Copyright (C) 2010, 2012 Free Software Foundation, Inc.
+@
+
+
+1.7
+log
+@Rename ia64-hpux-nat.c:_initialize_hppa_hpux_nat...
+
+... into _initialize_ia64_hpux_nat. Looks like a harmless but
+unfortunate copy/paste error.
+
+gdb/ChangeLog:
+
+        * ia64-hpux-nat.c (_initialize_ia64_hpux_nat): Renames
+        _initialize_hppa_hpux_nat.
+@
+text
+@d488 31
+d538 18
+a555 3
+  regcache_raw_read_unsigned (get_current_regcache (), IA64_BSP_REGNUM, &bsp);
+  regcache_raw_read_unsigned (get_current_regcache (), IA64_BSPSTORE_REGNUM,
+                              &bspstore);
+@
+
+
+1.6
+log
+@gdb/
+2012-05-24  Pedro Alves  <palves@@redhat.com>
+
+	PR gdb/7205
+
+        Replace TARGET_SIGNAL_ with GDB_SIGNAL_ throughout.
+
+gdb/gdbserver/
+2012-05-24  Pedro Alves  <palves@@redhat.com>
+
+	PR gdb/7205
+
+        Replace TARGET_SIGNAL_ with GDB_SIGNAL_ throughout.
+
+include/gdb/
+2012-05-24  Pedro Alves  <palves@@redhat.com>
+
+	PR gdb/7205
+
+        * gdb/signals.def: Replace TARGET_SIGNAL_ with GDB_SIGNAL_
+	throughout.
+
+sim/arm/
+2012-05-24  Pedro Alves  <palves@@redhat.com>
+
+	PR gdb/7205
+
+        Replace TARGET_SIGNAL_ with GDB_SIGNAL_ throughout.
+
+sim/avr/
+2012-05-24  Pedro Alves  <palves@@redhat.com>
+
+	PR gdb/7205
+
+        Replace TARGET_SIGNAL_ with GDB_SIGNAL_ throughout.
+
+sim/common/
+2012-05-24  Pedro Alves  <palves@@redhat.com>
+
+	PR gdb/7205
+
+        Replace TARGET_SIGNAL_ with GDB_SIGNAL_ throughout.
+
+sim/cr16/
+2012-05-24  Pedro Alves  <palves@@redhat.com>
+
+	PR gdb/7205
+
+        Replace TARGET_SIGNAL_ with GDB_SIGNAL_ throughout.
+
+sim/d10v/
+2012-05-24  Pedro Alves  <palves@@redhat.com>
+
+	PR gdb/7205
+
+        Replace TARGET_SIGNAL_ with GDB_SIGNAL_ throughout.
+
+sim/erc32/
+2012-05-24  Pedro Alves  <palves@@redhat.com>
+
+	PR gdb/7205
+
+        Replace TARGET_SIGNAL_ with GDB_SIGNAL_ throughout.
+
+sim/m32c/
+2012-05-24  Pedro Alves  <palves@@redhat.com>
+
+	PR gdb/7205
+
+        Replace TARGET_SIGNAL_ with GDB_SIGNAL_ throughout.
+
+sim/ppc/
+2012-05-24  Pedro Alves  <palves@@redhat.com>
+
+	PR gdb/7205
+
+        Replace TARGET_SIGNAL_ with GDB_SIGNAL_ throughout.
+
+sim/rl78/
+2012-05-24  Pedro Alves  <palves@@redhat.com>
+
+	PR gdb/7205
+
+        Replace TARGET_SIGNAL_ with GDB_SIGNAL_ throughout.
+
+sim/rx/
+2012-05-24  Pedro Alves  <palves@@redhat.com>
+
+	PR gdb/7205
+
+        Replace TARGET_SIGNAL_ with GDB_SIGNAL_ throughout.
+@
+text
+@d682 1
+a682 1
+void _initialize_hppa_hpux_nat (void);
+d685 1
+a685 1
+_initialize_hppa_hpux_nat (void)
+@
+
+
+1.5
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d157 1
+a157 1
+      && ourstatus->value.sig == TARGET_SIGNAL_TRAP
+d162 1
+a162 1
+      target_resume (new_ptid, 0, TARGET_SIGNAL_0);
+@
+
+
+1.4
+log
+@fix ARI warnings introduced by ia64-hpux patches
+
+gdb/ChangeLog:
+
+        * ia64-hpux-nat.c (ia64_hpux_fetch_register): Remove trailing
+        new-line at end of warning message.
+        (ia64_hpux_store_register): Remove trailing new-line at end of
+        error message.
+        * ia64-hpux-tdep.c: Rephrase comment.
+        * solib-ia64-hpux.c (struct dld_info): Change type of field
+        dld_flags from "long long" to ULONGEST.
+@
+text
+@d1 1
+a1 1
+/* Copyright (C) 2010 Free Software Foundation, Inc.
+@
+
+
+1.4.4.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d1 1
+a1 1
+/* Copyright (C) 2010, 2012 Free Software Foundation, Inc.
+@
+
+
+1.3
+log
+@[ia64-hpux] inferior function call support
+
+We have two stacks to deal with on ia64, when making a function call.
+The first is the usual stack frame, and the second is the register
+stack frame.  On ia64-linux, the register frame is setup by adjusting
+the BSP register.  Unfortunately for us, the HP-UX kernel does not allow
+the debugger to change the value of the BSP.
+
+To work around that limitation, the method I am using here is to push
+some assembly code on the stack. This assembly code contains, among
+other things, a call to the alloc insn, which sets up our frame for us.
+An extensive comment in ia64-hpux-tdep.c explains the entire procedure.
+
+Despite this approach, most of the code in ia64-tdep.c which sets up
+the function call is still applicable - and only a few things need
+to be done differently:  For instance, instead of changing the BSP,
+we do nothing.  We store the parameters at a different location, etc.
+So this patch also adjusts the inf-call code in ia64-tdep.c to make it
+a little more extensible: I create a new ia64_infcall_ops structure
+which allows an ABI to define how the few things that need to be
+differentiated.
+
+Another element that turned out to be necessary but is more of a detail
+is that the computation of the linkage pointer needs to be handled
+specially for symbols inside shared libraries.  This is especially
+visible when calling malloc, which happens everytime memory needs to
+be allocated in inferior memory...  The special treatment included
+again the necessity to use some routines only available on the host.
+So another target object TARGET_OBJECT_HPUX_SOLIB_GOT was created for
+that purpose.
+
+gdb/ChangeLog:
+
+        * ia64-tdep.h (struct regcache): Forward declare.
+        (struct ia64_infcall_ops): New struct type.
+        (struct gdbarch_tdep): New fields "find_global_pointer_from_solib"
+        and "infcall_ops".
+        * ia64-tdep.c (ia64_find_global_pointer_from_dynamic_section):
+        Renames ia64_find_global_pointer.
+        (ia64_find_global_pointer, ia64_allocate_new_rse_frame)
+        (ia64_store_argument_in_slot, ia64_set_function_addr: New function.
+        (ia64_push_dummy_call): Adjust to use the new tdep ia64_infocall_ops
+        methods.
+        (ia64_infcall_ops): New static global constant.
+        (ia64_gdbarch_init): Set tdep->infcall_ops.
+        * ia64-hpux-nat.c (ia64_hpux_xfer_solib_got): New function.
+        (ia64_hpux_xfer_partial): Add TARGET_OBJECT_HPUX_SOLIB_GOT handing.
+        * ia64-hpux-tdep.c: Include "regcache.h", "gdbcore.h" and "inferior.h".
+        (ia64_hpux_dummy_code): New static global constant.
+        (ia64_hpux_push_dummy_code, ia64_hpux_allocate_new_rse_frame)
+        (ia64_hpux_store_argument_in_slot, ia64_hpux_set_function_addr)
+        (ia64_hpux_dummy_id, ia64_hpux_find_global_pointer_from_solib):
+        New function.
+        (ia64_hpux_infcall_ops): New static global constant.
+        (ia64_hpux_init_abi): Install gdbarch and tdep methods needed
+        for inferior function calls to work properly on ia64-hpux.
+@
+text
+@d255 1
+a255 1
+    warning (_("Failed to read register value for %s.\n"),
+d315 1
+a315 1
+    error (_("failed to write register value for %s.\n"),
+@
+
+
+1.2
+log
+@[ia64-hpux] unwinding bsp value from system call
+
+This fixes unwinding from a thread that is stopped inside a system call.
+This can be seen when switching to a thread that is stopped doing a
+pthread_cond_wait, for instance...
+
+The comments inside the code should explain what is happening in our
+case (the HP-UX exception in the case of system calls): Under certain
+circumstances (program stopped inside syscall), the offset to apply to
+the current BSP in order to compute the previous BSP is not the usual
+CFM & 0x7f.
+
+We parts in this patch:
+
+  1. Figuring out that we are stopped inside a syscal: This requires
+     a TT_LWP_RUREGS ttrace call, which is not directly possible from
+     ia64-tdep.c.  So use defined a new TARGET_OBJECT_HPUX_UREGS object
+     to request it from the -nat side.
+
+  2. Add a gdbarch_tdep method that allows us to change the default
+     behavior on ia64-hpux, permitting us to have a different "size of
+     register frame" in that one particular case.
+
+gdb/ChangeLog:
+
+        * target.h (enum target_object): Add TARGET_OBJECT_HPUX_UREGS.
+        * ia64-tdep.h (struct frame_info): forward declaration.
+        (struct gdbarch_tdep): Add field size_of_register_frame.
+        * ia64-tdep.c (ia64_access_reg): Use tdep->size_of_register_frame
+        to determine the size of the register frame.
+        (ia64_size_of_register_frame): New function.
+        (ia64_gdbarch_init): Set tdep->size_of_register_frame.
+        * ia64-hpux-tdep.c: Include "target.h" and "frame.h".
+        (IA64_HPUX_UREG_REASON): New macro.
+        (ia64_hpux_stopped_in_syscall, ia64_hpux_size_of_register_frame):
+        New functions.
+        (ia64_hpux_init_abi): Set tdep->size_of_register_frame.
+        * ia64-hpux-nat.c (ia64_hpux_xfer_uregs): New function.
+        (ia64_hpux_xfer_partial): Add handling of TARGET_OBJECT_HPUX_UREGS
+        objects.
+@
+text
+@d593 34
+d640 3
+@
+
+
+1.1
+log
+@port GDB to ia64-hpux (native).
+
+ChangeLog:
+
+        * configure.ac: Remove readline, mmalloc, and gdb from noconfigdirs
+        for ia64-hpux.
+        * configure: Regenerate.
+
+gdb/ChangeLog:
+
+        * config/ia64/hpux.mh, ia64-hpux-nat.c, ia64-hpux-tdep.c,
+        ia64-hpux-tdep.h, solib-ia64-hpux.c, solib-ia64-hpux.h: New files.
+
+        * configure.host: Add handling for ia64-hpux hosts.  Add associated
+        floatformats.
+        * configure.tgt: Add handling for ia64-hpux targets.
+        * Makefile.in (ALL_64_TARGET_OBS): Add ia64-hpux-tdep.o.
+        (HFILES_NO_SRCDIR): Add ia64-hpux-tdep.h.
+        (ALLDEPFILES): Add ia64-hpux-nat.c ia64-hpux-tdep.c.
+@
+text
+@d571 22
+d604 2
+@
+

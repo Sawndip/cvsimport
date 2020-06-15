@@ -1,0 +1,703 @@
+head	1.11;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.9
+	gdb_7_6-2013-04-26-release:1.9
+	gdb_7_6-branch:1.9.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.9
+	gdb_7_5_1-2012-11-29-release:1.8
+	gdb_7_5-2012-08-17-release:1.8
+	gdb_7_5-branch:1.8.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.8
+	gdb_7_4_1-2012-04-26-release:1.2.2.1
+	gdb_7_4-2012-01-24-release:1.2.2.1
+	gdb_7_4-branch:1.2.0.2
+	gdb_7_4-2011-12-13-branchpoint:1.2;
+locks; strict;
+comment	@# @;
+
+
+1.11
+date	2013.07.19.10.24.34;	author willnewton;	state Exp;
+branches;
+next	1.10;
+
+1.10
+date	2013.03.15.01.41.28;	author qiyao;	state Exp;
+branches;
+next	1.9;
+
+1.9
+date	2013.01.01.06.33.25;	author brobecke;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2012.03.04.02.36.38;	author qiyao;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2012.03.03.06.58.16;	author jkratoch;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2012.02.29.14.59.41;	author jkratoch;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2012.02.21.22.01.09;	author palves;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2012.02.21.21.55.39;	author palves;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2012.01.04.08.17.45;	author brobecke;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2011.10.16.08.42.04;	author jkratoch;	state Exp;
+branches
+	1.2.2.1;
+next	1.1;
+
+1.1
+date	2011.09.17.13.34.01;	author qiyao;	state Exp;
+branches;
+next	;
+
+1.2.2.1
+date	2012.01.06.04.44.00;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.11
+log
+@gdb/testsuite/gdb.base: Enable disp-step-syscall.exp tests for ARM.
+
+disp-step-syscall.exp is not run for ARM targets because ARM syscall
+instructions have not been added to the list of possible syscall
+instructions. This patch adds ARM syscall instructions to enable
+disp-step-syscall.exp tests for ARM targets. Attached patch is tested
+on ARMv7 and helps pass all disp-step-syscall.exp tests for ARM
+targets.
+
+gdb/testsuite/ChangeLog:
+
+2013-07-19  Omair Javaid  <Omair.Javaid@@linaro.org>
+
+	* gdb.base/disp-step-syscall.exp: Add svc and swi syscall
+	instructions and enable disp-step-syscall for arm targets.
+@
+text
+@# This testcase is part of GDB, the GNU debugger.
+
+# Copyright 2011-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+if { ![support_displaced_stepping] } {
+    unsupported "displaced stepping"
+    return -1
+}
+
+set syscall_insn ""
+
+# Define the syscall instruction for each target.
+
+if { [istarget "i\[34567\]86-*-linux*"] || [istarget "x86_64-*-linux*"] } {
+    set syscall_insn "\[ \t\](int|syscall|sysenter)\[ \t\]"
+} elseif [istarget "arm*-*-linux*"] {
+    set syscall_insn "\[ \t\](swi|svc)\[ \t\]"
+} else {
+    return -1
+}
+
+proc disp_step_cross_syscall { syscall } {
+    with_test_prefix "$syscall" {
+	global syscall_insn
+	global gdb_prompt
+
+	set testfile "disp-step-$syscall"
+
+	if [prepare_for_testing ${testfile}.exp ${testfile} ${testfile}.c {debug}] {
+	    untested ${testfile}.exp
+	    return -1
+	}
+
+	if { ![runto main] } then {
+	    fail "run to main ($syscall)"
+	    return
+	}
+
+	# Delete the breakpoint on main.
+	gdb_test_no_output "delete break 1"
+
+	gdb_test "break marker" "Breakpoint.*at.* file .*${testfile}.c, line.*"
+	gdb_test_no_output "set displaced-stepping off"
+
+	set syscall_bp 0
+	gdb_test_multiple "break $syscall"  "break $syscall" {
+	    -re "Breakpoint (\[0-9\]*) at .*$gdb_prompt $" {
+		set syscall_bp $expect_out(1,string)
+		pass "break $syscall"
+	    }
+	}
+
+	gdb_test "continue" "Continuing\\..*Breakpoint \[0-9\]+, (.* in |__libc_|)$syscall \\(\\).*" \
+	    "continue to $syscall (1st time)"
+	# Hit the breakpoint on $syscall for the first time.  In this time, we will let PLT
+	# resolution done, and the number single steps we will do later will be
+	# reduced.
+
+	gdb_test "continue" "Continuing\\..*Breakpoint \[0-9\]+, (.* in |__libc_|)$syscall \\(\\).*" \
+	    "continue to $syscall (2nd time)"
+	# Hit the breakpoint on $syscall for the second time.  In this time, the address
+	# of syscall insn and next insn of syscall are recorded.
+
+	gdb_test "display/i \$pc" ".*"
+
+
+	# Single step until we see sysall insn or we reach the upper bound of loop
+	# iterations.
+	set see_syscall_insn 0
+
+	for {set i 0} {$i < 1000 && $see_syscall_insn == 0} {incr i} {
+	    send_gdb "stepi\n"
+	    gdb_expect {
+		-re ".*$syscall_insn.*$gdb_prompt $" {
+		    set see_syscall_insn 1
+		}
+		-re ".*$gdb_prompt $" {}
+	    }
+	}
+
+	if {$see_syscall_insn == 0} then {
+	    fail "find syscall insn in $syscall"
+	    return -1
+	}
+
+	set syscall_insn_addr [get_hexadecimal_valueof "\$pc" "0"]
+	gdb_test "stepi" ".*" "stepi $syscall insn"
+	set syscall_insn_next_addr [get_hexadecimal_valueof "\$pc" "0"]
+
+	gdb_test "continue" "Continuing\\..*Breakpoint \[0-9\]+, (.* in |__libc_|)$syscall \\(\\).*" \
+	    "continue to $syscall (3rd time)"
+
+	# Hit the breakpoint on $syscall for the third time.  In this time, we'll set
+	# breakpoint on the syscall insn we recorded previously, and single step over it.
+
+	set syscall_insn_bp 0
+	gdb_test_multiple "break \*$syscall_insn_addr"  "break on syscall insn" {
+	    -re "Breakpoint (\[0-9\]*) at .*$gdb_prompt $" {
+		set syscall_insn_bp $expect_out(1,string)
+		pass "break on syscall insns"
+	    }
+	}
+	gdb_test_no_output "delete $syscall_bp" "delete break $syscall"
+
+	gdb_test "continue" "Continuing\\..*Breakpoint \[0-9\]+, .*" \
+	    "continue to syscall insn $syscall"
+
+	gdb_test_no_output "set displaced-stepping on"
+
+	# Check the address of next instruction of syscall.
+	if {$syscall == "vfork" && [is_remote target]} {
+	    setup_kfail server/13796 "*-*-*"
+	}
+	set test "single step over $syscall"
+	gdb_test_multiple "stepi" $test {
+	    -re "Program terminated with signal SIGILL,.*\r\n$gdb_prompt $" {
+		fail $test
+		return
+	    }
+	    -re "\\\[Inferior .* exited normally\\\].*\r\n$gdb_prompt $" {
+		fail $test
+		return
+	    }
+	    -re "\r\n$gdb_prompt $" {
+		pass $test
+	    }
+	}
+
+	set syscall_insn_next_addr_found [get_hexadecimal_valueof "\$pc" "0"]
+
+	set test "single step over $syscall final pc"
+	if {$syscall_insn_next_addr != 0
+	    && $syscall_insn_next_addr == $syscall_insn_next_addr_found} {
+	    pass $test
+	} else {
+	    fail $test
+	}
+
+	# Delete breakpoint syscall insns to avoid interference to other syscalls.
+	gdb_test_no_output "delete $syscall_insn_bp" "delete break $syscall insn"
+
+	gdb_test "continue" "Continuing\\..*Breakpoint \[0-9\]+, marker \\(\\) at.*" \
+	    "continue to marker ($syscall)"
+    }
+}
+
+disp_step_cross_syscall "fork"
+disp_step_cross_syscall "vfork"
+@
+
+
+1.10
+log
+@gdb/testsuite/
+	* gdb.threads/non-ldr-exc-1.exp (do_test): Fix the indent of
+	using with_test_prefix.
+	* gdb.threads/non-ldr-exc-2.exp (do_test): Likewise.
+	* gdb.threads/non-ldr-exc-3.exp (do_test): Likewise.
+	* gdb.threads/non-ldr-exc-4.exp (do_test): Likewise.
+	* gdb.threads/watchpoint-fork.exp (test): Likewise.
+	* gdb.base/break-interp.exp (test_core): Likewise.
+	(test_attach_gdb): Likewise.
+	* gdb.base/catch-load.exp (one_catch_load_test): Likewise.
+	* gdb.base/disp-step-syscall.exp (disp_step_cross_syscall):
+	Likewise.
+	* gdb.base/jit-so.exp (one_jit_test): Likewise.
+	* gdb.base/jit.exp (one_jit_test): Likewise.
+	* gdb.base/sepdebug.exp (test_different_dir): Likewise.
+	* gdb.dwarf2/dw2-dir-file-name.exp (test): Likewise.
+	* gdb.dwarf2/dw2-noloc.exp (file_symbols): Likewise.
+	* gdb.mi/mi-breakpoint-changed.exp (test_pending_resolved):
+	Likewise.
+	* gdb.mi/mi-cmd-param-changed.exp (test_command_param_changed):
+	Likewise.
+	* gdb.mi/mi-watch.exp test_watchpoint_all): Likewise.
+	* gdb.mi/pr11022.exp (test_memory_changed_observer): Likewise.
+	* gdb.trace/change-loc.exp (tracepoint_change_loc_1): Likewise.
+	(tracepoint_change_loc_2): Likewise.
+	* gdb.trace/disconnected-tracing.exp (disconnected_tracing):
+	Likewise.
+	(disconnected_tfind): Likewise.
+	* gdb.trace/mi-traceframe-changed.exp (test_tfind_tfile):
+	Likewise.
+	(test_tfind_remote): Likewise.
+	* gdb.trace/mi-tracepoint-changed.exp (test_reconnect):
+	Likewise.
+	(test_pending_resolved): Likewise.
+	* gdb.trace/mi-tsv-changed.exp (test_create_delete_modify_tsv):
+	Likewise.
+	(test_upload_tsv): Likewise.
+	* gdb.trace/pending.exp (pending_tracepoint_resolved):
+	Likewise.
+	(pending_tracepoint_works): Likewise.
+	* gdb.trace/report.exp (use_collected_data): Likewise.
+	* gdb.trace/status-stop.exp (test_tstart_tstop_tstart):
+	Likewise.
+	(test_tstart_tstart, test_buffer_full_tstart): Likewise.
+	* gdb.trace/strace.exp (strace_info_marker): Likewise.
+	(strace_trace_on_same_addr): Likewise.
+	(strace_trace_on_diff_addr): Likewise.
+	* gdb.trace/unavailable.exp (gdb_collect_args_test): Likewise.
+	(gdb_collect_locals_test): Likewise.
+	(gdb_unavailable_registers_test): Likewise.
+	(gdb_collect_globals_test): Likewise.
+@
+text
+@d29 2
+@
+
+
+1.9
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@d33 11
+a43 10
+proc disp_step_cross_syscall { syscall } { with_test_prefix "$syscall" {
+    global syscall_insn
+    global gdb_prompt
+
+    set testfile "disp-step-$syscall"
+
+    if [prepare_for_testing ${testfile}.exp ${testfile} ${testfile}.c {debug}] {
+	untested ${testfile}.exp
+	return -1
+    }
+d45 4
+a48 4
+    if { ![runto main] } then {
+	fail "run to main ($syscall)"
+	return
+    }
+d50 2
+a51 2
+    # Delete the breakpoint on main.
+    gdb_test_no_output "delete break 1"
+d53 2
+a54 2
+    gdb_test "break marker" "Breakpoint.*at.* file .*${testfile}.c, line.*"
+    gdb_test_no_output "set displaced-stepping off"
+d56 6
+a61 5
+    set syscall_bp 0
+    gdb_test_multiple "break $syscall"  "break $syscall" {
+	-re "Breakpoint (\[0-9\]*) at .*$gdb_prompt $" {
+	    set syscall_bp $expect_out(1,string)
+	    pass "break $syscall"
+a62 1
+    }
+d64 25
+a88 23
+    gdb_test "continue" "Continuing\\..*Breakpoint \[0-9\]+, (.* in |__libc_|)$syscall \\(\\).*" \
+	"continue to $syscall (1st time)"
+    # Hit the breakpoint on $syscall for the first time.  In this time, we will let PLT
+    # resolution done, and the number single steps we will do later will be
+    # reduced.
+
+    gdb_test "continue" "Continuing\\..*Breakpoint \[0-9\]+, (.* in |__libc_|)$syscall \\(\\).*" \
+	"continue to $syscall (2nd time)"
+    # Hit the breakpoint on $syscall for the second time.  In this time, the address
+    # of syscall insn and next insn of syscall are recorded.
+
+    gdb_test "display/i \$pc" ".*"
+
+
+    # Single step until we see sysall insn or we reach the upper bound of loop
+    # iterations.
+    set see_syscall_insn 0
+
+    for {set i 0} {$i < 1000 && $see_syscall_insn == 0} {incr i} {
+	send_gdb "stepi\n"
+	gdb_expect {
+	    -re ".*$syscall_insn.*$gdb_prompt $" {
+		set see_syscall_insn 1
+a89 1
+	    -re ".*$gdb_prompt $" {}
+a90 1
+    }
+d92 21
+a112 20
+    if {$see_syscall_insn == 0} then {
+	fail "find syscall insn in $syscall"
+	return -1
+    }
+
+    set syscall_insn_addr [get_hexadecimal_valueof "\$pc" "0"]
+    gdb_test "stepi" ".*" "stepi $syscall insn"
+    set syscall_insn_next_addr [get_hexadecimal_valueof "\$pc" "0"]
+
+    gdb_test "continue" "Continuing\\..*Breakpoint \[0-9\]+, (.* in |__libc_|)$syscall \\(\\).*" \
+	"continue to $syscall (3rd time)"
+
+    # Hit the breakpoint on $syscall for the third time.  In this time, we'll set
+    # breakpoint on the syscall insn we recorded previously, and single step over it.
+
+    set syscall_insn_bp 0
+    gdb_test_multiple "break \*$syscall_insn_addr"  "break on syscall insn" {
+	-re "Breakpoint (\[0-9\]*) at .*$gdb_prompt $" {
+	    set syscall_insn_bp $expect_out(1,string)
+	    pass "break on syscall insns"
+d114 1
+a114 2
+    }
+    gdb_test_no_output "delete $syscall_bp" "delete break $syscall"
+d116 2
+a117 2
+    gdb_test "continue" "Continuing\\..*Breakpoint \[0-9\]+, .*" \
+	"continue to syscall insn $syscall"
+d119 1
+a119 1
+    gdb_test_no_output "set displaced-stepping on"
+d121 17
+a137 9
+    # Check the address of next instruction of syscall.
+    if {$syscall == "vfork" && [is_remote target]} {
+	setup_kfail server/13796 "*-*-*"
+    }
+    set test "single step over $syscall"
+    gdb_test_multiple "stepi" $test {
+	-re "Program terminated with signal SIGILL,.*\r\n$gdb_prompt $" {
+	    fail $test
+	    return
+d139 8
+a146 1
+	-re "\\\[Inferior .* exited normally\\\].*\r\n$gdb_prompt $" {
+a147 4
+	    return
+	}
+	-re "\r\n$gdb_prompt $" {
+	    pass $test
+a148 1
+    }
+d150 2
+a151 1
+    set syscall_insn_next_addr_found [get_hexadecimal_valueof "\$pc" "0"]
+d153 2
+a154 6
+    set test "single step over $syscall final pc"
+    if {$syscall_insn_next_addr != 0
+	&& $syscall_insn_next_addr == $syscall_insn_next_addr_found} {
+      pass $test
+    } else {
+      fail $test
+d156 1
+a156 7
+
+    # Delete breakpoint syscall insns to avoid interference to other syscalls.
+    gdb_test_no_output "delete $syscall_insn_bp" "delete break $syscall insn"
+
+    gdb_test "continue" "Continuing\\..*Breakpoint \[0-9\]+, marker \\(\\) at.*" \
+	"continue to marker ($syscall)"
+}}
+@
+
+
+1.8
+log
+@gdb/testsuite/
+	* gdb.base/disp-step-syscall.exp (disp_step_cross_syscall): Catch error
+	messages for KFAIL.
+@
+text
+@d3 1
+a3 1
+# Copyright 2011-2012 Free Software Foundation, Inc.
+@
+
+
+1.7
+log
+@gdb/testsuite/
+	Setup KFAIL for PR server/13796.
+	* gdb.base/disp-step-syscall.exp (single step over vfork): Setup KFAIL.
+@
+text
+@d130 4
+@
+
+
+1.6
+log
+@gdb/
+	Fix disp-step-syscall.exp: fork: single step over fork.
+	* i386-linux-tdep.c (-i386_linux_get_syscall_number): Rename to ...
+	(i386_linux_get_syscall_number_from_regcache): ... here, new function
+	comment, change parameters gdbarch and ptid to regcache.  Remove
+	parameter regcache, initialize gdbarch from regcache here.
+	(i386_linux_get_syscall_number, i386_linux_displaced_step_copy_insn):
+	New functions.
+	(i386_linux_init_abi): Install i386_linux_displaced_step_copy_insn
+	instead.
+	* i386-tdep.c (i386_syscall_p): Check also for 'sysenter' and
+	'syscall'.  Make the 'int' check more strict.
+
+gdb/testsuite/
+	Fix disp-step-syscall.exp: fork: single step over fork.
+	* gdb.base/disp-step-syscall.exp (syscall_insn): Anchor it by
+	whitespaces.
+	(single step over $syscall): Remove its check.
+	(single step over $syscall final pc): New check.
+@
+text
+@d121 14
+a134 1
+    gdb_test "stepi" ".*" "single step over $syscall"
+@
+
+
+1.5
+log
+@2012-02-21  Pedro Alves  <palves@@redhat.com>
+
+	* gdb.arch/altivec-abi.exp (altivec_abi_tests): Don't do
+	with_test_prefix here.
+	(top level): Do it here instead.  Remove `:' from the
+	with_test_prefix string.
+	* gdb.base/attach-pie-misread.exp: Remove the leading space the
+	the suffix `:' from the with_test_prefix prefix string.
+	* gdb.base/break-interp.exp: Ditto.
+	* gdb.base/catch-load.exp: Ditto.
+	* gdb.base/disp-step-syscall.exp: Ditto.
+	* gdb.base/jit-so.exp: Ditto.
+	* gdb.base/jit.exp: Ditto.
+	* gdb.base/sepdebug.exp: Ditto.
+	* gdb.base/solib-display.exp: Ditto.
+	* gdb.base/solib-overlap.exp: Ditto.
+	* gdb.base/watch-cond-infcall.exp: Ditto.
+	* gdb.base/watchpoint.exp: Ditto.
+	* gdb.dwarf2/dw2-noloc.exp: Ditto.
+	* gdb.mi/mi-watch.exp: Ditto.
+	* gdb.mi/mi2-watch.exp: Ditto.
+	* gdb.threads/non-ldr-exc-1.exp: Ditto.
+	* gdb.threads/non-ldr-exc-2.exp: Ditto.
+	* gdb.threads/non-ldr-exc-3.exp: Ditto.
+	* gdb.threads/non-ldr-exc-4.exp: Ditto.
+	* gdb.threads/watchpoint-fork.exp: Ditto.
+	* gdb.threads/watchthreads-reorder.exp: Ditto.
+	* gdb.trace/change-loc.exp: Ditto.
+	* gdb.trace/pending.exp: Ditto.
+	* gdb.trace/status-stop.exp: Ditto.
+	* gdb.trace/strace.exp: Ditto.
+	* gdb.trace/trace-break.exp: Ditto.
+	* gdb.trace/unavailable.exp: Ditto.
+	* lib/gdb.exp (with_test_prefix): Always prefix with space and
+	suffix with colon.  Adjust leading comments.
+@
+text
+@d28 1
+a28 1
+    set syscall_insn "(int|syscall|sysenter)"
+d121 10
+a130 1
+    gdb_test "stepi" ".*$syscall_insn_next_addr.*" "single step over $syscall"
+@
+
+
+1.4
+log
+@2012-02-21  Pedro Alves  <palves@@redhat.com>
+	    Tom Tromey  <tromey@@redhat.com>
+
+	* lib/gdb.exp: Add description of test prefixes.
+	(with_test_prefix): New procedure.
+	* gdb.arch/altivec-abi.exp: Use with_test_prefix.
+	* gdb.base/attach-pie-misread.exp: Use with_test_prefix.
+	* gdb.base/break-interp.exp: Use with_test_prefix.  Use append
+	instead of lappend to append to pf_prefix.
+	* gdb.base/catch-load.exp: Use with_test_prefix.
+	* gdb.base/disp-step-syscall.exp: Use with_test_prefix.
+	* gdb.base/jit-so.exp: Use with_test_prefix.
+	* gdb.base/jit.exp: Use with_test_prefix.
+	* gdb.base/return-nodebug.exp (do_test): Use append instead of
+	lappend to append to pf_prefix.
+	* gdb.base/sepdebug.exp: Use with_test_prefix.
+	* gdb.base/solib-display.exp: Use with_test_prefix.
+	* gdb.base/solib-overlap.exp: Use with_test_prefix.
+	* gdb.base/watch-cond-infcall.exp: Use with_test_prefix.
+	* gdb.base/watchpoint.exp: Use with_test_prefix.
+	* gdb.dwarf2/dw2-noloc.exp: Use with_test_prefix.
+	* gdb.mi/mi-watch.exp: Use with_test_prefix.
+	* gdb.mi/mi2-watch.exp: Use with_test_prefix.
+	* gdb.threads/non-ldr-exc-1.exp: Use with_test_prefix.
+	* gdb.threads/non-ldr-exc-2.exp: Use with_test_prefix.
+	* gdb.threads/non-ldr-exc-3.exp: Use with_test_prefix.
+	* gdb.threads/non-ldr-exc-4.exp: Use with_test_prefix.
+	* gdb.threads/watchpoint-fork.exp: Use with_test_prefix.  Use
+	append instead of lappend to append to pf_prefix.
+	* gdb.threads/watchthreads-reorder.exp: Use with_test_prefix.
+	* gdb.trace/change-loc.exp: Use with_test_prefix.
+	* gdb.trace/pending.exp: Use with_test_prefix.
+	* gdb.trace/status-stop.exp: Use with_test_prefix.
+	* gdb.trace/strace.exp: Use with_test_prefix.
+	* gdb.trace/trace-break.exp: Use with_test_prefix.
+	* gdb.trace/unavailable.exp: Use with_test_prefix.  Use append
+	instead of lappend to append to pf_prefix.
+@
+text
+@d33 1
+a33 1
+proc disp_step_cross_syscall { syscall } { with_test_prefix " $syscall:" {
+@
+
+
+1.3
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d33 1
+a33 1
+proc disp_step_cross_syscall { syscall } {
+a35 1
+    global pf_prefix
+a48 3
+    set old_pf_prefix $pf_prefix
+    lappend pf_prefix "$syscall:"
+
+a92 1
+	set pf_prefix $old_pf_prefix
+d128 1
+a128 3
+
+    set pf_prefix $old_pf_prefix
+}
+@
+
+
+1.2
+log
+@gdb/testsuite/
+	Fix results with system glibc debug info installed.
+	* gdb.base/disp-step-syscall.exp (continue to $syscall (1st time))
+	(continue to $syscall (2nd time), continue to $syscall (3rd time)):
+	Accept also __libc_ symbol prefix and no prefix.
+@
+text
+@d3 1
+a3 1
+# Copyright 2011 Free Software Foundation, Inc.
+@
+
+
+1.2.2.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d3 1
+a3 1
+# Copyright 2011-2012 Free Software Foundation, Inc.
+@
+
+
+1.1
+log
+@	gdb/testsuite/
+	* gdb.base/disp-step-fork.c: New.
+	* gdb.base/disp-step-syscall.exp: New.
+	* gdb.base/disp-step-vfork.c: New.
+@
+text
+@d67 1
+a67 1
+    gdb_test "continue" "Continuing\\..*Breakpoint \[0-9\]+, .* in $syscall ().*" \
+d73 1
+a73 1
+    gdb_test "continue" "Continuing\\..*Breakpoint \[0-9\]+, .* in $syscall ().*" \
+d105 1
+a105 1
+    gdb_test "continue" "Continuing\\..*Breakpoint \[0-9\]+, .* in $syscall ().*" \
+@
+

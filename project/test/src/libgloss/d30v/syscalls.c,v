@@ -1,0 +1,275 @@
+head	1.3;
+access;
+symbols
+	newlib-2_2_0:1.3.0.2
+	newlib-2_1_0:1.3
+	newlib-2_0_0:1.2
+	newlib-1_20_0:1.2
+	newlib-1_19_0:1.2
+	newlib-1_18_0:1.2
+	newlib-1_17_0-arc:1.2.0.8
+	binutils-arc-20080908-branch:1.2.0.6
+	binutils-arc-20080908-branchpoint:1.2
+	newlib-1_17_0:1.2
+	newlib-1_16_0:1.2
+	newlib-1_15_0:1.2
+	newlib-csl-coldfire-4_1-32:1.2
+	newlib-csl-sourcerygxx-4_1-32:1.2
+	newlib-csl-innovasic-fido-3_4_4-33:1.2
+	newlib-csl-coldfire-4_1-30:1.2
+	newlib-csl-sourcerygxx-4_1-30:1.2
+	newlib-csl-coldfire-4_1-28:1.2
+	newlib-csl-sourcerygxx-4_1-28:1.2
+	newlib-csl-arm-2006q3-27:1.2
+	newlib-csl-sourcerygxx-4_1-27:1.2
+	newlib-csl-arm-2006q3-26:1.2
+	newlib-csl-sourcerygxx-4_1-26:1.2
+	newlib-csl-sourcerygxx-4_1-24:1.2
+	newlib-csl-sourcerygxx-4_1-23:1.2
+	newlib-csl-sourcerygxx-4_1-21:1.2
+	newlib-csl-arm-2006q3-21:1.2
+	newlib-csl-arm-2006q3-19:1.2
+	newlib-csl-sourcerygxx-4_1-19:1.2
+	newlib-csl-sourcerygxx-4_1-18:1.2
+	newlib-csl-sourcerygxx-3_4_4-25:1.2
+	newlib-csl-sourcerygxx-4_1-17:1.2
+	newlib-csl-sourcerygxx-4_1-14:1.2
+	newlib-csl-sourcerygxx-4_1-13:1.2
+	newlib-csl-sourcerygxx-4_1-12:1.2
+	newlib-csl-sourcerygxx-4_1-9:1.2
+	newlib-csl-sourcerygxx-4_1-8:1.2
+	newlib-csl-sourcerygxx-4_1-7:1.2
+	newlib-csl-arm-2006q1-6:1.2
+	newlib-csl-sourcerygxx-4_1-6:1.2
+	newlib-csl-sourcerygxx-4_1-5:1.2
+	newlib-csl-sourcerygxx-4_1-4:1.2
+	newlib-autotools-branch:1.2.0.4
+	newlib-csl-20060320-branch:1.2.0.2
+	newlib-csl-20060320-branchpoint:1.2
+	newlib-1_14_0:1.2
+	newlib-csl-arm-2005-q1b:1.2
+	newlib-csl-arm-2005-q1a:1.2
+	newlib-1_13_0:1.2
+	csl-arm-2004-q3:1.2
+	csl-arm-2004-q1a:1.2
+	csl-arm-2004-q1:1.2
+	newlib-1_12_0:1.2
+	csl-arm-2003-q4:1.2
+	newlib-1_11_0:1.2
+	cygnus_cvs_20020108_pre:1.1
+	newlib-1_10_0:1.1
+	newlib-1_9_0:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.3
+date	2013.11.21.16.42.17;	author joel;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2002.04.15.20.45.59;	author jjohnstn;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2000.03.17.22.48.49;	author ranjith;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.3
+log
+@2013-11-21  Daniel Ramirez <javamonn@@gmail.com>
+
+	* d30v/syscalls.c, i960/mon960.c, m68k/io-stat.c, mt/stat.c,
+	spu/lstat.c, spu/stat.c: Add restrict keyword.
+@
+text
+@/*
+ * syscalls.c -- provide system call support via trap 31
+ *
+ * Copyright (c) 1997 Cygnus Support
+ *
+ * The authors hereby grant permission to use, copy, modify, distribute,
+ * and license this software and its documentation for any purpose, provided
+ * that existing copyright notices are retained in all copies and that this
+ * notice is included verbatim in any distributions. No written agreement,
+ * license, or royalty fee is required for any of the authorized uses.
+ * Modifications to this software may be copyrighted by their authors
+ * and need not follow the licensing terms described here, provided that
+ * the new terms are clearly indicated on the first page of each file where
+ * they apply.
+ *
+ * Read bytes, using simulator trap 31.
+ */
+
+#include <stdlib.h>
+#include <time.h>
+#include "syscall.h"
+
+extern int *__errno(), errno;
+
+__asm__ (
+"	.globl	__syscall					\n\
+	.type	__syscall,@@function				\n\
+__syscall:							\n\
+	trap	31		|| nop				\n\
+	cmpge	f0,r2,0		-> jmp/tx	link		\n\
+	bra	__set_errno					\n\
+	.size	__syscall,.-__syscall				\n\
+");
+
+int
+__set_errno (int new_errno)
+{
+  errno = new_errno;
+  *(__errno)() = errno;
+  return -1;
+}
+
+void
+_exit (int status)
+{
+  __syscall (status, 0, 0, 0, SYS_exit);
+}
+
+int
+open (const char *filename, int flags, int mode)
+{
+  return __syscall (filename, flags, mode, 0, SYS_open);
+}
+
+int
+close (int filedes)
+{
+  return __syscall (filedes, 0, 0, 0, SYS_close);
+}
+
+int
+read (int filedes, void *buffer, size_t length)
+{
+  return __syscall (filedes, buffer, length, 0, SYS_read);
+}
+
+int
+write (int filedes, void *buffer, size_t length)
+{
+  return __syscall (filedes, buffer, length, 0, SYS_write);
+}
+
+long
+lseek (int filedes, long offset, int whence)
+{
+  return __syscall (filedes, offset, whence, 0, SYS_lseek);
+}
+
+int
+unlink (const char *filename)
+{
+  return __syscall (filename, 0, 0, 0, SYS_unlink);
+}
+
+int
+getpid (void)
+{
+  return __syscall (0, 0, 0, 0, SYS_getpid);
+}
+
+int
+kill (int signal, int pid)
+{
+  return __syscall (signal, pid, 0, 0, SYS_kill);
+}
+
+int
+fstat (int filedes, void *info)
+{
+  return __syscall (filedes, info, 0, 0, SYS_fstat);
+}
+
+int
+__argvlen (void)
+{
+  return __syscall (0, 0, 0, 0, SYS_argvlen);
+}
+
+int
+__argv (void)
+{
+  return __syscall (0, 0, 0, 0, SYS_argv);
+}
+
+int
+chdir (char *dir)
+{
+  return __syscall (dir, 0, 0, 0, SYS_chdir);
+}
+
+int
+stat (const char *__restrict filename, void *__restrict info)
+{
+  return __syscall (filename, info, 0, 0, SYS_stat);
+}
+
+int
+chmod (const char *filename, int mode)
+{
+  return __syscall (filename, mode, 0, 0, SYS_chmod);
+}
+
+int
+utime (const char *filename, void *packet)
+{
+  return __syscall (filename, packet, 0, 0, SYS_utime);
+}
+
+time_t
+time (time_t *time_ptr)
+{
+  time_t result;	
+  result = (time_t) __syscall (time_ptr, 0, 0, 0, SYS_time);
+  if (time_ptr != NULL)
+    *time_ptr = result;
+  return result;
+}
+@
+
+
+1.2
+log
+@
+2002-04-15  Hans-Peter Nilsson  <hp@@bitrange.com>
+
+        * d30v/syscalls.c: #include <time.h>.  Don't use multi-line
+        strings.
+@
+text
+@d122 1
+a122 1
+stat (const char *filename, void *info)
+@
+
+
+1.1
+log
+@20000317 sourceware import
+@
+text
+@d20 1
+d26 7
+a32 7
+"	.globl	__syscall
+	.type	__syscall,@@function
+__syscall:
+	trap	31		|| nop
+	cmpge	f0,r2,0		-> jmp/tx	link
+	bra	__set_errno
+	.size	__syscall,.-__syscall
+@
+

@@ -1,0 +1,456 @@
+head	1.7;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.7
+	gdb_7_6-2013-04-26-release:1.7
+	gdb_7_6-branch:1.7.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.7
+	gdb_7_5_1-2012-11-29-release:1.6
+	gdb_7_5-2012-08-17-release:1.6
+	gdb_7_5-branch:1.6.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.6
+	gdb_7_4_1-2012-04-26-release:1.3.2.1
+	gdb_7_4-2012-01-24-release:1.3.2.1
+	gdb_7_4-branch:1.3.0.2
+	gdb_7_4-2011-12-13-branchpoint:1.3;
+locks; strict;
+comment	@# @;
+
+
+1.7
+date	2013.01.01.06.33.27;	author brobecke;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2012.07.10.15.18.18;	author tromey;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2012.01.04.08.17.47;	author brobecke;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2011.12.19.13.37.34;	author jkratoch;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2011.12.10.15.58.14;	author jkratoch;	state Exp;
+branches
+	1.3.2.1;
+next	1.2;
+
+1.2
+date	2011.07.18.15.15.06;	author tromey;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2011.05.31.22.14.21;	author kseitz;	state Exp;
+branches;
+next	;
+
+1.3.2.1
+date	2012.01.06.04.44.05;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.7
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@# Copyright 2011-2013 Free Software Foundation, Inc.
+#
+# Contributed by Red Hat, originally written by Keith Seitz.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# This file is part of the gdb testsuite.
+
+# A helper proc which sets a breakpoint at FUNC and attempts to
+# run to the breakpoint.
+proc test_breakpoint {func result} {
+    set DEC {[0-9]}
+
+    # Return to the top of the test function every time.
+    delete_breakpoints
+    if {![gdb_breakpoint test_function]} {
+        fail "set test_function breakpoint for $func"
+    } elseif {[gdb_test "continue" \
+		   "Continuing.\r\n\r\nBreakpoint $DEC+,.*test_function.*" \
+		   ""] != 0} {
+        fail "continue to test_function for $func"
+    } else {
+        gdb_breakpoint "$func"
+        gdb_test "continue" \
+            "Continuing.\r\n\r\nBreakpoint $DEC+,.*$result.*" \
+            "continue to $func"
+    }
+}
+
+if {[skip_cplus_tests]} { continue }
+
+# Tests for c++/12750
+standard_testfile .cc
+
+if {[prepare_for_testing $testfile $testfile $srcfile {c++ debug}]} {
+    return -1
+}
+
+# The GDB workaround for GCC PR debug/45682 does not apply as it requires
+# DW_AT_linkage_name of methods.  The whole class A is in anonymous namespace,
+# therefore not accessible outside of the CU (compilation unit) and therefore
+# GCC does not produce DW_AT_linkage_name for such methods.
+
+set have_gcc_45682_fixed 1
+set test "info addr A::func()"
+gdb_test_multiple $test $test {
+    -re "No symbol \"A::func\\(\\)\" in current context\\.\r\n$gdb_prompt $" {
+	pass $test
+    }
+    -re "Symbol \"A::func\\(\\)\" is a function at address .*\r\n$gdb_prompt $" {
+	setup_xfail gcc/45682 "*-*-*"
+	fail $test
+	set have_gcc_45682_fixed 0
+    }
+}
+
+if {![runto_main]} {
+    perror "couldn't run to breakpoint"
+    continue
+}
+
+set ans {(anonymous namespace)}
+set methods {}
+lappend methods "xxx::${ans}::func"
+lappend methods "xxx::${ans}::A::func"
+
+gdb_test_no_output "set listsize 1" ""
+
+foreach test $methods {
+    # The result we expect is the source code name of the symbol,
+    # i.e., without "(anonymous namespace)".
+    regsub -all [string_to_regexp "${ans}::"] $test "" expected
+    set result ".*// [string_to_regexp $expected]"
+
+    # Test whether the function/method can be "list"ed
+    # with the filename pre-pended.
+    if {[string compare $test "xxx::${ans}::A::func"] == 0
+	&& !$have_gcc_45682_fixed} {
+	setup_xfail gcc/45682 "*-*-*"
+    }
+    gdb_test "list ${srcfile}:$test" $result
+    if {[string compare $test "xxx::${ans}::A::func"] == 0
+	&& !$have_gcc_45682_fixed} {
+	setup_xfail gcc/45682 "*-*-*"
+    }
+    gdb_test "list '${srcfile}:$test'" $result
+    if {[string compare $test "xxx::${ans}::A::func"] == 0
+	&& !$have_gcc_45682_fixed} {
+	setup_xfail gcc/45682 "*-*-*"
+    }
+    gdb_test "list '${srcfile}':'$test'" $result
+    if {[string compare $test "xxx::${ans}::A::func"] == 0
+	&& !$have_gcc_45682_fixed} {
+	setup_xfail gcc/45682 "*-*-*"
+    }
+    gdb_test "list ${srcfile}:'$test'" $result
+
+    # Test setting and hitting a breakoint at the function/method.
+    test_breakpoint $test $expected
+    test_breakpoint "'$test'" $expected
+}
+
+gdb_exit
+return 0
+@
+
+
+1.6
+log
+@	* gdb.cp/abstract-origin.exp: Use standard_testfile.
+	* gdb.cp/ambiguous.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/annota2.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/annota3.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/anon-ns.exp: Use standard_testfile.
+	* gdb.cp/anon-struct.exp: Use standard_testfile.
+	* gdb.cp/anon-union.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/arg-reference.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/bool.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/breakpoint.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/bs15503.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/call-c.exp: Use standard_testfile, clean_restart,
+	standard_output_file.
+	* gdb.cp/casts.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/class2.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/classes.exp: Use standard_testfile, prepare_for_testing.
+	(test_static_members): Update.
+	* gdb.cp/cmpd-minsyms.exp: Use standard_testfile.
+	* gdb.cp/converts.exp: Use standard_testfile.
+	* gdb.cp/cp-relocate.exp: Use standard_testfile.
+	* gdb.cp/cpcompletion.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/cpexprs.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/cplabel.exp: Use standard_testfile.
+	* gdb.cp/cplusfuncs.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/ctti.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/derivation.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/destrprint.exp: Use standard_testfile.
+	* gdb.cp/dispcxx.exp: Use standard_testfile.
+	* gdb.cp/exception.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/expand-psymtabs-cxx.exp: Use standard_testfile.
+	* gdb.cp/extern-c.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/formatted-ref.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/fpointer.exp: Use standard_testfile.
+	* gdb.cp/gdb1355.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/gdb2384.exp: Use standard_testfile, clean_restart,
+	standard_output_file.
+	* gdb.cp/gdb2495.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/hang.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/infcall-dlopen.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.cp/inherit.exp: Use standard_testfile, prepare_for_testing.
+	(do_tests): Update.
+	* gdb.cp/koenig.exp: Use standard_testfile.
+	* gdb.cp/local.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/m-data.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/m-static.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/mb-ctor.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/mb-inline.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/mb-templates.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/member-ptr.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/meth-typedefs.exp: Use standard_testfile.
+	* gdb.cp/method.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/method2.exp: Use standard_testfile.
+	* gdb.cp/minsym-fallback.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.cp/misc.exp: Use standard_testfile, prepare_for_testing.
+	(do_tests): Update.
+	* gdb.cp/namespace-enum.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/namespace-nested-import.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/namespace.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/nextoverthrow.exp: Use standard_testfile.
+	* gdb.cp/no-dmgl-verbose.exp: Use standard_testfile.
+	* gdb.cp/nsdecl.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/nsimport.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/nsnested.exp: Use standard_testfile.
+	* gdb.cp/nsnoimports.exp: Use standard_testfile.
+	* gdb.cp/nsrecurs.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/nsstress.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/nsusing.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/operator.exp: Use standard_testfile.
+	* gdb.cp/oranking.exp: Use standard_testfile.
+	* gdb.cp/overload-const.exp: Use standard_testfile.
+	* gdb.cp/overload.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/ovldbreak.exp: Use standard_testfile.
+	* gdb.cp/ovsrch.exp: Use standard_testfile.
+	* gdb.cp/paren-type.exp: Use standard_testfile.
+	* gdb.cp/pass-by-ref.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/pr-1023.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/pr-1210.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/pr-574.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/pr10687.exp: Use standard_testfile, clean_restart.
+	* gdb.cp/pr10728.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.cp/pr12028.exp: Use standard_testfile.
+	* gdb.cp/pr9067.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/pr9167.exp: Use standard_testfile.
+	* gdb.cp/pr9631.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/printmethod.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/psmang.exp: Use standard_testfile, clean_restart.
+	* gdb.cp/psymtab-parameter.exp: Use standard_testfile.
+	* gdb.cp/ptype-cv-cp.exp: Use standard_testfile.
+	* gdb.cp/re-set-overloaded.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.cp/readnow-language.exp: Use standard_testfile.
+	* gdb.cp/ref-params.exp: Use standard_testfile, build_executable.
+	(gdb_start_again): Use clean_restart.
+	* gdb.cp/ref-types.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/rtti.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/shadow.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/smartp.exp: Use standard_testfile.
+	* gdb.cp/static-method.exp: Use standard_testfile.
+	* gdb.cp/static-print-quit.exp: Use standard_testfile.
+	* gdb.cp/temargs.exp: Use standard_testfile.
+	* gdb.cp/templates.exp: Use standard_testfile,
+	prepare_for_testing.
+	(do_tests): Update.
+	* gdb.cp/try_catch.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/typedef-operator.exp: Use standard_testfile.
+	* gdb.cp/userdef.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/virtbase.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/virtfunc.exp: Use standard_testfile,
+	prepare_for_testing.
+	(do_tests): Update.
+	* gdb.cp/virtfunc2.exp: Use standard_testfile,
+	prepare_for_testing.
+@
+text
+@d1 1
+a1 1
+# Copyright 2011-2012 Free Software Foundation, Inc.
+@
+
+
+1.5
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d44 1
+a44 2
+set testfile "static-method"
+set srcfile $testfile.cc
+@
+
+
+1.4
+log
+@gdb/doc/
+	* gdbint.texinfo (Testsuite): Describe KFAIL and XFAIL in Writing
+	tests.
+
+gdb/testsuite/
+	* gdb.cp/ptype-cv-cp.exp (ptype v_volatile_const_my_int): Replace KFAIL
+	by XFAIL.
+	* gdb.cp/static-method.exp (info addr A::func())
+	(list static-method.cc:xxx::(anonymous namespace)::A::func)
+	(list 'static-method.cc:xxx::(anonymous namespace)::A::func')
+	(list 'static-method.cc':'xxx::(anonymous namespace)::A::func')
+	(list static-method.cc:'xxx::(anonymous namespace)::A::func'): Likewise.
+	* gdb.cp/temargs.exp (test value of F in k2_m, test type of F in k3_m)
+	(test value of F in k3_m): Likewise.
+	* gdb.python/py-type.exp (python print ttype.template_argument(2)):
+	Likewise.
+@
+text
+@d1 1
+a1 1
+# Copyright 2011 Free Software Foundation, Inc.
+@
+
+
+1.3
+log
+@gdb/testsuite/
+	* gdb.cp/static-method.exp (have_gcc_45682_fixed, info addr A::func()):
+	New variable, new test.
+	(list static-method.cc:xxx::(anonymous namespace)::A::func)
+	(list 'static-method.cc:xxx::(anonymous namespace)::A::func')
+	(list 'static-method.cc':'xxx::(anonymous namespace)::A::func')
+	(list static-method.cc:'xxx::(anonymous namespace)::A::func'): KFAIL
+	them if HAVE_GCC_45682_FIXED is not set.
+@
+text
+@d63 2
+a64 1
+	kfail gcc/45682 $test
+d91 1
+a91 1
+	setup_kfail gcc/45682 "*-*-*"
+d96 1
+a96 1
+	setup_kfail gcc/45682 "*-*-*"
+d101 1
+a101 1
+	setup_kfail gcc/45682 "*-*-*"
+d106 1
+a106 1
+	setup_kfail gcc/45682 "*-*-*"
+@
+
+
+1.3.2.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d1 1
+a1 1
+# Copyright 2011-2012 Free Software Foundation, Inc.
+@
+
+
+1.2
+log
+@	* gdb.cp/static-method.exp: Add missing single quote.
+@
+text
+@d51 17
+d88 4
+d93 4
+d98 4
+d103 4
+@
+
+
+1.1
+log
+@	PR c++/12750
+	* gdb.cp/static-method.cc: New file.
+	* gdb.cp/static-method.exp: New file.
+@
+text
+@d73 1
+a73 1
+    gdb_test "list '${srcfile}':$test'" $result
+@
+

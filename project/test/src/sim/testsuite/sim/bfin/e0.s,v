@@ -1,0 +1,95 @@
+head	1.1;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.1
+	gdb_7_6-2013-04-26-release:1.1
+	gdb_7_6-branch:1.1.0.6
+	gdb_7_6-2013-03-12-branchpoint:1.1
+	gdb_7_5_1-2012-11-29-release:1.1
+	gdb_7_5-2012-08-17-release:1.1
+	gdb_7_5-branch:1.1.0.4
+	gdb_7_5-2012-07-18-branchpoint:1.1
+	gdb_7_4_1-2012-04-26-release:1.1
+	gdb_7_4-2012-01-24-release:1.1
+	gdb_7_4-branch:1.1.0.2
+	gdb_7_4-2011-12-13-branchpoint:1.1;
+locks; strict;
+comment	@# @;
+
+
+1.1
+date	2011.06.04.17.44.21;	author vapier;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.1
+log
+@sim: bfin: import testsuite
+
+Now that the common sim testsuite code supports .S and .c files, we
+can import the Blackfin testsuite.  There are about ~800 tests here,
+so I'm only attaching a compressed patch of them.  Other than adding
+files to sim/testsuite/sim/bfin/, the sim/configure.tgt file was
+updated to mark Blackfin as having a testsuite, and sim/configure
+regenerated.
+
+Signed-off-by: Mike Frysinger <vapier@@gentoo.org>
+@
+text
+@// assert that we can issue a software exception
+// and that the expt number is passed correctly through
+// SEQSTAT.
+# mach: bfin
+# sim: --environment operating
+
+	.include "testutils.inc"
+
+	start
+.ifndef BFIN_HOST
+	imm32 p0, 0xFFE02000;	/* EVT0 */
+	P1 = re (Z);		// load a pointer to ihandler interrupt 1
+	P1.H = re;
+	[ P0 + (4*3) ] = P1;
+
+	R0 = -1;	/* unmask all interrupts */
+	imm32 p1, 0xFFE02104;
+	[P1] = R0;
+
+	R0 = start_uspace (Z);
+	R0.H = start_uspace;
+	RETI = R0;
+	RTI;
+start_uspace:
+	EXCPT 10;
+
+	DBGA ( R1.L , 0x1238 );
+
+	dbg_pass;
+
+	// ihandler
+re:
+	R0 = SEQSTAT;
+	R0 <<= (32-6);
+	R0 >>= (32-6);
+	R2 = 0x20;
+	CC = R0 < R2;
+	IF !CC JUMP _error;
+	DBGA ( R0.L , 0xa );
+	R1 = 0x1234 (X);
+	R1 += 1;
+	R1 += 1;
+	R1 += 1;
+	R1 += 1;
+	RTX;
+
+_error:
+	DBGA ( R0.L , EXCPT_PROTVIOL );
+	dbg_fail;
+
+.endif
+@

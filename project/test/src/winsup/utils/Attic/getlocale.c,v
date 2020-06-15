@@ -1,0 +1,438 @@
+head	1.7;
+access;
+symbols;
+locks; strict;
+comment	@ * @;
+
+
+1.7
+date	2010.02.17.15.01.56;	author corinna;	state dead;
+branches;
+next	1.6;
+
+1.6
+date	2010.02.11.11.39.23;	author corinna;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2010.02.10.15.58.59;	author corinna;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2010.02.10.12.39.40;	author corinna;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2010.02.10.12.36.29;	author corinna;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2010.01.25.09.22.12;	author corinna;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2010.01.22.22.31.50;	author corinna;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.7
+log
+@	* Makefile.in (CYGWIN_BINS): Rename getlocale to locale.
+	* getlocale.c: Rename to ...
+	* locale.cc: Revamp to add full functionality of POSIX locale(1) tool,
+	as far as Cygwin supports it.
+	* utils.sgml (getlocale): Move and rename to ...
+	(locale): Accommodate new functionality.
+@
+text
+@/*
+ * Copyright (c) 2010, Corinna Vinschen
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+ * SUCH DAMAGE.
+ */
+#include <stdio.h>
+#include <getopt.h>
+#include <string.h>
+#include <wchar.h>
+#include <locale.h>
+#define WINVER 0x0601
+#include <windows.h>
+
+extern char *__progname;
+
+void usage (FILE *, int) __attribute__ ((noreturn));
+
+void
+usage (FILE * stream, int status)
+{
+  fprintf (stream,
+	   "Usage: %s [-asuh]\n"
+	   "Print default locale or list of all supported locales\n"
+	   "\n"
+	   "Options:\n"
+	   "\n"
+	   "  -a, --all       List all available supported locales\n"
+	   "  -s, --system    Print system default locale\n"
+	   "                  (default is current user default locale)\n"
+	   "  -u, --utf       Attach \".UTF-8\" to the result\n"
+	   "  -h, --help      this text\n",
+	   __progname);
+  exit (status);
+}
+
+struct option longopts[] = {
+  {"all", no_argument, NULL, 'a'},
+  {"system", no_argument, NULL, 's'},
+  {"utf", no_argument, NULL, 'u'},
+  {"help", no_argument, NULL, 'h'},
+  {0, no_argument, NULL, 0}
+};
+const char *opts = "ahsu";
+
+int
+getlocale (LCID lcid, char *name)
+{
+  char iso639[10];
+  char iso3166[10];
+
+  iso3166[0] = '\0';
+  if (!GetLocaleInfo (lcid, LOCALE_SISO639LANGNAME, iso639, 10))
+    return 0;
+  GetLocaleInfo (lcid, LOCALE_SISO3166CTRYNAME, iso3166, 10);
+  sprintf (name, "%s%s%s", iso639, lcid > 0x3ff ? "_" : "",
+			   lcid > 0x3ff ? iso3166 : "");
+  return 1;
+}
+
+int main (int argc, char **argv)
+{
+  int opt;
+  LCID lcid = LOCALE_USER_DEFAULT;
+  int all = 0;
+  const char *utf = "";
+  char name[32];
+  DWORD cp;
+
+  setlocale (LC_ALL, "");
+  while ((opt = getopt_long (argc, argv, opts, longopts, NULL)) != EOF)
+    switch (opt)
+      {
+      case 'a':
+        all = 1;
+	break;
+      case 's':
+      	lcid = LOCALE_SYSTEM_DEFAULT;
+	break;
+      case 'u':
+      	utf = ".UTF-8";
+	break;
+      case 'h':
+	usage (stdout, 0);
+	break;
+      default:
+	usage (stderr, 1);
+	break;
+      }
+  if (all)
+    {
+      unsigned lang, sublang;
+
+      for (lang = 1; lang <= 0xff; ++lang)
+	{
+	  struct {
+	    wchar_t language[256];
+	    wchar_t country[256];
+	    char loc[32];
+	  } loc_list[32];
+	  int lcnt = 0;
+
+	  for (sublang = 1; sublang <= 0x3f; ++sublang)
+	    {
+	      lcid = (sublang << 10) | lang;
+	      if (getlocale (lcid, name))
+		{
+		  wchar_t language[256];
+		  wchar_t country[256];
+		  int i;
+		  char *c, loc[32];
+		  wchar_t wbuf[9];
+
+		  /* Go figure.  Even the English name of a language or
+		     locale might contain native characters. */
+		  GetLocaleInfoW (lcid, LOCALE_SENGLANGUAGE, language, 256);
+		  GetLocaleInfoW (lcid, LOCALE_SENGCOUNTRY, country, 256);
+		  /* Avoid dups */
+		  for (i = 0; i < lcnt; ++ i)
+		    if (!wcscmp (loc_list[i].language, language)
+			&& !wcscmp (loc_list[i].country, country))
+		      break;
+		  if (i < lcnt)
+		    continue;
+		  if (lcnt < 32)
+		    {
+		      wcscpy (loc_list[lcnt].language, language);
+		      wcscpy (loc_list[lcnt].country, country);
+		    }
+		  c = stpcpy (loc, name);
+		  /* Convert old sr_SP silently to sr_CS on old systems.
+		     Make sure sr_CS country is in recent shape. */
+		  if (lang == LANG_SERBIAN
+		      && (sublang == SUBLANG_SERBIAN_LATIN
+			  || sublang == SUBLANG_SERBIAN_CYRILLIC))
+		    {
+		      c = stpcpy (loc, "sr_CS");
+		      wcscpy (country, L"Serbia and Montenegro (Former)");
+		    }
+		  /* Now check certain conditions to figure out if that
+		     locale requires a modifier. */
+		  if (lang == LANG_SERBIAN && !strncmp (loc, "sr_", 3)
+		      && wcsstr (language, L"(Latin)"))
+		    stpcpy (c, "@@latin");
+		  else if (lang == LANG_UZBEK
+			   && sublang == SUBLANG_UZBEK_CYRILLIC)
+		    stpcpy (c, "@@cyrillic");
+		  /* Avoid more dups */
+		  for (i = 0; i < lcnt; ++ i)
+		    if (!strcmp (loc_list[i].loc, loc))
+		      {
+			lcnt++;
+			break;
+		      }
+		  if (i < lcnt)
+		    continue;
+		  if (lcnt < 32)
+		    strcpy (loc_list[lcnt++].loc, loc);
+		  /* Print */
+		  printf ("%-16s %ls (%ls)\n", loc, language, country);
+		  /* Check for locales which sport a modifier for
+		     changing the codeset and other stuff. */
+		  if (lang == LANG_BELARUSIAN
+		      && sublang == SUBLANG_BELARUSIAN_BELARUS)
+		    stpcpy (c, "@@latin");
+		  else if (lang == LANG_TATAR
+			   && sublang == SUBLANG_TATAR_RUSSIA)
+		    stpcpy (c, "@@iqtelif");
+		  else if (GetLocaleInfoW (lcid,
+					   LOCALE_IDEFAULTANSICODEPAGE
+					   | LOCALE_RETURN_NUMBER,
+					   (PWCHAR) &cp, sizeof cp)
+			   && cp == 1252 /* Latin1*/
+			   && GetLocaleInfoW (lcid, LOCALE_SINTLSYMBOL, wbuf, 9)
+			   && !wcsncmp (wbuf, L"EUR", 3))
+		    stpcpy (c, "@@euro");
+		  else if (lang == LANG_JAPANESE
+			   || lang == LANG_KOREAN
+			   || lang == LANG_CHINESE)
+		    stpcpy (c, "@@cjknarrow");
+		  else
+		    continue;
+		  printf ("%-16s %ls (%ls)\n", loc, language, country);
+		}
+	    }
+	  /* Check Serbian language for the available territories.  Up to
+	     Server 2003 we only had sr_SP (silently converted to sr_CS
+	     above), in Vista we had only sr_CS.  First starting with W7 we
+	     have the actual sr_RS and sr_ME.  However, all of them are
+	     supported on all systems in Cygwin.  So we fake them here, if
+	     they are missing. */
+	  if (lang == LANG_SERBIAN)
+	    {
+	      int sr_CS_idx = -1;
+	      int sr_RS_idx = -1;
+	      int i;
+
+	      for (i = 0; i < lcnt; ++ i)
+		if (!strcmp (loc_list[i].loc, "sr_CS"))
+		  sr_CS_idx = i;
+		else if (!strcmp (loc_list[i].loc, "sr_RS"))
+		  sr_RS_idx = i;
+	      if (sr_CS_idx > 0 && sr_RS_idx == -1)
+	      	{
+		  puts ("sr_RS@@latin      Serbian (Latin) (Serbia)");
+		  puts ("sr_RS            Serbian (Latin) (Serbia)");
+		  puts ("sr_ME@@latin      Serbian (Latin) (Montenegro)");
+		  puts ("sr_ME            Serbian (Latin) (Montenegro)");
+		}
+	    }
+	}
+      return 0;
+    }
+  if (getlocale (lcid, name))
+    printf ("%s%s\n", name, utf);
+  return 0;
+}
+@
+
+
+1.6
+log
+@	* getlocale.c (main): Rename local variable to avoid problems.
+	Avoid string comparisons, rather test language and sublanguage codes
+	wheere possible.  Add more code to handle Serbian language/territory
+	state identical on all Windows versions.  Fix handling for "@@latin"
+	modifier in Belarusian locale.
+	* utils.sgml (getlocale): Try to make wording and example clearer.
+@
+text
+@@
+
+
+1.5
+log
+@	* getlocale.c (usage): Change text slightly.
+@
+text
+@d87 1
+d116 1
+a116 1
+	    wchar_t lang[256];
+d127 1
+a127 1
+		  wchar_t lang[256];
+d135 1
+a135 1
+		  GetLocaleInfoW (lcid, LOCALE_SENGLANGUAGE, lang, 256);
+d139 1
+a139 1
+		    if (!wcscmp (loc_list[i].lang, lang)
+d146 1
+a146 1
+		      wcscpy (loc_list[lcnt].lang, lang);
+d149 10
+d161 2
+a162 4
+		  c = stpcpy (loc, name);
+		  if (wcsstr (lang, L"(Latin)")
+		      && (!strncmp (loc, "sr_", 3)
+			  || !strcmp (loc, "be_BY")))
+d164 2
+a165 2
+		  else if (wcsstr (lang, L"(Cyrillic)")
+			   && !strcmp (loc, "uz_UZ"))
+d179 1
+a179 1
+		  printf ("%-16s %ls (%ls)\n", loc, lang, country);
+d182 5
+a186 1
+		  if (!strcmp (loc, "tt_RU"))
+d188 6
+a193 1
+		  else if (GetLocaleInfoW (lcid, LOCALE_SINTLSYMBOL, wbuf, 9)
+d196 3
+a198 3
+		  else if (!strncmp (loc, "ja_", 3)
+			   || !strncmp (loc, "ko_", 3)
+			   || !strncmp (loc, "zh_", 3))
+d202 26
+a227 1
+		  printf ("%-16s %ls (%ls)\n", loc, lang, country);
+@
+
+
+1.4
+log
+@	* getlocale.c (main): Restrict -a loop to avoid psudo language entries
+	on Vista and later.
+@
+text
+@d43 1
+a43 1
+	   "Print Windows locale(s)\n"
+d47 1
+a47 1
+	   "  -a, --all       List all available locales\n"
+@
+
+
+1.3
+log
+@	* getlocale.c (main): Revamp -a loop to avoid duplicates and to print
+	locales with the correct, supported modifiers.
+@
+text
+@d112 1
+a112 1
+      for (lang = 1; lang <= 0x3ff; ++lang)
+@
+
+
+1.2
+log
+@	* getlocale.c (main): Use setlocale and fetch string from Windows
+	using GetLocaleInfoW.  Explain why.
+@
+text
+@d29 1
+d113 75
+a187 16
+	for (sublang = 1; sublang <= 0x3f; ++sublang)
+	  {
+	    lcid = (sublang << 10) | lang;
+	    if (getlocale (lcid, name))
+	      {
+		wchar_t lang[256];
+		wchar_t country[256];
+		char loc[32];
+		/* Go figure.  Even the English name of a language or
+		   locale might contain native characters. */
+		GetLocaleInfoW (lcid, LOCALE_SENGLANGUAGE, lang, 256);
+		GetLocaleInfoW (lcid, LOCALE_SENGCOUNTRY, country, 256);
+		stpcpy (stpcpy (loc, name), utf);
+		printf ("%-16s %ls (%ls)\n", loc, lang, country);
+	      }
+	  }
+@
+
+
+1.1
+log
+@	* Makefile.in (CYGWIN_BINS): Add getlocale.
+	* getlocale.c: New file.
+	* utils.sgml (getlocale): New section describing new getlocale tool.
+@
+text
+@d29 1
+d87 1
+d117 2
+a118 2
+		char lang[256];
+		char country[256];
+d120 4
+a123 2
+		GetLocaleInfo (lcid, LOCALE_SENGLANGUAGE, lang, 256);
+		GetLocaleInfo (lcid, LOCALE_SENGCOUNTRY, country, 256);
+d125 1
+a125 1
+		printf ("%-16s %s (%s)\n", loc, lang, country);
+@
+

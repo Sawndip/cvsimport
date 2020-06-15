@@ -1,0 +1,367 @@
+head	1.5;
+access;
+symbols;
+locks; strict;
+comment	@ * @;
+
+
+1.5
+date	2007.08.23.18.45.22;	author jjohnstn;	state dead;
+branches;
+next	1.4;
+
+1.4
+date	2007.05.23.21.41.17;	author jjohnstn;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2007.04.04.21.03.13;	author jjohnstn;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2007.02.20.20.58.38;	author jjohnstn;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2007.02.01.16.43.45;	author jjohnstn;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.5
+log
+@
+2007-08-23  Hidetaka Takano  <hidetaka.takano@@glb.toshiba.co.jp>
+
+        Reduce the memory consumption of variable argument functions
+        for SPU (cell):
+        * libc/machine/spu/Makefile.am: Replace printf/scanf family C sources
+          to assembler sources.
+        * libc/machine/spu/Makefile.in: Regenerated.
+        * libc/machine/spu/stdio.c: Add __check_init function wrapping
+          CHECK_INIT macro to use from assembler routines.
+        * libc/machine/spu/c99ppe.h: Add definitions for assembler code.
+        * libc/machine/spu/fiprintf.S: New file.
+        * libc/machine/spu/fiscanf.S: Ditto.
+        * libc/machine/spu/fprintf.S: Ditto.
+        * libc/machine/spu/fscanf.S: Ditto.
+        * libc/machine/spu/iprintf.S: Ditto.
+        * libc/machine/spu/iscanf.S: Ditto.
+        * libc/machine/spu/printf.S: Ditto.
+        * libc/machine/spu/scanf.S: Ditto.
+        * libc/machine/spu/siprintf.S: Ditto.
+        * libc/machine/spu/siscanf.S: Ditto.
+        * libc/machine/spu/sniprintf.S: Ditto.
+        * libc/machine/spu/snprintf.S: Ditto.
+        * libc/machine/spu/sprintf.S: Ditto.
+        * libc/machine/spu/sscanf.S: Ditto.
+        * libc/machine/spu/stack_reg_va.S: Ditto.
+        * libc/machine/spu/syscall.def: Ditto. (for maintenance)
+        * libc/machine/spu/mk_syscalls: Ditto. (for maintenance)
+        * libc/machine/spu/fiprintf.c: Removed. (Replaced by .S)
+        * libc/machine/spu/fiscanf.c: Ditto.
+        * libc/machine/spu/fprintf.c: Ditto.
+        * libc/machine/spu/fscanf.c: Ditto.
+        * libc/machine/spu/iprintf.c: Ditto.
+        * libc/machine/spu/iscanf.c: Ditto.
+        * libc/machine/spu/printf.c: Ditto.
+        * libc/machine/spu/scanf.c: Ditto.
+        * libc/machine/spu/siprintf.c: Ditto.
+        * libc/machine/spu/siscanf.c: Ditto.
+        * libc/machine/spu/sniprintf.c: Ditto.
+        * libc/machine/spu/snprintf.c: Ditto.
+        * libc/machine/spu/sprintf.c: Ditto.
+        * libc/machine/spu/sscanf.c: Ditto.
+@
+text
+@/*
+(C) Copyright IBM Corp. 2006
+
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+    * Redistributions of source code must retain the above copyright notice,
+this list of conditions and the following disclaimer.
+    * Redistributions in binary form must reproduce the above copyright
+notice, this list of conditions and the following disclaimer in the
+documentation and/or other materials provided with the distribution.
+    * Neither the name of IBM nor the names of its contributors may be
+used to endorse or promote products derived from this software without
+specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
+
+Author: Joel Schopp <jschopp@@austin.ibm.com>
+*/
+
+#include <_ansi.h>
+#include <stdio.h>
+
+#include "c99ppe.h"
+
+#ifdef _HAVE_STDC
+#include <stdarg.h>
+#else
+#include <varargs.h>
+#endif
+
+#ifdef INTEGER_ONLY
+#  define sscanf siscanf
+#endif
+
+typedef struct
+{
+  _CONST char* str;
+  unsigned int pad0[ 3 ];
+  _CONST char* fmt;
+  unsigned int pad1[ 3 ];
+  va_list ap;
+} c99_sscanf_t;
+
+#ifndef _REENT_ONLY
+
+int
+_DEFUN(sscanf, (str, fmt),
+       _CONST char *str _AND
+       _CONST char *fmt _DOTS)
+{
+  int ret;
+  c99_sscanf_t args;
+
+  CHECK_STR_INIT(_REENT);
+
+  args.str = str;
+  args.fmt = fmt;
+#ifdef _HAVE_STDC
+  va_start (args.ap, fmt);
+#else
+  va_start (args.ap);
+#endif
+
+  ret = __send_to_ppe(SPE_C99_SIGNALCODE, SPE_C99_VSSCANF, &args);
+
+  va_end (args.ap);
+  return ret;
+}
+
+#endif /* ! _REENT_ONLY */
+@
+
+
+1.4
+log
+@
+2007-05-23 Patrick Mansfield <patmans@@us.ibm.com>
+
+	* libc/machine/spu/sys/syscall.h: Update the __send_to_ppe
+	prototype.
+	* libc/machine/spu/fclose.c: Use the __send_to_ppe return value
+	instead of the slot 0 value, remove any now unused variables, and
+	for some cases, now store the result in an int vs int*.
+	* libc/machine/spu/feof.c: Ditto.
+	* libc/machine/spu/ferror.c: Ditto.
+	* libc/machine/spu/fflush.c: Ditto.
+	* libc/machine/spu/fgetc.c: Ditto.
+	* libc/machine/spu/fgetpos.c: Ditto.
+	* libc/machine/spu/fgets.c: Ditto.
+	* libc/machine/spu/fileno.c: Ditto.
+	* libc/machine/spu/fopen.c: Ditto.
+	* libc/machine/spu/fprintf.c: Ditto.
+	* libc/machine/spu/fputc.c: Ditto.
+	* libc/machine/spu/fputs.c: Ditto.
+	* libc/machine/spu/fread.c: Ditto.
+	* libc/machine/spu/freopen.c: Ditto.
+	* libc/machine/spu/fscanf.c: Ditto.
+	* libc/machine/spu/fseek.c: Ditto.
+	* libc/machine/spu/fsetpos.c: Ditto.
+	* libc/machine/spu/ftell.c: Ditto.
+	* libc/machine/spu/fwrite.c: Ditto.
+	* libc/machine/spu/getc.c: Ditto.
+	* libc/machine/spu/getchar.c: Ditto.
+	* libc/machine/spu/gets.c: Ditto.
+	* libc/machine/spu/printf.c: Ditto.
+	* libc/machine/spu/putc.c: Ditto.
+	* libc/machine/spu/putchar.c: Ditto.
+	* libc/machine/spu/puts.c: Ditto.
+	* libc/machine/spu/remove.c: Ditto.
+	* libc/machine/spu/rename.c: Ditto.
+	* libc/machine/spu/scanf.c: Ditto.
+	* libc/machine/spu/setvbuf.c: Ditto.
+	* libc/machine/spu/snprintf.c: Ditto.
+	* libc/machine/spu/sprintf.c: Ditto.
+	* libc/machine/spu/sscanf.c: Ditto.
+	* libc/machine/spu/tmpfile.c: Ditto.
+	* libc/machine/spu/tmpnam.c: Ditto.
+	* libc/machine/spu/ungetc.c: Ditto.
+	* libc/machine/spu/vfprintf.c: Ditto.
+	* libc/machine/spu/vfscanf.c: Ditto.
+	* libc/machine/spu/vprintf.c: Ditto.
+	* libc/machine/spu/vscanf.c: Ditto.
+	* libc/machine/spu/vsnprintf.c: Ditto.
+	* libc/machine/spu/vsprintf.c: Ditto.
+	* libc/machine/spu/vsscanf.c: Ditto.
+@
+text
+@@
+
+
+1.3
+log
+@
+2007-04-04  Patrick Mansfield <patmans@@us.ibm.com>
+
+	* libc/machine/spu/sys/syscall.h: New file for __send_to_ppe
+	prototype.
+	* libc/machine/spu/c99ppe.h: Remove static version of send_to_ppe.
+	* libc/machine/spu/clearerr.c: Call __send_to_ppe vs send_to_ppe.
+	* libc/machine/spu/fclose.c: Ditto.
+	* libc/machine/spu/feof.c: Ditto.
+	* libc/machine/spu/ferror.c: Ditto.
+	* libc/machine/spu/fflush.c: Ditto.
+	* libc/machine/spu/fgetc.c: Ditto.
+	* libc/machine/spu/fgetpos.c: Ditto.
+	* libc/machine/spu/fgets.c: Ditto.
+	* libc/machine/spu/fileno.c: Ditto.
+	* libc/machine/spu/fopen.c: Ditto.
+	* libc/machine/spu/fprintf.c: Ditto.
+	* libc/machine/spu/fputc.c: Ditto.
+	* libc/machine/spu/fputs.c: Ditto.
+	* libc/machine/spu/fread.c: Ditto.
+	* libc/machine/spu/freopen.c: Ditto.
+	* libc/machine/spu/fscanf.c: Ditto.
+	* libc/machine/spu/fseek.c: Ditto.
+	* libc/machine/spu/fsetpos.c: Ditto.
+	* libc/machine/spu/ftell.c: Ditto.
+	* libc/machine/spu/fwrite.c: Ditto.
+	* libc/machine/spu/getc.c: Ditto.
+	* libc/machine/spu/getchar.c: Ditto.
+	* libc/machine/spu/gets.c: Ditto.
+	* libc/machine/spu/perror.c: Ditto.
+	* libc/machine/spu/printf.c: Ditto.
+	* libc/machine/spu/putc.c: Ditto.
+	* libc/machine/spu/putchar.c: Ditto.
+	* libc/machine/spu/puts.c: Ditto.
+	* libc/machine/spu/remove.c: Ditto.
+	* libc/machine/spu/rename.c: Ditto.
+	* libc/machine/spu/rewind.c: Ditto.
+	* libc/machine/spu/scanf.c: Ditto.
+	* libc/machine/spu/setbuf.c: Ditto.
+	* libc/machine/spu/setvbuf.c: Ditto.
+	* libc/machine/spu/snprintf.c: Ditto.
+	* libc/machine/spu/sprintf.c: Ditto.
+	* libc/machine/spu/sscanf.c: Ditto.
+	* libc/machine/spu/tmpfile.c: Ditto.
+	* libc/machine/spu/tmpnam.c: Ditto.
+	* libc/machine/spu/ungetc.c: Ditto.
+	* libc/machine/spu/vfprintf.c: Ditto.
+	* libc/machine/spu/vfscanf.c: Ditto.
+	* libc/machine/spu/vprintf.c: Ditto.
+	* libc/machine/spu/vscanf.c: Ditto.
+	* libc/machine/spu/vsnprintf.c: Ditto.
+	* libc/machine/spu/vsprintf.c: Ditto.
+	* libc/machine/spu/vsscanf.c: Ditto.
+@
+text
+@d64 1
+a64 1
+  int* ret;
+a68 2
+  ret = (int*) &args;
+
+d77 1
+a77 1
+  __send_to_ppe(SPE_C99_SIGNALCODE, SPE_C99_VSSCANF, &args);
+d80 1
+a80 1
+  return *ret;
+@
+
+
+1.2
+log
+@
+2007-02-20  Kazunori Asayama <asayama@@sm.sony.co.jp>
+
+        * libc/machine/spu/Makefile.am: Add new objects.
+        * libc/machine/spu/Makefile.in: Regenerated.
+        * libc/machine/spu/fiprintf.c: New file. Add implementation of
+        integer-only version.
+        * libc/machine/spu/fiscanf.c: Ditto.
+        * libc/machine/spu/iprintf.c: Ditto.
+        * libc/machine/spu/iscanf.c: Ditto.
+        * libc/machine/spu/siprintf.c: Ditto.
+        * libc/machine/spu/siscanf.c: Ditto.
+        * libc/machine/spu/sniprintf.c: Ditto.
+        * libc/machine/spu/vfiprintf.c: Ditto.
+        * libc/machine/spu/vfiscanf.c: Ditto.
+        * libc/machine/spu/viprintf.c: Ditto.
+        * libc/machine/spu/viscanf.c: Ditto.
+        * libc/machine/spu/vsiprintf.c: Ditto.
+        * libc/machine/spu/vsiscanf.c: Ditto.
+        * libc/machine/spu/vsniprintf.c: Ditto.
+        * libc/machine/spu/fprintf.c: Add support for integer-only
+        version.
+        * libc/machine/spu/fscanf.c: Ditto.
+        * libc/machine/spu/printf.c: Ditto.
+        * libc/machine/spu/scanf.c: Ditto.
+        * libc/machine/spu/snprintf.c: Ditto.
+        * libc/machine/spu/sprintf.c: Ditto.
+        * libc/machine/spu/sscanf.c: Ditto.
+        * libc/machine/spu/vfprintf.c: Ditto.
+        * libc/machine/spu/vfscanf.c: Ditto.
+        * libc/machine/spu/vprintf.c: Ditto.
+        * libc/machine/spu/vscanf.c: Ditto.
+        * libc/machine/spu/vsnprintf.c: Ditto.
+        * libc/machine/spu/vsprintf.c: Ditto.
+        * libc/machine/spu/vsscanf.c: Ditto.
+@
+text
+@d79 1
+a79 1
+  send_to_ppe(SPE_C99_SIGNALCODE, SPE_C99_VSSCANF, &args);
+@
+
+
+1.1
+log
+@
+2007-02-01  Joel Schopp <jschopp@@austin.ibm.com>
+            Kazunori Asayama <asayama@@sm.sony.co.jp>
+
+        * libc/machine/spu/Makefile.am: Add objects.
+        * libc/machine/spu/Makefile.in: Regenerated.
+        * libc/machine/spu/vsscanf.c: New file. Add a stdio function
+        implementation.
+        * libc/machine/spu/snprintf.c: Ditto.
+        * libc/machine/spu/sprintf.c: Ditto.
+        * libc/machine/spu/sscanf.c: Ditto.
+        * libc/machine/spu/remove.c: Ditto.
+        * libc/machine/spu/rename.c: Ditto.
+        * libc/machine/spu/tmpnam.c: Ditto.
+        * libc/machine/spu/vsnprintf.c: Add initialization routine of
+        stdio stuffs.
+        * libc/machine/spu/vsprintf.c: Ditto.
+@
+text
+@d44 4
+@
+

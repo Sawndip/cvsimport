@@ -1,0 +1,653 @@
+head	1.10;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.9
+	gdb_7_6-2013-04-26-release:1.9
+	gdb_7_6-branch:1.9.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.9
+	gdb_7_5_1-2012-11-29-release:1.8
+	gdb_7_5-2012-08-17-release:1.8
+	gdb_7_5-branch:1.8.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.8
+	gdb_7_4_1-2012-04-26-release:1.7.4.1
+	gdb_7_4-2012-01-24-release:1.7.4.1
+	gdb_7_4-branch:1.7.0.4
+	gdb_7_4-2011-12-13-branchpoint:1.7
+	gdb_7_3_1-2011-09-04-release:1.7
+	gdb_7_3-2011-07-26-release:1.7
+	gdb_7_3-branch:1.7.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.7
+	gdb_7_2-2010-09-02-release:1.6
+	gdb_7_2-branch:1.6.0.2
+	gdb_7_2-2010-07-07-branchpoint:1.6
+	gdb_7_1-2010-03-18-release:1.5
+	gdb_7_1-branch:1.5.0.2
+	gdb_7_1-2010-02-18-branchpoint:1.5
+	gdb_7_0_1-2009-12-22-release:1.4
+	gdb_7_0-2009-10-06-release:1.4
+	gdb_7_0-branch:1.4.0.4
+	gdb_7_0-2009-09-16-branchpoint:1.4
+	arc-sim-20090309:1.1
+	msnyder-checkpoint-072509-branch:1.4.0.2
+	msnyder-checkpoint-072509-branchpoint:1.4
+	arc-insight_6_8-branch:1.1.0.16
+	arc-insight_6_8-branchpoint:1.1
+	insight_6_8-branch:1.1.0.14
+	insight_6_8-branchpoint:1.1
+	reverse-20081226-branch:1.1.0.12
+	reverse-20081226-branchpoint:1.1
+	multiprocess-20081120-branch:1.1.0.10
+	multiprocess-20081120-branchpoint:1.1
+	reverse-20080930-branch:1.1.0.8
+	reverse-20080930-branchpoint:1.1
+	reverse-20080717-branch:1.1.0.6
+	reverse-20080717-branchpoint:1.1
+	msnyder-reverse-20080609-branch:1.1.0.4
+	msnyder-reverse-20080609-branchpoint:1.1
+	gdb_6_8-2008-03-27-release:1.1
+	gdb_6_8-branch:1.1.0.2
+	gdb_6_8-2008-02-26-branchpoint:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.10
+date	2013.07.25.12.10.44;	author kettenis;	state Exp;
+branches;
+next	1.9;
+
+1.9
+date	2013.01.01.06.32.45;	author brobecke;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2012.01.04.08.17.03;	author brobecke;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2011.01.01.15.33.07;	author brobecke;	state Exp;
+branches
+	1.7.4.1;
+next	1.6;
+
+1.6
+date	2010.05.03.19.59.13;	author kettenis;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2010.01.01.07.31.33;	author brobecke;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2009.03.18.08.51.11;	author nathan;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2009.02.22.01.02.17;	author palves;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2009.01.03.05.57.51;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2008.01.19.15.03.50;	author skrll;	state Exp;
+branches;
+next	;
+
+1.7.4.1
+date	2012.01.06.04.43.15;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.10
+log
+@2013-07-25  Mark Kettenis  <kettenis@@gnu.org>
+
+        * hppa-tdep.h (enum hppa_regnum): Add members for all space registers.
+        * hppaobsd-tdep.c (HPPAOBSD_SIZEOF_GREGS): Add comment.
+        (HPPANBSD_SIZEOF_GREGS): New define.
+        (hppaobsd_supply_gregset): Handle additional registers.
+        * hppabsd-nat.c (hppabsd_gregset_supplies_p): Adjust to indicate
+        we provide more registers now.
+        (hppabsd_supply_gregset): Supply additional registers.
+        (hppabsd_collect_gregset): Collect additional registers.
+@
+text
+@/* Target-dependent code for OpenBSD/hppa
+
+   Copyright (C) 2004-2013 Free Software Foundation, Inc.
+
+   This file is part of GDB.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+#include "defs.h"
+#include "osabi.h"
+#include "regcache.h"
+#include "regset.h"
+
+#include "gdb_assert.h"
+#include "gdb_string.h"
+
+#include "hppa-tdep.h"
+#include "hppabsd-tdep.h"
+
+/* Core file support.  */
+
+/* Sizeof `struct reg' in <machine/reg.h>.  */
+#define HPPAOBSD_SIZEOF_GREGS	(34 * 4) /* OpenBSD 5.1 and earlier.  */
+#define HPPANBSD_SIZEOF_GREGS	(46 * 4) /* NetBSD and OpenBSD 5.2 and later.  */
+
+/* Sizeof `struct fpreg' in <machine/reg.h>.  */
+#define HPPAOBSD_SIZEOF_FPREGS	(32 * 8)
+
+/* Supply register REGNUM from the buffer specified by GREGS and LEN
+   in the general-purpose register set REGSET to register cache
+   REGCACHE.  If REGNUM is -1, do this for all registers in REGSET.  */
+
+static void
+hppaobsd_supply_gregset (const struct regset *regset,
+			 struct regcache *regcache,
+			 int regnum, const void *gregs, size_t len)
+{
+  gdb_byte zero[4] = { 0 };
+  const gdb_byte *regs = gregs;
+  size_t offset;
+  int i;
+
+  gdb_assert (len >= HPPAOBSD_SIZEOF_GREGS);
+
+  if (regnum == -1 || regnum == HPPA_R0_REGNUM)
+    regcache_raw_supply (regcache, HPPA_R0_REGNUM, &zero);
+  for (i = HPPA_R1_REGNUM, offset = 4; i <= HPPA_R31_REGNUM; i++, offset += 4)
+    {
+      if (regnum == -1 || regnum == i)
+	regcache_raw_supply (regcache, i, regs + offset);
+    }
+
+  if (len >= HPPANBSD_SIZEOF_GREGS)
+    {
+      if (regnum == -1 || regnum == HPPA_IPSW_REGNUM)
+	regcache_raw_supply (regcache, HPPA_IPSW_REGNUM, regs);
+      if (regnum == -1 || regnum == HPPA_SAR_REGNUM)
+	regcache_raw_supply (regcache, HPPA_SAR_REGNUM, regs + 32 * 4);
+      if (regnum == -1 || regnum == HPPA_PCSQ_HEAD_REGNUM)
+	regcache_raw_supply (regcache, HPPA_PCSQ_HEAD_REGNUM, regs + 33 * 4);
+      if (regnum == -1 || regnum == HPPA_PCSQ_TAIL_REGNUM)
+	regcache_raw_supply (regcache, HPPA_PCSQ_TAIL_REGNUM, regs + 34 * 4);
+      if (regnum == -1 || regnum == HPPA_PCOQ_HEAD_REGNUM)
+	regcache_raw_supply (regcache, HPPA_PCOQ_HEAD_REGNUM, regs + 35 * 4);
+      if (regnum == -1 || regnum == HPPA_PCOQ_TAIL_REGNUM)
+	regcache_raw_supply (regcache, HPPA_PCOQ_TAIL_REGNUM, regs + 36 * 4);
+      if (regnum == -1 || regnum == HPPA_SR0_REGNUM)
+	regcache_raw_supply (regcache, HPPA_SR0_REGNUM, regs + 37 * 4);
+      if (regnum == -1 || regnum == HPPA_SR1_REGNUM)
+	regcache_raw_supply (regcache, HPPA_SR1_REGNUM, regs + 38 * 4);
+      if (regnum == -1 || regnum == HPPA_SR2_REGNUM)
+	regcache_raw_supply (regcache, HPPA_SR2_REGNUM, regs + 39 * 4);
+      if (regnum == -1 || regnum == HPPA_SR3_REGNUM)
+	regcache_raw_supply (regcache, HPPA_SR3_REGNUM, regs + 40 * 4);
+      if (regnum == -1 || regnum == HPPA_SR4_REGNUM)
+	regcache_raw_supply (regcache, HPPA_SR4_REGNUM, regs + 41 * 4);
+      if (regnum == -1 || regnum == HPPA_SR5_REGNUM)
+	regcache_raw_supply (regcache, HPPA_SR5_REGNUM, regs + 42 * 4);
+      if (regnum == -1 || regnum == HPPA_SR6_REGNUM)
+	regcache_raw_supply (regcache, HPPA_SR6_REGNUM, regs + 43 * 4);
+      if (regnum == -1 || regnum == HPPA_SR7_REGNUM)
+	regcache_raw_supply (regcache, HPPA_SR7_REGNUM, regs + 44 * 4);
+      if (regnum == -1 || regnum == HPPA_CR26_REGNUM)
+	regcache_raw_supply (regcache, HPPA_CR26_REGNUM, regs + 45 * 4);
+      if (regnum == -1 || regnum == HPPA_CR27_REGNUM)
+	regcache_raw_supply (regcache, HPPA_CR27_REGNUM, regs + 46 * 4);
+    }
+  else
+    {
+      if (regnum == -1 || regnum == HPPA_SAR_REGNUM)
+	regcache_raw_supply (regcache, HPPA_SAR_REGNUM, regs);
+      if (regnum == -1 || regnum == HPPA_PCOQ_HEAD_REGNUM)
+	regcache_raw_supply (regcache, HPPA_PCOQ_HEAD_REGNUM, regs + 32 * 4);
+      if (regnum == -1 || regnum == HPPA_PCOQ_TAIL_REGNUM)
+	regcache_raw_supply (regcache, HPPA_PCOQ_TAIL_REGNUM, regs + 33 * 4);
+    }
+}
+
+/* Supply register REGNUM from the buffer specified by FPREGS and LEN
+   in the floating-point register set REGSET to register cache
+   REGCACHE.  If REGNUM is -1, do this for all registers in REGSET.  */
+
+static void
+hppaobsd_supply_fpregset (const struct regset *regset,
+			  struct regcache *regcache,
+			  int regnum, const void *fpregs, size_t len)
+{
+  struct gdbarch *gdbarch = get_regcache_arch (regcache);
+  const gdb_byte *regs = fpregs;
+  int i;
+
+  gdb_assert (len >= HPPAOBSD_SIZEOF_FPREGS);
+
+  for (i = HPPA_FP0_REGNUM; i <= HPPA_FP31R_REGNUM; i++)
+    {
+      if (regnum == i || regnum == -1)
+	regcache_raw_supply (regcache, i, regs + (i - HPPA_FP0_REGNUM) * 4);
+    }
+}
+
+/* OpenBSD/hppa register sets.  */
+
+static struct regset hppaobsd_gregset =
+{
+  NULL,
+  hppaobsd_supply_gregset
+};
+
+static struct regset hppaobsd_fpregset =
+{
+  NULL,
+  hppaobsd_supply_fpregset
+};
+
+/* Return the appropriate register set for the core section identified
+   by SECT_NAME and SECT_SIZE.  */
+
+static const struct regset *
+hppaobsd_regset_from_core_section (struct gdbarch *gdbarch,
+				  const char *sect_name, size_t sect_size)
+{
+  if (strcmp (sect_name, ".reg") == 0 && sect_size >= HPPAOBSD_SIZEOF_GREGS)
+    return &hppaobsd_gregset;
+
+  if (strcmp (sect_name, ".reg2") == 0 && sect_size >= HPPAOBSD_SIZEOF_FPREGS)
+    return &hppaobsd_fpregset;
+
+  return NULL;
+}
+
+
+static void
+hppaobsd_init_abi (struct gdbarch_info info, struct gdbarch *gdbarch)
+{
+  /* Obviously OpenBSD is BSD-based.  */
+  hppabsd_init_abi (info, gdbarch);
+
+  /* Core file support.  */
+  set_gdbarch_regset_from_core_section
+    (gdbarch, hppaobsd_regset_from_core_section);
+}
+
+
+/* OpenBSD uses uses the traditional NetBSD core file format, even for
+   ports that use ELF.  */
+#define GDB_OSABI_NETBSD_CORE GDB_OSABI_OPENBSD_ELF
+
+static enum gdb_osabi
+hppaobsd_core_osabi_sniffer (bfd *abfd)
+{
+  if (strcmp (bfd_get_target (abfd), "netbsd-core") == 0)
+    return GDB_OSABI_NETBSD_CORE;
+
+  return GDB_OSABI_UNKNOWN;
+}
+
+
+/* Provide a prototype to silence -Wmissing-prototypes.  */
+void _initialize_hppabsd_tdep (void);
+
+void
+_initialize_hppabsd_tdep (void)
+{
+  /* BFD doesn't set a flavour for NetBSD style a.out core files.  */
+  gdbarch_register_osabi_sniffer (bfd_arch_hppa, bfd_target_unknown_flavour,
+				  hppaobsd_core_osabi_sniffer);
+
+  gdbarch_register_osabi (bfd_arch_hppa, 0, GDB_OSABI_OPENBSD_ELF,
+			  hppaobsd_init_abi);
+}
+@
+
+
+1.9
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@d34 2
+a35 1
+#define HPPAOBSD_SIZEOF_GREGS	(34 * 4)
+d49 1
+d56 2
+d64 44
+a107 6
+  if (regnum == -1 || regnum == HPPA_SAR_REGNUM)
+    regcache_raw_supply (regcache, HPPA_SAR_REGNUM, regs);
+  if (regnum == -1 || regnum == HPPA_PCOQ_HEAD_REGNUM)
+    regcache_raw_supply (regcache, HPPA_PCOQ_HEAD_REGNUM, regs + 32 * 4);
+  if (regnum == -1 || regnum == HPPA_PCOQ_TAIL_REGNUM)
+    regcache_raw_supply (regcache, HPPA_PCOQ_TAIL_REGNUM, regs + 33 * 4);
+@
+
+
+1.8
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d3 1
+a3 1
+   Copyright (C) 2004-2006, 2008-2012 Free Software Foundation, Inc.
+@
+
+
+1.7
+log
+@run copyright.sh for 2011.
+@
+text
+@d3 1
+a3 2
+   Copyright (C) 2004, 2005, 2006, 2008, 2009, 2010, 2011
+   Free Software Foundation, Inc.
+@
+
+
+1.7.4.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d3 2
+a4 1
+   Copyright (C) 2004-2006, 2008-2012 Free Software Foundation, Inc.
+@
+
+
+1.6
+log
+@* hppaobsd-tdep.c (HPPAOBSD_SIZEOF_GREGS): Renamed from
+HPPABSD_SIZEOF_GREGS.
+(HPPAOBSD_SIZEOF_FPREGS): New define.
+(hppaobsd_supply_gregset): Renamed from hppabsd_supply_gregset.
+(hppaobsd_supply_fpregset): New function.
+(hppaobsd_gregset): Renamed from hppabsd_gregset.
+(hppaobsd_fpregset): New variable.
+(hppaobsd_regset_from_core_section): Handle floating-point registers.
+(_initialize_hppabsd_tdep): Remove spurious blank line.
+@
+text
+@d3 1
+a3 1
+   Copyright (C) 2004, 2005, 2006, 2008, 2009, 2010
+@
+
+
+1.5
+log
+@Update copyright year in most headers.
+
+Automatic update by copyright.sh.
+@
+text
+@d35 4
+a38 1
+#define HPPABSD_SIZEOF_GREGS	(34 * 4)
+d45 3
+a47 2
+hppabsd_supply_gregset (const struct regset *regset, struct regcache *regcache,
+		     int regnum, const void *gregs, size_t len)
+d53 1
+a53 1
+  gdb_assert (len >= HPPABSD_SIZEOF_GREGS);
+d69 23
+a91 1
+/* OpenBSD/hppa register set.  */
+d93 1
+a93 1
+static struct regset hppabsd_gregset =
+d96 7
+a102 1
+  hppabsd_supply_gregset
+d112 5
+a116 2
+  if (strcmp (sect_name, ".reg") == 0 && sect_size >= HPPABSD_SIZEOF_GREGS)
+    return &hppabsd_gregset;
+a130 1
+
+@
+
+
+1.4
+log
+@	* Makefile.in: Update license to GPLv3.
+	* ada-exp.y: Update license to GPLv3.
+	* ada-lex.l: Update license to GPLv3.
+	* c-exp.y: Update license to GPLv3.
+	* cp-name-parser.y: Update license to GPLv3.
+	* darwin-nat-info.c: Update license to GPLv3.
+	* f-exp.y: Update license to GPLv3.
+	* gdb_thread_db.h: Update license to GPLv3.
+	* hppanbsd-nat.c: Update license to GPLv3.
+	* hppanbsd-tdep.c: Update license to GPLv3.
+	* hppaobsd-tdep.c: Update license to GPLv3.
+	* jv-exp.y: Update license to GPLv3.
+	* m2-exp.y: Update license to GPLv3.
+	* objc-exp.y: Update license to GPLv3.
+	* p-exp.y: Update license to GPLv3.
+	* reply_mig_hack.awk: Update license to GPLv3.
+	* reverse.c: Update license to GPLv3.
+	* xtensa-xtregs.c: Update license to GPLv3.
+@
+text
+@d3 2
+a4 1
+   Copyright (C) 2004, 2005, 2006, 2008, 2009 Free Software Foundation, Inc.
+@
+
+
+1.3
+log
+@	Silence a few -Wmissing-prototypes warnings.
+
+	PR build/9877:
+        * alpha-linux-tdep.c (alpha_linux_regset_from_core_section): Make
+	it static.
+        * alpha-osf1-tdep.c (_initialize_alpha_osf1_tdep): Declare.
+        * amd64fbsd-tdep.c (amd64fbsd_init_abi): Make it static.
+        * amd64nbsd-tdep.c (_initialize_amd64nbsd_ndep): Rename to ...
+	(_initialize_amd64nbsd_tdep): ... this.
+	* arm-linux-tdep.c (arm_linux_software_single_step): Make it static.
+	(_initialize_arm_linux_tdep): Declare.
+	* armbsd-tdep.c (armbsd_fpreg_offset): Make it static.
+	* armnbsd-tdep.c (_initialize_arm_netbsd_tdep): Declare.
+	* armobsd-tdep.c (_initialize_armobsd_tdep): Declare.
+	* avr-tdep.c (avr_return_value): Make it static.
+	(avr_frame_unwind_cache): Ditto.
+	* bsd-uthread.c (bsd_uthread_inferior_created): Ditto.
+	(bsd_uthread_solib_loaded): Ditto.
+	(bsd_uthread_solib_unloaded): Ditto.
+	(bsd_uthread_target): Ditto.
+	(_initialize_bsd_uthread): Declare.
+	* cris-tdep.c (crisv32_single_step_through_delay): Make it static.
+	(cris_frame_unwind_cache): Ditto.
+	* frv-tdep.c (frv_return_value): Ditto.
+	* h8300-tdep.c (h8300_use_struct_convention): Ditto.
+	(h8300h_use_struct_convention): Ditto.
+	* hppa-tdep.c (hppa_sign_extend, hppa_low_hppa_sign_extend):
+	Ditto.
+	* hppa-tdep.h (hppa_low_sign_extend, hppa_sign_extend): Delete
+	declarations.
+	* hppabsd-tdep.c: Include hppabsd-tdep.h.
+	(hppabsd_find_global_pointer): Make it static.
+	* hppabsd-tdep.h: New.
+	* hppanbsd-tdep.c: Include hppabsd-tdep.h.
+	(hppabsd_init_abi): Remove declaration.
+	(_initialize_hppabsd_tdep): Remove declaration.
+	(_initialize_hppanbsd_tdep): Declare.
+	* hppaobsd-tdep.c: Include hppabsd-tdep.h.
+	(hppabsd_init_abi): Delete declaration.
+	(hppaobsd_init_abi): Make it static.
+	* i386-nto-tdep.c (_initialize_i386nto_tdep): Declare.
+	* i386nbsd-tdep.c (_initialize_i386nbsd_tdep): Declare.
+	* ia64-linux-tdep.c (_initialize_ia64_linux_tdep): Declare.
+	* ia64-tdep.c (ia64_register_reggroup_p): Make it static.
+	* iq2000-tdep.c (_initialize_iq2000_tdep): Declare.
+	* m32c-tdep.c (m32c_register_reggroup_p): Make it static.
+	(m32c_analyze_prologue, m32c_virtual_frame_pointer): Ditto.
+	(_initialize_m32c_tdep): Declare.
+	* m32r-rom.c (_initialize_m32r_rom): Declare.
+	* m32r-tdep.c (m32r_skip_prologue): Make it static.
+	(m32r_return_value): Ditto.
+	* m68hc11-tdep.c (m68hc11_frame_unwind_cache): Make it static.
+	(m68hc11_return_value): Ditto.
+	* m68klinux-tdep.c (_initialize_m68k_linux_tdep): Declare.
+	* m88k-tdep.c (m88k_frame_cache): Make it static.
+	* mep-tdep.c (mep_gdb_print_insn): Ditto.
+	(mep_return_value): Ditto.
+	(_initialize_mep_tdep): Declare.
+	* mips-irix-tdep.c (_initialize_mips_irix_tdep): Declare.
+	* mips-linux-tdep.c (supply_64bit_reg): Make it static.
+	(mips_linux_syscall_next_pc): Ditto.
+	(_initialize_mips_linux_tdep): Declare.
+	* mips-tdep.c (mips_single_step_through_delay): Make it static.
+	* mipsnbsd-tdep.c (_initialize_mipsnbsd_tdep): Declare.
+	* mn10300-linux-tdep.c (_initialize_mn10300_linux_tdep): Declare.
+	* mn10300-tdep.c (_initialize_mn10300_tdep): Declare.
+	* mt-tdep.c (_initialize_mt_tdep): Declare.
+	* nbsd-tdep.c: Include nbsd-tdep.h.
+	* nto-tdep.c (find_load_phdr): Make it static.
+	(_initialize_nto_tdep): Declare.
+	* ppc-linux-tdep.c (ppc_linux_memory_remove_breakpoint): Make it
+	static.
+	(_initialize_ppc_linux_tdep): Declare.
+	* remote-m32r-sdi.c (m32r_can_use_hw_watchpoint)
+	(m32r_insert_watchpoint, m32r_remove_watchpoint)
+	(m32r_stopped_data_address, m32r_stopped_by_watchpoint): Make
+	static.
+	* rs6000-aix-tdep.c (_initialize_rs6000_aix_tdep): Declare.
+	* rs6000-nat.c: Include xcoffread.h.
+	(find_toc_address): Don't extern declare get_toc_offset.  Adjust
+	to call xcoff_get_to_offset.
+	* rs6000-tdep.c (ppc_vsx_support_p, ppc_displaced_step_fixup)
+	(rs6000_skip_main_prologue, rs6000_in_solib_return_trampoline)
+	(rs6000_skip_trampoline_code): Make static.
+	* s390-tdep.c (s390_regset_from_core_section): Ditto.
+	* sh-tdep.c (sh_register_reggroup_p): Ditto.
+	* shnbsd-tdep.c (shnbsd_regset_from_core_section): Ditto.
+	(_initialize_shnbsd_tdep): Declare.
+	* solib-frv.c (displacement_from_map): Make static.
+	(_initialize_frv_solib): Declare.
+	* solib-irix.c (fetch_lm_info): Make static.
+	(_initialize_irix_solib): Declare.
+	* solib-som.c: Include solib-som.h.
+	(som_solib_select): Line break.
+	* sparc-tdep.c (sparc_regset_from_core_section): Make static.
+	* sparcnbsd-tdep.c (_initialize_sparnbsd_tdep): Rename to ...
+	(_initialize_sparcnbsd_tdep): ... this.
+	* spu-tdep.c (spu_software_single_step): Make it static.
+	(_initialize_spu_tdep): Declare.
+	* vax-tdep.c (vax_frame_cache): Make it static.
+	* xcoffread.c: Include xcoffread.h.
+	(get_toc_offset): Rename to ...
+	(xcoff_get_toc_offset): ... this.
+	(_initialize_xcoffread): Declare.
+	* xcoffread.h: New.
+	* xtensa-linux-tdep.c (_initialize_xtensa_linux_tdep): Declare.
+	* xtensa-tdep.c (xtensa_skip_prologue, xtensa_derive_tdep): Make
+	static.
+	(_initialize_xtensa_tdep): Declare.
+@
+text
+@d9 1
+a9 1
+   the Free Software Foundation; either version 2 of the License, or
+d18 1
+a18 3
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 51 Franklin Street, Fifth Floor,
+   Boston, MA 02110-1301, USA.  */
+@
+
+
+1.2
+log
+@        Updated copyright notices for most files.
+@
+text
+@d31 1
+d88 1
+a88 3
+void hppabsd_init_abi (struct gdbarch_info, struct gdbarch *);
+
+void
+@
+
+
+1.1
+log
+@	Add NetBSD/hppa target and host support.
+
+	* hppabsd-tdep.c (hppabsd_supply_gregset): Move to ...
+	(hppabsd_gregset): Move to ...
+	(hppabsd_regset_from_core_section): Rename
+	hppaobsd_regset_from_core_section and move to ...
+	(hppabsd_find_global_pointer): Update comment.
+	(hppabsd_init_abi): Make global. Do not register
+	hppabsd_regset_from_core_section.
+	(hppabsd_core_osabi_sniffer): Rename hppaobsd_core_osabi_sniffer and
+	move to ...
+	(_initialize_hppabsd_tdep): Move to ...
+	* hppaobsd-tdep.c: ... here. New file.
+	* hppnbsd-tdep.c: New file.
+	* hppnbsd-nat.c: New file.
+        * Makefile.in (ALL_TARGET_OBS): Add hppanbsd-tdep.o and hppaobsd-tdep.o.
+	(ALLDEPFILES): Add hppabsd-nat.c and hppabsd-tdep.c.
+        (hppabsd-nat.o, hppabsd-tdep.o): New dependencies.
+        (hppabsd-tdep.o, hppaobsd-tdep.o): Update dependencies.
+	* configure.host (hppa*-*-netbsd*): New entry.
+	* configure.tgt (hppa*-*-netbsd*): New entry.
+	(hppa*-*-openbsd*): Update.
+	* NEWS (New native configuration): Mention NetBSD/hppa.
+	(New targets): Mention NetBSD/hppa.
+@
+text
+@d3 1
+a3 1
+   Copyright (C) 2004, 2005, 2006, 2008 Free Software Foundation, Inc.
+@
+

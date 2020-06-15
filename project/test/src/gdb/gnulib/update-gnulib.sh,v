@@ -1,0 +1,441 @@
+head	1.9;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.5
+	gdb_7_6-2013-04-26-release:1.5
+	gdb_7_6-branch:1.5.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.5;
+locks; strict;
+comment	@# @;
+
+
+1.9
+date	2013.07.01.11.25.43;	author palves;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2013.07.01.11.18.09;	author palves;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2013.06.21.17.55.07;	author brobecke;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2013.06.21.16.17.01;	author willnewton;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2012.12.19.04.13.53;	author brobecke;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2012.12.18.06.02.32;	author brobecke;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2012.12.18.06.00.54;	author brobecke;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2012.12.18.04.40.25;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2012.11.05.23.06.31;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.9
+log
+@Import the "pathmax" gnulib module.
+
+This imports the "pathmax" gnulib module, making PATH_MAX always
+available on systems that have the notion of a constant max path limit
+(i.e., practically everywhere except the Hurd), along with fixing a
+couple broken systems --- see pathmax.h in the patch.
+
+This means we can normalize on PATH_MAX throughout the tree (instead
+of some places using MAXPATHLEN, or defining fallback constants
+ourselves).
+
+This is the just the importing step.
+
+gdb/
+2013-07-01  Pedro Alves  <palves@@redhat.com>
+
+	* gnulib/update-gnulib.sh (IMPORTED_GNULIB_MODULES): Add pathmax.
+	* gnulib/Makefile.in (aclocal_m4_deps): Add import/m4/pathmax.m4.
+	* gnulib/aclocal.m4: Regenerate.
+	* gnulib/config.in: Regenerate.
+	* gnulib/configure: Regenerate.
+	* gnulib/import/pathmax.h: New file.
+	* gnulib/import/Makefile.am: Regenerate.
+	* gnulib/import/Makefile.in: Regenerate.
+	* gnulib/import/m4/gnulib-cache.m4: Regenerate.
+	* gnulib/import/m4/gnulib-comp.m4: Regenerate.
+	* gnulib/import/m4/pathmax.m4: New file.
+@
+text
+@#! /bin/sh
+
+# Copyright (C) 2011-2013 Free Software Foundation, Inc.
+#
+# This file is part of GDB.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# Usage: update-gnulib.sh <path-to-gnulib-repository>
+# Update our import of gnulib in the GDB source tree.
+#
+# This script assumes that it is being called from the gdb/gnulib
+# subdirectory, and will verify this before proceeding.
+#
+# This script will also make a number of other verifications:
+#   . The gnulib version (it should match $GNULIB_COMMIT_SHA1).
+#   . The correct versions of the auto-tools that are used to
+#     regenerate the various scripts and Makefiles are on the PATH.
+
+# The list of gnulib modules we are importing in GDB.
+IMPORTED_GNULIB_MODULES="fnmatch-gnu frexpl inttypes memmem update-copyright unistd pathmax"
+
+# The gnulib commit ID to use for the update.
+GNULIB_COMMIT_SHA1="8d5bd1402003bd0153984b138735adf537d960b0"
+
+# The expected version number for the various auto tools we will
+# use after the import.
+AUTOCONF_VERSION="2.64"
+AUTOMAKE_VERSION="1.11.1"
+ACLOCAL_VERSION="$AUTOMAKE_VERSION"
+
+if [ $# -ne 1 ]; then
+   echo "Error: Path to gnulib repository missing. Aborting."
+   echo "Usage: update-gnulib.sh <path-to-gnulib-repository>"
+   exit 1
+fi
+gnulib_prefix=$1
+
+gnulib_tool="$gnulib_prefix/gnulib-tool"
+
+# Verify that the gnulib directory does exist...
+if [ ! -f "$gnulib_tool" ]; then
+   echo "Error: Invalid gnulib directory. Cannot find gnulib tool"
+   echo "       ($gnulib_tool)."
+   echo "Aborting."
+   exit 1
+fi
+
+# Verify that we have the right version of gnulib...
+gnulib_head_sha1=`cd $gnulib_prefix && git rev-parse HEAD`
+if [ "$gnulib_head_sha1" != "$GNULIB_COMMIT_SHA1" ]; then
+   echo "Error: Wrong version of gnulib: $gnulib_head_sha1"
+   echo "       (we expected it to be $GNULIB_COMMIT_SHA1)"
+   echo "Aborting."
+   exit 1
+fi
+
+# Verify that we are in the gdb/ subdirectory.
+if [ ! -f ../main.c -o ! -d import ]; then
+   echo "Error: This script should be called from the gdb/gnulib subdirectory."
+   echo "Aborting."
+   exit 1
+fi
+
+# Verify that we have the correct version of autoconf.
+ver=`autoconf --version 2>&1 | head -1 | sed 's/.*) //'`
+if [ "$ver" != "$AUTOCONF_VERSION" ]; then
+   echo "Error: Wrong autoconf version: $ver. Aborting."
+   exit 1
+fi
+
+# Verify that we have the correct version of automake.
+ver=`automake --version 2>&1 | head -1 | sed 's/.*) //'`
+if [ "$ver" != "$AUTOMAKE_VERSION" ]; then
+   echo "Error: Wrong automake version ($ver), we need $AUTOMAKE_VERSION."
+   echo "Aborting."
+   exit 1
+fi
+
+# Verify that we have the correct version of aclocal.
+ver=`aclocal --version 2>&1 | head -1 | sed 's/.*) //'`
+if [ "$ver" != "$ACLOCAL_VERSION" ]; then
+   echo "Error: Wrong aclocal version: $ver. Aborting."
+   exit 1
+fi
+
+# Update our gnulib import.
+$gnulib_prefix/gnulib-tool --import --dir=. --lib=libgnu \
+  --source-base=import --m4-base=import/m4 --doc-base=doc \
+  --tests-base=tests --aux-dir=import/extra \
+  --no-conditional-dependencies --no-libtool --macro-prefix=gl \
+  --no-vc-files \
+  $IMPORTED_GNULIB_MODULES
+if [ $? -ne 0 ]; then
+   echo "Error: gnulib import failed.  Aborting."
+   exit 1
+fi
+
+# Regenerate all necessary files...
+aclocal -Iimport/m4 &&
+autoconf &&
+autoheader &&
+automake
+if [ $? -ne 0 ]; then
+   echo "Error: Failed to regenerate Makefiles and configure scripts."
+   exit 1
+fi
+
+@
+
+
+1.8
+log
+@Import the "unistd" gnulib module.
+
+I wanted to import the pathmax module, and that pulls in the unistd
+module as dependency.  The unistd module is actually bigger than the
+pathmax module.  If we're going to end up with it, might as well
+import it explicitly, and make use of it throughout.
+
+The "unistd" module makes a GNU-like <unistd.h> always available.
+This means we no longer need to do:
+
+ +#ifdef HAVE_UNISTD_H
+  #include <unistd.h>
+ +#endif
+
+and we can remove a few constants from defs.h.
+
+This is just the importing step.
+
+gdb/
+2013-07-01  Pedro Alves  <palves@@redhat.com>
+
+	Import the "unistd" gnulib module.
+	* gnulib/update-gnulib.sh (IMPORTED_GNULIB_MODULES): Add "unistd".
+	* gnulib/Makefile.in (aclocal_m4_deps): Add import/m4/off_t.m4,
+	import/m4/ssize_t.m4, import/m4/sys_types_h.m4 and
+	import/m4/unistd_h.m4.
+	* gnulib/aclocal.m4: Renenerate.
+	* gnulib/config.in: Renenerate.
+	* gnulib/configure: Renenerate.
+	* gnulib/import/Makefile.am: Renenerate.
+	* gnulib/import/Makefile.in: Renenerate.
+	* gnulib/import/m4/gnulib-cache.m4: Renenerate.
+	* gnulib/import/m4/gnulib-comp.m4: Renenerate.
+	* gnulib/import/m4/off_t.m4: New file.
+	* gnulib/import/m4/ssize_t.m4: New file.
+	* gnulib/import/m4/sys_types_h.m4: New file.
+	* gnulib/import/m4/unistd_h.m4: New file.
+	* gnulib/import/sys_types.in.h: New file.
+	* gnulib/import/unistd.c: New file.
+	* gnulib/import/unistd.in.h: New file.
+@
+text
+@d32 1
+a32 1
+IMPORTED_GNULIB_MODULES="fnmatch-gnu frexpl inttypes memmem update-copyright unistd"
+@
+
+
+1.7
+log
+@Update dates in relevant gdb/gnulib/ copyright headers
+
+This patch is the result of re-running the copyright.py script
+in GDB, after we modified it to stop ignoring some files in
+gdb/gnulib that should have been updated earlier this year.
+
+gdb/ChangeLog:
+
+        * gdb/gnulib/Makefile.in: Update date in copyright header.
+        * gdb/gnulib/configure.ac: Ditto.
+        * gdb/gnulib/update-gnulib.sh: Ditto.
+@
+text
+@d32 1
+a32 1
+IMPORTED_GNULIB_MODULES="fnmatch-gnu frexpl inttypes memmem update-copyright"
+@
+
+
+1.6
+log
+@gdb/gnulib: Import frexpl.
+
+gdb/ChangeLog:
+
+2013-06-21  Will Newton  <will.newton@@linaro.org>
+
+	* gnulib/update-gnulib.sh(IMPORTED_GNULIB_MODULES): Add frexpl.
+	* gnulib/aclocal.m4: Regenerate.
+	* gnulib/config.in: Regenerate.
+	* gnulib/configure: Regenerate.
+	* gnulib/import/Makefile.am: Update.
+	* gnulib/import/Makefile.in: Update.
+	* gnulib/import/m4/gnulib-cache.m4: Update.
+	* gnulib/import/m4/gnulib-comp.m4: Update.
+	* gnulib/import/float+.h: Import.
+	* gnulib/import/float.c: Import.
+	* gnulib/import/float.in.h: Import.
+	* gnulib/import/fpucw.h: Import.
+	* gnulib/import/frexp.c: Import.
+	* gnulib/import/frexpl.c: Import.
+	* gnulib/import/isnan.c: Import.
+	* gnulib/import/isnand-nolibm.h: Import.
+	* gnulib/import/isnand.c: Import.
+	* gnulib/import/isnanl-nolibm.h: Import.
+	* gnulib/import/isnanl.c: Import.
+	* gnulib/import/itold.c: Import.
+	* gnulib/import/m4/exponentd.m4: Import.
+	* gnulib/import/m4/exponentl.m4: Import.
+	* gnulib/import/m4/float_h.m4: Import.
+	* gnulib/import/m4/fpieee.m4: Import.
+	* gnulib/import/m4/frexp.m4: Import.
+	* gnulib/import/m4/frexpl.m4: Import.
+	* gnulib/import/m4/isnand.m4: Import.
+	* gnulib/import/m4/isnanl.m4: Import.
+	* gnulib/import/m4/math_h.m4: Import.
+	* gnulib/import/math.c: Import.
+	* gnulib/import/math.in.h: Import.
+@
+text
+@d3 1
+a3 1
+# Copyright (C) 2011-2012 Free Software Foundation, Inc.
+@
+
+
+1.5
+log
+@Revert "Import gnulib's errno module."
+
+There are some compatibility concerns with libiconv to be
+discussed first.
+
+gdb/ChangeLog:
+
+        Revert the following change:
+        * gnulib/update-gnulib.sh (IMPORTED_GNULIB_MODULES): Add errno.
+        * gnulib/import/errno.in.h: Import.
+        * gnulib/import/m4/errno_h.m4: Import.
+        * gnulib/aclocal.m4: Regenerate.
+        * gnulib/configure: Regenerate.
+        * gnulib/import/Makefile.am: Update.
+        * gnulib/import/Makefile.in: Update.
+        * gnulib/import/m4/gnulib-cache.m4: Update.
+        * gnulib/import/m4/gnulib-comp.m4: Update.
+@
+text
+@d32 1
+a32 1
+IMPORTED_GNULIB_MODULES="fnmatch-gnu inttypes memmem update-copyright"
+@
+
+
+1.4
+log
+@Import gnulib's errno module.
+
+gdb/ChangeLog:
+
+        * gnulib/update-gnulib.sh (IMPORTED_GNULIB_MODULES): Add errno.
+        * gnulib/import/errno.in.h: Import.
+        * gnulib/import/m4/errno_h.m4: Import.
+        * gnulib/aclocal.m4: Regenerate.
+        * gnulib/configure: Regenerate.
+        * gnulib/import/Makefile.am: Update.
+        * gnulib/import/Makefile.in: Update.
+        * gnulib/import/m4/gnulib-cache.m4: Update.
+        * gnulib/import/m4/gnulib-comp.m4: Update.
+@
+text
+@d32 1
+a32 2
+IMPORTED_GNULIB_MODULES="fnmatch-gnu inttypes memmem update-copyright \
+			 errno"
+@
+
+
+1.3
+log
+@Update gnulib to current HEAD.
+
+gdb/ChangeLog:
+
+        * gnulib/update-gnulib.sh (GNULIB_COMMIT_SHA1): Set to
+        8d5bd1402003bd0153984b138735adf537d960b0.
+        * gnulib/aclocal.m4, configure, config.in: Regenerate.
+        * gnulib/import/m4/extern-inline.m4: Import.
+        * gnulib/import/wctype-h.c: Import.
+        * gnulib/import/Makefile.am: Update.
+        * gnulib/import/Makefile.in: Update.
+        * gnulib/import/alloca.in.h: Update.
+        * gnulib/import/extra/snippet/warn-on-use.h: Update.
+        * gnulib/import/localcharset.c: Update.
+        * gnulib/import/m4/fcntl-o.m4: Update.
+        * gnulib/import/m4/gnulib-cache.m4: Update.
+        * gnulib/import/m4/gnulib-comp.m4: Update.
+        * gnulib/import/m4/wctype_h.m4: Update.
+        * gnulib/import/stdbool.in.h: Update.
+        * gnulib/import/verify.h: Update.
+        * gnulib/import/wctype.in.h: Update.
+@
+text
+@d32 2
+a33 1
+IMPORTED_GNULIB_MODULES="fnmatch-gnu inttypes memmem update-copyright"
+@
+
+
+1.2
+log
+@Add call to autoheader in update-gnulib.sh.
+
+gdb/ChangeLog:
+
+        * gnulib/update-gnulib.sh: Add call to autoheader.
+@
+text
+@d35 1
+a35 1
+GNULIB_COMMIT_SHA1="a39f53ccb70a613e647e1019fb4c63645220267e"
+@
+
+
+1.1
+log
+@New script to update our gnulib import
+
+gdb/ChangeLog:
+
+        * gnulib/update-gnulib.sh: New script.
+@
+text
+@d113 1
+@
+

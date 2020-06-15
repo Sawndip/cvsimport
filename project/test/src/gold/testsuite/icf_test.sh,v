@@ -1,0 +1,131 @@
+head	1.2;
+access;
+symbols
+	binutils-2_24-branch:1.2.0.2
+	binutils-2_24-branchpoint:1.2
+	binutils-2_21_1:1.1
+	binutils-2_23_2:1.1
+	binutils-2_23_1:1.1
+	binutils-2_23:1.1
+	binutils-2_23-branch:1.1.0.10
+	binutils-2_23-branchpoint:1.1
+	binutils-2_22_branch:1.1.0.8
+	binutils-2_22:1.1
+	binutils-2_22-branch:1.1.0.6
+	binutils-2_22-branchpoint:1.1
+	binutils-2_21:1.1
+	binutils-2_21-branch:1.1.0.4
+	binutils-2_21-branchpoint:1.1
+	binutils-2_20_1:1.1
+	binutils-2_20:1.1
+	binutils-2_20-branch:1.1.0.2
+	binutils-2_20-branchpoint:1.1
+	binutils_latest_snapshot:1.2;
+locks; strict;
+comment	@# @;
+
+
+1.2
+date	2013.03.12.22.46.19;	author amodra;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2009.08.05.20.51.56;	author tmsriram;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@	* powerpc.cc (is_branch_reloc): Forward declare.
+	(Target_powerpc::do_can_check_for_function_pointers): New predicate.
+	(Target_powerpc::Scan::local_reloc_may_be_function_pointer): Return
+	false for 64-bit, true for 32-bit non-branch relocs.
+	(Target_powerpc::Scan::global_reloc_may_be_function_pointer): Likewise.
+	* testsuite/Makefile.am (icf_test): Use linker map file instead of
+	nm output.
+	(icf_safe_test): Generate linker map file as well as nm output.
+	(icf_safe_so_test): Likewise.
+	* testsuite/Makefile.in: Regenerate.
+	* testsuite/icf_test.sh: Parse linker map file to determine
+	section folding.
+	* testsuite/icf_safe_test.sh: Likewise.  Expect folding for PowerPC.
+	* testsuite/icf_safe_so_test.sh: Likewise.
+	(X86_32_or_ARM_specific_safe_fold): Merge into..
+	(arch_specific_safe_fold): ..this.
+	(X86_64_specific_safe_fold): Delete unused function.
+@
+text
+@#!/bin/sh
+
+# icf_test.sh -- test --icf
+
+# Copyright 2009 Free Software Foundation, Inc.
+# Written by Sriraman Tallam <tmsriram@@google.com>.
+
+# This file is part of gold.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+# MA 02110-1301, USA.
+
+# The goal of this program is to verify if icf works as expected.
+# File icf_test.cc is in this test. This program checks if the 
+# identical sections are correctly folded.
+
+check()
+{
+    awk "
+BEGIN { discard = 0; }
+/^Discarded input/ { discard = 1; }
+/^Memory map/ { discard = 0; }
+/.*\\.text\\..*($2|$3).*/ { act[discard] = act[discard] \" \" \$0; }
+END {
+      # printf \"kept\" act[0] \"\\nfolded\" act[1] \"\\n\";
+      if (length(act[0]) == 0 || length(act[1]) == 0)
+	{
+	  printf \"Identical Code Folding did not fold $2 and $3\\n\"
+	  exit 1;
+	}
+    }" $1
+}
+
+check icf_test.map "folded_func" "kept_func"
+@
+
+
+1.1
+log
+@*** empty log message ***
+@
+text
+@d31 13
+a43 7
+    func_addr_1=`grep $2 $1 | awk '{print $1}'`
+    func_addr_2=`grep $3 $1 | awk '{print $1}'`
+    if [ $func_addr_1 != $func_addr_2 ]
+    then
+        echo "Identical Code Folding failed to fold" $2 "and" $3
+	exit 1
+    fi
+d46 1
+a46 1
+check icf_test.stdout "folded_func" "kept_func"
+@
+

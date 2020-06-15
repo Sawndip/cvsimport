@@ -1,0 +1,227 @@
+head	1.4;
+access;
+symbols
+	cygwin_daemon_merge_HEAD:1.4
+	Z-cygwin_daemon_merge-new_HEAD:1.4
+	Z-cygwin_daemon_merge_HEAD:1.4
+	cygwin_daemon:1.4.0.2
+	cygwin-1_1_1:1.1.1.1
+	winsup-2000-02-17:1.1.1.1
+	SNAPSHOT:1.1.1;
+locks; strict;
+comment	@// @;
+expand	@o@;
+
+
+1.4
+date	2000.07.01.03.51.55;	author cgf;	state dead;
+branches;
+next	1.3;
+
+1.3
+date	2000.06.22.19.48.10;	author cgf;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2000.06.21.18.33.19;	author cgf;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2000.02.17.19.38.31;	author cgf;	state Exp;
+branches
+	1.1.1.1;
+next	;
+
+1.1.1.1
+date	2000.02.17.19.38.31;	author cgf;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.4
+log
+@* Makefile.in: Use variables rather than configure constructs where
+appropriate.
+(LIBCOS): Find additional stub library stuff in their own subdirectory.
+* dcrt0.cc: Convert user_data pointer to static __cygwin_user_data area.
+(do_global_ctors): Check magic_bisquit for initialization.
+(dll_crt0_1): First group of premain functions prior to fd initialization.  Run
+second group before calling main.
+(dll_crt0 ()): New function, called from new initialization code.
+(dll_crt0 (per_process *uptr)): Call new dll_crt0 () function on
+initialization.
+* debug.cc (thread_stub): Initialize bottom of stack with per-thread info.
+* environ.cc (parse_thing): Use binmode global to control CYGWIN=binmode
+behavior.
+* fhandler.cc (fhandler_base::open): Allow explicit setting of __fmode to
+O_BINARY or O_TEXT to override disk mount settings.
+* libcmain.cc: Move to lib subdirectory.
+* libccrt0.cc: Ditto.
+* dll_main.cc: Ditto.
+* dll_entry.cc: Ditto.
+* getopt.c: Ditto.
+* thread.cc (thread_init_wrapper): Call ExitThread explicitly rather than
+returning, as a preliminary step towards placing per thread info at the bottom
+of the stack.
+* winsup.h: Move per_process class to include/sys/cygwin.h.  Declare new
+dll_crt0().
+* include/cygwin/version.h: Bump API minor version.
+* binmode.c: New file.
+* textmode.c: Ditto.
+* lib/_cygwin_crt0_common.cc: Ditto.
+* lib/crt0.h: Ditto.
+* lib/cygwin_attach_dll.c: Ditto.
+* lib/cygwin_crt0.c: Ditto.
+* lib/dll_entry.cc: Ditto.
+* lib/dll_main.cc: Ditto.
+* lib/getopt.c: Ditto.
+* lib/libcmain.c: Ditto.
+* lib/premain0.c: Ditto.
+* lib/premain1.c: Ditto.
+* lib/premain2.c: Ditto.
+* lib/premain3.c: Ditto.
+@
+text
+@/* libccrt0.cc: crt0 for libc [newlib calls this one]
+
+   Copyright 1996, 1998, 1999, 2000 Cygnus Solutions.
+
+This file is part of Cygwin.
+
+This software is a copyrighted work licensed under the terms of the
+Cygwin license.  Please consult the file "CYGWIN_LICENSE" for
+details. */
+
+#undef MALLOC_DEBUG
+
+#include "winsup.h"
+#include <reent.h>
+#include <stdlib.h>
+
+typedef int (*MainFunc) (int argc, char *argc[], char **env);
+
+extern "C"
+{
+  char **environ;
+  void cygwin_crt0 (MainFunc);
+  int cygwin_attach_dll (HMODULE, MainFunc);
+  int cygwin_attach_noncygwin_dll (HMODULE, MainFunc);
+  int main (int, char **, char **);
+  struct _reent *_impure_ptr;
+  int _fmode;
+};
+
+static per_process this_proc;
+
+/* Set up pointers to various pieces so the dll can then use them,
+   and then jump to the dll.  */
+
+static void
+cygwin_crt0_common (MainFunc f)
+{
+  /* This is used to record what the initial sp was.  The value is needed
+     when copying the parent's stack to the child during a fork.  */
+  int onstack;
+
+  /* The version numbers are the main source of compatibility checking.
+     As a backup to them, we use the size of the per_process struct.  */
+  this_proc.magic_biscuit = sizeof (per_process);
+
+  /* cygwin.dll version number in effect at the time the app was created.  */
+  this_proc.dll_major = CYGWIN_VERSION_DLL_MAJOR;
+  this_proc.dll_minor = CYGWIN_VERSION_DLL_MINOR;
+  this_proc.api_major = CYGWIN_VERSION_API_MAJOR;
+  this_proc.api_minor = CYGWIN_VERSION_API_MINOR;
+
+  this_proc.ctors = &__CTOR_LIST__;
+  this_proc.dtors = &__DTOR_LIST__;
+  this_proc.envptr = &environ;
+  this_proc.impure_ptr_ptr = &_impure_ptr;
+  this_proc.main = f;
+  this_proc.fmode_ptr = &_fmode;
+  this_proc.initial_sp = (char *) &onstack;
+
+  /* Remember whatever the user linked his application with - or
+     point to entries in the dll.  */
+  this_proc.malloc = &malloc;
+  this_proc.free = &free;
+  this_proc.realloc = &realloc;
+  this_proc.calloc = &calloc;
+
+  /* Setup the module handle so fork can get the path name. */
+  this_proc.hmodule = GetModuleHandle (0);
+
+  /* variables for fork */
+  this_proc.data_start = &_data_start__;
+  this_proc.data_end = &_data_end__;
+  this_proc.bss_start = &_bss_start__;
+  this_proc.bss_end = &_bss_end__;
+}
+
+/* for main module */
+void
+cygwin_crt0 (MainFunc f)
+{
+  cygwin_crt0_common (f);
+
+ /* Jump into the dll. */
+  dll_crt0 (&this_proc);
+}
+
+/* for a loaded dll */
+int
+cygwin_attach_dll (HMODULE h, MainFunc f)
+{
+  cygwin_crt0_common (f);
+
+  /* jump into the dll. */
+  return dll_dllcrt0 (h, &this_proc);
+}
+@
+
+
+1.3
+log
+@Revert.
+@
+text
+@@
+
+
+1.2
+log
+@* Makefile.in: Add *.def to clean operation.
+@
+text
+@a13 1
+#include "sys/cygwin.h"
+a56 4
+  this_proc.premain[0] = cygwin_premain0;
+  this_proc.premain[1] = cygwin_premain1;
+  this_proc.premain[2] = cygwin_premain2;
+  this_proc.premain[3] = cygwin_premain3;
+@
+
+
+1.1
+log
+@Initial revision
+@
+text
+@d14 1
+d58 4
+@
+
+
+1.1.1.1
+log
+@import winsup-2000-02-17 snapshot
+@
+text
+@@

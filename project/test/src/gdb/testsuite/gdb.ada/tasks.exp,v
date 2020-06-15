@@ -1,0 +1,573 @@
+head	1.11;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.11
+	gdb_7_6-2013-04-26-release:1.11
+	gdb_7_6-branch:1.11.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.11
+	gdb_7_5_1-2012-11-29-release:1.9
+	gdb_7_5-2012-08-17-release:1.9
+	gdb_7_5-branch:1.9.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.9
+	gdb_7_4_1-2012-04-26-release:1.7.2.1
+	gdb_7_4-2012-01-24-release:1.7.2.1
+	gdb_7_4-branch:1.7.0.2
+	gdb_7_4-2011-12-13-branchpoint:1.7
+	gdb_7_3_1-2011-09-04-release:1.6
+	gdb_7_3-2011-07-26-release:1.6
+	gdb_7_3-branch:1.6.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.6
+	gdb_7_2-2010-09-02-release:1.2
+	gdb_7_2-branch:1.2.0.4
+	gdb_7_2-2010-07-07-branchpoint:1.2
+	gdb_7_1-2010-03-18-release:1.2
+	gdb_7_1-branch:1.2.0.2
+	gdb_7_1-2010-02-18-branchpoint:1.2
+	gdb_7_0_1-2009-12-22-release:1.1
+	gdb_7_0-2009-10-06-release:1.1
+	gdb_7_0-branch:1.1.0.4
+	gdb_7_0-2009-09-16-branchpoint:1.1
+	msnyder-checkpoint-072509-branch:1.1.0.2
+	msnyder-checkpoint-072509-branchpoint:1.1;
+locks; strict;
+comment	@# @;
+
+
+1.11
+date	2013.01.01.06.33.06;	author brobecke;	state Exp;
+branches;
+next	1.10;
+
+1.10
+date	2012.07.26.18.43.01;	author tromey;	state Exp;
+branches;
+next	1.9;
+
+1.9
+date	2012.01.16.16.21.44;	author palves;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2012.01.04.08.17.29;	author brobecke;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2011.09.16.19.09.57;	author brobecke;	state Exp;
+branches
+	1.7.2.1;
+next	1.6;
+
+1.6
+date	2011.03.09.14.17.04;	author tromey;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2011.03.07.16.03.01;	author tromey;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2011.01.06.10.35.00;	author brobecke;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2011.01.01.15.33.28;	author brobecke;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2010.01.01.07.31.51;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2009.03.31.16.48.48;	author brobecke;	state Exp;
+branches;
+next	;
+
+1.7.2.1
+date	2012.01.06.04.43.42;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.11
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@# Copyright 2009-2013 Free Software Foundation, Inc.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+load_lib "ada.exp"
+
+standard_ada_testfile foo
+
+if {[gdb_compile_ada "${srcfile}" "${binfile}" executable [list debug ]] != "" } {
+  return -1
+}
+
+clean_restart ${testfile}
+
+set bp_location [gdb_get_line_number "STOP_HERE" ${testdir}/foo.adb]
+runto "foo.adb:$bp_location"
+
+# Make sure that all tasks appear in the "info tasks" listing, and
+# that the active task is the environment task.
+gdb_test "info tasks" \
+         [join {" +ID +TID P-ID Pri State +Name" \
+                "\\* +1 .* main_task" \
+                " +2 .* task_list\\(1\\)" \
+                " +3 .* task_list\\(2\\)" \
+                " +4 .* task_list\\(3\\)"} \
+               "\r\n"] \
+         "info tasks before inserting breakpoint"
+
+# Now, insert a breakpoint that should stop only if task 3 stops.
+gdb_test "break break_me task 3" "Breakpoint .* at .*"
+
+# Continue to that breakpoint.  Task 2 should hit it first, and GDB
+# is expected to ignore that hit and resume the execution.  Only then
+# task 3 will hit our breakpoint, and GDB is expected to stop at that
+# point.
+gdb_test "continue" \
+         ".*Breakpoint.*, foo.break_me \\(\\).*" \
+         "continue to breakpoint"
+
+# Check that it is indeed task 3 that hit the breakpoint by checking
+# which is the active task.
+gdb_test "info tasks" \
+         [join {" +ID +TID P-ID Pri State +Name" \
+                " +1 .* main_task" \
+                " +2 .* task_list\\(1\\)" \
+                "\\* +3 .* task_list\\(2\\)" \
+                " +4 .* task_list\\(3\\)"} \
+               "\r\n"] \
+         "info tasks after hitting breakpoint"
+
+# Now, resume the execution and make sure that GDB does not stop when
+# task 4 hits the breakpoint. Continuing thus results in our program
+# running to completion.
+gdb_continue_to_end "" continue 1
+@
+
+
+1.10
+log
+@	* lib/ada.exp (standard_ada_testfile): New proc.
+	* gdb.ada/aliased_array.exp: Use standard_ada_testfile.
+	* gdb.ada/array_bounds.exp: Use standard_ada_testfile.
+	* gdb.ada/array_return.exp: Use standard_ada_testfile.
+	* gdb.ada/array_subscript_addr.exp: Use standard_ada_testfile.
+	* gdb.ada/arrayidx.exp: Use standard_ada_testfile.
+	* gdb.ada/arrayparam.exp: Use standard_ada_testfile.
+	* gdb.ada/arrayptr.exp: Use standard_ada_testfile.
+	* gdb.ada/atomic_enum.exp: Use standard_ada_testfile.
+	* gdb.ada/bad-task-bp-keyword.exp: Use standard_ada_testfile.
+	* gdb.ada/bp_enum_homonym.exp: Use standard_ada_testfile.
+	* gdb.ada/bp_on_var.exp: Use standard_ada_testfile.
+	* gdb.ada/bp_range_type.exp: Use standard_ada_testfile.
+	* gdb.ada/call_pn.exp: Use standard_ada_testfile.
+	* gdb.ada/catch_ex.exp: Use standard_ada_testfile.
+	* gdb.ada/char_enum.exp: Use standard_ada_testfile.
+	* gdb.ada/char_param.exp: Use standard_ada_testfile.
+	* gdb.ada/complete.exp: Use standard_ada_testfile.
+	* gdb.ada/cond_lang.exp: Use standard_ada_testfile,
+	standard_output_file.
+	* gdb.ada/dyn_loc.exp: Use standard_ada_testfile.
+	* gdb.ada/enum_idx_packed.exp: Use standard_ada_testfile.
+	* gdb.ada/exec_changed.exp: Use standard_ada_testfile,
+	standard_output_file.
+	* gdb.ada/exprs.exp: Use standard_ada_testfile.
+	* gdb.ada/fixed_cmp.exp: Use standard_ada_testfile.
+	* gdb.ada/fixed_points.exp: Use standard_ada_testfile.
+	* gdb.ada/formatted_ref.exp: Use standard_ada_testfile.
+	* gdb.ada/frame_args.exp: Use standard_ada_testfile.
+	* gdb.ada/fullname_bp.exp: Use standard_ada_testfile.
+	* gdb.ada/fun_addr.exp: Use standard_ada_testfile.
+	* gdb.ada/fun_in_declare.exp: Use standard_ada_testfile.
+	* gdb.ada/funcall_param.exp: Use standard_ada_testfile.
+	* gdb.ada/homonym.exp: Use standard_ada_testfile.
+	* gdb.ada/info_locals_renaming.exp: Use standard_ada_testfile.
+	* gdb.ada/int_deref.exp: Use standard_ada_testfile.
+	* gdb.ada/interface.exp: Use standard_ada_testfile.
+	* gdb.ada/lang_switch.exp: Use standard_ada_testfile,
+	standard_output_file
+	* gdb.ada/mi_catch_ex.exp: Use standard_ada_testfile.
+	* gdb.ada/mi_task_arg.exp: Use standard_ada_testfile.
+	* gdb.ada/mi_task_info.exp: Use standard_ada_testfile.
+	* gdb.ada/mod_from_name.exp: Use standard_ada_testfile.
+	* gdb.ada/nested.exp: Use standard_ada_testfile.
+	* gdb.ada/null_array.exp: Use standard_ada_testfile.
+	* gdb.ada/null_record.exp: Use standard_ada_testfile.
+	* gdb.ada/operator_bp.exp: Use standard_ada_testfile.
+	* gdb.ada/packed_array.exp: Use standard_ada_testfile.
+	* gdb.ada/packed_tagged.exp: Use standard_ada_testfile.
+	* gdb.ada/print_chars.exp: Use standard_ada_testfile.
+	* gdb.ada/print_pc.exp: Use standard_ada_testfile.
+	* gdb.ada/ptr_typedef.exp: Use standard_ada_testfile.
+	* gdb.ada/ptype_field.exp: Use standard_ada_testfile.
+	* gdb.ada/ptype_tagged_param.exp: Use standard_ada_testfile.
+	* gdb.ada/rec_return.exp: Use standard_ada_testfile.
+	* gdb.ada/ref_param.exp: Use standard_ada_testfile.
+	* gdb.ada/ref_tick_size.exp: Use standard_ada_testfile.
+	* gdb.ada/same_enum.exp: Use standard_ada_testfile.
+	* gdb.ada/set_pckd_arr_elt.exp: Use standard_ada_testfile.
+	* gdb.ada/small_reg_param.exp: Use standard_ada_testfile.
+	* gdb.ada/start.exp: Use standard_ada_testfile.
+	* gdb.ada/str_ref_cmp.exp: Use standard_ada_testfile.
+	* gdb.ada/sym_print_name.exp: Use standard_ada_testfile.
+	* gdb.ada/taft_type.exp: Use standard_ada_testfile.
+	* gdb.ada/tagged.exp: Use standard_ada_testfile.
+	* gdb.ada/tagged_not_init.exp: Use standard_ada_testfile.
+	* gdb.ada/task_bp.exp: Use standard_ada_testfile.
+	* gdb.ada/tasks.exp: Use standard_ada_testfile.
+	* gdb.ada/tick_last_segv.exp: Use standard_ada_testfile.
+	* gdb.ada/type_coercion.exp: Use standard_ada_testfile.
+	* gdb.ada/uninitialized_vars.exp: Use standard_ada_testfile.
+	* gdb.ada/variant_record_packed_array.exp: Use standard_ada_testfile.
+	* gdb.ada/watch_arg.exp: Use standard_ada_testfile.
+	* gdb.ada/whatis_array_val.exp: Use standard_ada_testfile.
+	* gdb.ada/widewide.exp: Use standard_ada_testfile.
+@
+text
+@d1 1
+a1 1
+# Copyright 2009-2012 Free Software Foundation, Inc.
+@
+
+
+1.9
+log
+@2012-01-16  Pedro Alves  <palves@@redhat.com>
+
+	Remove all calls to strace.
+@
+text
+@d18 1
+a18 4
+set testdir "tasks"
+set testfile "${testdir}/foo"
+set srcfile ${srcdir}/${subdir}/${testfile}.adb
+set binfile ${objdir}/${subdir}/${testfile}
+a19 1
+file mkdir ${objdir}/${subdir}/${testdir}
+@
+
+
+1.8
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@a15 4
+if $tracelevel then {
+    strace $tracelevel
+}
+
+@
+
+
+1.7
+log
+@[Ada] Re-implement `info tasks' command using ui-out
+
+This is in preparation for providing a GDB/MI equivalent of
+the `info tasks' command.  The previous implementation was using
+various printf commands to generate the command output, which
+does not work at all if we want to use that same code to generate
+the result for that new GDB/MI command.
+
+This patch thus re-implements the `info tasks' command (with no
+arguments) in a way that makes it GDB/MI friendly.
+
+There is an additional hicup, which is the fact that the `info tasks'
+command displays a completely different type of output when a task
+ID is given. For instance:
+
+    (gdb) info task 2
+    Ada Task: 0x644d20
+    Name: my_callee
+    Thread: 0
+    LWP: 0x5809
+    Parent: 1 (main_task)
+    Base Priority: 48
+    State: Blocked in accept or select with terminate
+
+The above output is better when in CLI mode, but really not
+what we want when in GDB/MI mode. In GDB/MI mode, we want to
+follow what the `-thread-info' command does when a task-id
+is given as an argument, which is to produce the same table,
+but with only one element/task in it.
+
+For compatibility as well as practical reasons, we do not want
+to change the output of the `info task TASKNO' command when in
+CLI mode.  But it's easy to preserve this behavior while providing
+the desirable output when in GDB/MI mode.  For this, the function
+used to generated the `info tasks' output has been enhanced to take
+an argument interpreted as a string. The CLI command knows to never
+provide that argument, while the GDB/MI command will pass one if
+provided by the user.
+
+gdb/ChangeLog:
+
+        * ada-tasks.c (print_ada_task_info): New function, merging
+        short_task_info and info_tasks together.  Reimplement using
+        ui-out instead of printing to stdout directly.  Move the code
+        building and checking the task list here, instead of leaving it
+        in info_tasks_command.
+        (info_task): Move the code building and checking the task
+        list here, instead of leaving it in info_tasks_command.
+        (info_tasks_command): Delete code building and checking
+        the task list - moved elsewhere.  Update calls to info_tasks
+        and info_task.
+
+One of the minor changes the switch caused is the introduction
+of a space between the "current" column, and the task "ID"
+column, which wasn't there before.  This matches what we do
+in the "info threads" command, so I kept that change.  This
+required an adjustment in the testsuite, however...
+
+gdb/testsuite/ChangeLog:
+
+        * gdb.ada/tasks.exp: Make the expected output for
+        the `info tasks' tests more resilient to spacing
+        changes.
+@
+text
+@d1 1
+a1 1
+# Copyright 2009, 2010, 2011 Free Software Foundation, Inc.
+@
+
+
+1.7.2.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d1 1
+a1 1
+# Copyright 2009-2012 Free Software Foundation, Inc.
+@
+
+
+1.6
+log
+@	* lib/gdb.exp (inferior_exited_re): Match. leading `['.  Wrap in
+	parentheses.
+	(gdb_continue_to_end): Add "allow_extra" parameter.  Use
+	$command.
+	* gdb.threads/thread-unwindonsignal.exp: Pass "allow_extra"
+	argument to gdb_continue_to_end.
+	* gdb.threads/interrupted-hand-call.exp: Pass "allow_extra"
+	argument to gdb_continue_to_end.
+	* gdb.cp/annota3.exp: Fix regex.
+	* gdb.cp/annota2.exp: Fix regex.
+	* gdb.base/shlib-call.exp: Pass "allow_extra" argument to
+	gdb_continue_to_end.
+	* gdb.base/call-signal-resume.exp: Revert earlier patch.
+	* gdb.ada/tasks.exp: Pass "allow_extra" argument to
+	gdb_continue_to_end.
+@
+text
+@d40 5
+a44 5
+         [join {"  ID       TID P-ID Pri State                  Name" \
+                "\\*  1 .* main_task" \
+                "   2 .* task_list\\(1\\)" \
+                "   3 .* task_list\\(2\\)" \
+                "   4 .* task_list\\(3\\)"} \
+d62 5
+a66 5
+         [join {"  ID       TID P-ID Pri State                  Name" \
+                "   1 .* main_task" \
+                "   2 .* task_list\\(1\\)" \
+                "\\*  3 .* task_list\\(2\\)" \
+                "   4 .* task_list\\(3\\)"} \
+@
+
+
+1.5
+log
+@gdb
+	* infrun.c (print_exited_reason): Include inferior id and pid in
+	message.
+gdb/testsuite
+	* lib/opencl.exp (skip_opencl_tests): Update for exit message
+	change.
+	* lib/mi-support.exp (mi_gdb_test): Update for exit message
+	change.
+	* lib/gdb.exp (gdb_test_multiple): Update comment.  Update for
+	exit message change.
+	(skip_altivec_tests): Update for exit message change.
+	(skip_vsx_tests): Likewise.
+	(gdb_continue_to_end): Likewise.  Add 'command' argument.
+	* lib/cell.exp (skip_cell_tests): Update for exit message change.
+	* gdb.threads/tls.exp: Update for exit message change.
+	* gdb.threads/thread-unwindonsignal.exp: Use
+	gdb_continue_to_end.
+	* gdb.threads/step.exp (step_it): Update for exit message change.
+	(continue_all): Likewise.
+	* gdb.threads/print-threads.exp (test_all_threads): Update for
+	exit message change.
+	* gdb.threads/interrupted-hand-call.exp: Use
+	gdb_continue_to_end.
+	* gdb.threads/execl.exp: Use gdb_continue_to_end.
+	* gdb.python/py-prettyprint.exp (run_lang_tests): Use
+	gdb_continue_to_end.
+	* gdb.hp/gdb.objdbg/objdbg02.exp: Use gdb_continue_to_end.
+	* gdb.hp/gdb.objdbg/objdbg01.exp: Use gdb_continue_to_end.
+	* gdb.hp/gdb.defects/solib-d.exp: Update for exit message change.
+	* gdb.cp/method.exp: Update for exit message change.
+	* gdb.cp/mb-templates.exp: Update for exit message change.
+	* gdb.cp/mb-inline.exp: Use gdb_continue_to_end.
+	* gdb.cp/annota3.exp: Update for exit message change.
+	* gdb.cp/annota2.exp: Update for exit message change.
+	* gdb.cell/fork.exp: Use gdb_continue_to_end.
+	* gdb.base/term.exp: Update for exit message change.
+	* gdb.base/step-test.exp (test_i): Update for exit message change.
+	* gdb.base/sigstep.exp (advance): Update for exit message change.
+	(advancei): Likewise.
+	* gdb.base/siginfo.exp: Update for exit message change.
+	* gdb.base/shlib-call.exp: Use gdb_continue_to_end.
+	* gdb.base/reread.exp: Use gdb_continue_to_end.
+	* gdb.base/langs.exp: Use gdb_continue_to_end.
+	* gdb.base/interrupt.exp: Update for exit message change.
+	* gdb.base/gdb1555.exp: Update for exit message change.
+	* gdb.base/exe-lock.exp: Use gdb_continue_to_end.
+	* gdb.base/ending-run.exp: Update for exit message change.
+	* gdb.base/chng-syms.exp: Update for exit message change.
+	* gdb.base/checkpoint.exp: Update for exit message change.
+	* gdb.base/catch-syscall.exp (check_for_program_end): Use
+	gdb_continue_to_end.
+	(test_catch_syscall_with_wrong_args): Likewise.
+	* gdb.base/call-signal-resume.exp: Use gdb_continue_to_end.
+	* gdb.base/break-interp.exp (test_ld): Update for exit message
+	change.
+	* gdb.base/bang.exp: Update for exit message change.
+	* gdb.base/attach.exp (do_attach_tests): Use gdb_continue_to_end.
+	(do_call_attach_tests): Likewise.
+	* gdb.base/a2-run.exp: Update for exit message change.
+	* gdb.arch/ppc-dfp.exp: Update for exit message change.
+	* gdb.ada/tasks.exp: Use gdb_continue_to_end.
+	* gdb.ada/catch_ex.exp: Use gdb_continue_to_end.
+@
+text
+@d73 1
+a73 2
+gdb_continue_to_end
+
+@
+
+
+1.4
+log
+@[testsuite/gdb.ada] simplify some testcases by using clean_restart.
+
+gdb/testsuite/ChangeLog:
+
+        * gdb.ada/array_bounds.exp, gdb.ada/array_return.exp,
+        gdb.ada/array_subscript_addr.exp, gdb.ada/arrayidx.exp,
+        gdb.ada/arrayparam.exp, gdb.ada/arrayptr.exp,
+        gdb.ada/atomic_enum.exp, gdb.ada/call_pn.exp,
+        gdb.ada/catch_ex.exp, gdb.ada/char_param.exp,
+        gdb.ada/complete.exp, gdb.ada/exprs.exp, gdb.ada/fixed_cmp.exp,
+        gdb.ada/fixed_points.exp, gdb.ada/formatted_ref.exp,
+        gdb.ada/frame_args.exp, gdb.ada/fun_addr.exp,
+        gdb.ada/fun_in_declare.exp, gdb.ada/funcall_param.exp,
+        gdb.ada/homonym.exp, gdb.ada/int_deref.exp,
+        gdb.ada/interface.exp, gdb.ada/lang_switch.exp,
+        gdb.ada/mod_from_name.exp, gdb.ada/nested.exp,
+        gdb.ada/null_array.exp, gdb.ada/null_record.exp,
+        gdb.ada/packed_array.exp, gdb.ada/packed_tagged.exp,
+        gdb.ada/print_chars.exp, gdb.ada/print_pc.exp,
+        gdb.ada/ptype_field.exp, gdb.ada/ptype_tagged_param.exp,
+        gdb.ada/rec_return.exp, gdb.ada/ref_param.exp,
+        gdb.ada/ref_tick_size.exp, gdb.ada/start.exp,
+        gdb.ada/str_ref_cmp.exp, gdb.ada/sym_print_name.exp,
+        gdb.ada/taft_type.exp, gdb.ada/tagged.exp, gdb.ada/tasks.exp,
+        gdb.ada/tick_last_segv.exp, gdb.ada/type_coercion.exp,
+        gdb.ada/uninitialized_vars.exp,
+        gdb.ada/variant_record_packed_array.exp, gdb.ada/watch_arg.exp:
+        Simplify by using clean_restart.
+@
+text
+@d73 1
+a73 3
+gdb_test "continue" \
+         ".*Program exited normally\..*" \
+         "continue until end of program"
+@
+
+
+1.3
+log
+@run copyright.sh for 2011.
+@
+text
+@d32 1
+a32 4
+gdb_exit
+gdb_start
+gdb_reinitialize_dir $srcdir/$subdir
+gdb_load ${binfile}
+@
+
+
+1.2
+log
+@Update copyright year in most headers.
+
+Automatic update by copyright.sh.
+@
+text
+@d1 1
+a1 1
+# Copyright 2009, 2010 Free Software Foundation, Inc.
+@
+
+
+1.1
+log
+@        * gdb.ada/tasks: New testcase.
+@
+text
+@d1 1
+a1 1
+# Copyright 2009 Free Software Foundation, Inc.
+@
+

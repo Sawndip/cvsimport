@@ -1,0 +1,267 @@
+head	1.2;
+access;
+symbols
+	cygnus_cvs_20020108_pre:1.1;
+locks; strict;
+comment	@// @;
+
+
+1.2
+date	2002.02.15.01.18.44;	author fitzsim;	state dead;
+branches;
+next	1.1;
+
+1.1
+date	2001.11.27.22.59.01;	author fitzsim;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@	* debug/debug.h: Move to top-level bochs directory.
+	* debug: Remove directory.
+	* pic/*: New files.
+	* floppy/*: New files.
+	* cmos/*: New files.
+	* unmapped/*: New files.
+	* dma/*: New files.
+	* pit/*: New files.
+	* cpu/x86.h: Rename to sid-x86-cpu-wrapper.h.
+	* cpu/x86.cc: Rename to sid-x86-cpu-wrapper.cc.
+	* cpu/x86-memory-modes.cc: Rename to sid-x86-memory-modes.cc.
+	* memory/*: Move to cpu/memory/*.
+	* fpu/*: Move to cpu/fpu/*.
+	* bochs.h: Change #include's to reflect new and moved files.
+	Add sid expansions for A20ADDR(x), BX_INP(addr, len),
+	BX_OUTP(addr, val, len), BX_RAISE_HLDA(),
+	BX_SET_ENABLE_A20(enabled), BX_GET_ENABLE_A20(), and
+	BX_NULL_TIMER_HANDLE.
+	* components.cxx: Add support for cmos, dma, pic, pit, floppy,
+	unmapped.
+	* config.h.in: Set BX_SUPPORT_TASKING, BX_DMA_FLOPPY_IO and
+	BX_SUPPORT_A20 to 1 by default.
+	Set SMF macros to 0 for cmos, dma, pic, pit, floppy and unmapped
+	components.
+	* configure.in: Add pic, pit, cmos, dma, floppy, and unmapped
+	Makefiles to AC_OUTPUT.
+	* cpu/exception-sid.cc: Remove.  Merge differences into
+	cpu/exception.cc.
+	* cpu/cpu-sid.h: Remove.  Merge differences into cpu/cpu.h.
+	* cpu/cpu-sid.cc: Remove.  Merge differences into cpu/cpu.cc.
+	* cpu/init-sid.cc: Remove.  Merge differences into cpu/init.cc.
+	* cpu/soft_int-sid.cc: Remove.
+	* cpu/debugstuff-sid.cc: Remove.  Merge differences into
+	cpu/debugstuff.cc.
+	* cpu/ctrl_xfer32-sid.cc: Remove.
+	* cpu/fetchdecode-sid.cc: Remove.
+	* cpu/Makefile.am: Remove references to removed files.
+	(SUBDIRS) Add memory and fpu.
+	(SUBLIBS) Add memory/libmemory.la and fpu/libfpu.la.
+	(INCLUDES) Add memory and fpu directories.
+	* cpu/cpu.cc: Remove BX_HRQ related FIXME's.
+	Add interrupt pin support.
+	* cpu/debugstuff.cc (BX_SUPPORT_SID): Add implementations of
+	dbg_get_reg, dbg_set_reg, and dbg_get_eflags for when
+	BX_DEBUGGER isn't defined.
+	* cpu/io.cc: Remove #if 0's -- no longer needed.
+	* cpu/io_pro.cc: Likewise.
+	* gui/x-gui.cc: Change title bar messages.
+	* keyboard/keyboard.cc: Change keyboard to remove serial delay
+	pin.
+	* keyboard/sid-keyboard-wrapper.cc: Add a20-related pins.
+	Remove serial-delay pin.
+	Add cmos accessor.
+	Add trigger-irq pin.
+	* keyboard/sid-keyboard-wrapper.h: Likewise.
+	* vga/sid-vga-wrapper.cc: Rename buses from eg. 3b4 to 0x3b4.
+	Import imagemmap code from generic.cxx.
+	* vga/vga.cc: Cap number of rows at BX_MAX_TEXT_LINES.
+	* Makefile.am (SUBDIRLIST): Add pic, pit, cmos, dma, floppy,
+	unmapped.
+	Removed fpu, memory.
+	(SUBLIBLIST): Likewise.
+	(INCLUDES): Likewise.
+@
+text
+@//  Copyright (C) 2001  MandrakeSoft S.A.
+//
+//    MandrakeSoft S.A.
+//    43, rue d'Aboukir
+//    75002 Paris - France
+//    http://www.linux-mandrake.com/
+//    http://www.mandrakesoft.com/
+//
+//  This library is free software; you can redistribute it and/or
+//  modify it under the terms of the GNU Lesser General Public
+//  License as published by the Free Software Foundation; either
+//  version 2 of the License, or (at your option) any later version.
+//
+//  This library is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+//  Lesser General Public License for more details.
+//
+//  You should have received a copy of the GNU Lesser General Public
+//  License along with this library; if not, write to the Free Software
+//  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307 USA
+
+
+
+
+
+
+
+
+#define NEED_CPU_REG_SHORTCUTS 1
+#include "bochs.h"
+#define LOG_THIS BX_CPU_THIS_PTR
+
+
+
+
+#if 0
+  void
+BX_CPU_C::BOUND_GvMa(BxInstruction_t *i)
+{
+#if BX_CPU_LEVEL < 2
+  BX_PANIC(("BOUND_GvMa: not supported on 8086!\n"));
+#else
+
+  if (i->mod == 0xc0) {
+    /* undefined opcode exception */
+    BX_PANIC(("bound: op2 must be mem ref\n"));
+    UndefinedOpcode(i);
+    }
+
+  if (i->os_32) {
+    Bit32s bound_min, bound_max;
+    Bit32s op1_32;
+
+    op1_32 = BX_READ_32BIT_REG(i->nnn);
+
+    read_virtual_dword(i->seg, i->rm_addr, (Bit32u *) &bound_min);
+    read_virtual_dword(i->seg, i->rm_addr+4, (Bit32u *) &bound_max);
+
+    /* ??? */
+    if ( (op1_32 < bound_min) || (op1_32 > bound_max) ) {
+      BX_INFO(("BOUND: fails bounds test\n"));
+      exception(5, 0, 0);
+      }
+    }
+  else {
+    Bit16s bound_min, bound_max;
+    Bit16s op1_16;
+
+    op1_16 = BX_READ_16BIT_REG(i->nnn);
+
+    read_virtual_word(i->seg, i->rm_addr, (Bit16u *) &bound_min);
+    read_virtual_word(i->seg, i->rm_addr+2, (Bit16u *) &bound_max);
+
+    /* ??? */
+    if ( (op1_16 < bound_min) || (op1_16 > bound_max) ) {
+      BX_INFO(("BOUND: fails bounds test\n"));
+      exception(5, 0, 0);
+      }
+    }
+
+#endif
+}
+
+  void
+BX_CPU_C::INT1(BxInstruction_t *i)
+{
+  // This is an undocumented instrucion (opcode 0xf1)
+  // which is useful for an ICE system.
+
+#if BX_DEBUGGER
+  BX_CPU_THIS_PTR show_flag |= Flag_int;
+#endif
+
+  interrupt(1, 1, 0, 0);
+  BX_INSTR_FAR_BRANCH(BX_INSTR_IS_INT,
+                      BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].selector.value,
+                      BX_CPU_THIS_PTR eip);
+}
+#endif
+
+  void
+sid_cpu_c::INT3(BxInstruction_t *i)
+{
+  // INT 3 is not IOPL sensitive
+
+#if BX_DEBUGGER
+  BX_CPU_THIS_PTR show_flag |= Flag_int;
+#endif
+
+//BX_PANIC(("INT3: bailing\n"));
+  interrupt(3, 1, 0, 0);
+  BX_INSTR_FAR_BRANCH(BX_INSTR_IS_INT,
+                      BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].selector.value,
+                      BX_CPU_THIS_PTR eip);
+}
+
+
+  void
+sid_cpu_c::INT_Ib(BxInstruction_t *i)
+{
+  Bit8u imm8;
+
+#if BX_DEBUGGER
+  BX_CPU_THIS_PTR show_flag |= Flag_int;
+#endif
+
+  imm8 = i->Ib;
+
+  if (v8086_mode() && (IOPL<3)) {
+    //BX_INFO(("int_ib: v8086: IOPL<3\n"));
+    exception(BX_GP_EXCEPTION, 0, 0);
+    }
+
+#ifdef SHOW_EXIT_STATUS
+if ( (imm8 == 0x21) && (AH == 0x4c) ) {
+  BX_INFO(("INT 21/4C called AL=0x%02x, BX=0x%04x\n", (unsigned) AL, (unsigned) BX));
+  }
+#endif
+
+  interrupt(imm8, 1, 0, 0);
+  BX_INSTR_FAR_BRANCH(BX_INSTR_IS_INT,
+                      BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].selector.value,
+                      BX_CPU_THIS_PTR eip);
+}
+#if 0
+
+  void
+BX_CPU_C::INTO(BxInstruction_t *i)
+{
+
+#if BX_DEBUGGER
+  BX_CPU_THIS_PTR show_flag |= Flag_int;
+#endif
+
+  /* ??? is this IOPL sensitive ? */
+  if (v8086_mode()) BX_PANIC(("soft_int: v8086 mode unsupported\n"));
+
+  if (get_OF()) {
+    interrupt(4, 1, 0, 0);
+    BX_INSTR_FAR_BRANCH(BX_INSTR_IS_INT,
+                        BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].selector.value,
+                        BX_CPU_THIS_PTR eip);
+    }
+}
+#endif
+@
+
+
+1.1
+log
+@	Changes to many generated files -- incorporate bochs into
+	build system and configrun-sid.
+@
+text
+@@
+

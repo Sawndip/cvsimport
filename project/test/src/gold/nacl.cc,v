@@ -1,0 +1,310 @@
+head	1.2;
+access;
+symbols
+	binutils-2_24-branch:1.2.0.2
+	binutils-2_24-branchpoint:1.2
+	binutils-2_23_2:1.1.2.1
+	binutils-2_23_1:1.1.2.1
+	binutils-2_23:1.1
+	binutils-2_23-branch:1.1.0.2
+	binutils-2_23-branchpoint:1.1
+	binutils_latest_snapshot:1.2;
+locks; strict;
+comment	@// @;
+
+
+1.2
+date	2012.11.01.18.16.23;	author roland;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2012.05.02.21.37.23;	author roland;	state Exp;
+branches
+	1.1.2.1;
+next	;
+
+1.1.2.1
+date	2012.11.07.17.30.46;	author roland;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@gold/
+	* nacl.cc: Include "libiberty.h" for vasprintf declaration.
+@
+text
+@// nacl.cc -- Native Client support for gold
+
+// Copyright 2012 Free Software Foundation, Inc.
+
+// This file is part of gold.
+
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 3 of the License, or
+// (at your option) any later version.
+
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+// MA 02110-1301, USA.
+
+#include "gold.h"
+
+#include <cstdio>
+#include "libiberty.h"
+
+#include "nacl.h"
+#include "elfcpp.h"
+
+namespace gold
+{
+
+// Copied from object.cc:Object::error.
+void
+Sniff_file::error(const char* format, ...) const
+{
+  va_list args;
+  va_start(args, format);
+  char* buf = NULL;
+  if (vasprintf(&buf, format, args) < 0)
+    gold_nomem();
+  va_end(args);
+  gold_error(_("%s: %s"), this->file_.filename().c_str(), buf);
+  free(buf);
+}
+
+} // end namespace gold
+@
+
+
+1.1
+log
+@	* configure.ac (ENABLE_GOLD): Consider *-*-nacl* targets ELF.
+	* configure: Regenerate.
+
+gold/
+	* nacl.cc: New file.
+	* nacl.h: New file.
+	* Makefile.am (CCFILES, HFILES): Add them.
+	* Makefile.in: Regenerate.
+	* i386.cc (Output_data_plt_i386_nacl): New class.
+	(Output_data_plt_i386_nacl_exec): New class.
+	(Output_data_plt_i386_nacl_dyn): New class.
+	(Target_i386_nacl): New class.
+	(Target_selector_i386_nacl): New class.
+	(target_selector_i386): Use it instead of Target_selector_i386.
+	* x86_64.cc (Output_data_plt_x86_64_nacl): New class.
+	(Target_x86_64_nacl): New class.
+	(Target_selector_x86_64_nacl): New class.
+	(target_selector_x86_64, target_selector_x32): Use it instead of
+	Target_selector_x86_64.
+	* arm.cc (Output_data_plt_arm_nacl): New class.
+	(Target_arm_nacl): New class.
+	(Target_selector_arm_nacl): New class.
+	(target_selector_arm, target_selector_armbe): Use it instead of
+	Target_selector_arm.
+
+	* target-select.cc (select_target): Take new Input_file* and off_t
+	arguments, pass them on to recognize method of selector.
+	* object.cc (make_elf_sized_object): Update caller.
+	* parameters.cc (parameters_force_valid_target): Likewise.
+	* incremental.cc (make_sized_incremental_binary): Likewise.
+	* target-select.h: Update decl.
+	(Target_selector::recognize): Take new Input_file* argument,
+	pass it on to do_recognize.
+	(Target_selector::do_recognize): Take new Input_file* argument.
+	* freebsd.h (Target_selector_freebsd::do_recognize): Likewise.
+	* powerpc.cc (Target_selector_powerpc::do_recognize): Likewise.
+	* sparc.cc (Target_selector_sparc::do_recognize): Likewise.
+	* testsuite/testfile.cc (Target_selector::do_recognize): Likewise.
+
+	* target.h (Target::Target_info): New members isolate_execinstr
+	and rosegment_gap.
+	(Target::isolate_execinstr, Target::rosegment_gap): New methods.
+	* arm.cc (Target_arm::arm_info): Update initializer.
+	* i386.cc (Target_i386::i386_info): Likewise.
+	* powerpc.cc (Target_powerpc::powerpc_info): Likewise.
+	* sparc.cc (Target_sparc::sparc_info): Likewise.
+	* x86_64.cc (Target_x86_64::x86_64_info): Likewise.
+	* testsuite/testfile.cc (Target_test::test_target_info): Likewise.
+	* layout.cc (Layout::attach_allocated_section_to_segment):
+	Take new const Target* argument.  If target->isolate_execinstr(), act
+	like --rosegment.
+	(Layout::find_first_load_seg): Take new const Target* argument;
+	if target->isolate_execinstr(), reject PF_X segments.
+	(Layout::relaxation_loop_body): Update caller.
+	(Layout::set_segment_offsets): If target->isolate_execinstr(),
+	reset file offset to zero when we hit LOAD_SEG, and then do a second
+	loop over the segments before LOAD_SEG to reassign offsets after
+	addresses have been determined.  Handle target->rosegment_gap().
+	(Layout::attach_section_to_segment): Take new const Target* argument;
+	pass it to attach_allocated_section_to_segment.
+	(Layout::make_output_section): Update caller.
+	(Layout::attach_sections_to_segments): Take new const Target* argument;
+	pass it to attach_section_to_segment.
+	* gold.cc (queue_middle_tasks): Update caller.
+	* layout.h (Layout): Update method decls with new arguments.
+
+	* arm.cc (Target_arm::Target_arm): Take optional argument for the
+	Target_info pointer to use.
+	(Target_arm::do_make_data_plt): New virtual method.
+	(Target_arm::make_data_plt): New method that calls it.
+	(Target_arm::make_plt_entry): Use it.
+	(Output_data_plt_arm::Output_data_plt_arm): Take additional argument
+	for the section alignment.
+	(Output_data_plt_arm::do_first_plt_entry_offset): New abstract virtual
+	method.
+	(Output_data_plt_arm::first_plt_entry_offset): Call it.
+	(Output_data_plt_arm::do_get_plt_entry_size): New abstract virtual
+	method.
+	(Output_data_plt_arm::get_plt_entry_size): Call it.
+	(Output_data_plt_arm::do_fill_plt_entry): New abstract virtual method.
+	(Output_data_plt_arm::fill_plt_entry): New method that calls it.
+	(Output_data_plt_arm::do_fill_first_plt_entry): New abstract virtual
+	method.
+	(Output_data_plt_arm::fill_first_plt_entry): New method that calls it.
+	(Output_data_plt_arm::set_final_data_size): Use get_plt_entry_size
+	method instead of sizeof(plt_entry).
+	(Output_data_plt_arm::add_entry): Likewise.
+	Use first_plt_entry_offset method instead of sizeof(first_plt_entry).
+	(Target_arm::first_plt_entry_offset): Call method on this->plt_ rather
+	than static method.
+	(Target_arm::plt_entry_size): Likewise.
+	(Output_data_plt_arm::first_plt_entry, Output_data_plt_arm::plt_entry):
+	Move to ...
+	(Output_data_plt_arm_standard): ... here, new class.
+	(Output_data_plt_arm::do_write): Move guts of PLT filling to...
+	(Output_data_plt_arm_standard::do_fill_first_plt_entry): ... here ...
+	(Output_data_plt_arm_standard::do_fill_plt_entry): ... and here.
+
+	* x86_64.cc (Output_data_plt_x86_64::Output_data_plt_x86_64):
+	Take additional argument for the PLT entry size.
+	(Output_data_plt_x86_64::get_tlsdesc_plt_offset):
+	Use get_plt_entry_size method rather than plt_entry_size variable.
+	(Output_data_plt_x86_64::reserve_slot): Likewise.
+	(Output_data_plt_x86_64::do_adjust_output_section): Likewise.
+	(Output_data_plt_x86_64::add_entry): Likewise.
+	(Output_data_plt_x86_64::add_local_ifunc_entry): Likewise.
+	(Output_data_plt_x86_64::address_for_global): Likewise.
+	(Output_data_plt_x86_64::address_for_local): Likewise.
+	(Output_data_plt_x86_64::set_final_data_size): Likewise.
+	(Output_data_plt_x86_64::first_plt_entry_offset): Likewise.
+	Make method non-static.
+	(Output_data_plt_x86_64::do_get_plt_entry_size): New abstract virtual
+	method.
+	(Output_data_plt_x86_64::get_plt_entry_size): Just call that.
+	(Output_data_plt_x86_64::do_add_eh_frame): New abstract virtual method.
+	(Output_data_plt_x86_64::add_eh_frame): New method to call it.
+	(Output_data_plt_x86_64::do_fill_first_plt_entry): New abstract
+	virtual method.
+	(Output_data_plt_x86_64::fill_first_plt_entry): New method to call it.
+	(Output_data_plt_x86_64::do_fill_plt_entry): New abstract
+	virtual method.
+	(Output_data_plt_x86_64::fill_plt_entry): New method to call it.
+	(Output_data_plt_x86_64::do_fill_tlsdesc_entry): New abstract
+	virtual method.
+	(Output_data_plt_x86_64::fill_tlsdesc_entry): New method to call it.
+	(Output_data_plt_x86_64::plt_entry_size)
+	(Output_data_plt_x86_64::first_plt_entry)
+	(Output_data_plt_x86_64::plt_entry)
+	(Output_data_plt_x86_64::tlsdesc_plt_entry)
+	(Output_data_plt_x86_64::plt_eh_frame_fde_size)
+	(Output_data_plt_x86_64::plt_eh_frame_fde): Move to ...
+	(Output_data_plt_x86_64_standard): ... here, new class.
+	(Target_x86_64::Target_x86_64): Take optional argument for the
+	Target_info pointer to use.
+	(Target_x86_64::do_make_data_plt): New virtual method.
+	(Target_x86_64::make_data_plt): New method to call it.
+	(Target_x86_64::init_got_plt_for_update): Use that.
+	Call this->plt_->add_eh_frame method here.
+	(Output_data_plt_x86_64::init):	Don't do add_eh_frame_for_plt here.
+	(Target_x86_64::first_plt_entry_offset): Call method on this->plt_
+	rather than static method.
+	(Target_x86_64::plt_entry_size): Likewise.
+	(Output_data_plt_x86_64::do_write): Use get_plt_entry_size method
+	rather than plt_entry_size variable.  Move guts of PLT filling to...
+	(Output_data_plt_x86_64_standard::do_fill_first_plt_entry): ... here ...
+	(Output_data_plt_x86_64_standard::do_fill_plt_entry): ... and here ...
+	(Output_data_plt_x86_64_standard::do_fill_tlsdesc_entry): ... and here.
+
+	* i386.cc (Output_data_plt_i386::Output_data_plt_i386): Take
+	additional argument for the section alignment.
+	Don't do add_eh_frame_for_plt here.
+	(Output_data_plt_i386::first_plt_entry_offset): Make the method
+	non-static.  Use get_plt_entry_size method rather than plt_entry_size
+	variable.
+	(Output_data_plt_i386::do_get_plt_entry_size): New abstract virtual
+	method.
+	(Output_data_plt_i386::get_plt_entry_size): Call it.
+	(Output_data_plt_i386::do_add_eh_frame): New abstract virtual method.
+	(Output_data_plt_i386::add_eh_frame): New method to call it.
+	(Output_data_plt_i386::do_fill_first_plt_entry): New abstract virtual
+	method.
+	(Output_data_plt_i386::fill_first_plt_entry): New method to call it.
+	(Output_data_plt_i386::do_fill_plt_entry): New abstract virtual
+	method.
+	(Output_data_plt_i386::fill_plt_entry): New method to call it.
+	(Output_data_plt_i386::set_final_data_size): Use get_plt_entry_size
+	method instead of plt_entry_size.
+	(Output_data_plt_i386::plt_entry_size)
+	(Output_data_plt_i386::plt_eh_frame_fde_size)
+	(Output_data_plt_i386::plt_eh_frame_fde): Move to ...
+	(Output_data_plt_i386_standard): ... here, new class.
+	(Output_data_plt_i386_exec): New class.
+	(Output_data_plt_i386::exec_first_plt_entry): Move to ...
+	(Output_data_plt_i386_exec::first_plt_entry): ... here.
+	(Output_data_plt_i386::exec_plt_entry): Move to ...
+	(Output_data_plt_i386_exec::plt_entry): ... here.
+	(Output_data_plt_i386_dyn): New class.
+	(Output_data_plt_i386::first_plt_entry): Move to ...
+	(Output_data_plt_i386_dyn::first_plt_entry): ... here.
+	(Output_data_plt_i386::dyn_plt_entry): Move to ...
+	(Output_data_plt_i386_dyn::plt_entry): ... here.
+	(Target_i386::Target_i386): Take optional argument for the Target_info
+	pointer to use.
+	(Target_i386::do_make_data_plt): New virtual method.
+	(Target_i386::make_data_plt): New method to call it.
+	(Target_i386::make_plt_section): Use that.
+	Call this->plt_->add_eh_frame method here.
+	(Output_data_plt_i386::add_entry): Use get_plt_entry_size method
+	rather than plt_entry_size variable.
+	(Output_data_plt_i386::add_local_ifunc_entry): Likewise.
+	(Output_data_plt_i386::address_for_local): Likewise.
+	(Output_data_plt_i386::do_write): Likewise.
+	Move guts of PLT filling to...
+	(Output_data_plt_i386_exec::do_fill_first_plt_entry): ... here ...
+	(Output_data_plt_i386_exec::do_fill_plt_entry): ... and here ...
+	(Output_data_plt_i386_dyn::do_fill_first_plt_entry): ... and here ...
+	(Output_data_plt_i386_dyn::do_fill_plt_entry): ... and here.
+
+Change-Id: Id24b95600489835ff5e860a39c147203d4380c2b
+@
+text
+@d25 1
+@
+
+
+1.1.2.1
+log
+@gold/
+	* nacl.cc: Include "libiberty.h" for vasprintf declaration.
+@
+text
+@a24 1
+#include "libiberty.h"
+@
+
+

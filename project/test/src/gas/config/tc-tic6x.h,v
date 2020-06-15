@@ -1,0 +1,737 @@
+head	1.8;
+access;
+symbols
+	binutils-2_24-branch:1.8.0.8
+	binutils-2_24-branchpoint:1.8
+	binutils-2_21_1:1.6
+	binutils-2_23_2:1.8
+	binutils-2_23_1:1.8
+	binutils-2_23:1.8
+	binutils-2_23-branch:1.8.0.6
+	binutils-2_23-branchpoint:1.8
+	binutils-2_22_branch:1.8.0.4
+	binutils-2_22:1.8
+	binutils-2_22-branch:1.8.0.2
+	binutils-2_22-branchpoint:1.8
+	binutils-2_21:1.6
+	binutils-2_21-branch:1.6.0.2
+	binutils-2_21-branchpoint:1.6
+	binutils_latest_snapshot:1.8;
+locks; strict;
+comment	@ * @;
+
+
+1.8
+date	2011.05.20.10.09.58;	author bernds;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2011.05.09.13.17.56;	author pbrook;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2010.09.27.15.52.40;	author bernds;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2010.06.18.22.44.20;	author jsm28;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2010.06.16.00.36.02;	author jsm28;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2010.04.27.23.43.25;	author jsm28;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2010.04.20.22.03.00;	author jsm28;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2010.03.25.21.12.28;	author jsm28;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.8
+log
+@	ld/testsuite/
+	* ld-tic6x/pcr-reloc.d: New test.
+	* ld-tic6x/pcr-reloc.s: New test.
+
+	gas/testsuite/
+	* gas/tic6x/pcr-relocs.d: New test.
+	* gas/tic6x/pcr-relocs.s: New test.
+	* gas/tic6x/pcr-relocs-undef.d: New test.
+	* gas/tic6x/pcr-relocs-undef.s: New test.
+	* gas/tic6x/reloc-bad-2.s: Update for pcr_offset.
+	* gas/tic6x/reloc-bad-2.l: Update for pcr_offset.
+
+	bfd/
+	* elf32-tic6x.c (elf32_tic6x_howto_table): Add entries for
+	R_C6000_PCR_H16 and R_C6000_PCR_L16.
+	(elf32_tic6x_relocate_section): Handle them.
+
+	gas/
+	* config/tc-tic6x.c (tic6x_operators): Add "pcr_offset".
+	(tic6x_parse_name): Handle it.
+	(tic6x_fix_new_exp): Handle O_pcr_offset.
+	(tic6x_fix_adjustable): Return 0 for the new relocs.
+	(md_apply_fix): Handle them.
+	(tc_gen_reloc): Likewise.
+	* config/tc-tic6x.h (tic6x_fix_info): Add a fix_subsy member.
+@
+text
+@/* Definitions for TI C6X assembler.
+   Copyright 2010
+   Free Software Foundation, Inc.
+
+   This file is part of GAS, the GNU Assembler.
+
+   GAS is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3, or (at your option)
+   any later version.
+
+   GAS is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with GAS; see the file COPYING.  If not, write to the Free
+   Software Foundation, 51 Franklin Street - Fifth Floor, Boston, MA
+   02110-1301, USA.  */
+
+#define TC_TIC6X 1
+#define TARGET_BYTES_BIG_ENDIAN 0
+#define WORKING_DOT_WORD
+#define DOUBLEBAR_PARALLEL
+#define DWARF2_LINE_MIN_INSN_LENGTH 2
+#define MD_APPLY_SYM_VALUE(FIX) 0
+#define TC_PREDICATE_START_CHAR '['
+#define TC_PREDICATE_END_CHAR ']'
+/* For TI C6X, we keep spaces in what the preprocessor considers
+   operands as they may separate functional unit specifiers from
+   operands.  */
+#define TC_KEEP_OPERAND_SPACES 1
+
+#define TARGET_ARCH 	bfd_arch_tic6x
+#define TARGET_FORMAT	(target_big_endian	\
+			 ? "elf32-tic6x-be"	\
+			 : "elf32-tic6x-le")
+
+typedef struct tic6x_label_list
+{
+  struct tic6x_label_list *next;
+  symbolS *label;
+} tic6x_label_list;
+
+/* Must be consistent with the enum in tc-tic6x.c.  */
+#define TIC6X_NUM_UNWIND_REGS 13
+
+/* Unwinding information state.  */
+typedef struct tic6x_unwind_info {
+    int personality_index;
+    symbolS *personality_routine;
+    symbolS *function_start;
+    segT saved_seg;
+    subsegT saved_subseg;
+    /* NULL if table entry is inline.  */
+    symbolS *table_entry;
+    char *frag_start;
+    valueT data;
+    /* 0 before .cfi_startproc
+      -1 between .cfi_startproc and .handlerdata
+      >0 between .handlerdata and .endp */
+    int data_bytes;
+
+    offsetT reg_offset[TIC6X_NUM_UNWIND_REGS];
+    bfd_boolean reg_saved[TIC6X_NUM_UNWIND_REGS];
+    int cfa_reg;
+    int return_reg;
+    unsigned safe_mask;
+    unsigned compact_mask;
+    unsigned reg_saved_mask;
+    offsetT cfa_offset;
+    bfd_boolean pop_rts;
+    /* Only valid for UNWIND_OP_POP_REG */
+    int saved_reg_count;
+} tic6x_unwind_info;
+
+typedef struct
+{
+  /* Any labels seen since the last instruction or data.  If not NULL,
+     a following instruction may not have parallel bars, but must
+     start a new execute packet.  */
+  tic6x_label_list *label_list;
+
+  /* Whether compact instructions are forbidden here.  */
+  bfd_boolean nocmp;
+
+  /* If there is a current execute packet, the frag being used for
+     that execute packet.  */
+  fragS *execute_packet_frag;
+
+  /* If there is a current execute packet, a pointer to the
+     least-significant byte of the last instruction in it (for setting
+     the p-bit).  */
+  char *last_insn_lsb;
+
+  /* If there has been an SPMASK instruction in the current execute
+     packet, a pointer to the first byte in it (for processing
+     ||^); otherwise NULL.  */
+  char *spmask_addr;
+
+  /* The functional units used in the current execute packet, recorded
+     by setting the same bits as would be set in the 32-bit SPMASK
+     instruction.  */
+  unsigned int func_units_used;
+
+  /* If an SPLOOP-family instruction has been seen, and a following
+     SPKERNEL-family instruction has not yet been seen, the ii value
+     from the SPLOOP instruction (in the range 1 to 14); otherwise
+     0.  */
+  int sploop_ii;
+
+  /* Bit N indicates that an R_C6000_NONE relocation has been output for
+     __c6xabi_unwind_cpp_prN already if set. This enables dependencies to be
+     emitted only once per section, to save unnecessary bloat.  */
+  unsigned int marked_pr_dependency;
+
+  tic6x_unwind_info *unwind;
+  tic6x_unwind_info *text_unwind;
+} tic6x_segment_info_type;
+#define TC_SEGMENT_INFO_TYPE tic6x_segment_info_type
+
+typedef struct
+{
+  /* Whether this machine-dependent frag is used for instructions (as
+     opposed to code alignment).  */
+  bfd_boolean is_insns;
+
+  /* For a frag used for instructions, whether it is may cross a fetch
+     packet boundary (subject to alignment requirements).  */
+  bfd_boolean can_cross_fp_boundary;
+} tic6x_frag_info;
+#define TC_FRAG_TYPE tic6x_frag_info
+#define TC_FRAG_INIT(fragP) tic6x_frag_init (fragP)
+extern void tic6x_frag_init (fragS *fragp);
+
+typedef struct
+{
+  /* Whether this fix was for an ADDA instruction.  If so, a constant
+     resulting from resolving the fix should be implicitly shifted
+     left (it represents a value to be encoded literally in the
+     instruction, whereas a non-constant represents a DP-relative
+     value counting in the appropriate units).  */
+  bfd_boolean fix_adda;
+  /* The symbol to be subtracted in case of a PCR_H16 or PCR_L16
+     reloc.  */
+  symbolS *fix_subsy;
+} tic6x_fix_info;
+#define TC_FIX_TYPE tic6x_fix_info
+#define TC_INIT_FIX_DATA(fixP) tic6x_init_fix_data (fixP)
+struct fix;
+extern void tic6x_init_fix_data (struct fix *fixP);
+
+#define md_after_parse_args() tic6x_after_parse_args ()
+extern void tic6x_after_parse_args (void);
+
+#define md_cleanup() tic6x_cleanup ()
+extern void tic6x_cleanup (void);
+
+#define md_cons_align(n) tic6x_cons_align (n)
+extern void tic6x_cons_align (int n);
+
+#define md_do_align(n, fill, len, max, label)	\
+  do {						\
+    if (tic6x_do_align (n, fill, len, max))	\
+      goto label;				\
+  } while (0)
+extern bfd_boolean tic6x_do_align (int n, char *fill, int len, int max);
+
+#define CONVERT_SYMBOLIC_ATTRIBUTE(name)	\
+  tic6x_convert_symbolic_attribute (name)
+extern int tic6x_convert_symbolic_attribute (const char *);
+
+#define md_end() tic6x_end ();
+extern void tic6x_end (void);
+
+#define md_parse_name(name, exprP, mode, nextcharP)	\
+  tic6x_parse_name (name, exprP, mode, nextcharP)
+extern int tic6x_parse_name (const char *name, expressionS *exprP,
+			     enum expr_mode mode, char *nextchar);
+
+#define MD_PCREL_FROM_SECTION(FIX, SEC) tic6x_pcrel_from_section (FIX, SEC)
+extern long tic6x_pcrel_from_section (struct fix *fixp, segT sec);
+
+#define md_start_line_hook() tic6x_start_line_hook ()
+extern void tic6x_start_line_hook (void);
+
+#define TC_CONS_FIX_NEW(frag, where, size, exp)	\
+  tic6x_cons_fix_new (frag, where, size, exp)
+extern void tic6x_cons_fix_new (fragS *frag, int where, int size,
+				expressionS *exp);
+
+#define tc_fix_adjustable(FIX) tic6x_fix_adjustable (FIX)
+extern bfd_boolean tic6x_fix_adjustable (struct fix *);
+
+#define tc_frob_label(sym) tic6x_frob_label (sym)
+extern void tic6x_frob_label (symbolS *sym);
+
+#define tc_init_after_args() tic6x_init_after_args ()
+extern void tic6x_init_after_args (void);
+
+#define tc_unrecognized_line(c) tic6x_unrecognized_line (c)
+extern int tic6x_unrecognized_line (int c);
+
+/* We want .cfi_* pseudo-ops for generating unwind info.  */
+#define TARGET_USE_CFIPOP              1
+
+/* CFI hooks.  */
+#define tc_regname_to_dw2regnum            tic6x_regname_to_dw2regnum
+int tic6x_regname_to_dw2regnum (char *regname);
+
+#define tc_cfi_frame_initial_instructions  tic6x_frame_initial_instructions
+void tic6x_frame_initial_instructions (void);
+
+/* The return register is B3.  */
+#define DWARF2_DEFAULT_RETURN_COLUMN  (16 + 3)
+
+/* Registers are generally saved at negative offsets to the CFA.  */
+#define DWARF2_CIE_DATA_ALIGNMENT     (-4)
+
+#define tc_cfi_startproc tic6x_cfi_startproc
+void tic6x_cfi_startproc (void);
+
+#define tc_cfi_endproc tic6x_cfi_endproc
+struct fde_entry;
+void tic6x_cfi_endproc (struct fde_entry *fde);
+
+#define tc_cfi_section_name ".c6xabi.exidx"
+@
+
+
+1.7
+log
+@2011-05-09  Paul Brook  <paul@@codesourcery.com>
+
+	bfd/
+	* elf32-tic6x.c (is_tic6x_elf_unwind_section_name,
+	elf32_tic6x_fake_sections): New functions.
+	(elf_backend_fake_sections): Define.
+
+	gas/
+	* config/tc-tic6x.c (streq): Define.
+	(tic6x_get_unwind): New.
+	(s_tic6x_cantunwind, s_tic6x_handlerdata, s_tic6x_endp,
+	s_tic6x_personalityindex, s_tic6x_personality): New functions.
+	(md_pseudo_table): Add "endp", "handlerdata", "personalityindex",
+	"personality" and "cantunwind".
+	(tic6x_regname_to_dw2regnum, tic6x_frame_initial_instructions,
+	tic6x_start_unwind_section, tic6x_unwind_frame_regs,
+	tic6x_pop_rts_offset_little, tic6x_pop_rts_offset_big,
+	tic6x_unwind_reg_from_dwarf, tic6x_flush_unwind_word,
+	tic6x_unwind_byte, tic6x_unwind_2byte, tic6x_unwind_uleb,
+	tic6x_cfi_startproc, output_exidx_entry, tic6x_output_unwinding,
+	tic6x_cfi_endproc): New.
+	* config/tc-tic6x.h (TIC6X_NUM_UNWIND_REGS): Define.
+	(tic6x_unwind_info): New.
+	(tic6x_segment_info_type): Add marked_pr_dependency, unwind and
+	text_unwind.
+	(TARGET_USE_CFIPOP, tc_regname_to_dw2regnum,
+	tc_cfi_frame_initial_instructions, DWARF2_DEFAULT_RETURN_COLUMN,
+	DWARF2_CIE_DATA_ALIGNMENT, tc_cfi_startproc, tc_cfi_endproc,
+	tc_cfi_section_name): Define.
+	* doc/c-tic6x.texi: Document new unwinding directives.
+	* dw2gencfi.c (tc_cfi_startproc, tc_cfi_endproc): Add default
+	definitions.
+	(cfi_insn_data, fde_entry, CFI_adjust_cfa_offset, CFI_return_column,
+	CFI_rel_offset, CFI_escape, CFI_signal_frame, CFI_val_encoded_addr):
+	Move to dw2gencfi.h.
+	(CFI_EMIT_target): Define.
+	(dot_cfi_sections): Check tc_cfi_section_name.
+	(dot_cfi_startproc): Use tc_cfi_startproc.
+	(dot_cfi_endproc): Use tc_cfi_endproc.
+	* dw2gencfi.h (cfi_insn_data, fde_entry, CFI_adjust_cfa_offset,
+	CFI_return_column, CFI_rel_offset, CFI_escape, CFI_signal_frame,
+	CFI_val_encoded_addr):  Move to here from dw2gencfi.c.
+
+	gas/testsuite:
+	* gas/tic6x/unwind-1.d: New test.
+	* gas/tic6x/unwind-1.s: New test.
+	* gas/tic6x/unwind-2.d: New test.
+	* gas/tic6x/unwind-2.s: New test.
+	* gas/tic6x/unwind-3.d: New test.
+	* gas/tic6x/unwind-3.s: New test.
+	* gas/tic6x/unwind-bad-1.d: New test.
+	* gas/tic6x/unwind-bad-1.s: New test.
+	* gas/tic6x/unwind-bad-1.l: New test.
+	* gas/tic6x/unwind-bad-2.d: New test.
+	* gas/tic6x/unwind-bad-2.s: New test.
+	* gas/tic6x/unwind-bad-2.l: New test.
+
+	include/
+	* elf/tic6x.h (ELF_STRING_C6000_unwind,
+	ELF_STRING_C6000_unwind_info, ELF_STRING_C6000_unwind_once,
+	ELF_STRING_C6000_unwind_info_once): Define.
+@
+text
+@d145 3
+@
+
+
+1.6
+log
+@gas/
+	* config/tc-tic6x.c (tic6x_fix_adjustable): New function.
+	* config/tc-tic6x.h (tic6x_fix_adjustable): Declare.
+	(tc_fix_adjustable): New macro.
+
+gas/testsuite/
+	* gas/tic6x/got-reloc.s: New test.
+	* gas/tic6x/got-reloc.d: New test.
+@
+text
+@d46 32
+d112 8
+d201 25
+@
+
+
+1.5
+log
+@gas:
+	* config/tc-tic6x.h (tic6x_segment_info_type): Add field
+	func_units_used.
+	* config/tc-tic6x.c (tic6x_cons_align: Clear func_units_used.
+	(md_assemble): Clear func_units_used for new execute packet.
+	Check for duplicate functional units and update func_units_used
+	for instructions using a functional unit.
+
+gas/testsuite:
+	* gas/tic6x/resource-func-unit-1.d,
+	gas/tic6x/resource-func-unit-1.l,
+	gas/tic6x/resource-func-unit-1.s,
+	gas/tic6x/resource-func-unit-2.d,
+	gas/tic6x/resource-func-unit-2.l,
+	gas/tic6x/resource-func-unit-2.s: New.
+@
+text
+@d150 3
+@
+
+
+1.4
+log
+@bfd:
+	* elf-bfd.h (LEAST_KNOWN_OBJ_ATTRIBUTE): Decrease to 2.
+	* elf32-tic6x.c (elf32_tic6x_obj_attrs_arg_type,
+	elf32_tic6x_merge_arch_attributes, elf32_tic6x_merge_attributes,
+	elf32_tic6x_merge_private_bfd_data): New.
+	(bfd_elf32_bfd_merge_private_bfd_data,
+	elf_backend_obj_attrs_arg_type, elf_backend_obj_attrs_section,
+	elf_backend_obj_attrs_section_type, elf_backend_obj_attrs_vendor):
+	Define.
+	* elf32-tic6x.h (elf32_tic6x_merge_arch_attributes): Declare.
+
+binutils:
+	* readelf.c (display_tic6x_attribute, process_tic6x_specific):
+	New.
+	(process_arch_specific): Call process_tic6x_specific for
+	EM_TI_C6000.
+
+gas:
+	* config/tc-tic6x.c: Include elf/tic6x.h.
+	(tic6x_arch_attribute, tic6x_seen_insns): New.
+	(tic6x_arch_table, tic6x_arches): Add attribute values.
+	(tic6x_use_arch): Handle attribute settings.
+	(tic6x_attributes_set_explicitly, s_tic6x_c6xabi_attribute,
+	tic6x_attribute_table, tic6x_attributes,
+	tic6x_convert_symbolic_attribute): New.
+	(md_pseudo_table): Add c6xabi_attribute.
+	(md_assemble): Set tic6x_seen_insns and tic6x_arch_attribute.
+	(tic6x_set_attribute_int, tic6x_set_attributes): New.
+	(tic6x_end): Call tic6x_set_attributes.
+	* config/tc-tic6x.h (CONVERT_SYMBOLIC_ATTRIBUTE): Define.
+	(tic6x_convert_symbolic_attribute): Declare.
+
+gas/testsuite:
+	* gas/elf/elf.exp: Set target_machine for tic6x-*-*.
+	* gas/elf/section2.e-tic6x, gas/tic6x/attr-arch-directive-1.d,
+	gas/tic6x/attr-arch-directive-1.s,
+	gas/tic6x/attr-arch-directive-2.d,
+	gas/tic6x/attr-arch-directive-2.s,
+	gas/tic6x/attr-arch-directive-3.d,
+	gas/tic6x/attr-arch-directive-3.s,
+	gas/tic6x/attr-arch-directive-4.d,
+	gas/tic6x/attr-arch-directive-4.s,
+	gas/tic6x/attr-arch-directive-5.d,
+	gas/tic6x/attr-arch-directive-5.s,
+	gas/tic6x/attr-arch-opts-c62x.d, gas/tic6x/attr-arch-opts-c64x+.d,
+	gas/tic6x/attr-arch-opts-c64x.d, gas/tic6x/attr-arch-opts-c674x.d,
+	gas/tic6x/attr-arch-opts-c67x+.d, gas/tic6x/attr-arch-opts-c67x.d,
+	gas/tic6x/attr-arch-opts-none-1.d,
+	gas/tic6x/attr-arch-opts-none-2.d,
+	gas/tic6x/attr-arch-opts-override-1.d,
+	gas/tic6x/attr-arch-opts-override-2.d, gas/tic6x/empty.s: New.
+
+include/elf:
+	* tic6x-attrs.h: New.
+	* tic6x.h: Include elf/tic6x-attrs.h for attribute table.
+	(C6XABI_Tag_CPU_arch_none, C6XABI_Tag_CPU_arch_C62X,
+	C6XABI_Tag_CPU_arch_C67X, C6XABI_Tag_CPU_arch_C67XP,
+	C6XABI_Tag_CPU_arch_C64X, C6XABI_Tag_CPU_arch_C64XP,
+	C6XABI_Tag_CPU_arch_C674X): Define.
+
+ld:
+	* emulparams/elf32_tic6x_le.sh (ATTRS_SECTIONS): Define.
+
+ld/testsuite:
+	* ld-elf/orphan3.d: Allow section names starting '_'.
+	* ld-tic6x/attr-arch-c62x-c62x.d, ld-tic6x/attr-arch-c62x-c64x+.d,
+	ld-tic6x/attr-arch-c62x-c64x.d, ld-tic6x/attr-arch-c62x-c674x.d,
+	ld-tic6x/attr-arch-c62x-c67x+.d, ld-tic6x/attr-arch-c62x-c67x.d,
+	ld-tic6x/attr-arch-c62x.s, ld-tic6x/attr-arch-c64x+-c62x.d,
+	ld-tic6x/attr-arch-c64x+-c64x+.d, ld-tic6x/attr-arch-c64x+-c64x.d,
+	ld-tic6x/attr-arch-c64x+-c674x.d,
+	ld-tic6x/attr-arch-c64x+-c67x+.d, ld-tic6x/attr-arch-c64x+-c67x.d,
+	ld-tic6x/attr-arch-c64x+.s, ld-tic6x/attr-arch-c64x-c62x.d,
+	ld-tic6x/attr-arch-c64x-c64x+.d, ld-tic6x/attr-arch-c64x-c64x.d,
+	ld-tic6x/attr-arch-c64x-c674x.d, ld-tic6x/attr-arch-c64x-c67x+.d,
+	ld-tic6x/attr-arch-c64x-c67x.d, ld-tic6x/attr-arch-c64x.s,
+	ld-tic6x/attr-arch-c674x-c62x.d, ld-tic6x/attr-arch-c674x-c64x+.d,
+	ld-tic6x/attr-arch-c674x-c64x.d, ld-tic6x/attr-arch-c674x-c674x.d,
+	ld-tic6x/attr-arch-c674x-c67x+.d, ld-tic6x/attr-arch-c674x-c67x.d,
+	ld-tic6x/attr-arch-c674x.s, ld-tic6x/attr-arch-c67x+-c62x.d,
+	ld-tic6x/attr-arch-c67x+-c64x+.d, ld-tic6x/attr-arch-c67x+-c64x.d,
+	ld-tic6x/attr-arch-c67x+-c674x.d,
+	ld-tic6x/attr-arch-c67x+-c67x+.d, ld-tic6x/attr-arch-c67x+-c67x.d,
+	ld-tic6x/attr-arch-c67x+.s, ld-tic6x/attr-arch-c67x-c62x.d,
+	ld-tic6x/attr-arch-c67x-c64x+.d, ld-tic6x/attr-arch-c67x-c64x.d,
+	ld-tic6x/attr-arch-c67x-c674x.d, ld-tic6x/attr-arch-c67x-c67x+.d,
+	ld-tic6x/attr-arch-c67x-c67x.d, ld-tic6x/attr-arch-c67x.s: New.
+@
+text
+@d70 5
+@
+
+
+1.3
+log
+@gas:
+	* config/tc-tic6x.h (tic6x_label_list): New.
+	(tic6x_segment_info_type): Keep a list of labels and a current
+	frag instead of a boolean for whether labels seen and a count of
+	instructions.
+	(tic6x_frag_info, TC_FRAG_TYPE, TC_FRAG_INIT, tic6x_frag_init,
+	md_do_align, tic6x_do_align, md_end, tic6x_end): New.
+	* config/tc-tic6x.c (tic6x_frob_label): Put label on list.
+	(tic6x_cleanup): Correct comment.
+	(tic6x_free_label_list): New.
+	(tic6x_cons_align): Free label list and update for
+	tic6x_segment_info_type changes.
+	(tic6x_do_align): New.
+	(md_assemble): Handle list of labels and saved frag for execute
+	packet.  Create machine-dependent frag for new execute packet and
+	adjust labels accordingly.
+	(tic6x_adjust_section, tic6x_frag_init, tic6x_end): New.
+	(md_convert_frag, md_estimate_size_before_relax): Update comments.
+
+gas/testsuite:
+	* gas/tic6x/align-1-be.d, gas/tic6x/align-1.d,
+	gas/tic6x/align-1.s, gas/tic6x/align-2.d, gas/tic6x/align-2.s:
+	New.
+@
+text
+@d122 4
+@
+
+
+1.2
+log
+@bfd:
+	* elf32-tic6x.h: New.
+	* elf-bfd.h (enum elf_target_id): Define TIC6X_ELF_DATA.
+	* elf32-tic6x.c (struct elf32_tic6x_obj_tdata, elf32_tic6x_tdata,
+	elf32_tic6x_howto_table_rel, elf32_tic6x_info_to_howto_rel,
+	elf32_tic6x_set_use_rela_p, elf32_tic6x_mkobject,
+	elf32_tic6x_new_section_hook, elf32_tic6x_rel_relocation_p,
+	bfd_elf32_mkobject, bfd_elf32_new_section_hook): New.
+	(elf32_tic6x_reloc_type_lookup, elf32_tic6x_reloc_name_lookup,
+	elf32_tic6x_relocate_section): Handle REL relocations.
+	(elf_info_to_howto_rel): Define to elf32_tic6x_info_to_howto_rel.
+
+gas:
+	* config/tc-tic6x.c (OPTION_MGENERATE_REL): New.
+	(md_longopts): Add -mgenerate-rel.
+	(tic6x_generate_rela): New.
+	(md_parse_option): Handle -mgenerate-rel.
+	(md_show_usage): Add comment that -mgenerate-rel is undocumented.
+	(tic6x_init_after_args): New.
+	(md_apply_fix): Correct shift calculations for SB-relative
+	relocations.
+	(md_pcrel_from): Change to tic6x_pcrel_from_section.  Do not
+	adjust addresses for relocations referencing symbols in other
+	sections.
+	(tc_gen_reloc): Adjust addend calculations for REL relocations.
+	* config/tc-tic6x.h (MD_PCREL_FROM_SECTION,
+	tic6x_pcrel_from_section, tc_init_after_args,
+	tic6x_init_after_args): New.
+
+ld/testsuite:
+	* ld-tic6x/data-reloc-global-rel.d,
+	ld-tic6x/data-reloc-global-rel.s,
+	ld-tic6x/data-reloc-local-r-rel.d,
+	ld-tic6x/data-reloc-local-rel.d, ld-tic6x/mvk-reloc-global-rel.d,
+	ld-tic6x/mvk-reloc-global-rel.s, ld-tic6x/mvk-reloc-local-1-rel.s,
+	ld-tic6x/mvk-reloc-local-2-rel.s,
+	ld-tic6x/mvk-reloc-local-r-rel.d, ld-tic6x/mvk-reloc-local-rel.d,
+	ld-tic6x/pcrel-reloc-global-rel.d,
+	ld-tic6x/pcrel-reloc-local-r-rel.d,
+	ld-tic6x/pcrel-reloc-local-rel.d, ld-tic6x/sbr-reloc-global-rel.d,
+	ld-tic6x/sbr-reloc-global-rel.s, ld-tic6x/sbr-reloc-local-1-rel.s,
+	ld-tic6x/sbr-reloc-local-2-rel.s,
+	ld-tic6x/sbr-reloc-local-r-rel.d, ld-tic6x/sbr-reloc-local-rel.d:
+	New.
+@
+text
+@d40 6
+d48 4
+a51 7
+  /* Number of instructions in the current execute packet.  */
+  unsigned int num_execute_packet_insns;
+
+  /* Whether a label has been seen since the last instruction or data
+     (in which case a following instruction may not have parallel
+     bars, but must start a new execute packet).  */
+  bfd_boolean seen_label;
+d56 4
+d80 14
+d115 10
+@
+
+
+1.1
+log
+@bfd:
+	* Makefile.am (ALL_MACHINES): Add cpu-tic6x.lo.
+	(ALL_MACHINES_CFILES): Add cpu-tic6x.c.
+	(BFD32_BACKENDS): Add elf32-tic6x.lo.
+	(BFD32_BACKENDS_CFILES): Add elf32-tic6x.c.
+	* Makefile.in: Regenerate.
+	* archures.c (bfd_arch_tic6x, bfd_tic6x_arch): New.
+	(bfd_archures_list): Update.
+	* config.bfd (tic6x-*-elf): New.
+	* configure.in (bfd_elf32_tic6x_be_vec, bfd_elf32_tic6x_le_vec):
+	New.
+	* configure: Regenerate.
+	* cpu-tic6x.c, elf32-tic6x.c: New.
+	* reloc.c (BFD_RELOC_C6000_PCR_S21, BFD_RELOC_C6000_PCR_S12,
+	BFD_RELOC_C6000_PCR_S10, BFD_RELOC_C6000_PCR_S7,
+	BFD_RELOC_C6000_ABS_S16, BFD_RELOC_C6000_ABS_L16,
+	BFD_RELOC_C6000_ABS_H16, BFD_RELOC_C6000_SBR_U15_B,
+	BFD_RELOC_C6000_SBR_U15_H, BFD_RELOC_C6000_SBR_U15_W,
+	BFD_RELOC_C6000_SBR_S16, BFD_RELOC_C6000_SBR_L16_B,
+	BFD_RELOC_C6000_SBR_L16_H, BFD_RELOC_C6000_SBR_L16_W,
+	BFD_RELOC_C6000_SBR_H16_B, BFD_RELOC_C6000_SBR_H16_H,
+	BFD_RELOC_C6000_SBR_H16_W, BFD_RELOC_C6000_SBR_GOT_U15_W,
+	BFD_RELOC_C6000_SBR_GOT_L16_W, BFD_RELOC_C6000_SBR_GOT_H16_W,
+	BFD_RELOC_C6000_DSBT_INDEX, BFD_RELOC_C6000_PREL31,
+	BFD_RELOC_C6000_COPY, BFD_RELOC_C6000_ALIGN,
+	BFD_RELOC_C6000_FPHEAD, BFD_RELOC_C6000_NOCMP): New.
+	* targets.c (bfd_elf32_tic6x_be_vec, bfd_elf32_tic6x_le_vec): New.
+	(_bfd_target_vector): Update.
+	* bfd-in2.h, libbfd.h: Regenerate.
+
+binutils:
+	* MAINTAINERS: Add self as TI C6X maintainer.
+	* NEWS: Add news entry for TI C6X support.
+	* readelf.c: Include elf/tic6x.h.
+	(guess_is_rela): Handle EM_TI_C6000.
+	(dump_relocations): Likewise.
+	(get_tic6x_dynamic_type): New.
+	(get_dynamic_type): Call it.
+	(get_machine_flags): Handle EF_C6000_REL.
+	(get_osabi_name): Handle machine-specific values only for relevant
+	machines.  Handle C6X values.
+	(get_tic6x_segment_type): New.
+	(get_segment_type): Call it.
+	(get_tic6x_section_type_name): New.
+	(get_section_type_name): Call it.
+	(is_32bit_abs_reloc, is_16bit_abs_reloc, is_none_reloc): Handle
+	EM_TI_C6000.
+
+gas:
+	* Makefile.am (TARGET_CPU_CFILES): Add config/tc-tic6x.c.
+	(TARGET_CPU_HFILES): Add config/tc-tic6x.h.
+	* Makefile.in: Regenerate.
+	* NEWS: Add news entry for TI C6X support.
+	* app.c (do_scrub_chars): Handle "||^" for TI C6X.  Handle
+	TC_PREDICATE_START_CHAR and TC_PREDICATE_END_CHAR.  Keep spaces in
+	operands if TC_KEEP_OPERAND_SPACES.
+	* configure.tgt (tic6x-*-*): New.
+	* config/tc-ia64.h (TC_PREDICATE_START_CHAR,
+	TC_PREDICATE_END_CHAR): Define.
+	* config/tc-tic6x.c, config/tc-tic6x.h: New.
+	* doc/Makefile.am (CPU_DOCS): Add c-tic6x.texi.
+	* doc/Makefile.in: Regenerate.
+	* doc/all.texi (TIC6X): Define.
+	* doc/as.texinfo: Add TI C6X documentation.  Include c-tic6x.texi.
+	* doc/c-tic6x.texi: New.
+
+gas/testsuite:
+	* gas/tic6x: New directory and testcases.
+
+include:
+	* dis-asm.h (print_insn_tic6x): Declare.
+
+include/elf:
+	* common.h (ELFOSABI_C6000_ELFABI, ELFOSABI_C6000_LINUX): Define.
+	* tic6x.h: New.
+
+include/opcode:
+	* tic6x-control-registers.h, tic6x-insn-formats.h,
+	tic6x-opcode-table.h, tic6x.h: New.
+
+ld:
+	* Makefile.am (ALL_EMULATIONS): Add eelf32_tic6x_be.o and
+	eelf32_tic6x_le.o.
+	(eelf32_tic6x_be.c, eelf32_tic6x_le.c): New.
+	* NEWS: Add news entry for TI C6X support.
+	* configure.tgt (tic6x-*-*): New.
+	* emulparams/elf32_tic6x_be.sh, emulparams/elf32_tic6x_le.sh: New.
+
+ld/testsuite:
+	* ld-elf/flags1.d, ld-elf/merge.d: XFAIL for tic6x-*-*.
+	* ld-elf/sec-to-seg.exp: Set B_test_same_seg to 0 for tic6x-*-*.
+	* ld-tic6x: New directory and testcases.
+
+opcodes:
+	* Makefile.am (TARGET_LIBOPCODES_CFILES): Add tic6x-dis.c.
+	* Makefile.in: Regenerate.
+	* configure.in (bfd_tic6x_arch): New.
+	* configure: Regenerate.
+	* disassemble.c (ARCH_tic6x): Define if ARCH_all.
+	(disassembler): Handle TI C6X.
+	* tic6x-dis.c: New.
+@
+text
+@d99 3
+d113 3
+@
+

@@ -1,0 +1,285 @@
+head	1.4;
+access;
+symbols
+	cygwin_daemon_merge_HEAD:1.4
+	cygwin-1-3-6-6:1.3.0.24
+	cygwin-1-3-6-5:1.3.0.22
+	cygwin-1-3-6-4:1.3.0.20
+	cygwin-1-3-6-3:1.3.0.18
+	cygwin-1-3-6-2:1.3.0.16
+	cygwin-1-3-6-1:1.3.0.14
+	cygwin-1-3-5-3:1.3.0.12
+	cygwin-1-3-5-2:1.3.0.10
+	cygwin-1-3-5:1.3.0.8
+	cygwin-1-3-4:1.3.0.6
+	Z-cygwin_daemon_merge-new_HEAD:1.4
+	Z-cygwin_daemon_merge_HEAD:1.4
+	cygwin_daemon:1.3.0.4
+	cygwin-1-3-3:1.3.0.2
+	cygwin-1-3-2:1.1.1.1.0.4
+	cygwin-1-3-1:1.1.1.1.0.6
+	cygwin-1-1-8:1.1.1.1
+	cygwin-1-1-7:1.1.1.1
+	cygwin-1-1-6:1.1.1.1
+	cygwin-1-1-5:1.1.1.1
+	pre-cygwin-heap:1.1.1.1
+	cygwin-1-1-4:1.1.1.1.0.2
+	cygwin-1_1_1:1.1.1.1
+	winsup-2000-02-17:1.1.1.1
+	SNAPSHOT:1.1.1;
+locks; strict;
+comment	@ * @;
+expand	@o@;
+
+
+1.4
+date	2001.12.10.03.35.54;	author cgf;	state dead;
+branches;
+next	1.3;
+
+1.3
+date	2001.09.11.20.01.01;	author cgf;	state Exp;
+branches
+	1.3.4.1;
+next	1.2;
+
+1.2
+date	2001.06.24.22.26.53;	author cgf;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2000.02.17.19.38.31;	author cgf;	state Exp;
+branches
+	1.1.1.1;
+next	;
+
+1.1.1.1
+date	2000.02.17.19.38.31;	author cgf;	state Exp;
+branches;
+next	;
+
+1.3.4.1
+date	2002.01.04.03.56.11;	author rbcollins;	state dead;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.4
+log
+@whitespace cleanup
+@
+text
+@/* test.c: misc Cygwin testing code
+
+   Copyright 1996, 1998, 1999, 2000, 2001 Red Hat, Inc.
+
+This file is part of Cygwin.
+
+This software is a copyrighted work licensed under the terms of the
+Cygwin license.  Please consult the file "CYGWIN_LICENSE" for
+details. */
+
+#include <stdio.h>
+#include <windows.h>
+
+char a[] ="This is static data";
+
+void
+test1()
+{
+  int depth = 0;
+  while (depth < 5) 
+    {
+      int  r;
+      printf ("about to fork %d\n", depth);
+
+      r = fork ();
+
+      if (r == 0)
+	{
+	  int res;
+	  depth++;
+	  printf ("************Depth is %d\n", depth);
+	  sleep (1);
+	}
+      else 
+	{
+	  printf ("This is the parent, quitting %d\n", depth);
+	  sleep (1);
+	  exit (1);
+	}
+      printf ("done loop, depth %d\n", depth);
+    }
+}
+
+#define N 10
+int v[N];
+startup ()
+{
+  int i;
+  for (i = 0; i < N; i++)
+    {
+      int r;
+      fflush (stdout);
+      r = fork ();
+      if (r) 
+	{
+	  v[i] = r;
+	  printf ("started %d, were'id %d\n", v[i], GetCurrentProcessId ());
+	  fflush (stdout);
+	}
+      else
+	{
+	  /* running the child, sleep a bit and exit. */
+	  printf ("the fork said 0, were %d\n", GetCurrentProcessId ());
+	  fflush (stdout);
+  sleep (2);
+	  printf ("Running, and exiting %d\n", i);
+	  fflush (stdout);
+	  _exit (i + 0x30);
+	}
+    }
+}
+
+test2()
+{
+  int i;
+  startup ();
+  sleep (1);
+  /* Wait for them one by one */
+  for (i = 0; i < N; i++) 
+    {
+      int res;
+      
+      waitpid (v[i], &res, 0);
+      printf ("Process %d gave res %x\n", v[i], res);
+      if (res != (0x30 + i) << 8)
+	printf ("***** BAD *** Process %d gave res %x\n", v[i], res);
+    }
+}
+
+test3()
+{
+  int i;
+  startup ();
+  /* Wait for them all at the same time */
+  for (i = 0; i < N; i++) 
+    {
+      int res;
+      wait (&res);
+      printf ("Got res %x\n", res);
+    }
+}
+
+test5()
+{
+  char *c = strdup ("HI STEVE");
+  printf ("c is %s\n", c);
+  free (c);
+}
+
+int count;
+
+main (int ac, char **av)
+{
+  int r;
+  int done;
+  int test;
+  fprintf (stderr,"TO STDERR\n");
+  if (ac < 2) {
+		printf ("usage: test <n>\n");
+		exit (2);
+	      }
+  test = atoi (av[1]);
+
+  printf ("%d %d Hi steve, about to start fork test %d %d.\n",getpid (), count++, test,
+	 GetCurrentProcessId ());
+fflush (stdout);
+  switch (test) 
+    {
+    case 1:
+      test1();
+      break;
+    case 2:
+      test2();
+      break;
+    case 3:
+      test3();
+      break;
+    case 4:
+SetConsoleTextAttribute (GetStdHandle (STD_OUTPUT_HANDLE), FOREGROUND_RED);
+break;
+    case 5:
+      test5();
+break;
+    }
+
+}
+
+free ()
+{
+  printf ("MY FREE!\n");
+}
+
+char b[100000];
+int i;
+
+malloc (x)
+{
+char *r = b + i;
+i += x;
+return r;
+}
+
+realloc ()
+{
+}
+@
+
+
+1.3
+log
+@Update copyrights.
+@
+text
+@@
+
+
+1.3.4.1
+log
+@Merged changes from HEAD
+@
+text
+@@
+
+
+1.2
+log
+@forced commit
+@
+text
+@d3 1
+a3 1
+   Copyright 1996, 1998 Cygnus Solutions.
+@
+
+
+1.1
+log
+@Initial revision
+@
+text
+@@
+
+
+1.1.1.1
+log
+@import winsup-2000-02-17 snapshot
+@
+text
+@@

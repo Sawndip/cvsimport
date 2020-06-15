@@ -1,0 +1,146 @@
+head	1.1;
+access;
+symbols;
+locks; strict;
+comment	@ * @;
+
+
+1.1
+date	2013.09.17.18.26.41;	author palves;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.1
+log
+@PR gdb/15911: "info threads" changes the default source and line (for "break", "list")
+
+"info threads" changes the default source for "break" and "list", to
+whatever the location of the first/bottom thread in the thread list
+is...
+
+ (gdb) b start
+ (gdb) c
+ ...
+ (gdb) list
+ *lists "start"*
+ (gdb) b 23
+ Breakpoint 3 at 0x400614: file test.c, line 23.
+ (gdb) info threads
+   Id   Target Id         Frame
+ * 2    Thread 0x7ffff7fcb700 (LWP 1760) "test" start (arg=0x0) at test.c:23
+   1    Thread 0x7ffff7fcc740 (LWP 1748) "test" 0x000000323dc08e60 in pthread_join (threadid=140737353922304, thread_return=0x0) at pthread_join.c:93
+ (gdb) b 23
+ Breakpoint 4 at 0x323dc08d90: file pthread_join.c, line 23.
+                                    ^^^^^^^^^^^^^^^
+ (gdb) list
+ 93          lll_wait_tid (pd->tid);
+ 94
+ 95
+ 96        /* Restore cancellation mode.  */
+ 97        CANCEL_RESET (oldtype);
+ 98
+ 99        /* Remove the handler.  */
+ 100       pthread_cleanup_pop (0);
+ 101
+ 102
+
+The issue is that print_stack_frame always sets the current sal to the
+frame's sal.  print_frame_info (which print_stack_frame calls to do
+most of the work) also sets the last displayed sal, but only if
+print_what isn't LOCATION.  Now the call in question, from within
+thread.c:print_thread_info, does pass in LOCATION as print_what, but
+print_stack_frame doesn't have the same check print_frame_info has.
+We could consider adding it, but setting these globals depending on
+print_what isn't very clean, IMO.  What we have is two logically
+distinct operations mixed in the same function(s):
+
+  #1 - print frame, in the format specified by {print_what,
+    print_level and print_args}.
+
+  #2 - We're displaying a frame to the user, and I want the default
+    sal to point here, because the program stopped here, or the user
+    did some context-changing command (up, down, etc.).
+
+So I added a new parameter to print_stack_frame & friends for point
+#2, and went through all calls in the tree adjusting as necessary.
+
+Tested on x86_64 Fedora 17.
+
+gdb/
+2013-09-17  Pedro Alves  <palves@@redhat.com>
+
+	PR gdb/15911
+	* ada-tasks.c (task_command_1): Adjust call to print_stack_frame.
+	* bsd-kvm.c (bsd_kvm_open, bsd_kvm_proc_cmd, bsd_kvm_pcb_cmd):
+	* corelow.c (core_open):
+	* frame.h (print_stack_frame, print_frame_info): New
+	'set_current_sal' parameter.
+	* infcmd.c (finish_command, kill_command): Adjust call to
+	print_stack_frame.
+	* inferior.c (inferior_command): Likewise.
+	* infrun.c (normal_stop): Likewise.
+	* linux-fork.c (linux_fork_context): Likewise.
+	* record-full.c (record_full_goto_entry, record_full_restore):
+	Likewise.
+	* remote-mips.c (common_open): Likewise.
+	* stack.c (print_stack_frame): New 'set_current_sal' parameter.
+	Use it.
+	(print_frame_info): New 'set_current_sal' parameter.  Set the last
+	displayed sal depending on the new paremeter instead of looking at
+	print_what.
+	(backtrace_command_1, select_and_print_frame, frame_command)
+	(current_frame_command, up_command, down_command): Adjust call to
+	print_stack_frame.
+	* thread.c (print_thread_info, restore_selected_frame)
+	(do_captured_thread_select): Adjust call to print_stack_frame.
+	* tracepoint.c (tfind_1): Likewise.
+	* mi/mi-cmd-stack.c (mi_cmd_stack_list_frames)
+	(mi_cmd_stack_info_frame): Likewise.
+	* mi/mi-interp.c (mi_on_normal_stop): Likewise.
+	* mi/mi-main.c (mi_cmd_exec_return, mi_cmd_trace_find): Likewise.
+
+	gdb/testsuite/
+	* gdb.threads/info-threads-cur-sal-2.c: New file.
+	* gdb.threads/info-threads-cur-sal.c: New file.
+	* gdb.threads/info-threads-cur-sal.exp: New file.
+@
+text
+@/* Copyright 2007-2013 Free Software Foundation, Inc.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+#include <pthread.h>
+#include <assert.h>
+#include <unistd.h>
+
+extern void *start (void *arg);
+
+int
+main (void)
+{
+  pthread_t thread;
+  int i;
+
+  i = pthread_create (&thread, NULL, start, NULL);
+  assert (i == 0);
+  pthread_join (thread, NULL);
+
+  return 0;
+}
+@

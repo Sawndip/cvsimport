@@ -1,0 +1,735 @@
+head	1.15;
+access;
+symbols
+	cygwin-1_7_35-release:1.15
+	cygwin-1_7_34-release:1.15
+	cygwin-1_7_33-release:1.15
+	cygwin-1_7_32-release:1.15
+	cygwin-1_7_31-release:1.15
+	cygwin-1_7_30-release:1.15
+	cygwin-1_7_29-release:1.15
+	cygwin-1_7_29-release-branchpoint:1.15.0.2
+	cygwin-pre-user-db:1.15
+	cygwin-1_7_28-release:1.15
+	cygwin-1_7_27-release:1.15
+	cygwin-1_7_26-release:1.15
+	cygwin-1_7_25-release:1.15
+	cygwin-1_7_24-release:1.15
+	cygwin-1_7_23-release:1.15
+	cygwin-1_7_22-release:1.15
+	cygwin-1_7_21-release:1.15
+	cygwin-1_7_20-release:1.15
+	cygwin-1_7_19-release:1.15
+	cygwin-64bit-postmerge:1.15
+	cygwin-64bit-premerge-branch:1.14.0.2
+	cygwin-64bit-premerge:1.14
+	cygwin-1_7_18-release:1.14
+	post-ptmalloc3:1.12.2.2
+	pre-ptmalloc3:1.12.2.2
+	cygwin-1_7_17-release:1.12
+	cygwin-64bit-branch:1.12.0.2
+	cygwin-1_7_16-release:1.12
+	cygwin-1_7_15-release:1.9
+	cygwin-1_7_14_2-release:1.9
+	cygwin-1_7_14-release:1.9
+	cygwin-1_7_12-release:1.9
+	cygwin-1_7_11-release:1.9
+	cygwin-1_7_10-release:1.9
+	signal-rewrite:1.9.0.2
+	pre-notty:1.9;
+locks; strict;
+comment	@// @;
+
+
+1.15
+date	2013.04.23.09.44.31;	author corinna;	state Exp;
+branches;
+next	1.14;
+
+1.14
+date	2013.01.21.13.53.03;	author corinna;	state Exp;
+branches;
+next	1.13;
+
+1.13
+date	2013.01.21.04.34.48;	author cgf;	state Exp;
+branches;
+next	1.12;
+
+1.12
+date	2012.07.12.10.33.54;	author corinna;	state Exp;
+branches
+	1.12.2.1;
+next	1.11;
+
+1.11
+date	2012.07.06.13.43.05;	author corinna;	state Exp;
+branches;
+next	1.10;
+
+1.10
+date	2012.06.27.13.19.11;	author corinna;	state Exp;
+branches;
+next	1.9;
+
+1.9
+date	2011.04.29.10.38.11;	author corinna;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2011.04.29.09.48.24;	author corinna;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2011.04.29.07.34.04;	author corinna;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2011.04.28.15.54.47;	author corinna;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2011.04.28.09.53.11;	author corinna;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2011.04.28.09.30.35;	author corinna;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2011.04.28.08.34.49;	author corinna;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2011.04.28.08.15.56;	author corinna;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2011.04.01.12.46.09;	author corinna;	state Exp;
+branches;
+next	;
+
+1.12.2.1
+date	2012.08.14.19.29.32;	author corinna;	state Exp;
+branches;
+next	1.12.2.2;
+
+1.12.2.2
+date	2013.01.21.13.52.03;	author corinna;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.15
+log
+@	* Merge in cygwin-64bit-branch.
+@
+text
+@/* advapi32.cc: Win32 replacement functions.
+
+   Copyright 2011, 2012, 2013 Red Hat, Inc.
+
+This file is part of Cygwin.
+
+This software is a copyrighted work licensed under the terms of the
+Cygwin license.  Please consult the file "CYGWIN_LICENSE" for
+details. */
+
+#include "winsup.h"
+#include <winioctl.h>
+#include "shared_info.h"
+#include "ntdll.h"
+
+#define DEFAULT_NTSTATUS_TO_BOOL_RETURN \
+  if (!NT_SUCCESS (status)) \
+    SetLastError (RtlNtStatusToDosError (status)); \
+  return NT_SUCCESS (status);
+
+/* This file should only contain non-trivial implementations of advapi32
+   functions, or advapi32 functions for which the ntdll.dll equivalent
+   is not easy to understand.  In all other case, use the ntdll.dll
+   equivalent. */
+
+BOOL WINAPI
+RevertToSelf ()
+{
+  HANDLE tok = NULL;
+  NTSTATUS status = NtSetInformationThread (NtCurrentThread (),
+					    ThreadImpersonationToken,
+					    &tok, sizeof tok);
+  DEFAULT_NTSTATUS_TO_BOOL_RETURN
+}
+
+BOOL WINAPI
+DuplicateTokenEx (HANDLE tok, DWORD access, LPSECURITY_ATTRIBUTES sec_attr,
+		  SECURITY_IMPERSONATION_LEVEL level, TOKEN_TYPE type,
+		  PHANDLE new_tok)
+{
+  SECURITY_QUALITY_OF_SERVICE sqos =
+    { sizeof sqos, level, SECURITY_STATIC_TRACKING, FALSE };
+  OBJECT_ATTRIBUTES attr =
+    { sizeof attr, NULL, NULL,
+      (sec_attr && sec_attr->bInheritHandle) ? OBJ_INHERIT : 0U,
+      sec_attr ? sec_attr->lpSecurityDescriptor : NULL, &sqos };
+  NTSTATUS status = NtDuplicateToken (tok, access, &attr, FALSE, type, new_tok);
+  DEFAULT_NTSTATUS_TO_BOOL_RETURN
+}
+
+BOOL WINAPI
+ImpersonateLoggedOnUser (HANDLE tok)
+{
+  NTSTATUS status;
+  HANDLE ptok = NULL;
+  TOKEN_TYPE type;
+  ULONG size;
+
+  status = NtQueryInformationToken (tok, TokenType, &type, sizeof type, &size);
+  if (!NT_SUCCESS (status))
+    {
+      SetLastError (RtlNtStatusToDosError (status));
+      return FALSE;
+    }
+  if (type == TokenPrimary)
+    {
+      /* If its a primary token it must be converted to an impersonated
+	 token. */
+      SECURITY_QUALITY_OF_SERVICE sqos =
+	{ sizeof sqos, SecurityImpersonation, SECURITY_DYNAMIC_TRACKING, FALSE};
+      OBJECT_ATTRIBUTES attr =
+	{ sizeof attr, NULL, NULL, 0, NULL, &sqos };
+
+      /* The required rights for the impersonation token according to MSDN. */
+      status = NtDuplicateToken (tok, TOKEN_QUERY | TOKEN_IMPERSONATE,
+				 &attr, FALSE, TokenImpersonation, &ptok);
+      if (!NT_SUCCESS (status))
+	{
+	  SetLastError (RtlNtStatusToDosError (status));
+	  return FALSE;
+	}
+      tok = ptok;
+    }
+  status = NtSetInformationThread (NtCurrentThread (), ThreadImpersonationToken,
+				   &tok, sizeof tok);
+  if (ptok)
+    NtClose (ptok);
+  DEFAULT_NTSTATUS_TO_BOOL_RETURN
+}
+
+BOOL WINAPI
+ImpersonateNamedPipeClient (HANDLE pipe)
+{
+  IO_STATUS_BLOCK io;
+  NTSTATUS status = NtFsControlFile (pipe, NULL, NULL, NULL, &io,
+				     FSCTL_PIPE_IMPERSONATE, NULL, 0, NULL, 0);
+  DEFAULT_NTSTATUS_TO_BOOL_RETURN
+}
+@
+
+
+1.14
+log
+@Use same fix to silence newer gcc as in 64 bit branch
+@
+text
+@d46 1
+a46 1
+      (sec_attr ? sec_attr->lpSecurityDescriptor : NULL), &sqos };
+@
+
+
+1.13
+log
+@Throughout, change __attribute__ ((regparm (N))) to just __regN.  Throughout,
+(mainly in fhandler*) start fixing gcc 4.7.2 mismatch between regparm
+definitions and declarations.
+* gendef: Define some functions to take @@ declaration to accommodate _regN
+defines which use __stdcall.
+* gentls_offsets: Define __regN macros as empty.
+* autoload.cc (wsock_init): Remove unneeded regparm attribute.
+* winsup.h (__reg1): Define.
+(__reg2): Define.
+(__reg3): Define.
+* advapi32.cc (DuplicateTokenEx): Coerce some initializers to avoid warnings
+from gcc 4.7.2.
+* exceptions.cc (status_info): Declare struct to use NTSTATUS.
+(cygwin_exception::dump_exception): Coerce e->ExceptionCode to NTSTATUS.
+* fhandler_clipboard.cc (cygnativeformat): Redefine as UINT to avoid gcc 4.7.2
+warnings.
+(fhandler_dev_clipboard::read): Ditto.
+@
+text
+@d45 1
+a45 1
+      (ULONG) ((sec_attr && sec_attr->bInheritHandle) ? OBJ_INHERIT : 0),
+@
+
+
+1.12
+log
+@	* pseudo-reloc.cc: Drop including wchar.h.
+	(__report_error): Define module as WCHAR.
+	* advapi.cc: Drop including wchar.h.
+	* kernel32.cc: Ditto.
+@
+text
+@d3 1
+a3 1
+   Copyright 2011, 2012 Red Hat, Inc.
+d45 2
+a46 2
+      sec_attr && sec_attr->bInheritHandle? OBJ_INHERIT : 0,
+      sec_attr ? sec_attr->lpSecurityDescriptor : NULL, &sqos };
+@
+
+
+1.12.2.1
+log
+@	* advapi32.cc (DuplicateTokenEx): Make ?: expression type-safe.
+	* ntdll.h (KAFFINITY): Don't define if building with Mingw64 headers.
+	* thread.cc: Throughout drop casts in calls to Interlocked functions.
+	* thread.h (class fast_mutex): Ditto.  Define lock_counter as LONG.
+	(class pthread_mutex): Define lock_counter as LONG.
+	(struct MTinterface): Define threadcount as LONG.
+@
+text
+@d45 1
+a45 1
+      (sec_attr && sec_attr->bInheritHandle) ? OBJ_INHERIT : 0U,
+@
+
+
+1.12.2.2
+log
+@Pull in changes from HEAD
+@
+text
+@d3 1
+a3 1
+   Copyright 2011, 2012, 2013 Red Hat, Inc.
+@
+
+
+1.11
+log
+@	* advapi32.cc (_ADVAPI32_): Drop definition.
+	* kernel32.cc (_KERNEL32_): Ditto.
+	* winlean.h: Add definitions required to use Mingw64 headers.
+	(FILE_SHARE_VALID_FLAGS): Drop definition.
+@
+text
+@a14 1
+#include <wchar.h>
+@
+
+
+1.10
+log
+@	* advapi32.cc (_ADVAPI32_): Define.  Explain why.
+	(ImpersonateNamedPipeClient): Add missing WINAPI.
+	* ntdll.h (STATUS_INVALID_PARAMETER): Only define if it isn't already.
+	(STATUS_DLL_NOT_FOUND): Ditto.
+	(STATUS_ENTRYPOINT_NOT_FOUND): Ditto.
+	(enum _EVENT_TYPE): Guard against redefinition since it's already
+	defined in Mingw64's ntdef.h.
+	(enum _TIMER_TYPE): Ditto.
+	(enum _SECTION_INHERIT): Define if using Mingw64 headers since it's
+	missing in Mingw64's ntdef.h.
+	* winlean.h (__STRALIGN_H_): Define before including windows.h.
+@
+text
+@a10 4
+/* This define is required to tell the mingw64 headers (or, FWIW, the
+   Microsoft headers) to omit declspec(dllimport) from advapi declarations. */
+#define _ADVAPI32_
+
+@
+
+
+1.9
+log
+@	* advapi32.cc: Add comment.
+	(EqualSid): Remove.
+	(CopySid): Remove.
+	(AddAccessAllowedAce): Remove.
+	(AddAccessDeniedAce): Remove.
+	(MakeSelfRelativeSD): Remove.
+	* flock.cc: Replace above functions throughout with their ntdll.dll
+	equivalent.
+	* sec_acl.cc: Ditto.
+	* sec_auth.cc: Ditto.
+	* sec_helper.cc: Ditto.
+	* security.cc: Ditto.
+	* security.h: Ditto.
+	(RtlEqualSid): Declare.  Explain why.
+	(RtlCopySid): Ditto.
+@
+text
+@d3 1
+a3 1
+   Copyright 2011 Red Hat, Inc.
+d11 4
+d96 1
+a96 1
+BOOL
+@
+
+
+1.8
+log
+@	* advapi32.cc (AccessCheck): Remove.
+	(PrivilegeCheck): Remove.
+	(OpenThreadToken): Remove.
+	* fhandler_tty.cc: Replace above functions throughout with their
+	ntdll.dll equivalent.
+	* security.cc: Ditto.
+@
+text
+@d22 4
+a25 34
+BOOL WINAPI
+EqualSid (PSID sid1, PSID sid2)
+{
+  return !!RtlEqualSid (sid1, sid2);
+}
+
+BOOL WINAPI
+CopySid (DWORD len, PSID dest, PSID src)
+{
+  NTSTATUS status = RtlCopySid (len, dest, src);
+  DEFAULT_NTSTATUS_TO_BOOL_RETURN
+}
+
+BOOL WINAPI
+AddAccessAllowedAce (PACL acl, DWORD revision, DWORD mask, PSID sid)
+{
+  NTSTATUS status = RtlAddAccessAllowedAce (acl, revision, mask, sid);
+  DEFAULT_NTSTATUS_TO_BOOL_RETURN
+}
+
+BOOL WINAPI
+AddAccessDeniedAce (PACL acl, DWORD revision, DWORD mask, PSID sid)
+{
+  NTSTATUS status = RtlAddAccessDeniedAce (acl, revision, mask, sid);
+  DEFAULT_NTSTATUS_TO_BOOL_RETURN
+}
+
+BOOL WINAPI
+MakeSelfRelativeSD (PSECURITY_DESCRIPTOR abs_sd, PSECURITY_DESCRIPTOR rel_sd,
+		    LPDWORD len)
+{
+  NTSTATUS status = RtlAbsoluteToSelfRelativeSD (abs_sd, rel_sd, len);
+  DEFAULT_NTSTATUS_TO_BOOL_RETURN
+}
+@
+
+
+1.7
+log
+@	* advapi32.cc (GetTokenInformation): Remove.
+	(SetTokenInformation): Remove.
+	* grp.cc: Replace above functions throughout with their ntdll.dll
+	equivalent.
+	* sec_auth.cc: Ditto.
+	* syscalls.cc: Ditto.
+	* uinfo.cc: Ditto.
+@
+text
+@a22 21
+AccessCheck (PSECURITY_DESCRIPTOR sd, HANDLE tok, DWORD access,
+	     PGENERIC_MAPPING mapping, PPRIVILEGE_SET pset, LPDWORD psetlen,
+	     LPDWORD granted, LPBOOL allowed)
+{
+  NTSTATUS status, astatus;
+
+  status = NtAccessCheck (sd, tok, access, mapping, pset, psetlen, granted,
+			  &astatus);
+  if (NT_SUCCESS (status))
+    *allowed = NT_SUCCESS (astatus);
+  DEFAULT_NTSTATUS_TO_BOOL_RETURN
+}
+
+BOOL WINAPI
+PrivilegeCheck (HANDLE tok, PPRIVILEGE_SET pset, LPBOOL res)
+{
+  NTSTATUS status = NtPrivilegeCheck (tok, pset, (PBOOLEAN) res);
+  DEFAULT_NTSTATUS_TO_BOOL_RETURN
+}
+
+BOOL WINAPI
+a57 7
+OpenThreadToken (HANDLE thread, DWORD access, BOOL as_self, PHANDLE tok)
+{
+  NTSTATUS status = NtOpenThreadToken (thread, access, as_self, tok);
+  DEFAULT_NTSTATUS_TO_BOOL_RETURN
+}
+
+BOOL WINAPI
+@
+
+
+1.6
+log
+@	* advapi32.cc (SetSecurityDescriptorDacl): Remove.
+	(SetSecurityDescriptorGroup): Remove.
+	(SetSecurityDescriptorOwner): Remove.
+	* pinfo.cc: Replace above functions throughout with their ntdll.dll
+	equivalent.
+	* sec_acl.cc: Ditto.
+	* sec_helper.cc: Ditto.
+	* security.cc: Ditto.
+
+	* sec_helper.cc (__sec_user): Remove old comment.
+@
+text
+@a85 16
+GetTokenInformation(HANDLE tok, TOKEN_INFORMATION_CLASS infoclass, LPVOID buf,
+		    DWORD len, PDWORD retlen)
+{
+  NTSTATUS status = NtQueryInformationToken (tok, infoclass, buf, len, retlen);
+  DEFAULT_NTSTATUS_TO_BOOL_RETURN
+}
+
+BOOL WINAPI
+SetTokenInformation (HANDLE tok, TOKEN_INFORMATION_CLASS infoclass, PVOID buf,
+		     ULONG len)
+{
+  NTSTATUS status = NtSetInformationToken (tok, infoclass, buf, len);
+  DEFAULT_NTSTATUS_TO_BOOL_RETURN
+}
+
+BOOL WINAPI
+@
+
+
+1.5
+log
+@	* advapi32.cc (GetSecurityDescriptorDacl): Remove.
+	(GetSecurityDescriptorGroup): Remove.
+	(GetSecurityDescriptorOwner): Remove.
+	* sec_acl.cc: Replace above functions throughout with their ntdll.dll
+	equivalent.  Remove redundant debug output.
+	* sec_auth.cc: Ditto.
+	* security.cc: Ditto.
+	* uinfo.cc: Ditto.
+@
+text
+@a78 23
+SetSecurityDescriptorDacl (PSECURITY_DESCRIPTOR sd, BOOL present, PACL dacl,
+			   BOOL def)
+{
+  NTSTATUS status = RtlSetDaclSecurityDescriptor (sd, (BOOLEAN) !!present, dacl,
+						  (BOOLEAN) !!def);
+  DEFAULT_NTSTATUS_TO_BOOL_RETURN
+}
+
+BOOL WINAPI
+SetSecurityDescriptorGroup (PSECURITY_DESCRIPTOR sd, PSID sid, BOOL def)
+{
+  NTSTATUS status = RtlSetGroupSecurityDescriptor (sd, sid, (BOOLEAN) !!def);
+  DEFAULT_NTSTATUS_TO_BOOL_RETURN
+}
+
+BOOL WINAPI
+SetSecurityDescriptorOwner (PSECURITY_DESCRIPTOR sd, PSID sid, BOOL def)
+{
+  NTSTATUS status = RtlSetOwnerSecurityDescriptor (sd, sid, (BOOLEAN) !!def);
+  DEFAULT_NTSTATUS_TO_BOOL_RETURN
+}
+
+BOOL WINAPI
+@
+
+
+1.4
+log
+@	* advapi32.cc (InitializeAcl): Remove.
+	(AddAce): Remove.
+	(FindFirstFreeAce): Remove.
+	(GetAce): Remove.
+	(InitializeSecurityDescriptor): Remove.
+	(OpenProcessToken): Remove.
+	* dcrt0.cc: Replace above functions throughout with their ntdll.dll
+	equivalent.
+	* fhandler_tty.cc: Ditto.
+	* flock.cc: Ditto.
+	* pinfo.cc: Ditto.  Drop unnecessary error handling.
+	* sec_acl.cc: Ditto.
+	* sec_auth.cc: Ditto.
+	* sec_helper.cc: Ditto.
+	* security.cc: Ditto.
+@
+text
+@a78 9
+GetSecurityDescriptorDacl (PSECURITY_DESCRIPTOR sd, LPBOOL present, PACL *dacl,
+			   LPBOOL def)
+{
+  NTSTATUS status = RtlGetDaclSecurityDescriptor (sd, (PBOOLEAN) present, dacl,
+						  (PBOOLEAN) def);
+  DEFAULT_NTSTATUS_TO_BOOL_RETURN
+}
+
+BOOL WINAPI
+a87 7
+GetSecurityDescriptorGroup (PSECURITY_DESCRIPTOR sd, PSID *sid, LPBOOL def)
+{
+  NTSTATUS status = RtlGetGroupSecurityDescriptor (sd, sid, (PBOOLEAN) def);
+  DEFAULT_NTSTATUS_TO_BOOL_RETURN
+}
+
+BOOL WINAPI
+a94 7
+GetSecurityDescriptorOwner (PSECURITY_DESCRIPTOR sd, PSID *sid, LPBOOL def)
+{
+  NTSTATUS status = RtlGetOwnerSecurityDescriptor (sd, sid, (PBOOLEAN) def);
+  DEFAULT_NTSTATUS_TO_BOOL_RETURN
+}
+
+BOOL WINAPI
+@
+
+
+1.3
+log
+@	* advapi32.cc (InitializeSid): Remove.
+	(EqualPrefixSid): Remove.
+	(GetLengthSid): Remove.
+	(GetSidSubAuthority): Remove.
+	(GetSidSubAuthorityCount): Remove.
+	(GetSidIdentifierAuthority): Remove.
+	* fhandler_disk_file.cc: Remove above functions throughout with their
+	ntdll.dll equivalent.
+	* sec_auth.cc: Ditto.
+	* sec_helper.cc: Ditto.
+	* security.cc: Ditto.
+@
+text
+@a56 7
+InitializeAcl (PACL acl, DWORD len, DWORD revision)
+{
+  NTSTATUS status = RtlCreateAcl (acl, len, revision);
+  DEFAULT_NTSTATUS_TO_BOOL_RETURN
+}
+
+BOOL WINAPI
+a70 28
+AddAce (PACL acl, DWORD revision, DWORD index, LPVOID ace_list, DWORD len)
+{
+  NTSTATUS status = RtlAddAce (acl, revision, index, ace_list, len);
+  DEFAULT_NTSTATUS_TO_BOOL_RETURN
+}
+
+BOOL WINAPI
+FindFirstFreeAce (PACL acl, LPVOID *ace)
+{
+  NTSTATUS status = RtlFirstFreeAce (acl, ace);
+  DEFAULT_NTSTATUS_TO_BOOL_RETURN
+}
+
+BOOL WINAPI
+GetAce (PACL acl, DWORD index, LPVOID *ace)
+{
+  NTSTATUS status = RtlGetAce (acl, index, ace);
+  DEFAULT_NTSTATUS_TO_BOOL_RETURN
+}
+
+BOOL WINAPI
+InitializeSecurityDescriptor (PSECURITY_DESCRIPTOR sd, DWORD revision)
+{
+  NTSTATUS status = RtlCreateSecurityDescriptor (sd, revision);
+  DEFAULT_NTSTATUS_TO_BOOL_RETURN
+}
+
+BOOL WINAPI
+a124 7
+OpenProcessToken (HANDLE process, DWORD access, PHANDLE tok)
+{
+  NTSTATUS status = NtOpenProcessToken (process, access, tok);
+  DEFAULT_NTSTATUS_TO_BOOL_RETURN
+}
+
+BOOL WINAPI
+@
+
+
+1.2
+log
+@	* advapi32.cc (AllocateLocallyUniqueId): Remove.
+	* fhandler_disk_file.cc (fhandler_base::open_fs): Replace call to
+	AllocateLocallyUniqueId with call to NtAllocateLocallyUniqueId;
+	* posix_ipc.cc (mq_open): Ditto.  Drop error handling for that call.
+	(sem_open): Ditto.
+@
+text
+@a43 7
+InitializeSid (PSID sid, PSID_IDENTIFIER_AUTHORITY auth, BYTE count)
+{
+  NTSTATUS status = RtlInitializeSid (sid, auth, count);
+  DEFAULT_NTSTATUS_TO_BOOL_RETURN
+}
+
+BOOL WINAPI
+a49 6
+EqualPrefixSid (PSID sid1, PSID sid2)
+{
+  return !!RtlEqualPrefixSid (sid1, sid2);
+}
+
+BOOL WINAPI
+a55 24
+DWORD WINAPI
+GetLengthSid (PSID sid)
+{
+  return RtlLengthSid (sid);
+}
+
+PDWORD WINAPI
+GetSidSubAuthority (PSID sid, DWORD subauth)
+{
+  return RtlSubAuthoritySid (sid, subauth);
+}
+
+PUCHAR WINAPI
+GetSidSubAuthorityCount (PSID sid)
+{
+  return RtlSubAuthorityCountSid (sid);
+}
+
+PSID_IDENTIFIER_AUTHORITY WINAPI
+GetSidIdentifierAuthority (PSID sid)
+{
+  return RtlIdentifierAuthoritySid (sid);
+}
+
+@
+
+
+1.1
+log
+@	* Makefile.in (DLL_OFILES): Add avapi32.o.
+	* advapi32.cc: New file.
+	* autoload.cc: Add block of remaining advapi32 functions used by
+	Cygwin.  Keep commented out.  Explain why.
+@
+text
+@a22 7
+AllocateLocallyUniqueId (PLUID luid)
+{
+  NTSTATUS status = NtAllocateLocallyUniqueId (luid);
+  DEFAULT_NTSTATUS_TO_BOOL_RETURN
+}
+
+BOOL WINAPI
+@
+

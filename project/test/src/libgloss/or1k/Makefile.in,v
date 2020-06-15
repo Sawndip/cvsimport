@@ -1,0 +1,257 @@
+head	1.3;
+access;
+symbols
+	newlib-2_2_0:1.3.0.2;
+locks; strict;
+comment	@# @;
+
+
+1.3
+date	2014.12.15.20.22.27;	author jjohnstn;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2014.12.15.20.17.37;	author jjohnstn;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2014.12.15.20.09.27;	author jjohnstn;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.3
+log
+@
+2014-12-15  Stefan Wallentowitz  <stefan.wallentowitz@@tum.de>
+
+        * or1k/Makefile.in: Build and install board libraries
+        * or1k/board.h: New file
+        * or1k/boards/README: New file
+        * or1k/boards/atlys.S: New file
+        * or1k/boards/de0_nano.S: New file
+        * or1k/boards/ml501.S: New file
+        * or1k/boards/ml509.S: New file
+        * or1k/boards/optimsoc.S: New file
+        * or1k/boards/or1ksim-uart.S: New file
+        * or1k/boards/or1ksim.S: New file
+        * or1k/boards/ordb1a3pe1500.S: New file
+        * or1k/boards/ordb2a.S: New file
+        * or1k/boards/orpsocrefdesign.S: New file
+        * or1k/boards/tmpl.S: New file
+        * or1k/boards/tmpl.c: New file
+@
+text
+@# Copyright (c) 1998 Cygnus Support
+#
+# The authors hereby grant permission to use, copy, modify, distribute,
+# and license this software and its documentation for any purpose, provided
+# that existing copyright notices are retained in all copies and that this
+# notice is included verbatim in any distributions. No written agreement,
+# license, or royalty fee is required for any of the authorized uses.
+# Modifications to this software may be copyrighted by their authors
+# and need not follow the licensing terms described here, provided that
+# the new terms are clearly indicated on the first page of each file where
+# they apply.
+
+DESTDIR =
+VPATH = @@srcdir@@
+srcdir = @@srcdir@@
+objdir = .
+srcroot = $(srcdir)/../..
+objroot = $(objdir)/../..
+
+prefix = @@prefix@@
+exec_prefix = @@exec_prefix@@
+
+host_alias = @@host_alias@@
+target_alias = @@target_alias@@
+program_transform_name = @@program_transform_name@@
+
+bindir = @@bindir@@
+libdir = @@libdir@@
+includedir = @@includedir@@
+tooldir = $(exec_prefix)/$(target_alias)
+
+# Multilib support variables.
+# TOP is used instead of MULTI{BUILD,SRC}TOP.
+MULTIDIRS =
+MULTISUBDIR =
+MULTIDO = true
+MULTICLEAN = true
+
+INSTALL = @@INSTALL@@
+INSTALL_PROGRAM = @@INSTALL_PROGRAM@@
+INSTALL_DATA = @@INSTALL_DATA@@
+
+SHELL =	/bin/sh
+
+CC = @@CC@@
+AS = @@AS@@
+AR = @@AR@@
+LD = @@LD@@
+RANLIB = @@RANLIB@@
+
+OBJDUMP = `if [ -f ${objroot}/../binutils/objdump ] ; \
+	then echo ${objroot}/../binutils/objdump ; \
+	else t='$(program_transform_name)'; echo objdump | sed -e $$t ; fi`
+OBJCOPY = `if [ -f ${objroot}/../binutils/objcopy ] ; \
+	then echo ${objroot}/../binutils/objcopy ; \
+	else t='$(program_transform_name)'; echo objcopy | sed -e $$t ; fi`
+
+# object files needed
+COMMON_FILES = syscalls \
+	or1k_uart \
+	outbyte \
+	caches-asm \
+	exceptions \
+	exceptions-asm \
+	interrupts \
+	interrupts-asm \
+	mmu-asm \
+	timer \
+	sbrk \
+	impure \
+	util \
+	sync-asm
+
+LIBOR1K_FILES = $(COMMON_FILES)
+LIBOR1K_OBJS = $(addsuffix .o,$(LIBOR1K_FILES))
+
+BOARDS = atlys \
+	de0_nano \
+	ml501 \
+	optimsoc \
+	or1ksim \
+	or1ksim-uart \
+	ordb1a3pe1500 \
+	ordb2a \
+	orpsocrefdesign
+
+BOARD_LIBS = $(addprefix libboard-,$(addsuffix .a,$(BOARDS)))
+BOARD_OBJS = $(addprefix libboard-,$(addsuffix .o,$(BOARDS)))
+
+GCC_LDFLAGS = `if [ -d ${objroot}/../gcc ] ; \
+	then echo -L${objroot}/../gcc ; fi`
+
+OUTPUTS = libor1k.a crt0.o ${BOARD_LIBS}
+
+# Host specific makefile fragment comes in here.
+@@host_makefile_frag@@
+
+
+all: ${OUTPUTS}
+
+#
+# here's where we build the library for each target
+#
+
+libor1k.a: $(LIBOR1K_OBJS)
+	${AR} ${ARFLAGS} $@@ $(LIBOR1K_OBJS)
+	${RANLIB} $@@
+
+libboard-%.o: boards/%.S
+	${CC} ${CFLAGS} -o $@@ -c $<
+
+libboard-%.o: boards/%.c
+	${CC} ${CFLAGS} -o $@@ -c $<
+
+libboard-%.a: libboard-%.o
+	${AR} ${ARFLAGS} $@@ $<
+	${RANLIB} $@@
+
+doc:
+
+clean mostlyclean:
+	rm -f $(OUTPUTS) $(BOARD_LIBS) *.i *~ *.o *-test *.srec *.dis *.map *.x
+
+distclean maintainer-clean realclean: clean
+	rm -f Makefile config.status $(OUTPUTS)
+
+.PHONY: install info install-info clean-info
+install:
+	@@for outputs in ${OUTPUTS}; do\
+	 mkdir -p $(DESTDIR)$(tooldir)/lib${MULTISUBDIR}; \
+	 $(INSTALL_DATA) $${outputs} $(DESTDIR)$(tooldir)/lib${MULTISUBDIR}; \
+	done
+	$(INSTALL_DATA) ${srcdir}/include/or1k-support.h $(DESTDIR)$(tooldir)/include/
+	$(INSTALL_DATA) ${srcdir}/include/or1k-sprs.h $(DESTDIR)$(tooldir)/include/
+	$(INSTALL_DATA) ${srcdir}/include/or1k-asm.h $(DESTDIR)$(tooldir)/include/
+	$(INSTALL_DATA) ${srcdir}/include/or1k-nop.h $(DESTDIR)$(tooldir)/include/
+
+info:
+install-info:
+clean-info:
+
+Makefile: Makefile.in config.status @@host_makefile_frag_path@@
+	$(SHELL) config.status
+
+config.status: configure
+	$(SHELL) config.status --recheck
+@
+
+
+1.2
+log
+@
+2014-12-15  Stefan Wallentowitz  <stefan.wallentowitz@@tum.de>
+
+        * or1k/Makefile.in: Add libor1k
+        * or1k/README: New file
+        * or1k/caches-asm.S: New file
+        * or1k/exceptions-asm.S: New file
+        * or1k/exceptions.c: New file
+        * or1k/impure.c: New file
+        * or1k/include/or1k-nop.h: New file
+        * or1k/include/or1k-support.h: New file
+        * or1k/interrupts-asm.S: New file
+        * or1k/interrupts.c: New file
+        * or1k/mmu-asm.S: New file
+        * or1k/or1k-internals.h: New file
+        * or1k/or1k_uart.c: New file
+        * or1k/or1k_uart.h: New file
+        * or1k/outbyte.S: New file
+        * or1k/sbrk.c: New file
+        * or1k/sync-asm.S: New file
+        * or1k/syscalls.c: New file
+        * or1k/timer.c: New file
+        * or1k/util.c: New file
+@
+text
+@d77 13
+d93 1
+a93 1
+OUTPUTS = libor1k.a crt0.o
+d109 10
+@
+
+
+1.1
+log
+@
+2014-12-15  Stefan Wallentowitz  <stefan.wallentowitz@@tum.de>
+
+        * README: Add details about or1k.
+        * configure.in: Add or1k/or1knd
+        * configure: Regenerated.
+        * or1k/aclocal.m4: New file.
+        * or1k/configure: Ditto.
+        * or1k/Makefile.in: New file
+        * or1k/configure.in: New file
+        * or1k/crt0.S: New file
+        * or1k/include/or1k-asm.h: New file
+@
+text
+@d58 19
+d80 1
+a80 1
+OUTPUTS = crt0.o
+d92 4
+@
+

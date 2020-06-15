@@ -1,0 +1,112 @@
+head	1.1;
+access;
+symbols;
+locks; strict;
+comment	@# @;
+
+
+1.1
+date	2013.09.24.14.03.43;	author jkratoch;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.1
+log
+@Support .dwp with the name of symlinked binary file
+
+gdb/
+2013-09-24  Jan Kratochvil  <jan.kratochvil@@redhat.com>
+
+	* dwarf2read.c (open_and_init_dwp_file): Try open_dwp_file also with
+	objfile->original_name.
+
+gdb/testsuite/
+2013-09-24  Jan Kratochvil  <jan.kratochvil@@redhat.com>
+
+	* gdb.dwarf2/dwp-symlink.c: New file.
+	* gdb.dwarf2/dwp-symlink.exp: New file.
+@
+text
+@# Copyright 2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+standard_testfile
+
+if [is_remote host] {
+    untested "remote host"
+    return 0
+}
+
+file delete [standard_output_file ${testfile}.dwp]
+if [file exists [standard_output_file ${testfile}.dwp]] {
+    unsupported "dwp file cannot be deleted"
+    return 0
+}
+if { [build_executable ${testfile}.exp ${testfile} ${srcfile}] == -1 } {
+    return -1
+}
+if ![file exists [standard_output_file ${testfile}.dwp]] {
+    unsupported "testsuite run does not produce dwp files"
+    return 0
+}
+
+set thelink "${testfile}-thelink"
+
+file delete [standard_output_file ${thelink}]
+file delete [standard_output_file ${thelink}.dwp]
+# file link is only Tcl 8.4+.
+exec "ln" "-sf" "${testfile}" "[standard_output_file $thelink]"
+if ![file exists [standard_output_file $thelink]] {
+    unsupported "host does not support symbolic links (binary symlink is missing)"
+    return 0
+}
+if [file exists [standard_output_file $thelink.dwp]] {
+    unsupported "host does not support symbolic links (we tried to delete a file and it is still there)"
+    return 0
+}
+
+clean_restart "$testfile"
+
+gdb_test "ptype main" {type = int \(int, char \*\*\)} "binary default, dwp default"
+
+clean_restart "$thelink"
+
+gdb_test "ptype main" {type = int \(int, char \*\*\)} "binary symlink, dwp default"
+
+gdb_exit
+file rename [standard_output_file ${testfile}.dwp] [standard_output_file ${thelink}.dwp]
+if [file exists [standard_output_file ${testfile}.dwp]] {
+    unsupported "host does not support symbolic links (binary symlink exists)"
+    return 0
+}
+if ![file exists [standard_output_file ${thelink}.dwp]] {
+    unsupported "host does not support symbolic links (dwp symlink is missing)"
+    return 0
+}
+
+clean_restart "$testfile"
+
+# This case cannot work.
+gdb_test "ptype main" {type = int \(\)} "binary default, dwp at symlink"
+
+clean_restart "$thelink"
+
+gdb_test "ptype main" {type = int \(int, char \*\*\)} "binary symlink, dwp at symlink"
+@

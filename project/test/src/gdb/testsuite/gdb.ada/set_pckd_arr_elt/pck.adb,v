@@ -1,0 +1,163 @@
+head	1.2;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.2
+	gdb_7_6-2013-04-26-release:1.2
+	gdb_7_6-branch:1.2.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.2
+	gdb_7_5_1-2012-11-29-release:1.1
+	gdb_7_5-2012-08-17-release:1.1
+	gdb_7_5-branch:1.1.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.1;
+locks; strict;
+comment	@-- @;
+
+
+1.2
+date	2013.01.01.06.33.20;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2012.03.16.17.55.45;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@--  Copyright 2012-2013 Free Software Foundation, Inc.
+--
+--  This program is free software; you can redistribute it and/or modify
+--  it under the terms of the GNU General Public License as published by
+--  the Free Software Foundation; either version 3 of the License, or
+--  (at your option) any later version.
+--
+--  This program is distributed in the hope that it will be useful,
+--  but WITHOUT ANY WARRANTY; without even the implied warranty of
+--  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+--  GNU General Public License for more details.
+--
+--  You should have received a copy of the GNU General Public License
+--  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+package body Pck is
+   procedure Update_Small (S : in out Small) is
+   begin
+      null;
+   end Update_Small;
+end Pck;
+@
+
+
+1.1
+log
+@[Ada] Crash when trying to set value of packed array element
+
+Consider the following declaration:
+
+   type Small is new Integer range 0 .. 2 ** 4 - 1;
+   type Simple_Array is array (1 .. 4) of Small;
+   pragma Pack (Simple_Array);
+
+   SA : Simple_Array := (1, 2, 3, 4);
+
+Trying to change the value of one of the elements in the packed array
+causes the debugger to crash:
+
+    (gdb) set sa(3) := 9
+    [1]    4880 segmentation fault  gdb -q foo
+
+The circumstances leading to the crash are as follow:
+
+   . ada_evaluate_subexp creates a value corresponding to "sa(3)".
+
+   . ada_evaluate_subexp then tries to assign 9 to this value, and
+     for this calls value_assign (via ada_value_assign).
+
+   . Because the array is packed, the destination value is 3 bits long,
+     and as a result, value_assign uses the parent to determine that
+     element byte address and offset:
+
+      | if (value_bitsize (toval))
+      |   {
+      |     struct value *parent = value_parent (toval);
+      |
+      |     changed_addr = value_address (parent) + value_offset (toval);
+
+The destination value (corresponding to "sa(3)") was incorrectly created
+by ada-lang.c:ada_value_primitive_packed_val, because the "parent" was
+left as NULL. So, when we try to dereference it to get the parent address,
+GDB crashed.
+
+The first part of the fix therefore consists in setting that field.
+This required the addition of a new "setter" in value.[hc].  It fixes
+the crash, but is still not sufficient for the assignment to actually
+work.
+
+The second part of the problem came from the fact that value_assign
+seems to expect the "child"'s address to be equal to the parent's address,
+with the difference being the offset. Unfortunately, this requirement was
+not followed by ada_value_primitive_packed_val, so the second part of
+the fix consisted in fixing that.
+
+Still, this was not sufficient, because it caused a regression when
+trying to perform an aggregate assignment of a packed array of packed
+record.  The key element here is the nesting of packed entities.
+Looking at the way ada_value_primitive_packed_val creates the value
+of each sub-component, one can see that the value's offset is set
+to the offset compared to the start of the parent. This was meant to
+match what value_primitive_field does as well.
+
+So, with our array of records, if the record offset was 2, and if
+the field we're interested in that record is at offset 1, the record
+value's offset would be set to 2, and the field value's offset would
+be set to 1. But the address for both values would be left to the
+array's address. This is where things start breaking down, because
+the value_address function for our field value would return the
+address of the array + 1, instead of + 3.
+
+This is what causes the final issue, here, because ada-lang.c's
+value_assign_to_component needs to compute the offset of the
+subcomponent compared to the top-level aggregate's start address
+(the array in our case). And it does so by subtracting the array's
+address from the sub-component's address.  When you have two levels
+of packed components, and the mid-level component is at an offset of
+the top-level component, things didn't work, because the component's
+address was miscomputed (the parent's offset is missing).
+
+The fix consists is fixing value_address to match the work done by
+value_primitive_field (where we ignore the parent's offset).
+
+gdb/ChangeLog:
+
+        * value.h (set_value_parent): Add declaration.
+        * value.c (set_value_parent): New function.
+        (value_address): If VALUE->PARENT is not NULL, then use it as
+        the base address instead of VALUE->LOCATION.address.
+        * ada-lang.c (ada_value_primitive_packed_val): Keep V's address
+        the same as OBJ's address.  Adjust V's offset accordingly.
+        Set V's parent.
+
+gdb/testsuite/ChangeLog:
+
+        * gdb.ada/set_pckd_arr_elt: New testcase.
+@
+text
+@d1 1
+a1 1
+--  Copyright 2012 Free Software Foundation, Inc.
+@
+

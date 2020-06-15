@@ -1,0 +1,554 @@
+head	1.6;
+access;
+symbols
+	msnyder-fork-checkpoint-branch:1.4.0.2
+	msnyder-fork-checkpoint-branchpoint:1.4
+	msnyder-tracepoint-checkpoint-branch:1.2.0.4
+	msnyder-tracepoint-checkpoint-branchpoint:1.2
+	jimb-rda-nptl-branch:1.2.0.2
+	jimb-rda-nptl-branchpoint:1.2;
+locks; strict;
+comment	@ * @;
+
+
+1.6
+date	2009.12.01.00.27.09;	author kevinb;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2006.10.03.22.49.05;	author kevinb;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2005.08.24.01.14.35;	author kevinb;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2005.06.30.03.24.18;	author jimb;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2003.02.07.23.03.09;	author kevinb;	state Exp;
+branches
+	1.2.2.1;
+next	1.1;
+
+1.1
+date	2002.08.28.01.22.28;	author kevinb;	state Exp;
+branches;
+next	;
+
+1.2.2.1
+date	2004.10.26.23.04.44;	author jimb;	state Exp;
+branches;
+next	1.2.2.2;
+
+1.2.2.2
+date	2004.11.23.06.02.19;	author jimb;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.6
+log
+@	* diagnostics.h, diagnostics.c (print_sigint_message): New function.
+	* linux-target.c (linux_process_rcmd): Add monitor commands
+	"interrupt-with-SIGSTOP and interrupt-with-SIGINT".
+	* server.h (struct child_process): Add new field
+	interrupt_with_SIGSTOP.
+	* thread-db.c (thread_db_break_program): Interrupt using either
+	SIGSTOP or SIGINT depending upon user's preference.
+@
+text
+@/* server.h
+
+   Copyright 2000, 2002 Red Hat, Inc.
+
+   This file is part of RDA, the Red Hat Debug Agent (and library).
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 2 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 59 Temple Place - Suite 330,
+   Boston, MA 02111-1307, USA.
+   
+   Alternative licenses for RDA may be arranged by contacting Red Hat,
+   Inc.  */
+
+/* Shared definitions for an RDA based native gdb server.  */
+
+#if defined(_MIPSEL) || defined(_MIPSEB) || defined(AM33_2_0_LINUX_TARGET)
+/*
+ * We single-step by setting breakpoints. When an exception
+ * is handled, we need to restore the previous instructions
+ *
+ * This is where we save the original instructions.
+ */
+
+struct ss_save {
+	int in_use;
+	struct gdbserv_reg ss_addr;
+	char ss_val[8];
+	int ss_size;
+	/* Additional actions that need to be taken after restoring certain
+	   singlestep breakpoints.  This will be NULL if no action other
+	   than the default is required.  */
+	void (*restore_action) (struct gdbserv *serv, struct ss_save *save);
+};
+#endif
+
+struct arch;
+struct arch_bp_table;
+
+/* Definition of a "process", or an instance of the server.
+ * Theoretically one server could run an arbitrary number of these.
+ */
+struct child_process {
+  struct gdbserv *serv;
+  struct arch *arch;
+  char *executable;
+  char **argv;
+  int  pid;
+
+  /* The last thread we reported an event for.  */
+  struct gdbserv_thread *event_thread;
+
+  /* If the client continues or single-steps a single thread, leaving
+     the rest of the program stopped, this is that thread.  */
+  struct gdbserv_thread *focus_thread;
+
+  int  stop_status;
+  int  stop_signal;
+  long signal_to_send;
+  int  debug_backend;
+  int  debug_informational;
+  int  interrupt_with_SIGSTOP;
+  int  running;
+  
+#if defined(_MIPSEL) || defined(_MIPSEB) || defined(AM33_2_0_LINUX_TARGET)
+   int  is_ss;                 /* we are single stepping */
+   struct ss_save ss_info[2];  /* single stepping saved information */
+#endif
+
+  /* A breakpoint table for the current process.  May be zero if we
+     don't support breakpoints.  */
+  struct arch_bp_table *breakpoint_table;
+};
+
+/* Definition of the entry points to the server, 
+ * needed by main.
+ */
+struct server_vector {
+  struct gdbserv_target * (*attach) (struct gdbserv *serv, void *data);
+  int (*check_child_state)     (struct child_process *process);
+  void (*fromtarget_break)     (struct child_process *process);
+  void (*fromtarget_exit)      (struct child_process *process);
+  void (*fromtarget_terminate) (struct child_process *process);
+};
+
+extern struct server_vector gdbserver;
+
+/* Global flag used by the server to tell main to quit out of its loop.
+ */
+extern int server_quit_p;
+
+@
+
+
+1.5
+log
+@Add code for software singlestep of AM33 LIW instructions.  Revise code
+for handling am33's SETLB and Lcc instructions.
+@
+text
+@d72 1
+@
+
+
+1.4
+log
+@Add support for am33 linux.
+@
+text
+@d40 4
+@
+
+
+1.3
+log
+@Add support for the Linux NPTL (New POSIX Thread Library) thread
+implementation.
+* arch.h, lwp-pool.c, lwp-pool.h, stock-breakpoints.c:
+* stock-breakpoints.h: New files.
+* gdbserv-thread-db.h (continue_lwp, singlestep_lwp, attach_lwp)
+(stop_lwp): Move these ...
+* lwp-ctrl.h: ... to here (new file).
+* server.h (struct child_process): Include a pointer to the
+architecture object, a breakpoint table, and a pointer to the
+"focus thread".
+* linux-target.c: Create architecture objects for the i386 and
+FRV, and describe breakpoints for those architectures.
+#include "arch.h".
+[STOCK_BREAKPOINTS]: #include "stock-breakpoints.h".
+(allocate_empty_arch): New function.
+[X86_LINUX_TARGET] (stock_table_to_x86, x86_table_to_stock)
+(stock_bp_to_x86, x86_bp_to_stock, x86_make_bp_table, x86_set_bp)
+(x86_delete_bp, x86_bp_hit_p, x86_make_arch): New functions.
+(MAKE_ARCH): #define to call x86_make_arch.
+[X86_LINUX_TARGET] (stock_table_to_frv, frv_table_to_stock)
+(stock_bp_to_frv, frv_bp_to_stock, frv_make_bp_table, frv_set_bp)
+(frv_delete_bp, frv_bp_hit_p, frv_make_arch): New functions.
+(MAKE_ARCH): #define to call frv_make_arch.
+(linux_attach): If MAKE_ARCH is #defined, create an architecture
+object for this process.  And if we have an architecture object,
+make a breakpoint table.
+* thread-db.c: #include <assert.h>, "arch.h", "lwp-ctrl.h", and
+"lwp-pool.h".
+(struct gdbserv_thread): Remove state-tracking flags 'attached',
+'stopped', 'waited', and 'stepping'; all that state is handled
+inside lwp-pool.c now.
+(add_thread_to_list): Zero the entire newly allocated thread
+structure.
+(thread_list_lookup_by_lid): Prefer threads whose ti_lid values
+are different from that of the main process.
+(thread_db_state_str, thread_db_type_str): Don't include
+formatting spaces here.
+(thread_db_event_str): New function.
+(thread_debug_name): New function.
+(get_thread_signals): Return a value indicating success or failure.
+(ignore_thread_signal): New function.
+(using_thread_db_events, create_notification, death_notification)
+(get_event_notification, set_event_breakpoint)
+(insert_thread_db_event_breakpoints)
+(delete_thread_db_event_breakpoints, request_thread_db_events)
+(hit_thread_db_event_breakpoint, handle_thread_db_event): New
+variables and functions, for using libthread_db's event interface.
+(thread_db_open): Gather error-handling code next to the operation
+that might fail.  Decide here whether to use the signal-based
+debugging interface, or the event-based debugging interface.
+(stop_thread, stop_all_threads, struct event_list, pending_events)
+(pending_events_listsize, pending_events_top, add_pending_event)
+(select_pending_event, send_pending_signals, wait_all_threads):
+Deleted; we now use lwp-pool.c for all this.
+(attach_thread, continue_thread, continue_all_threads)
+(singlestep_thread, thread_db_singlestep_program)
+(thread_db_continue_thread, thread_db_singlestep_thread): Use the
+lwp-pool.c functions, instead of calling the lwp manipulation
+functions directly and managing state here.  Keep track of the
+focus thread.
+(find_new_threads_callback): Always call attach_thread.  If we're
+using libthread_db events, enable event reporting for the new
+thread.
+(update_thread_list): Take the current child process as an
+argument; if the current focus thread disappears, clear the
+process's focus_thread pointer.
+(thread_db_thread_next): Pass the current child process to
+update_thread_list.
+(thread_db_thread_info): Reformat thread descriptions.  Mark
+threads whose pid is equal to the process ID.
+(thread_db_check_child_state): Use the lwp-pool functions, instead
+of calling waitpid and the old stop-all-threads functions.  If we
+have a focus thread, only check for a status on that thread.
+Check for libthread_db events.  Use ignore_thread_signal, instead
+of writing it out.
+(thread_db_break_program): New function.
+(thread_db_attach): Register it as the target's 'break_program'
+method.  Always preload the symbol list with the names we'll need
+for the signal-based interface, even if we have td_symbol_list.
+Use lwp_pool_new_stopped to register the initial thread.  Clear
+the focus thread.
+* ptrace-target.c: #define _GNU_SOURCE and #include <sys/types.h>
+and <linux/unistd.h>, to get declarations for the functions we
+need.
+#include "lwp-ctrl.h".
+(continue_lwp, singlestep_lwp, attach_lwp): Remove
+unnecessary 'extern' keywords.  Move pre-function comments to
+lwp-ctrl.h.  Take an ordinary 'pid_t', not an 'lwpid_t', since
+we're calling ptrace / tkill, and that's what they expect; rename
+arguments accordingly.  Preserve value of errno across calls to
+fprintf when reporting errors.
+(kill_lwp): All the above, and use tkill system call if available.
+* configure.in: Whenever we include thread-db.o in TARGET_MODULES,
+also include lwp-pool.o.
+On i386 and FRV Linux, use the stock-breakpoints module.
+* config.in: Add template for STOCK_BREAKPOINTS.
+* Makefile.am (EXTRA_rda_SOURCES): Include stock-breakpoints.c.
+* Makefile.in, aclocal.m4, configure: Regenerated.
+@
+text
+@d27 1
+a27 1
+#if defined(_MIPSEL) || defined(_MIPSEB)
+d38 2
+a39 1
+        unsigned int ss_val;
+d70 1
+a70 1
+#if defined(_MIPSEL) || defined(_MIPSEB)
+@
+
+
+1.2
+log
+@Fix mips single step code for mips64 n32 and n64 targets.  Adjust register
+information.
+@
+text
+@d42 3
+d50 1
+d54 2
+d57 5
+d68 1
+d73 4
+@
+
+
+1.2.2.1
+log
+@Add an architecture object to the Unix server.
+* arch.h: New header file.
+* server.h (struct arch): New forward struct declaration.
+(struct child_process): Add an 'arch' member to the process.
+* thread-db.c: #include arch.h.
+* linux-target.c: #include arch.h.
+(allocate_empty_arch): New function.
+(x86_make_arch): New function.
+(MAKE_ARCH): New #definition.
+(linux_attach): Initialize process's architecture.
+
+Provide arch-independent framework for breakpoints.
+* server.h (struct arch_bp_table): New forward struct declaration.
+(struct child_process): New member: 'breakpoint_table'.
+* linux-target.c (linux_attach): Initialize process's breakpoint
+table, if the architecture defines a breakpoint table constructor.
+* arch.h (struct arch): Add fields pointing to breakpoint functions.
+
+Provide a module implementing breakpoints for architectures that
+support a simple software breakpoint model ("patch these bytes
+into the instruction stream").
+* stock-breakpoints.h, stock-breakpoints.c: New files.
+* linux-target.c: If STOCK_BREAKPOINTS is #defined, then #include
+"stock-breakpoints.h".
+* Makefile.am (EXTRA_rda_SOURCES): Add stock-breakpoints.c.
+* Makefile.in: Updated.
+
+Define x86 breakpoint functions using the stock-breakpoints.c
+model.
+* configure.in: When configuring for an x86 target, include
+stock-breakpoints.o in the mix, and #define STOCK_BREAKPOINTS.
+* configure: Regenerated.
+* config.in (STOCK_BREAKPOINTS): Provide #definition template.
+* linux-target.c (stock_table_to_x86, x86_table_to_stock,
+stock_bp_to_x86, x86_bp_to_stock, x86_make_bp_table, x86_set_bp,
+x86_delete_bp, x86_bp_hit_p): New functions.
+(x86_make_arch): Register the latter four as our breakpoint
+methods.
+
+Use the libthread_db event interface to communicate with the
+thread library, if the old signal-based interface is not
+supported.
+* thread-db.c: #include <assert.h>.
+(thread_db_event_str): New function.
+(get_target_int_by_name, set_target_int_by_name, get_thread_signals)
+(cancel_signal, restart_signal, debug_signal): Move these to just
+before thread_db_dlopen; get_thread_signals is a subroutine of that.
+(using_thread_db_events, create_notification, death_notification,
+create_event_breakpoint, death_event_breakpoint): New global vars.
+(get_event_notification, set_event_breakpoint)
+(insert_thread_db_event_breakpoints)
+(delete_thread_db_event_breakpoints, request_thread_db_events)
+(hit_thread_db_event_breakpoint): New functions.
+(thread_db_open): Call get_thread_signals, and if that fails, call
+request_thread_db_events.
+(struct event_list): Add 'thread_db_event' member.
+(add_pending_event): Initialize it.
+(delete_pending_event, handle_thread_db_events): New functions.
+(find_new_threads_callback): If we're using the event interface,
+enable event reporting on each new thread we find.
+(select_pending_event): Return a value to indicate whether we
+selected any event at all.
+(continue_all_threads): Send a restart signal only if we're using
+the signal-based interface.
+(thread_db_check_child_state): If we're using the libthread_db
+event interface to communicate with the inferior thread library,
+check for those events here.  If select_pending_event says it
+didn't find anything interesting, that means we consumed all the
+reportable events; continue the program silently.
+* ptrace-target.c: #include <sys/types.h> and <linux/unistd.h>.
+(tkill): Generate code for this syscall.
+(stop_lwp): Use tkill instead of kill.
+
+* thread-db.c (thread_db_check_child_state): Call stop_all_threads
+before calling update_thread_list, so RDA will have to compete for
+CPU with fewer running threads.
+
+* thread-db.c (wait_all_threads): Move calls to
+select_pending_event and send_pending_signals from here...
+(thread_db_check_child_state): To here.
+
+* thread-db.c (ignore_thread_signal): New function.
+(thread_db_check_child_state): Call it, instead of writing it out.
+
+* thread-db.c (thread_db_open): Return 0 on success, -1 on
+failure, like most of the other int-valued functions in this file,
+and like most system calls.
+
+* thread-db.c (struct gdbserv_thread): Doc fixes.
+
+* thread-db.c: #include "gdbserv-utils.h", to get prototypes for
+the 'struct gdbserv_reg' manipulation functions.
+
+* thread-db.c (thread_db_noisy): Initialize to 1.
+
+* thread-db.c (thread_debug_name): New function.
+(find_new_threads_callback): If noisy, report new threads.
+(stop_thread): If noisy, report stopping threads.
+(select_pending_event): If noisy, report what we selected.
+(wait_all_threads): If noisy, report before each thread we wait
+for.
+
+* thread-db.c (stop_all_threads): Doc fixes.
+
+* aclocal.m4: Regenerated.
+@
+text
+@a41 3
+struct arch;
+struct arch_bp_table;
+
+a46 1
+  struct arch *arch;
+a56 1
+  
+a60 4
+
+  /* A breakpoint table for the current process.  May be zero if we
+     don't support breakpoints.  */
+  struct arch_bp_table *breakpoint_table;
+@
+
+
+1.2.2.2
+log
+@Separate management of kernel-level LWPs from that of libpthread /
+libthread_db-level threads.
+* lwp-pool.c, lwp-pool.h: New files.
+* thread-db.c: #include "lwp-ctrl.h" and "lwp-pool.h".
+(struct gdbserv_thread): Delete members 'attached', 'stopped',
+'waited', and 'stepping'.  This structure is now just a
+'td_thrinfo_t' and a list link.  Describe some quirks in the
+meanings of certain 'ti' fields.
+(thread_list_lookup_by_lid): Move later in file, so we can use
+information directly from our proc handle.  Be skeptical of ZOMBIE
+or UNKNOWN threads whose LWP ID is equal to the PID in the proc
+handle.
+(thread_debug_name): Move later in file, so we can use
+thread_db_state_str.
+(attach_thread): Use lwp pool functions to attach.  Attach to
+zombies.  When using signal-based communication, send the thread
+the restart signal immediately.
+(find_new_threads_callback): Go ahead and attach to all threads.
+The LWP pool functions tolerate attaching to a given LWP more than
+once.
+(update_thread_list): Take the process as an argument.  If the
+focus thread has disappeared, set process->focus_thread to NULL.
+(thread_db_thread_next): Pass the process to update_thread_list.
+(stop_thread, stop_all_threads, add_pending_event,
+delete_pending_event, select_pending_event, send_pending_signals,
+wait_all_threads, continue_all_threads): Deleted.
+(handle_thread_db_event): Renamed from handle_thread_db_events.
+Take the process structure as an argument, and check only for a
+thread-db event notification from process->event_thread.  Use LWP
+pool functions.
+(continue_thread, singlestep_thread): Use LWP pool functions.
+(thread_db_continue_program, thread_db_singlestep_program,
+thread_db_continue_thread, thread_db_singlestep_thread): Use LWP
+pool functions, and update process->focus_thread appropriately.
+(thread_db_check_child_state): Use the LWP pool functions.  Rather
+than stopping all LWP's, choosing the most interesting events, and
+then arranging to re-create all the other wait statuses we got,
+just pick the first event we get from lwp_pool_waitpid (either on
+the focus thread, if there is one, or on any thread) and report
+that.  Use the new handle_thread_db_event function.
+(struct event_list, pending_events, pending_events_listsize,
+pending_events_top): Deleted; replaced by LWP pool code.
+(thread_db_attach): Tell the LWP pool about the PID we're
+attaching to.  Clear the focus thread.
+* server.h (struct process): New member: 'focus_thread'.
+* gdbserv-thread-db.h (continue_lwp, singlestep_lwp, attach_lwp,
+stop_lwp): Move declarations from here...
+* lwp-ctrl.h: ... to here.  New file.
+(kill_lwp): Renamed from stop_lwp; allow caller to specify any
+signal.
+* ptrace-target.c: #include "lwp-ctrl.h".
+(continue_lwp, singlestep_lwp, attach_lwp, stop_lwp): Move
+function comments to lwp-ctrl.h, and expand.
+* configure.in: Whenever we select 'thread-db.o', select
+'lwp-pool.o' as well.
+* configure: Regenerated.
+
+* thread-db.c (thread_db_check_child_state): Remove extraneous
+call to handle_waitstatus.  Remove extra check for exited main
+thread.
+
+* thread-db.c (thread_db_thread_info): List the type and state
+before the PID, and mention whether the LWP's PID is equal to that
+of the main thread, since ZOMBIE and UNKNOWN threads whose LWP's
+PID is equal are probably actually exited threads.
+
+* thread-db.c (add_thread_to_list): Zero out entire structure.
+
+* thread-db.c (thread_db_state_str, thread_db_type_str): Remove
+spaces from names; we don't always want them, and the caller can
+use printf formatting directives to arrange things as they please.
+
+* ptrace-target.c (continue_lwp, singlestep_lwp, attach_lwp,
+stop_lwp): Change arguments from 'lwpid_t' to 'pid_t'.  lwpid_t is
+strictly a thread-db type; these are functions that use system
+calls, which all expect pid_t.  Rename arguments from 'lwpid' to
+'pid'.
+
+* ptrace-target.c: #define _GNU_SOURCE to get declaration for
+strsignal.
+(kill_lwp): Enhance error reporting.
+@
+text
+@a53 2
+
+  /* The last thread we reported an event for.  */
+a54 5
+
+  /* If the client continues or single-steps a single thread, leaving
+     the rest of the program stopped, this is that thread.  */
+  struct gdbserv_thread *focus_thread;
+
+@
+
+
+1.1
+log
+@Added files comprising RDA.
+@
+text
+@d36 2
+a37 1
+	unsigned int ss_addr;
+@
+

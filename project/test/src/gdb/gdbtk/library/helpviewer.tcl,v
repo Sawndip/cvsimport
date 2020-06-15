@@ -1,0 +1,346 @@
+head	1.5;
+access;
+symbols
+	insight_7_6-2013-04-10-branchpoint:1.5
+	gdb_7_6-branch:1.5.0.18
+	gdb_7_5-branch:1.5.0.16
+	gdb_7_4-branch:1.5.0.14
+	gdb_7_3-branch:1.5.0.12
+	gdb_7_1-branch:1.5.0.10
+	gdb_7_0-branch:1.5.0.8
+	arc-sim-20090309:1.5
+	arc-insight_6_8-branch:1.5.0.6
+	arc-insight_6_8-branchpoint:1.5
+	insight_6_8-branch:1.5.0.4
+	insight_6_8-branchpoint:1.5
+	gdb_6_8-branch:1.5.0.2
+	insight_6_6-20070208-release:1.4
+	gdb_6_6-branch:1.4.0.4
+	gdb_6_6-2006-11-15-branchpoint:1.4
+	insight_6_5-20061003-release:1.4
+	gdb_6_5-branch:1.4.0.2
+	gdb_6_5-2006-05-14-branchpoint:1.4
+	gdb-csl-gxxpro-6_3-branch:1.2.0.8
+	gdb-csl-gxxpro-6_3-branchpoint:1.2
+	gdb_6_4-branch:1.2.0.6
+	gdb_6_4-2005-11-01-branchpoint:1.2
+	gdb_6_1-2004-04-05-release:1.2
+	gdb_6_1-branch:1.2.0.4
+	gdb_6_1-2004-03-01-gmt-branchpoint:1.2
+	gdb_6_0-2003-10-04-release:1.2
+	gdb_6_0-branch:1.2.0.2
+	gdb_6_0-2003-06-23-branchpoint:1.2;
+locks; strict;
+comment	@# @;
+
+
+1.5
+date	2008.02.09.01.23.42;	author kseitz;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2006.01.24.01.30.49;	author kseitz;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2005.12.23.18.26.50;	author eliz;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2002.12.04.20.58.05;	author hunt;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2002.11.11.22.29.24;	author hunt;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.5
+log
+@        * library/main.tcl: Add gdbtk_platform definitions.
+        * library/attachdlg.itb (list_pids): Use gdbtk_platform
+        instead of tcl_platform.
+        * library/bpwin.itb (build_win): Likewise.
+        (_bp_add): Likewise.
+        (_bp_modify): Likewise.
+        * library/download.itb (download_it): Likewise.
+        * library/globalpref.itb (_build_win): Likewise.
+        * library/helpviewer.tcl (open_help): Likewise.
+        * library/interface.tcl (gdbtk_tcl_query): Likewise.
+        (show_warning): Likewise.
+        (open_file): Likewise.
+        (run_executable): Likewise.
+        * library/managedwin.itb (reveal): Likewise.
+        (_create): Likewise.
+        * library/prefs.tcl (pref_read): Likewise.
+        (pref_set_defaults): Likewise.
+        (pref_set_colors): Likewise.
+        * library/session.tcl (_exe_name): Likewise.
+        * library/srcbar.itcl (_update_file_menu): Likewise.
+        (create_run_menu): Likewise.
+        * library/srctextwin.itb (_mtime_changed): Likewise.
+        (LoadFromCache): Likewise.
+        * library/targetselection.itb (default_port): Likewise.
+        (build_win): Likewise.
+
+        * library/memwin.itb (build_win): Remove unused tcl_platform
+        declaration.
+        * library/pluginwin.itcl (enable_ui): Likewise.
+        * library/process.itb (build_win): Likewise.
+        * library/srcbar.itcl (enable_ui): Likewise.
+        * library/srcwin.itb (location): Likewise.
+        * library/stackwin.itb (build_win): Likewise.
+        * library/tdump.tcl (build_win): Likewise.
+@
+text
+@# Open a viewer for HTML help info
+# Copyright (C) 2002, 2008, Red Hat, Inc.
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License (GPL) as published by
+# the Free Software Foundation; either version 2 of the License, or (at
+# your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# ------------------------------------------------------------------------------
+# NAME:		public proc open_help
+# SYNOPSIS:	open_help file
+# DESC:		Opens html help file using an appropriate
+#		browser.
+# ------------------------------------------------------------------------------
+
+proc open_help {hfile} {
+  debug $hfile
+  # create full pathname link
+  set link file://[file join $::GDBTK_LIBRARY help $hfile]
+
+  # windows is easy
+  if {$::gdbtk_platform(platform) == "windows"} {
+    ide_shell_execute open $link
+    return
+  }
+
+  #
+  # for Unix, we never know what is installed
+  #
+
+  # set list of viewer apps to try
+  switch [pref get gdb/compat] {
+    "KDE" {
+      set apps {htmlview khelpcenter firefox opera mozilla}
+    }
+    "GNOME" {
+      set apps {htmlview firefox opera mozilla gnome-help khelpcenter}
+    }      
+    default {
+      set apps {htmlview firefox opera mozilla gnome-help khelpcenter netscape}
+    }
+  }
+
+  # If the user has previously entered a browser name, append it
+  # to the list. Should it go first or last? 
+  set bname [pref get gdb/help/browsername]
+  if {$bname != ""} {
+    lappend apps $bname
+  }
+  
+  # now loop through list checking each application
+  foreach app $apps {
+    debug "app=$app"
+    if {[catch "exec $app $link &" result]} {
+      debug "$app failed: $result"
+    } else {
+      return
+    }
+  }
+  
+  # if we reached here, nothing worked, so prompt for a name
+  set text "No help browser was found on your system.\n\
+Please enter the name of an HTML viewer application."
+  while {[set app [prompt_helpname  $text]] != "0"} {
+    if {$app != ""} {
+      if {[catch "exec $app $link &" result]} {
+	dbug W "$app failed: $result"
+	set text "Could not run application $app.\n\
+Please enter the name of an HTML viewer application."
+      } else {
+	pref set gdb/help/browsername $app
+	return
+      }
+    }
+  }
+}
+
+# displays an entry dialog and asks for the name of an application
+# returns 0 on cancel
+#         name on success
+proc prompt_helpname {text} {
+  iwidgets::promptdialog .pd -title "Browser Query" -modality application \
+    -labeltext  $text
+  if {[.pd activate]} {
+    set app [string trim [.pd get]]
+    destroy .pd
+    return $app
+  }
+  destroy .pd
+  debug "cancelled"
+  return 0
+}
+
+@
+
+
+1.4
+log
+@        From Andrew Stubbs  <andrew.stubbs@@st.com>:
+        * library/helpviewer.tcl (open_help): Add firefox and opera to the
+        browser list used to display help.
+@
+text
+@d2 1
+a2 1
+# Copyright (C) 2002, Red Hat, Inc.
+d27 1
+a27 1
+  if {$::tcl_platform(platform) == "windows"} {
+@
+
+
+1.3
+log
+@	* library/attachdlg.itb:
+	* library/actiondlg.tcl:
+	* library/about.tcl:
+	* library/ehandler.itb:
+	* library/editor.tcl:
+	* library/download.ith:
+	* library/download.itb:
+	* library/debugwin.ith:
+	* library/debugwin.itb:
+	* library/cspref.ith:
+	* library/cspref.itb:
+	* library/console.ith:
+	* library/console.itb:
+	* library/browserwin.ith:
+	* library/browserwin.itb:
+	* library/bpwin.ith:
+	* library/bpwin.itb:
+	* library/blockframe.ith:
+	* library/managedwin.ith:
+	* library/managedwin.itb:
+	* library/main.tcl:
+	* library/locals.tcl:
+	* library/ipcpref.ith:
+	* library/ipcpref.itb:
+	* library/ipc.tcl:
+	* library/interface.tcl:
+	* library/helpviewer.tcl:
+	* library/globalpref.ith:
+	* library/globalpref.itb:
+	* library/gdbwin.ith:
+	* library/gdbtoolbar.itcl:
+	* library/gdbmenubar.itcl:
+	* library/gdbevent.ith:
+	* library/gdbevent.itb:
+	* library/embeddedwin.ith:
+	* library/ehandler.ith:
+	* library/srcwin.itb:
+	* library/srctextwin.ith:
+	* library/srctextwin.itb:
+	* library/srcpref.ith:
+	* library/srcpref.itb:
+	* library/srcbar.itcl:
+	* library/session.tcl:
+	* library/regwin.ith:
+	* library/regwin.itb:
+	* library/process.ith:
+	* library/process.itb:
+	* library/prefs.tcl:
+	* library/pluginwin.itcl:
+	* library/modal.tcl:
+	* library/memwin.ith:
+	* library/memwin.itb:
+	* library/mempref.ith:
+	* library/mempref.itb:
+	* library/watch.tcl:
+	* library/watch.tcl:
+	* library/warning.tcl:
+	* library/vartree.ith:
+	* library/vartree.itb:
+	* library/util.tcl:
+	* library/tracedlg.tcl:
+	* library/toplevelwin.ith:
+	* library/tfind_args.tcl:
+	* library/tdump.tcl:
+	* library/targetselection.ith:
+	* library/targetselection.itb:
+	* library/stackwin.ith:
+	* library/stackwin.itb:
+	* library/srcwin.ith:
+@
+text
+@d39 1
+a39 1
+      set apps {htmlview khelpcenter mozilla}
+d42 1
+a42 1
+      set apps {htmlview mozilla gnome-help khelpcenter}
+d45 1
+a45 1
+      set apps {htmlview mozilla gnome-help khelpcenter netscape}
+@
+
+
+1.2
+log
+@2002-12-04  Martin M. Hunt  <hunt@@redhat.com>
+
+	* library/helpviewer.tcl (open_help): Fix KDE apps list.
+
+	* library/debugwin.itb (build_win): Fix help call.
+@
+text
+@d2 1
+a2 1
+# Copyright 2002, Red Hat, Inc.
+@
+
+
+1.1
+log
+@2002-11-11  Martin M. Hunt  <hunt@@redhat.com>
+
+	* library/helpviewer.tcl: New file. Finds
+	an appropriate help browser and displays the help files.
+
+	* library/vartree.itb: Fix open_help calls.
+
+	* library/helpviewer.ith: Deleted.
+	* library/helpviewer.itb: Deleted.
+
+	* library/prefs.tcl (pref_set_defaults): Remove
+	pref gdb/help/browser. Add pref gdb/help/browsername.
+	We couldn't simply rename because it would break older
+	versions of Insight that expect gdb/help/browser to be
+	a number.
+@
+text
+@d39 1
+a39 2
+      #	set apps {htmlview khelpcenter mozilla}
+      set apps {xhtmlview xkhelpcenter xmozilla}
+@
+

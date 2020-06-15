@@ -1,0 +1,453 @@
+head	1.8;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.7
+	gdb_7_6-2013-04-26-release:1.7
+	gdb_7_6-branch:1.7.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.7
+	gdb_7_5_1-2012-11-29-release:1.6
+	gdb_7_5-2012-08-17-release:1.6
+	gdb_7_5-branch:1.6.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.6
+	gdb_7_4_1-2012-04-26-release:1.2.4.1
+	gdb_7_4-2012-01-24-release:1.2.4.1
+	gdb_7_4-branch:1.2.0.4
+	gdb_7_4-2011-12-13-branchpoint:1.2
+	gdb_7_3_1-2011-09-04-release:1.2
+	gdb_7_3-2011-07-26-release:1.2
+	gdb_7_3-branch:1.2.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.2;
+locks; strict;
+comment	@# @;
+
+
+1.8
+date	2013.06.27.18.49.02;	author tromey;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2013.01.01.06.33.25;	author brobecke;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2012.06.03.17.10.28;	author jkratoch;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2012.06.03.17.06.04;	author jkratoch;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2012.01.16.16.21.44;	author palves;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2012.01.04.08.17.45;	author brobecke;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2011.01.01.15.33.41;	author brobecke;	state Exp;
+branches
+	1.2.4.1;
+next	1.1;
+
+1.1
+date	2010.07.26.09.38.50;	author guitton;	state Exp;
+branches;
+next	;
+
+1.2.4.1
+date	2012.01.06.04.43.59;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.8
+log
+@test suite update - gdb.base/[cd]
+
+Convert files gdb.base/[cd]*.exp to use standard_output_file et al.
+
+	* call-ar-st.exp, call-rt-st.exp, call-sc.exp,
+	call-signal-resume.exp, call-strs.exp, callexit.exp,
+	callfuncs.exp, catch-load.exp, catch-syscall.exp, charset.exp,
+	checkpoint.exp, chng-syms.exp, code-expr.exp, code_elim.exp,
+	commands.exp, completion.exp, complex.exp, cond-expr.exp,
+	condbreak.exp, consecutive.exp, constvars.exp, corefile.exp,
+	ctxobj.exp, cursal.exp, cvexpr.exp, dbx.exp, default.exp,
+	define.exp, del.exp, detach.exp, dfp-test.exp, display.exp,
+	dmsym.exp, dump.exp, dup-sect.exp: Use standard_testfile,
+	standard_output_file, prepare_for_testing, clean_restart.
+@
+text
+@# Copyright 2002-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+# code_elim.exp -- tests that GDB can handle executables where some data/code
+#                  has been eliminated by the linker.
+
+set testfile1 code_elim1
+set testfile2 code_elim2
+set srcfile1 ${testfile1}.c
+set srcfile2 ${testfile2}.c
+set binfile1 [standard_output_file ${testfile1}]
+set binfile2 [standard_output_file ${testfile2}]
+set opts [list debug]
+lappend opts "additional_flags=-ffunction-sections"
+lappend opts "additional_flags=-fdata-sections"
+lappend opts "additional_flags=-Wl,-gc-sections"
+lappend opts "additional_flags=-Wl,-e,main"
+
+remote_exec build "rm -f ${binfile1}"
+remote_exec build "rm -f ${binfile2}"
+
+if { [gdb_compile "${srcdir}/${subdir}/${srcfile1}" "${binfile1}" executable $opts] != "" } {
+     untested code_elim.exp
+     return -1
+}
+
+if { [gdb_compile "${srcdir}/${subdir}/${srcfile2}" "${binfile2}" executable $opts] != "" } {
+     untested code_elim.exp
+     return -1
+}
+
+proc get_var_address { var } {
+    global gdb_prompt hex
+
+    # Match output like:
+    # $1 = (int *) 0x0
+    # $5 = (int (*)()) 0
+    # $6 = (int (*)()) 0x24 <function_bar>
+
+    gdb_test_multiple "print &${var}" "get address of ${var}" {
+	-re "\\\$\[0-9\]+ = \\(.*\\) (0|$hex)( <${var}>)?\[\r\n\]+${gdb_prompt} $" {
+	    pass "get address of ${var}"
+	    if { $expect_out(1,string) == "0" } {
+		return "0x0"
+	    } else {
+		return $expect_out(1,string)
+	    }
+	}
+    }
+    return ""
+}
+
+proc not_null_var_address { var } {
+
+    # Same as get_var_address, expect that it reports a failure if a null
+    # address is returned by gdb.
+
+    set address [get_var_address $var]
+    regexp "0x\[0-9a-fA-F\]+" $address address
+    if { "$address" == "0x0" } {
+	fail "$var has null address"
+    }
+}
+
+proc test_eliminated_var { var } {
+    global gdb_prompt hex
+
+    # Match output 'No symbol "${var}" in current context'
+
+    gdb_test_multiple "print &${var}" "test eliminated var ${var}" {
+	-re "No symbol \"${var}\" in current context\\.\[\r\n\]+${gdb_prompt} $" {
+	    pass "test eliminated var ${var}"
+	}
+	-re "\\\$\[0-9\]+ = \\(.*\\) (0|$hex)( <${var}>)?\[\r\n\]+${gdb_prompt} $" {
+	    fail "test eliminated var ${var}"
+	}
+    }
+}
+
+# Check that the code and data eliminated in binfile1 are not included
+# into partial symtab... and that non-eliminated symbols are still there.
+
+gdb_exit
+gdb_start
+
+gdb_test "symbol-file ${binfile1}" \
+	"Reading symbols from .*${testfile1}\\.\\.\\.done\\.(|\r\nUsing host libthread_db library .*libthread_db.so.*\\.)" \
+	"symbol-file ${testfile1}"
+
+with_test_prefix "single psymtabs" {
+    test_eliminated_var my_global_symbol
+    test_eliminated_var my_static_symbol
+    test_eliminated_var my_global_func
+    not_null_var_address main
+}
+
+# Same thing for symtabs
+
+gdb_exit
+global GDBFLAGS
+set saved_gdbflags $GDBFLAGS
+set GDBFLAGS "$GDBFLAGS --readnow $binfile1"
+gdb_start
+set GDBFLAGS $saved_gdbflags
+
+with_test_prefix "single symtabs" {
+    test_eliminated_var my_global_symbol
+    test_eliminated_var my_static_symbol
+    test_eliminated_var my_global_func
+    not_null_var_address main
+}
+
+# binfile2 contains the symbols that have been eliminated in binfile1. Check
+# the eliminated symbols does not hide these valid ones.
+
+gdb_exit
+gdb_start
+
+with_test_prefix "order1" {
+    gdb_test "add-symbol-file ${binfile1} 0x100000 -s .bss 0x120000" \
+	    "Reading symbols from .*${testfile1}\\.\\.\\.done\\." \
+	    "add-symbol-file ${testfile1} 0x100000" \
+	    "add symbol table from file \".*${testfile1}\" at.*\\(y or n\\) " \
+	    "y"
+
+    gdb_test "add-symbol-file ${binfile2} 0x200000 -s .data 0x210000 -s .bss 0x220000" \
+	    "Reading symbols from .*${testfile2}\\.\\.\\.done\\." \
+	    "add-symbol-file ${testfile2} 0x200000" \
+	    "add symbol table from file \".*${testfile2}\" at.*\\(y or n\\) " \
+	    "y"
+
+    not_null_var_address my_global_symbol
+    not_null_var_address my_static_symbol
+    not_null_var_address my_global_func
+    not_null_var_address main
+}
+
+# Same thing, but loading binfile2 before binfile1.
+
+gdb_exit
+gdb_start
+
+with_test_prefix "order2" {
+    gdb_test "add-symbol-file ${binfile2} 0x200000 -s .data 0x210000 -s .bss 0x220000" \
+	    "Reading symbols from .*${testfile2}\\.\\.\\.done\\." \
+	    "add-symbol-file ${testfile2} 0x200000" \
+	    "add symbol table from file \".*${testfile2}\" at.*\\(y or n\\) " \
+	    "y"
+
+    gdb_test "add-symbol-file ${binfile1} 0x100000 -s .bss 0x120000" \
+	    "Reading symbols from .*${testfile1}\\.\\.\\.done\\." \
+	    "add-symbol-file ${testfile1} 0x100000" \
+	    "add symbol table from file \".*${testfile1}\" at.*\\(y or n\\) " \
+	    "y"
+
+    not_null_var_address my_global_symbol
+    not_null_var_address my_static_symbol
+    not_null_var_address my_global_func
+    not_null_var_address main
+}
+@
+
+
+1.7
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@d23 2
+a24 2
+set binfile1 ${objdir}/${subdir}/${testfile1}
+set binfile2 ${objdir}/${subdir}/${testfile2}
+@
+
+
+1.6
+log
+@gdb/testsuite/
+	* gdb.base/code_elim.exp
+	(add-symbol-file ${testfile1} 0x100000)
+	(add-symbol-file ${testfile2} 0x200000): Wrap them to 'order1' and
+	'order2'.
+	(order1: add-symbol-file ${testfile1} 0x100000)
+	(order1: add-symbol-file ${testfile2} 0x200000)
+	(order2: add-symbol-file ${testfile2} 0x200000)
+	(order2: add-symbol-file ${testfile1} 0x100000): Add -s .data and -s
+	.bss as appropriate.
+@
+text
+@d1 1
+a1 1
+# Copyright 2002-2003, 2005, 2007-2012 Free Software Foundation, Inc.
+@
+
+
+1.5
+log
+@gdb/testsuite/
+	* gdb.base/code_elim.exp (add-symbol-file ${testfile1} 0x100000):
+	Simplify it to ...
+	(symbol-file ${testfile1}): ... here.
+	(test eliminated var my_global_symbol)
+	(test eliminated var my_static_symbol)
+	(test eliminated var my_global_func, get address of main): Wrap them to
+	'single psymtabs' and 'single symtabs'
+	(get address of my_global_symbol, get address of my_static_symbol)
+	(get address of my_global_func, get address of main): Wrap them to
+	'order1' and 'order2'.
+@
+text
+@d131 12
+a142 11
+gdb_test "add-symbol-file ${binfile1} 0x100000" \
+	"Reading symbols from .*${testfile1}\\.\\.\\.done\\." \
+	"add-symbol-file ${testfile1} 0x100000" \
+	"add symbol table from file \".*${testfile1}\" at\[ \t\r\n\]+\.text_addr = 0x100000\[\r\n\]+\\(y or n\\) " \
+	"y"
+
+gdb_test "add-symbol-file ${binfile2} 0x200000" \
+	"Reading symbols from .*${testfile2}\\.\\.\\.done\\." \
+	"add-symbol-file ${testfile2} 0x200000" \
+	"add symbol table from file \".*${testfile2}\" at\[ \t\r\n\]+\.text_addr = 0x200000\[\r\n\]+\\(y or n\\) " \
+	"y"
+a143 1
+with_test_prefix "order1" {
+d155 12
+a166 11
+gdb_test "add-symbol-file ${binfile2} 0x200000" \
+	"Reading symbols from .*${testfile2}\\.\\.\\.done\\." \
+	"add-symbol-file ${testfile2} 0x200000" \
+	"add symbol table from file \".*${testfile2}\" at\[ \t\r\n\]+\.text_addr = 0x200000\[\r\n\]+\\(y or n\\) " \
+	"y"
+
+gdb_test "add-symbol-file ${binfile1} 0x100000" \
+	"Reading symbols from .*${testfile1}\\.\\.\\.done\\." \
+	"add-symbol-file ${testfile1} 0x100000" \
+	"add symbol table from file \".*${testfile1}\" at\[ \t\r\n\]+\.text_addr = 0x100000\[\r\n\]+\\(y or n\\) " \
+	"y"
+a167 1
+with_test_prefix "order2" {
+@
+
+
+1.4
+log
+@2012-01-16  Pedro Alves  <palves@@redhat.com>
+
+	Remove all calls to strace.
+@
+text
+@d98 1
+a98 1
+gdb_test "add-symbol-file ${binfile1} 0x100000" \
+d100 1
+a100 3
+	"add-symbol-file ${testfile1} 0x100000" \
+	"add symbol table from file \".*${testfile1}\" at\[ \t\r\n\]+\.text_addr = 0x100000\[\r\n\]+\\(y or n\\) " \
+	"y"
+d102 6
+a107 4
+test_eliminated_var my_global_symbol
+test_eliminated_var my_static_symbol
+test_eliminated_var my_global_func
+not_null_var_address main
+d118 6
+a123 4
+test_eliminated_var my_global_symbol
+test_eliminated_var my_static_symbol
+test_eliminated_var my_global_func
+not_null_var_address main
+d143 6
+a148 4
+not_null_var_address my_global_symbol
+not_null_var_address my_static_symbol
+not_null_var_address my_global_func
+not_null_var_address main
+d167 6
+a172 6
+not_null_var_address my_global_symbol
+not_null_var_address my_static_symbol
+not_null_var_address my_global_func
+not_null_var_address main
+
+
+@
+
+
+1.3
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@a18 4
+if $tracelevel then {
+    strace $tracelevel
+}
+
+@
+
+
+1.2
+log
+@run copyright.sh for 2011.
+@
+text
+@d1 1
+a1 2
+# Copyright 2002, 2003, 2005, 2007, 2008, 2009, 2010, 2011
+# Free Software Foundation, Inc.
+@
+
+
+1.2.4.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d1 2
+a2 1
+# Copyright 2002-2003, 2005, 2007-2012 Free Software Foundation, Inc.
+@
+
+
+1.1
+log
+@gdb/testsuite/
+	* gdb.base/code_elim.exp: New file.
+	* gdb.base/code_elim1.c: New file.
+	* gdb.base/code_elim2.c: New file.
+@
+text
+@d1 1
+a1 1
+# Copyright 2002, 2003, 2005, 2007, 2008, 2009, 2010
+@
+

@@ -1,0 +1,416 @@
+head	1.4;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.4
+	gdb_7_6-2013-04-26-release:1.4
+	gdb_7_6-branch:1.4.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.4
+	gdb_7_5_1-2012-11-29-release:1.3
+	gdb_7_5-2012-08-17-release:1.3
+	gdb_7_5-branch:1.3.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.3
+	gdb_7_4_1-2012-04-26-release:1.1.2.1
+	gdb_7_4-2012-01-24-release:1.1.2.1
+	gdb_7_4-branch:1.1.0.2
+	gdb_7_4-2011-12-13-branchpoint:1.1;
+locks; strict;
+comment	@# @;
+
+
+1.4
+date	2013.01.01.06.33.27;	author brobecke;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2012.07.10.15.18.18;	author tromey;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2012.01.04.08.17.47;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2011.08.18.16.19.01;	author kseitz;	state Exp;
+branches
+	1.1.2.1;
+next	;
+
+1.1.2.1
+date	2012.01.06.04.44.04;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.4
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@# Copyright 2011-2013 Free Software Foundation, Inc.
+#
+# Contributed by Red Hat, originally written by Keith Seitz.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# This file is part of the gdb testsuite.
+
+proc add {var name params expected {kind {func}}} {
+    upvar $var result
+
+    if {[string compare $kind "template"] == 0} {
+	set method_name "${name}<$expected>"
+    } else {
+	set method_name "$name"
+    }
+
+    set expect ".*// ${method_name}\\($expected\\)"
+    lappend result [list "${method_name}($params)" $expect]
+}
+
+if {[skip_cplus_tests]} { continue }
+
+# Tests for c++/12266 et al
+standard_testfile .cc
+
+if {[prepare_for_testing $testfile $testfile $srcfile {c++ debug}]} {
+    return -1
+}
+
+if {![runto_main]} {
+    perror "couldn't run to breakpoint"
+    continue
+}
+
+array set typedefs {
+    "my_other_type" {"my_other_type" "my_type" "const char* const*"}
+    "my_other_type_2" {"my_other_type_2" "my_type_2" "int"}
+    "CORE_ADDR" { "CORE_ADDR" "unsigned long" }
+    "_BAR_" { "_BAR_" "a::b::BAR" "a::b::c::d::bar" }
+    "aenum" { "aenum" "anon_enum" }
+    "astruct" { "astruct" "anon_struct" }
+    "aunion" { "aunion" "anon_union" }
+}
+
+set methods {}
+
+# Add the simple, one-parameter methods
+foreach meth {A::FOO::test A::FOO::foo} {
+    foreach type {my_other_type my_other_type_2} {
+	foreach t $typedefs($type)  {
+	    add methods $meth $t $type
+	}
+    }
+}
+
+# Add two-parameter methods
+foreach meth {A::FOO::test A::FOO::foo} {
+    set type "my_other_type_2, const my_other_type"
+    foreach t1 $typedefs(my_other_type_2) {
+	foreach t2 $typedefs(my_other_type) {
+	    add methods $meth "$t1, const $t2" $type
+	    add methods $meth "$t1, $t2" $type
+	}
+    }
+}
+
+# Add three-parameter methods/functions
+foreach meth {A::FOO::test A::FOO::foo B::test test} {
+    set type "aenum, astruct const&, aunion const\\*\\*\\*"
+    foreach t1 $typedefs(aenum) {
+	foreach t2 $typedefs(astruct) {
+	    foreach t3 $typedefs(aunion) {
+		add methods $meth "$t1, $t2 const&, $t3 const***" $type
+	    }
+	}
+    }
+}
+
+# Add the array-of-function pointer methods
+set type "fptr1\\*"
+foreach meth {A::FOO::test A::FOO::foo} {
+    add methods $meth "fptr1*" $type
+    foreach t $typedefs(my_other_type) {
+	add methods $meth "void (**) ($t)" $type
+    }
+}
+
+# Add the function pointer methods
+set type "fptr3"
+foreach meth {A::FOO::test A::FOO::foo} {
+    add methods $meth "fptr3" $type
+
+    foreach t1 $typedefs(my_other_type) {
+	add methods $meth "void (*)(fptr2, $t1)" $type
+	foreach t2 $typedefs(my_other_type_2) {
+	    add methods $meth "void (*)(void (*)(fptr1, $t2), $t1)" $type
+	    foreach t3 $typedefs(my_other_type) {
+		add methods $meth \
+		    "void (*)(void (*)(void (*) ($t3), $t2), $t1)" $type
+	    }
+	}
+    }
+}
+
+set type1 "my_other_type"
+set type2 "my_other_type, my_other_type_2"
+foreach meth {"test" "B::test"} {
+    foreach t1 $typedefs(my_other_type) {
+	add methods $meth $t1 $type1
+	foreach t2 $typedefs(my_other_type_2) {
+	    add methods $meth "$t1, $t2" $type2 template
+	}
+    }
+}
+
+# Miscellaneous tests
+set type {CORE_ADDR \(\*\) \[10\]}
+foreach meth {A::FOO::foo A::FOO::test} {
+    foreach t $typedefs(CORE_ADDR) {
+	add methods $meth "$t (*) \[10\]" $type
+    }
+}
+
+foreach t $typedefs(_BAR_) {
+    add methods "test" "$t&" {_BAR_&}
+}
+
+gdb_test_no_output "set listsize 1" ""
+
+# Finally, for each method in the list METHODS, check whether
+# the user can "list" it and "break" on it (both quoted and unquoted).
+foreach test $methods {
+    set func [lindex $test 0]
+    set result [lindex $test 1]
+
+    gdb_test "list $func" $result
+    gdb_test "list '$func'" $result
+    if {[gdb_breakpoint $func]} {
+      pass "break $func"
+    }
+    if {[gdb_breakpoint '$func']} {
+      pass "break '$func'"
+    }
+}
+
+gdb_exit
+return 0
+@
+
+
+1.3
+log
+@	* gdb.cp/abstract-origin.exp: Use standard_testfile.
+	* gdb.cp/ambiguous.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/annota2.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/annota3.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/anon-ns.exp: Use standard_testfile.
+	* gdb.cp/anon-struct.exp: Use standard_testfile.
+	* gdb.cp/anon-union.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/arg-reference.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/bool.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/breakpoint.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/bs15503.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/call-c.exp: Use standard_testfile, clean_restart,
+	standard_output_file.
+	* gdb.cp/casts.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/class2.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/classes.exp: Use standard_testfile, prepare_for_testing.
+	(test_static_members): Update.
+	* gdb.cp/cmpd-minsyms.exp: Use standard_testfile.
+	* gdb.cp/converts.exp: Use standard_testfile.
+	* gdb.cp/cp-relocate.exp: Use standard_testfile.
+	* gdb.cp/cpcompletion.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/cpexprs.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/cplabel.exp: Use standard_testfile.
+	* gdb.cp/cplusfuncs.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/ctti.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/derivation.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/destrprint.exp: Use standard_testfile.
+	* gdb.cp/dispcxx.exp: Use standard_testfile.
+	* gdb.cp/exception.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/expand-psymtabs-cxx.exp: Use standard_testfile.
+	* gdb.cp/extern-c.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/formatted-ref.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/fpointer.exp: Use standard_testfile.
+	* gdb.cp/gdb1355.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/gdb2384.exp: Use standard_testfile, clean_restart,
+	standard_output_file.
+	* gdb.cp/gdb2495.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/hang.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/infcall-dlopen.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.cp/inherit.exp: Use standard_testfile, prepare_for_testing.
+	(do_tests): Update.
+	* gdb.cp/koenig.exp: Use standard_testfile.
+	* gdb.cp/local.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/m-data.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/m-static.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/mb-ctor.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/mb-inline.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/mb-templates.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/member-ptr.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/meth-typedefs.exp: Use standard_testfile.
+	* gdb.cp/method.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/method2.exp: Use standard_testfile.
+	* gdb.cp/minsym-fallback.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.cp/misc.exp: Use standard_testfile, prepare_for_testing.
+	(do_tests): Update.
+	* gdb.cp/namespace-enum.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/namespace-nested-import.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/namespace.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/nextoverthrow.exp: Use standard_testfile.
+	* gdb.cp/no-dmgl-verbose.exp: Use standard_testfile.
+	* gdb.cp/nsdecl.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/nsimport.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/nsnested.exp: Use standard_testfile.
+	* gdb.cp/nsnoimports.exp: Use standard_testfile.
+	* gdb.cp/nsrecurs.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/nsstress.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/nsusing.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/operator.exp: Use standard_testfile.
+	* gdb.cp/oranking.exp: Use standard_testfile.
+	* gdb.cp/overload-const.exp: Use standard_testfile.
+	* gdb.cp/overload.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/ovldbreak.exp: Use standard_testfile.
+	* gdb.cp/ovsrch.exp: Use standard_testfile.
+	* gdb.cp/paren-type.exp: Use standard_testfile.
+	* gdb.cp/pass-by-ref.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/pr-1023.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/pr-1210.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/pr-574.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/pr10687.exp: Use standard_testfile, clean_restart.
+	* gdb.cp/pr10728.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.cp/pr12028.exp: Use standard_testfile.
+	* gdb.cp/pr9067.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/pr9167.exp: Use standard_testfile.
+	* gdb.cp/pr9631.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/printmethod.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/psmang.exp: Use standard_testfile, clean_restart.
+	* gdb.cp/psymtab-parameter.exp: Use standard_testfile.
+	* gdb.cp/ptype-cv-cp.exp: Use standard_testfile.
+	* gdb.cp/re-set-overloaded.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.cp/readnow-language.exp: Use standard_testfile.
+	* gdb.cp/ref-params.exp: Use standard_testfile, build_executable.
+	(gdb_start_again): Use clean_restart.
+	* gdb.cp/ref-types.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/rtti.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/shadow.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/smartp.exp: Use standard_testfile.
+	* gdb.cp/static-method.exp: Use standard_testfile.
+	* gdb.cp/static-print-quit.exp: Use standard_testfile.
+	* gdb.cp/temargs.exp: Use standard_testfile.
+	* gdb.cp/templates.exp: Use standard_testfile,
+	prepare_for_testing.
+	(do_tests): Update.
+	* gdb.cp/try_catch.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/typedef-operator.exp: Use standard_testfile.
+	* gdb.cp/userdef.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/virtbase.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/virtfunc.exp: Use standard_testfile,
+	prepare_for_testing.
+	(do_tests): Update.
+	* gdb.cp/virtfunc2.exp: Use standard_testfile,
+	prepare_for_testing.
+@
+text
+@d1 1
+a1 1
+# Copyright 2011-2012 Free Software Foundation, Inc.
+@
+
+
+1.2
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d36 1
+a36 2
+set testfile "meth-typedefs"
+set srcfile $testfile.cc
+@
+
+
+1.1
+log
+@	* gdb.cp/meth-typedefs.cc: New file.
+	* gdb.cp/meth-typedefs.exp: New file.
+@
+text
+@d1 1
+a1 1
+# Copyright 2011 Free Software Foundation, Inc.
+@
+
+
+1.1.2.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d1 1
+a1 1
+# Copyright 2011-2012 Free Software Foundation, Inc.
+@
+
+

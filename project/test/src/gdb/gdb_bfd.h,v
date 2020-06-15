@@ -1,0 +1,610 @@
+head	1.12;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.9
+	gdb_7_6-2013-04-26-release:1.9
+	gdb_7_6-branch:1.9.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.9;
+locks; strict;
+comment	@ * @;
+
+
+1.12
+date	2013.10.07.19.31.13;	author tromey;	state Exp;
+branches;
+next	1.11;
+
+1.11
+date	2013.04.08.20.04.42;	author tromey;	state Exp;
+branches;
+next	1.10;
+
+1.10
+date	2013.03.14.20.26.19;	author tromey;	state Exp;
+branches;
+next	1.9;
+
+1.9
+date	2013.01.01.06.32.42;	author brobecke;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2012.11.28.18.48.38;	author tromey;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2012.08.22.15.50.38;	author tromey;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2012.07.23.14.57.54;	author tromey;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2012.07.23.14.56.10;	author tromey;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2012.07.18.19.57.21;	author tromey;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2012.07.18.19.49.33;	author tromey;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2012.07.18.19.34.57;	author tromey;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2012.07.18.19.33.33;	author tromey;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.12
+log
+@don't share per-BFD data if relocations are needed
+
+Right now we always share per-BFD data across objfiles, if there is a
+BFD.  This works fine.  However, we're going to start sharing more
+data, and sometimes this data will come directly from sections of the
+BFD.  If such a section has SEC_RELOC set, then the data coming from
+that section will not be truly sharable -- the section will be
+program-space-dependent, and re-read by gdb for each objfile.
+
+This patch disallows per-BFD sharing in this case.  This is a bit
+"heavy" in that we could in theory examine each bit of shared data for
+suitability.  However, that is more complicated, and SEC_RELOC is rare
+enough that I think we needn't bother.
+
+Note that the "no sharing" case is equivalent to "gdb works as it
+historically did".  That is, the sharing is a new(-ish) optimization.
+
+Built and regtested on x86-64 Fedora 18.
+
+	* gdb_bfd.c (struct gdb_bfd_data) <relocation_computed,
+	needs_relocations>: New fields.
+	(gdb_bfd_requires_relocations): New function.
+	* gdb_bfd.h (gdb_bfd_requires_relocations): Declare.
+	* objfiles.c (get_objfile_bfd_data): Disallow sharing if
+	the BFD needs relocations applied.
+@
+text
+@/* Definitions for BFD wrappers used by GDB.
+
+   Copyright (C) 2011-2013 Free Software Foundation, Inc.
+
+   This file is part of GDB.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+#ifndef GDB_BFD_H
+#define GDB_BFD_H
+
+#include "registry.h"
+
+DECLARE_REGISTRY (bfd);
+
+/* Make a copy ABFD's filename using bfd_alloc, and reassign it to the
+   BFD.  This ensures that the BFD's filename has the same lifetime as
+   the BFD itself.  */
+
+void gdb_bfd_stash_filename (struct bfd *abfd);
+
+/* Open a read-only (FOPEN_RB) BFD given arguments like bfd_fopen.
+   Returns NULL on error.  On success, returns a new reference to the
+   BFD, which must be freed with gdb_bfd_unref.  BFDs returned by this
+   call are shared among all callers opening the same file.  If FD is
+   not -1, then after this call it is owned by BFD.  */
+
+struct bfd *gdb_bfd_open (const char *name, const char *target, int fd);
+
+/* Increment the reference count of ABFD.  It is fine for ABFD to be
+   NULL; in this case the function does nothing.  */
+
+void gdb_bfd_ref (struct bfd *abfd);
+
+/* Decrement the reference count of ABFD.  If this is the last
+   reference, ABFD will be freed.  If ABFD is NULL, this function does
+   nothing.  */
+
+void gdb_bfd_unref (struct bfd *abfd);
+
+/* Mark the CHILD BFD as being a member of PARENT.  Also, increment
+   the reference count of CHILD.  Calling this function ensures that
+   as along as CHILD remains alive, PARENT will as well.  Both CHILD
+   and PARENT must be non-NULL.  This can be called more than once
+   with the same arguments; but it is not allowed to call it for a
+   single CHILD with different values for PARENT.  */
+
+void gdb_bfd_mark_parent (bfd *child, bfd *parent);
+
+/* Try to read or map the contents of the section SECT.  If
+   successful, the section data is returned and *SIZE is set to the
+   size of the section data; this may not be the same as the size
+   according to bfd_get_section_size if the section was compressed.
+   The returned section data is associated with the BFD and will be
+   destroyed when the BFD is destroyed.  There is no other way to free
+   it; for temporary uses of section data, see
+   bfd_malloc_and_get_section.  SECT may not have relocations.  This
+   function will throw on error.  */
+
+const gdb_byte *gdb_bfd_map_section (asection *section, bfd_size_type *size);
+
+/* Compute the CRC for ABFD.  The CRC is used to find and verify
+   separate debug files.  When successful, this fills in *CRC_OUT and
+   returns 1.  Otherwise, this issues a warning and returns 0.  */
+
+int gdb_bfd_crc (struct bfd *abfd, unsigned long *crc_out);
+
+
+
+/* A wrapper for bfd_fopen that initializes the gdb-specific reference
+   count and calls gdb_bfd_stash_filename.  */
+
+bfd *gdb_bfd_fopen (const char *, const char *, const char *, int);
+
+/* A wrapper for bfd_openr that initializes the gdb-specific reference
+   count and calls gdb_bfd_stash_filename.  */
+
+bfd *gdb_bfd_openr (const char *, const char *);
+
+/* A wrapper for bfd_openw that initializes the gdb-specific reference
+   count and calls gdb_bfd_stash_filename.  */
+
+bfd *gdb_bfd_openw (const char *, const char *);
+
+/* A wrapper for bfd_openr_iovec that initializes the gdb-specific
+   reference count and calls gdb_bfd_stash_filename.  */
+
+bfd *gdb_bfd_openr_iovec (const char *filename, const char *target,
+			  void *(*open_func) (struct bfd *nbfd,
+					      void *open_closure),
+			  void *open_closure,
+			  file_ptr (*pread_func) (struct bfd *nbfd,
+						  void *stream,
+						  void *buf,
+						  file_ptr nbytes,
+						  file_ptr offset),
+			  int (*close_func) (struct bfd *nbfd,
+					     void *stream),
+			  int (*stat_func) (struct bfd *abfd,
+					    void *stream,
+					    struct stat *sb));
+
+/* A wrapper for bfd_openr_next_archived_file that initializes the
+   gdb-specific reference count and calls gdb_bfd_stash_filename.  */
+
+bfd *gdb_bfd_openr_next_archived_file (bfd *archive, bfd *previous);
+
+/* A wrapper for bfd_fdopenr that initializes the gdb-specific
+   reference count and calls gdb_bfd_stash_filename.  */
+
+bfd *gdb_bfd_fdopenr (const char *filename, const char *target, int fd);
+
+
+
+/* Return the index of the BFD section SECTION.  Ordinarily this is
+   just the section's index, but for some special sections, like
+   bfd_com_section_ptr, it will be a synthesized value.  */
+
+int gdb_bfd_section_index (bfd *abfd, asection *section);
+
+
+/* Like bfd_count_sections, but include any possible global sections,
+   like bfd_com_section_ptr.  */
+
+int gdb_bfd_count_sections (bfd *abfd);
+
+/* Return true if any section requires relocations, false
+   otherwise.  */
+
+int gdb_bfd_requires_relocations (bfd *abfd);
+
+#endif /* GDB_BFD_H */
+@
+
+
+1.11
+log
+@	* coffread.c (cs_to_section): Use gdb_bfd_section_index.
+	* elfread.c (record_minimal_symbol, elf_symtab_read): Use
+	gdb_bfd_section_index.
+	* gdb_bfd.c (gdb_bfd_section_index, gdb_bfd_count_sections):
+	New functions.
+	* gdb_bfd.h (gdb_bfd_section_index, gdb_bfd_count_sections):
+	Declare.
+	* machoread.c (macho_symtab_add_minsym, macho_symfile_offsets):
+	Update.
+	* objfiles.c (add_to_objfile_sections_full): New function.
+	(add_to_objfile_sections): Use it.
+	(build_section_table): Rewrite.
+	(objfile_relocate1): Use gdb_bfd_section_index.  Update.
+	* objfiles.h (obj_section_offset): Use gdb_bfd_section_index.
+	(struct objfile) <sections>: Update comment.
+	(ALL_OBJFILE_OSECTIONS): Skip sections where the_bfd_section
+	is NULL.
+	(ALL_OBJSECTIONS): Use it.
+	* solib-dsbt.c (dsbt_relocate_main_executable): Update.
+	* solib-frv.c (frv_relocate_main_executable): Update.
+	* solib-target.c (solib_target_relocate_section_addresses):
+	Use gdb_bfd_section_index.
+	* symfile.c (build_section_addr_info_from_section_table):
+	Use gdb_bfd_section_index.
+	(build_section_addr_info_from_bfd, place_section): Likewise.
+	* symtab.c (fixup_section): Update.
+	* xcoffread.c (find_targ_sec): Use gdb_bfd_section_index.
+@
+text
+@d138 5
+@
+
+
+1.10
+log
+@	* gdb_bfd.c (struct gdb_bfd_data) <crc_computed, crc>:
+	New fields.
+	(get_file_crc): Move from symfile.c.
+	(gdb_bfd_crc): New function.
+	* gdb_bfd.h (gdb_bfd_crc): Declare.
+	* objfiles.h (struct objfile) <crc32, crc32_p>: Remove.
+	* symfile.c (get_file_crc): Move to gdb_bfd.c.
+	(separate_debug_file_exists): Use gdb_bfd_crc.
+@
+text
+@d124 14
+@
+
+
+1.9
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@d73 6
+@
+
+
+1.8
+log
+@	PR gdb/14290:
+	* solib-darwin.c (gdb_bfd_mach_o_fat_extract): New function.
+	(darwin_solib_get_all_image_info_addr_at_init, darwin_bfd_open):
+	Use it.
+	* gdb_bfd.h (gdb_bfd_mark_parent): Declare.
+	* gdb_bfd.c (gdb_bfd_mark_parent): New function.
+	(gdb_bfd_openr_next_archived_file): Use it.
+@
+text
+@d3 1
+a3 2
+   Copyright (C) 2011, 2012
+   Free Software Foundation, Inc.
+@
+
+
+1.7
+log
+@	* gdb_bfd.h: Include registry.h.  Use DECLARE_REGISTRY.
+	* gdb_bfd.c: Use DEFINE_REGISTRY.
+	(struct gdb_bfd_data): Add REGISTRY_FIELDS.
+	(gdb_bfd_ref): Call bfd_alloc_data.
+	(gdb_bfd_unref): Call bfd_free_data.
+@
+text
+@d53 9
+@
+
+
+1.6
+log
+@	* cli/cli-dump.c (bfd_openr_with_cleanup): Use gdb_bfd_openr.
+	(bfd_openw_with_cleanup): Use gdb_bfd_openw.
+	* corelow.c (core_open): Use gdb_bfd_fopen.
+	* dsrec.c (load_srec): Use gdb_bfd_openr.
+	* exec.c (exec_file_attach): Use gdb_bfd_fopen.
+	* gcore.c (gcore_memory_sections): Use gdb_bfd_openw.
+	* gdb_bfd.c (gdb_bfd_fopen, gdb_bfd_openr, gdb_bfd_openw)
+	(gdb_bfd_openr_iovec, gdb_bfd_openr_next_archived_file)
+	(gdb_bfd_fdopenr): New functions.
+	* gdb_bfd.h (gdb_bfd_fopen, gdb_bfd_openr, gdb_bfd_openw)
+	(gdb_bfd_openr_iovec, gdb_bfd_openr_next_archived_file)
+	(gdb_bfd_fdopenr): Declare.
+	* jit.c (bfd_open_from_target_memory): Use gdb_bfd_openr_iovec.
+	* m32-rom.c (m32r_load, m32r_upload_command): Use gdb_bfd_openr.
+	* machoread.c (macho_symfile_read_all_oso): Use gdb_bfd_openr,
+	gdb_bfd_openr_next_archived_file.
+	(macho_check_dsym): Use gdb_bfd_openr.
+	(macho_add_oso_symfile): Don't call gdb_bfd_stash_filename.
+	* procfs.c (insert_dbx_link_bpt_in_file): Use gdb_bfd_fdopenr.
+	* remote-m32r-sdi.c (m32r_load): Use gdb_bfd_openr.
+	* remote-mips.c (mips_load_srec, pmon_load_fast): Use
+	gdb_bfd_openr.
+	* remote.c (remote_bfd_open): Use gdb_bfd_openr_iovec.
+	* rs6000-nat.c (add_vmap): Use gdb_bfd_openr, gdb_bfd_fdopenr,
+	gdb_bfd_openr_next_archived_file.
+	* solib-darwin.c (darwin_solib_get_all_image_info_addr_at_init):
+	Use gdb_bfd_openr.
+	* solib-pa64.c (pa64_solib_create_inferior_hook): Use
+	gdb_bfd_openr.
+	* solib-spu.c (spu_bfd_fopen): Use gdb_bfd_openr_iovec.
+	* solib.c (solib_bfd_fopen): Use gdb_bfd_fopen.
+	* spu-linux-nat.c (spu_bfd_open): Use gdb_bfd_openr_iovec.
+	* symfile.c (bfd_open_maybe_remote): Use gdb_bfd_openr.
+	(symfile_bfd_open): Use gdb_bfd_fopen.
+	(generic_load): Use gdb_bfd_openr.
+	* windows-nat.c (windows_make_so): Use gdb_bfd_openr.
+@
+text
+@d24 4
+@
+
+
+1.5
+log
+@	* bfd-target.c (target_bfd_reopen): Update.
+	* cli/cli-dump.c (bfd_openr_with_cleanup)
+	(bfd_openw_with_cleanup): Update.
+	* corelow.c (core_open): Update.
+	* dsrec.c (load_srec): Update.
+	* exec.c (exec_file_attach): Update.
+	* gcore.c (create_gcore_bfd): Update.
+	* gdb_bfd.c (gdb_bfd_ref): Return void.
+	(gdb_bfd_open): Update.
+	* gdb_bfd.h (gdb_bfd_ref): Return void.
+	Update comments.
+	* jit.c (jit_bfd_try_read_symtab): Update.
+	* m32r-rom.c (m32r_load, m32r_upload_command): Update.
+	* machoread.c (macho_symfile_read_all_oso): Update.
+	(macho_check_dsym): Update.
+	* procfs.c (insert_dbx_link_bpt_in_file): Update.
+	* remote-m32r-sdi.c (m32r_load): Update.
+	* remote-mips.c (mips_load_srec, pmon_load_fast): Update.
+	* rs6000-nat.c (add_vmap): Update.
+	* solib-darwin.c (darwin_solib_get_all_image_info_addr_at_init):
+	Update.
+	* solib-pa64.c (pa64_solib_create_inferior_hook): Update.
+	* solib-spu.c (spu_bfd_open): Update.
+	* solib.c (solib_bfd_fopen, solib_read_symbols): Update.
+	* spu-linux-nat.c (spu_bfd_open): Update.
+	* symfile.c (bfd_open_maybe_remote, symfile_bfd_open)
+	(generic_load): Update.
+	* windows-nat.c (windows_make_so): Update.
+@
+text
+@d61 45
+@
+
+
+1.4
+log
+@	* dwarf2read.c: Don't include zlib.h or sys/mman.h.
+	(pagesize): Remove.
+	(struct dwarf2_section_info) <map_addr, map_len>: Remove.
+	(zlib_decompress_section): Remove.
+	(dwarf2_read_section): Use gdb_bfd_map_section.
+	(munmap_section_buffer): Remove.
+	(free_dwo_file, dwarf2_per_objfile_free): Don't use
+	munmap_section_buffer.
+	* gdb_bfd.c: Include zlib.h, sys/mman.h.
+	(struct gdb_bfd_section_data): New.
+	(free_one_bfd_section): New function.
+	(gdb_bfd_close_or_warn): Use free_one_bfd_section.
+	(get_section_descriptor, zlib_decompress_section)
+	(gdb_bfd_map_section): New functions.
+	* gdb_bfd.h (gdb_bfd_map_section): Declare.
+@
+text
+@d38 2
+a39 3
+/* Acquire a new reference to ABFD.  Returns ABFD for convenience.
+   It is fine for ABFD to be NULL; in this case the function does
+   nothing and returns NULL.  */
+d41 1
+a41 1
+struct bfd *gdb_bfd_ref (struct bfd *abfd);
+d43 3
+a45 2
+/* Release a reference to ABFD.  If this is the last reference, ABFD
+   will be freed.  If ABFD is NULL, this function does nothing.  */
+@
+
+
+1.3
+log
+@	* gdb_bfd.c (struct gdb_bfd_data): New.
+	(gdb_bfd_cache): New global.
+	(struct gdb_bfd_cache_search): New.
+	(hash_bfd, eq_bfd, gdb_bfd_open): New functions.
+	(gdb_bfd_ref, gdb_bfd_unref): Use gdb_bfd_data.
+	* gdb_bfd.h (gdb_bfd_open): Declare.
+@
+text
+@d3 1
+a3 1
+   Copyright (C) 2011
+d49 12
+@
+
+
+1.2
+log
+@	* symfile.c (symfile_bfd_open): Don't copy name.  Call
+	gdb_bfd_stash_filename.
+	(load_command): Open the new BFD before freeing the old.
+	(bfd_open_maybe_remote): Call gdb_bfd_stash_filename.
+	* symfile-mem.c (symbol_file_add_from_memory): Don't copy name.
+	Call gdb_bfd_stash_filename.
+	* spu-linux-nat.c (spu_bfd_open): Don't copy name.
+	* solib-spu.c (spu_bfd_fopen): Don't copy name.  Call
+	gdb_bfd_stash_filename.
+	* solib-darwin.c (darwin_solib_get_all_image_info_addr_at_init):
+	Free found_pathname.
+	* rs6000-nat.c (add_vmap): Don't copy filename.  Call
+	gdb_bfd_stash_filename.
+	* remote.c (remote_bfd_open): Call gdb_bfd_stash_filename.
+	* machoread.c (macho_add_oso_symfile): Call
+	gdb_bfd_stash_filename.
+	(macho_symfile_read_all_oso): Arrange to free archive_name.  Call
+	gdb_bfd_stash_filename.
+	(macho_check_dsym): Don't copy filename.  Call
+	gdb_bfd_stash_filename.
+	* jit.c (bfd_open_from_target_memory): Don't copy the filename.
+	* gdb_bfd.c (gdb_bfd_stash_filename): New function.
+	* gdb_bfd.h (gdb_bfd_stash_filename): Declare.
+	* gcore.c (create_gcore_bfd): Call gdb_bfd_stash_filename.
+	* exec.c (exec_close): Don't free the BFD's filename.
+	(exec_file_attach): Don't copy the filename.  Call
+	gdb_bfd_stash_filename.
+	* corelow.c (core_close): Don't free the BFD's filename.
+	(core_open): Call gdb_bfd_stash_filename.
+	* corefile.c (reopen_exec_file): Remove #if 0 code.
+	* solib.c (solib_bfd_fopen): Call gdb_bfd_stash_filename.  Free
+	pathname.
+	* dwarf2read.c (try_open_dwo_file): Call gdb_bfd_stash_filename.
+@
+text
+@d30 8
+@
+
+
+1.1
+log
+@	* dwarf2read.c (try_open_dwo_file): Use gdb_bfd_ref and
+	gdb_bfd_unref.
+	(free_dwo_file): Use gdb_bfd_unref.
+	* cli/cli-dump.c: Include gdb_bfd.h.
+	(bfd_openw_with_cleanup): Use gdb_bfd_ref.
+	(bfd_openr_with_cleanup): Likewise.
+	* windows-nat.c (windows_make_so): Use gdb_bfd_ref,
+	gdb_bfd_unref.
+	* utils.c: Include gdb_bfd.h.
+	(do_bfd_close_cleanup): Use gdb_bfd_unref.
+	* symfile.c: Include gdb_bfd.h.
+	(separate_debug_file_exists): Use gdb_bfd_unref.
+	(bfd_open_maybe_remote): Use gdb_bfd_ref.
+	(symfile_bfd_open): Use gdb_bfd_ref, gdb_bfd_unref.
+	(generic_load): Use gdb_bfd_ref.
+	(reread_symbols): Use gdb_bfd_unref.
+	* symfile-mem.c: Include gdb_bfd.h.
+	(symbol_file_add_from_memory): Use make_cleanup_bfd_close.
+	* spu-linux-nat.c (spu_bfd_open): Use gdb_bfd_ref, gdb_bfd_unref.
+	* solib.c: Include gdb_bfd.h.
+	(solib_bfd_fopen): Use gdb_bfd_ref.
+	(solib_bfd_open): Use gdb_bfd_unref.
+	(free_so_symbols): Use gdb_bfd_unref.
+	(reload_shared_libraries_1): Use gdb_bfd_unref.
+	* solib-spu.c: Include gdb_bfd.h.
+	(spu_bfd_fopen): Use gdb_bfd_ref, gdb_bfd_unref.
+	* solib-pa64.c (pa64_solib_create_inferior_hook): Use gdb_bfd_ref,
+	gdb_bfd_unref.
+	* solib-frv.c: Include gdb_bfd.h.
+	(enable_break2): Use gdb_bfd_unref.
+	* solib-dsbt.c: Include gdb_bfd.h.
+	(enable_break2): Use gdb_bfd_unref.
+	* solib-darwin.c: Include gdb_bfd.h.
+	(darwin_solib_get_all_image_info_addr_at_init): Use gdb_bfd_ref,
+	gdb_bfd_unref.
+	(darwin_bfd_open): Use gdb_bfd_unref.
+	* rs6000-nat.c (add_vmap): Use gdb_bfd_ref, gdb_bfd_unref.
+	* remote-mips.c: Include gdb_bfd.h.
+	(mips_load_srec): Use gdb_bfd_ref.
+	(pmon_load_fast): Use gdb_bfd_ref.
+	* remote-m32r-sdi.c: Include gdb_bfd.h.
+	(m32r_load): Use gdb_bfd_ref.
+	* record.c: Include gdb_bfd.h.
+	(record_save_cleanups): Use gdb_bfd_unref.
+	(cmd_record_save): Use gdb_bfd_unref.
+	* procfs.c (insert_dbx_link_bpt_in_file): Use gdb_bfd_ref,
+	gdb_bfd_unref.
+	* objfiles.h (gdb_bfd_close_or_warn): Remove.
+	(gdb_bfd_ref, gdb_bfd_unref): Move to gdb_bfd.h.
+	* objfiles.c: Include gdb_bfd.h.
+	(free_objfile): Use gdb_bfd_unref.
+	(gdb_bfd_close_or_warn, gdb_bfd_ref, gdb_bfd_unref): Move to
+	gdb_bfd.c.
+	* machoread.c (macho_add_oso_symfile): Use gdb_bfd_unref.
+	(macho_symfile_read_all_oso): Use gdb_bfd_ref, gdb_bfd_unref.
+	(macho_check_dsym): Likewise.
+	* m32r-rom.c: Include gdb_bfd.h.
+	(m32r_load): Use gdb_bfd_ref.
+	(m32r_upload_command): Use gdb_bfd_ref.
+	* jit.c: Include gdb_bfd.h.
+	(jit_bfd_try_read_symtab): Use gdb_bfd_ref, gdb_bfd_unref.
+	* gdb_bfd.h: New file.
+	* gdb_bfd.c: New file.
+	* gcore.c: Include gdb_bfd.h.
+	(create_gcore_bfd): Use gdb_bfd_ref.
+	(do_bfd_delete_cleanup): Use gdb_bfd_unref.
+	(gcore_command): Use gdb_bfd_unref.
+	* exec.c: Include gdb_bfd.h.
+	(exec_close): Use gdb_bfd_unref.
+	(exec_close_1): Use gdb_bfd_unref.
+	(exec_file_attach): Use gdb_bfd_ref.
+	* elfread.c: Include gdb_bfd.h.
+	(build_id_verify): Use gdb_bfd_unref.
+	* dsrec.c: Include gdb_bfd.h.
+	(load_srec): Use gdb_bfd_ref.
+	* corelow.c: Include gdb_bfd.h.
+	(core_close): Use gdb_bfd_unref.
+	(core_open): Use gdb_bfd_ref.
+	* bfd-target.c: Include gdb_bfd.h.
+	(target_bfd_xclose): Use gdb_bfd_unref.
+	(target_bfd_reopen): Use gdb_bfd_ref.
+	* Makefile.in (SFILES): Add gdb_bfd.c.
+	(HFILES_NO_SRCDIR): Add gdb_bfd.h.
+	(COMMON_OBS): Add gdb_bfd.o.
+@
+text
+@d24 6
+@
+

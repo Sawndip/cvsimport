@@ -1,0 +1,342 @@
+head	1.4;
+access;
+symbols
+	csl-arm-2004-q1a:1.3
+	csl-arm-2004-q1:1.3
+	newlib-1_12_0:1.3
+	csl-arm-2003-q4:1.3
+	w32api-2_2:1.3
+	mingw-runtime-2_4:1.3
+	newlib-1_11_0:1.3
+	cygnus_cvs_20020108_pre:1.3
+	newlib-1_10_0:1.3
+	newlib-1_9_0:1.2
+	newlib-2000-02-17:1.1.1.1
+	SNAPSHOT:1.1.1;
+locks; strict;
+comment	@# @;
+expand	@o@;
+
+
+1.4
+date	2004.06.09.19.05.09;	author jjohnstn;	state dead;
+branches;
+next	1.3;
+
+1.3
+date	2001.03.30.00.51.51;	author jjohnstn;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2000.08.09.21.55.54;	author nickc;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2000.02.17.19.39.49;	author cgf;	state Exp;
+branches
+	1.1.1.1;
+next	;
+
+1.1.1.1
+date	2000.02.17.19.39.49;	author cgf;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.4
+log
+@
+2004-06-09  Toralf Lund  <toralf@@procaptura.com>
+
+        * libc/sys/arm/setjmp.S, libc/sys/arm/access.c: Move
+        files from libc/sys/arm to libc/machine/arm.
+        * libc/machine/arm/Makefile.am, libc/machine/arm/Makefile.in: Add
+        library build support for files moved from libc/sys/arm.
+        * libc/sys/arm/Makefile.am, libc/sys/arm/Makefile.in:  Remove
+        references to access and setjmp.
+        * configure.host: Add checks for newlib_may_supply_syscalls to
+        determine whether or not to use sys/arm directory and use
+        special compiler flags: ARM_RDI_MONITOR and ARM_RDP_MONITOR.
+@
+text
+@/* This is a simple version of setjmp and longjmp.
+
+   Nick Clifton, Cygnus Solutions, 13 June 1997.  */
+
+/* ANSI concatenation macros.  */
+#define CONCAT(a, b)  CONCAT2(a, b)
+#define CONCAT2(a, b) a##b
+
+#ifndef __USER_LABEL_PREFIX__
+#error  __USER_LABEL_PREFIX__ not defined
+#endif
+
+#define SYM(x) CONCAT (__USER_LABEL_PREFIX__, x)
+
+#ifdef __ELF__
+#define TYPE(x) .type SYM(x),function
+#define SIZE(x) .size SYM(x), . - SYM(x)
+#else
+#define TYPE(x)
+#define SIZE(x)
+#endif
+
+/* Arm/Thumb interworking support:
+
+   The interworking scheme expects functions to use a BX instruction
+   to return control to their parent.  Since we need this code to work
+   in both interworked and non-interworked environments as well as with
+   older processors which do not have the BX instruction we do the 
+   following:
+	Test the return address.
+	If the bottom bit is clear perform an "old style" function exit.
+	(We know that we are in ARM mode and returning to an ARM mode caller).
+	Otherwise use the BX instruction to perform the function exit.
+
+   We know that we will never attempt to perform the BX instruction on 
+   an older processor, because that kind of processor will never be 
+   interworked, and a return address with the bottom bit set will never 
+   be generated.
+
+   In addition, we do not actually assemble the BX instruction as this would
+   require us to tell the assembler that the processor is an ARM7TDMI and
+   it would store this information in the binary.  We want this binary to be
+   able to be linked with binaries compiled for older processors however, so
+   we do not want such information stored there.  
+
+   If we are running using the APCS-26 convention however, then we never
+   test the bottom bit, because this is part of the processor status.  
+   Instead we just do a normal return, since we know that we cannot be 
+   returning to a Thumb caller - the Thumb does not support APCS-26.
+	
+   Function entry is much simpler.  If we are compiling for the Thumb we 
+   just switch into ARM mode and then drop through into the rest of the
+   function.  The function exit code will take care of the restore to
+   Thumb mode.  */
+
+#ifdef __APCS_26__
+#define RET	movs		pc, lr
+#else
+#define RET	tst		lr, #1; \
+	        moveq		pc, lr ; \
+.word           0xe12fff1e	/* bx lr */
+#endif
+
+#ifdef __thumb__
+#define	MODE		.thumb_func
+.macro PROLOGUE name
+	.code 16
+	bx	pc
+	nop	
+	.code 32
+SYM (.arm_start_of.\name):
+.endm
+#else
+#define	MODE		.code 32
+.macro PROLOGUE name
+.endm
+#endif
+	
+.macro FUNC_START name
+	.text
+	.align 2
+	MODE
+	.globl SYM (\name)
+	TYPE (\name)
+SYM (\name):
+	PROLOGUE \name
+.endm
+
+.macro FUNC_END name
+	RET
+	SIZE (\name)
+.endm
+	
+/* --------------------------------------------------------------------
+                 int setjmp (jmp_buf); 
+   -------------------------------------------------------------------- */
+	
+	FUNC_START setjmp
+
+	/* Save all the callee-preserved registers into the jump buffer.  */
+	stmea		a1!, { v1-v7, fp, ip, sp, lr }
+	
+#if 0	/* Simulator does not cope with FP instructions yet.  */
+#ifndef __SOFTFP__
+	/* Save the floating point registers.  */
+	sfmea		f4, 4, [a1]
+#endif
+#endif		
+	/* When setting up the jump buffer return 0.  */
+	mov		a1, #0
+
+	FUNC_END setjmp
+	
+/* --------------------------------------------------------------------
+		volatile void longjmp (jmp_buf, int);
+   -------------------------------------------------------------------- */
+	
+	FUNC_START longjmp
+
+	/* If we have stack extension code it ought to be handled here.  */
+	
+	/* Restore the registers, retrieving the state when setjmp() was called.  */
+	ldmfd		a1!, { v1-v7, fp, ip, sp, lr }
+	
+#if 0	/* Simulator does not cope with FP instructions yet.  */
+#ifndef __SOFTFP__
+	/* Restore floating point registers as well.  */
+	lfmfd		f4, 4, [a1]
+#endif
+#endif	
+	/* Put the return value into the integer result register.
+	   But if it is zero then return 1 instead.  */	
+	movs		a1, a2
+	moveq		a1, #1
+
+	FUNC_END longjmp
+
+@
+
+
+1.3
+log
+@
+2001-03-29  Jeff Johnston  <jjohnstn@@redhat.com>
+
+        * libc/sys/arm/setjmp.S: Added .code 16 specifier for thumb-mode
+        prolog to by-pass possible assembler error.
+@
+text
+@@
+
+
+1.2
+log
+@Recode to clean up function prologues and epilogue and to allow the functions
+ to be used in a Thumb based toolchain.
+@
+text
+@d67 1
+@
+
+
+1.1
+log
+@Initial revision
+@
+text
+@d6 2
+a7 2
+#define CONCAT(a, b) CONCAT2(a, b)
+#define CONCAT2(a, b) a ## b
+d9 63
+a71 2
+#ifdef __USER_LABEL_PREFIX__
+#define FUNCTION( name ) CONCAT (__USER_LABEL_PREFIX__, name)
+d73 3
+a75 1
+#error __USER_LABEL_PREFIX__ is not defined
+d78 1
+a78 1
+
+a79 1
+	.code 32
+d81 15
+d97 1
+a97 3
+/* int setjmp (jmp_buf);  */
+	.globl	FUNCTION(setjmp)
+FUNCTION(setjmp):
+d99 1
+a99 1
+	/* Save all the callee-preserved registers into the jump buffer. */
+d102 1
+a102 1
+#if 0	/* Simulator does not cope with FP instructions yet.... */
+d104 1
+a104 1
+	/* Save the floating point registers */
+d108 1
+a108 1
+	/* When setting up the jump buffer return 0. */
+d111 5
+a115 8
+	/* Return to caller, see comment in longjmp below */
+#ifdef __APCS_26__
+	movs		pc, lr
+#else
+	tst		lr, #1
+	moveq		pc, lr
+.word   0xe12fff1e	/*  bx lr */
+#endif
+d117 1
+d119 1
+a119 5
+/* volatile void longjmp (jmp_buf, int);  */
+	.globl	FUNCTION(longjmp)
+FUNCTION(longjmp):
+
+	/* If we have stack extension code it ought to be handled here. */
+d121 1
+a121 1
+	/* Restore the registers, retrieving the state when setjmp() was called. */
+d124 1
+a124 1
+#if 0	/* Simulator does not cope with FP instructions yet.... */
+d126 1
+a126 1
+	/* Restore floating point registers as well */
+d135 1
+a135 36
+	/* Arm/Thumb interworking support:
+	
+	   The interworking scheme expects functions to use a BX instruction
+	   to return control to their parent.  Since we need this code to work
+	   in both interworked and non-interworked environments as well as with
+	   older processors which do not have the BX instruction we do the 
+	   following:
+		Test the return address.
+		If the bottom bit is clear perform an "old style" function exit.
+		(We know that we are in ARM mode and returning to an ARM mode caller).
+		Otherwise use the BX instruction to perform the function exit.
+	
+	   We know that we will never attempt to perform the BX instruction on 
+	   an older processor, because that kind of processor will never be 
+	   interworked, and a return address with the bottom bit set will never 
+	   be generated.
+
+	   In addition, we do not actually assemble the BX instruction as this would
+	   require us to tell the assembler that the processor is an ARM7TDMI and
+	   it would store this information in the binary.  We want this binary to be
+	   able to be linked with binaries compiled for older processors however, so
+	   we do not want such information stored there.  
+
+	   If we are running using the APCS-26 convention however, then we never
+	   test the bottom bit, because this is part of the processor status.  
+	   Instead we just do a normal return, since we know that we cannot be 
+	   returning to a Thumb caller - the Thumb doe snot support APCS-26
+	*/
+
+#ifdef __APCS_26__
+	movs		pc, lr
+#else
+	tst		lr, #1
+	moveq		pc, lr
+.word   0xe12fff1e	/* bx lr */
+#endif
+@
+
+
+1.1.1.1
+log
+@import newlib-2000-02-17 snapshot
+@
+text
+@@

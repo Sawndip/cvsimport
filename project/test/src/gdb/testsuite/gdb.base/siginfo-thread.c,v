@@ -1,0 +1,144 @@
+head	1.2;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.2
+	gdb_7_6-2013-04-26-release:1.2
+	gdb_7_6-branch:1.2.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.2;
+locks; strict;
+comment	@ * @;
+
+
+1.2
+date	2013.01.01.06.33.26;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2012.11.08.21.16.43;	author tromey;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@/* This testcase is part of GDB, the GNU debugger.
+
+   Copyright 2004-2013 Free Software Foundation, Inc.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+*/
+
+#include <signal.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/mman.h>
+#include <unistd.h>
+#include <pthread.h>
+
+static void *p;
+
+static void
+handler (int sig, siginfo_t *info, void *context)
+{
+  /* Copy to local vars, as the test wants to read them, and si_addr,
+     etc. may be preprocessor defines.  */
+  int ssi_errno = info->si_errno;
+  int ssi_signo = info->si_signo;
+  int ssi_code = info->si_code;
+  void *ssi_addr = info->si_addr;
+
+  _exit (0); /* set breakpoint here */
+}
+
+static void *
+segv_thread (void *ptr)
+{
+  *(int *)ptr = 0;
+}
+
+int
+main (void)
+{
+  pthread_t thr;
+
+  /* Set up unwritable memory.  */
+  {
+    size_t len;
+    len = sysconf(_SC_PAGESIZE);
+    p = mmap (0, len, PROT_NONE, MAP_ANON|MAP_PRIVATE, -1, 0);
+    if (p == MAP_FAILED)
+      {
+	perror ("mmap");
+	return 1;
+      }
+  }
+  /* Set up the signal handler.  */
+  {
+    struct sigaction action;
+    memset (&action, 0, sizeof (action));
+    action.sa_sigaction = handler;
+    action.sa_flags |= SA_SIGINFO;
+    if (sigaction (SIGSEGV, &action, NULL))
+      {
+	perror ("sigaction");
+	return 1;
+      }
+  }
+
+  /* Create a thread that will trigger SIGSEGV.  */
+  pthread_create (&thr, NULL, segv_thread, p);
+
+  pthread_join (thr, NULL);
+
+  return 0;
+}
+@
+
+
+1.1
+log
+@gdb
+	* linux-tdep.c (linux_make_siginfo_note): New function.
+	(linux_make_corefile_notes): Use it.
+	* corelow.c (get_core_siginfo): New function.
+	(core_xfer_partial) <TARGET_OBJECT_SIGNAL_INFO>: New case.
+gdb/testsuite
+	* gdb.base/siginfo-obj.exp: Create core file.  Test siginfo from
+	core files, if possible.
+	* gdb.base/siginfo-thread.c: New file
+	* gdb.base/siginfo-thread.exp: New file
+bfd
+	* elf.c (elfcore_grok_note) <NT_SIGINFO>: New case; make
+	pseudosection.
+@
+text
+@d3 1
+a3 1
+   Copyright 2004, 2007-2008, 2010-2012 Free Software Foundation, Inc.
+@
+

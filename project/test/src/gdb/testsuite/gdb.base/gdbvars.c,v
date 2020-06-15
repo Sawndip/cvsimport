@@ -1,0 +1,187 @@
+head	1.3;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.2
+	gdb_7_6-2013-04-26-release:1.2
+	gdb_7_6-branch:1.2.0.10
+	gdb_7_6-2013-03-12-branchpoint:1.2
+	gdb_7_5_1-2012-11-29-release:1.2
+	gdb_7_5-2012-08-17-release:1.2
+	gdb_7_5-branch:1.2.0.8
+	gdb_7_5-2012-07-18-branchpoint:1.2
+	gdb_7_4_1-2012-04-26-release:1.2
+	gdb_7_4-2012-01-24-release:1.2
+	gdb_7_4-branch:1.2.0.6
+	gdb_7_4-2011-12-13-branchpoint:1.2
+	gdb_7_3_1-2011-09-04-release:1.2
+	gdb_7_3-2011-07-26-release:1.2
+	gdb_7_3-branch:1.2.0.4
+	gdb_7_3-2011-04-01-branchpoint:1.2
+	gdb_7_2-2010-09-02-release:1.2
+	gdb_7_2-branch:1.2.0.2
+	gdb_7_2-2010-07-07-branchpoint:1.2
+	gdb_7_1-2010-03-18-release:1.1
+	gdb_7_1-branch:1.1.0.4
+	gdb_7_1-2010-02-18-branchpoint:1.1
+	gdb_7_0_1-2009-12-22-release:1.1
+	gdb_7_0-2009-10-06-release:1.1
+	gdb_7_0-branch:1.1.0.2
+	gdb_7_0-2009-09-16-branchpoint:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.3
+date	2013.09.16.17.47.30;	author sergiodj;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2010.03.24.21.28.14;	author drow;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2009.08.19.13.00.29;	author uweigand;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.3
+log
+@Based on the discussion at:
+
+<https://sourceware.org/ml/gdb-patches/2013-09/msg00301.html>
+<https://sourceware.org/ml/gdb-patches/2013-09/msg00383.html>
+
+This patch adds a new convenience function called $_isvoid, whose
+only purpose is to check whether an expression is void or not.
+This became necessary because the new convenience variable
+$_exitsignal (not yet approved) has a mutual exclusive behavior
+with $_exitcode, i.e., when one is "defined" (i.e., non-void),
+the other is cleared (i.e., becomes void).  Doug wanted a way to
+identify which variable to use, and checking for voidness is the
+obvious solution.
+
+It is worth mentioning that my first attempt, after a conversation with
+Doug, was to actually implement a new $_isdefined() convenience
+function.  I would do that (for convenience variables) by calling
+lookup_only_internalvar.  However, I found a few problems:
+
+- Whenever I called $_isdefined ($variable), $variable became defined
+  (with a void value), and $_isdefined always returned true.
+
+- Then, I tried to implement $_isdefined ("variable"), and do the "$" +
+  "variable" inside GDB, thus making it impossible for GDB to create the
+  convenience variable.  However, it was hard to extract the string
+  without having to mess with values and their idiossincrasies.
+  Therefore, I decided to abandon this attempt (specially because I
+  didn't want to spend too much time struggling with it).
+
+Anyway, after talking to Doug again we decided that it would be easier
+to implement $_isvoid, and this will probably help in cases like
+<http://stackoverflow.com/questions/3744554/testing-if-a-gdb-convenience-variable-is-defined>.
+
+I wrote a NEWS entry for it, and some new lines on the documentation.
+
+gdb/
+2013-09-16  Sergio Durigan Junior  <sergiodj@@redhat.com>
+
+	* NEWS: Mention new convenience function $_isvoid.
+	* value.c (isvoid_internal_fn): New function.
+	(_initialize_values): Add new convenience function $_isvoid.
+
+gdb/doc/
+2013-09-16  Sergio Durigan Junior  <sergiodj@@redhat.com>
+
+	* gdb.texinfo (Convenience Functions): Mention new convenience
+	function $_isvoid.
+
+gdb/testsuite/
+2013-09-16  Sergio Durigan Junior  <sergiodj@@redhat.com>
+
+	* gdb.base/gdbvars.c (foo_void): New function.
+	(foo_int): Likewise.
+	* gdb.base/gdbvars.exp (test_convenience_functions): New
+	function.  Call it.
+@
+text
+@/* Simple program to help exercise gdb's convenience variables.  */
+
+typedef void *ptr;
+
+ptr p = &p;
+
+static void
+foo_void (void)
+{
+}
+
+static int
+foo_int (void)
+{
+  return 0;
+}
+
+int
+main ()
+{
+  p = &p;
+  return 0;
+}
+@
+
+
+1.2
+log
+@	* gdb.base/completion.exp: Allow long instead of long int.
+	* gdb.base/ending-run.exp: Match _rt_entry.* for RealView.
+	* gdb.base/gdbvars.c (main): Remove unused usestubs code.  Reference
+	variable p.
+	* gdb.base/maint.exp: Allow ER_RO and ER_RW instead of .text and .data.
+	* gdb.base/pointers.exp: Allow long instead of long int.
+	* gdb.base/printcmds.exp: XFAIL for RealView on ARM EABI.
+	* gdb.base/step-line.exp: Allow a directory before the source file name.
+@
+text
+@d7 11
+@
+
+
+1.1
+log
+@ChangeLog:
+
+	* value.c (enum internalvar_kind): Replace INTERNALVAR_SCALAR by
+	INTERNALVAR_INTEGER and INTERNALVAR_POINTER.
+	(union internalvar_data): Replace "scalar" member by "integer"
+	and "pointer".
+	(value_of_internalvar): Handle INTERNALVAR_INTEGER and
+	INTERNALVAR_POINTER instead of INTERNALVAR_SCALAR.
+	(get_internalvar_integer): Likewise.
+	(set_internalvar): Likewise.
+	(set_internalvar_integer): Likewise.
+	(preserve_one_internalvar): Likewise.
+	(value_from_pointer): Handle typedef'd pointer types.
+
+testsuite/ChangeLog:
+
+2009-08-19  Doug Evans  <dje@@google.com>
+
+	* gdb.base/gdbvars.c: New file.
+	* gdb.base/gdbvars.exp: Test convenience vars with program variables.
+@
+text
+@d10 1
+a10 5
+#ifdef usestubs
+    set_debug_traps ();
+    breakpoint ();
+#endif
+
+@
+

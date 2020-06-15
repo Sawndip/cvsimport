@@ -1,0 +1,512 @@
+head	1.10;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.8
+	gdb_7_6-2013-04-26-release:1.8
+	gdb_7_6-branch:1.8.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.8
+	gdb_7_5_1-2012-11-29-release:1.7
+	gdb_7_5-2012-08-17-release:1.7
+	gdb_7_5-branch:1.7.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.7
+	gdb_7_4_1-2012-04-26-release:1.4.4.1
+	gdb_7_4-2012-01-24-release:1.4.4.1
+	gdb_7_4-branch:1.4.0.4
+	gdb_7_4-2011-12-13-branchpoint:1.4
+	gdb_7_3_1-2011-09-04-release:1.4
+	gdb_7_3-2011-07-26-release:1.4
+	gdb_7_3-branch:1.4.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.4
+	gdb_7_2-2010-09-02-release:1.2
+	gdb_7_2-branch:1.2.0.4
+	gdb_7_2-2010-07-07-branchpoint:1.2
+	gdb_7_1-2010-03-18-release:1.2
+	gdb_7_1-branch:1.2.0.2
+	gdb_7_1-2010-02-18-branchpoint:1.2
+	gdb_7_0_1-2009-12-22-release:1.1
+	gdb_7_0-2009-10-06-release:1.1
+	gdb_7_0-branch:1.1.0.4
+	gdb_7_0-2009-09-16-branchpoint:1.1
+	msnyder-checkpoint-072509-branch:1.1.0.2
+	msnyder-checkpoint-072509-branchpoint:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.10
+date	2013.09.02.23.09.57;	author qiyao;	state Exp;
+branches;
+next	1.9;
+
+1.9
+date	2013.08.09.16.54.43;	author sergiodj;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2013.01.01.06.32.46;	author brobecke;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2012.05.24.16.39.10;	author palves;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2012.01.20.09.56.56;	author uweigand;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2012.01.04.08.17.05;	author brobecke;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2011.01.01.15.33.10;	author brobecke;	state Exp;
+branches
+	1.4.4.1;
+next	1.3;
+
+1.3
+date	2010.08.04.15.27.57;	author palves;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2010.01.01.07.31.37;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2009.02.06.22.59.00;	author palves;	state Exp;
+branches;
+next	;
+
+1.4.4.1
+date	2012.01.06.04.43.19;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.10
+log
+@gdb/
+
+	* linux-tdep.c (linux_is_uclinux): New function.  Code moved
+	from linux_has_shared_address_space.
+	(linux_has_shared_address_space): Call linux_is_uclinux.
+	* linux-tdep.h (linux_is_uclinux): Declare.
+	* m68klinux-tdep.c (m68k_linux_get_sigtramp_info): Call
+	linux_is_uclinux.
+@
+text
+@/* Target-dependent code for GNU/Linux, architecture independent.
+
+   Copyright (C) 2009-2013 Free Software Foundation, Inc.
+
+   This file is part of GDB.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+#ifndef LINUX_TDEP_H
+#define LINUX_TDEP_H
+
+#include "bfd.h"
+
+struct regcache;
+
+typedef char *(*linux_collect_thread_registers_ftype) (const struct regcache *,
+						       ptid_t,
+						       bfd *, char *, int *,
+						       enum gdb_signal);
+
+char *linux_make_corefile_notes (struct gdbarch *, bfd *, int *,
+                                 linux_collect_thread_registers_ftype);
+
+struct type *linux_get_siginfo_type (struct gdbarch *);
+
+extern enum gdb_signal linux_gdb_signal_from_target (struct gdbarch *gdbarch,
+						     int signal);
+
+extern int linux_gdb_signal_to_target (struct gdbarch *gdbarch,
+				       enum gdb_signal signal);
+
+extern void linux_init_abi (struct gdbarch_info info, struct gdbarch *gdbarch);
+
+extern int linux_is_uclinux (void);
+
+#endif /* linux-tdep.h */
+@
+
+
+1.9
+log
+@This patch implements the new gdbarch method gdbarch_gdb_signal_to_target.
+It will be used when one wants to convert between the internal GDB signal
+representation (enum gdb_signal) and the target's representation.
+
+The idea of this patch came from a chat between Pedro and I on IRC, plus
+the discussion of my patches to add the new $_exitsignal convenience
+variable:
+
+	<http://sourceware.org/ml/gdb-patches/2013-06/msg00452.html>
+	<http://sourceware.org/ml/gdb-patches/2013-06/msg00352.html>
+
+What I did was to investigate, on the Linux kernel, which targets shared
+the signal numbers definition with the generic definition, present at
+<include/uapi/asm-generic/signal.h>.  For the record, I used linux-3.10-rc7
+as the main source of information, always looking at
+<arch/<ARCH_NAME>/include/uapi/asm/signal.h>.  For SIGRTMAX (which defaults
+to _NSIG in most cases), I had to look at different signal-related
+files, but most of them (except MIPS) were defined to 64 anyway.
+
+Then, with all the differences in hand, I implemented the bits on each
+target.
+
+2013-08-09  Sergio Durigan Junior  <sergiodj@@redhat.com>
+
+	* linux-tdep.c: Define enum with generic signal numbers.
+	(linux_gdb_signal_from_target): New function.
+	(linux_gdb_signal_to_target): Likewise.
+	(linux_init_abi): Set gdbarch_gdb_signal_{to,from}_target
+	methods to the functions above.
+	* linux-tdep.h (linux_gdb_signal_from_target): New prototype.
+	(linux_gdb_signal_to_target): Likewise.
+	* alpha-linux-tdep.c: Define new enum with signals different
+	from generic Linux kernel.
+	(alpha_linux_gdb_signal_from_target): New function.
+	(alpha_linux_gdb_signal_to_target): Likewise.
+	(alpha_linux_init_abi): Set gdbarch_gdb_signal_{to,from}_target
+	with the functions mentioned above.
+	* avr-tdep.c: Define enum with differences between Linux kernel
+	and AVR signals.
+	(avr_linux_gdb_signal_from_target): New function.
+	(avr_linux_gdb_signal_to_target): Likewise.
+	(avr_gdbarch_init): Set gdbarch_gdb_signal_{to,from}_target to
+	the functions mentioned above.
+	* sparc-linux-tdep.c: Define enum with differences between SPARC
+	and generic Linux kernel signal numbers.
+	(sparc32_linux_gdb_signal_from_target): New function.
+	(sparc32_linux_gdb_signal_to_target): Likewise.
+	(sparc32_linux_init_abi): Set gdbarch_gdb_signal_{to,from}_target
+	to the functions defined above.
+	* xtensa-linux-tdep.c: Define enum with differences between
+	Xtensa and Linux kernel generic signals.
+	(xtensa_linux_gdb_signal_from_target): New function.
+	(xtensa_linux_gdb_signal_to_target): Likewise.
+	(xtensa_linux_init_abi): Set gdbarch_gdb_signal_to_target
+	to the functions defined above.
+	* mips-linux-tdep.c: Define enum with differences between
+	signals in MIPS and Linux kernel generic ones.
+	(mips_gdb_signal_to_target): New function.
+	(mips_gdb_signal_from_target): Redefine to use new enum, handle
+	only different signals from the Linux kernel generic.
+	(mips_linux_init_abi): Set gdbarch_gdb_signal_{to,from}_target
+	the functions defined above.
+	* mips-linux-tdep.h (enum mips_signals): Remove.
+@
+text
+@d45 2
+@
+
+
+1.8
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@d37 6
+@
+
+
+1.7
+log
+@gdb/
+2012-05-24  Pedro Alves  <palves@@redhat.com>
+
+	PR gdb/7205
+
+	Replace target_signal with gdb_signal throughout.
+
+gdb/gdbserver/
+2012-05-24  Pedro Alves  <palves@@redhat.com>
+
+	PR gdb/7205
+
+	Replace target_signal with gdb_signal throughout.
+
+include/gdb/
+2012-05-24  Pedro Alves  <palves@@redhat.com>
+
+	PR gdb/7205
+
+	Replace target_signal with gdb_signal throughout.
+
+sim/common/
+2012-05-24  Pedro Alves  <palves@@redhat.com>
+
+	PR gdb/7205
+
+	Replace target_signal with gdb_signal throughout.
+@
+text
+@d3 1
+a3 1
+   Copyright (C) 2009-2012 Free Software Foundation, Inc.
+@
+
+
+1.6
+log
+@	* gdbarch.sh (make_corefile_notes): New architecture callback.
+	* gdbarch.c: Regenerate.
+	* gdbarch.h: Likewise.
+
+	* gcore.c (write_gcore_file): Try gdbarch_make_corefile_notes
+	before target_make_corefile_notes.  If NULL is returned, the
+	target does not support core file generation.
+
+	* linux-nat.c: Include "linux-tdep.h".
+	(find_signalled_thread, find_stop_signal): Remove.
+	(linux_nat_do_thread_registers): Likewise.
+	(struct linux_nat_corefile_thread_data): Likewise.
+	(linux_nat_corefile_thread_callback): Likewise.
+	(iterate_over_spus): Likewise.
+	(struct linux_spu_corefile_data): Likewise.
+	(linux_spu_corefile_callback): Likewise.
+	(linux_spu_make_corefile_notes): Likewise.
+	(linux_nat_collect_thread_registers): New function.
+	(linux_nat_make_corefile_notes): Replace contents by call to
+	linux_make_corefile_notes passing linux_nat_collect_thread_registers
+	as native-only callback.
+
+	* linux-tdep.h: Include "bfd.h".
+	(struct regcache): Add forward declaration.
+	(linux_collect_thread_registers_ftype): New typedef.
+	(linux_make_corefile_notes): Add prototype.
+	* linux-tdep.c: Include "gdbthread.h", "gdbcore.h", "regcache.h",
+	"regset.h", and "elf-bfd.h".
+	(find_signalled_thread, find_stop_signal): New functions.
+	(linux_spu_make_corefile_notes): Likewise.
+	(linux_collect_thread_registers): Likewise.
+	(struct linux_corefile_thread_data): New data structure.
+	(linux_corefile_thread_callback): New funcion.
+	(linux_make_corefile_notes): Likewise.
+	(linux_make_corefile_notes_1): Likewise.
+	(linux_init_abi): Install it.
+@
+text
+@d30 1
+a30 1
+						       enum target_signal);
+@
+
+
+1.5
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d23 12
+@
+
+
+1.4
+log
+@run copyright.sh for 2011.
+@
+text
+@d3 1
+a3 1
+   Copyright (C) 2009, 2010, 2011 Free Software Foundation, Inc.
+@
+
+
+1.4.4.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d3 1
+a3 1
+   Copyright (C) 2009-2012 Free Software Foundation, Inc.
+@
+
+
+1.3
+log
+@	* corelow.c (core_pid_to_str): Default to using normal_pid_to_str
+	instead of printing "Thread" here.
+	* linux-tdep.c: Include inferior.h.
+	(linux_core_pid_to_str): New.
+	(linux_init_abi): New.
+	* linux-tdep.h (linux_init_abi): Declare.
+	* alpha-linux-tdep.c: Include linux-tdep.h.
+	(alpha_linux_init_abi): Call linux_init_abi.
+	* amd64-linux-tdep.c (amd64_linux_init_abi): Call linux_init_abi.
+	* arm-linux-tdep.c (arm_linux_init_abi): Call linux_init_abi.
+	* frv-linux-tdep.c: Include linux-tdep.h
+	(frv_linux_init_abi): Call linux_init_abi.
+	* hppa-linux-tdep.c: Include linux-tdep.h
+	(hppa_linux_init_abi): Call linux_init_abi.
+	* i386-linux-tdep.c (i386_linux_init_abi): Call linux_init_abi.
+	* ia64-linux-tdep.c: Include linux-tdep.h.
+	(ia64_linux_init_abi): Call linux_init_abi.
+	* m32r-linux-tdep.c: Include linux-tdep.h.
+	(m32r_linux_init_abi): Call linux_init_abi.
+	* m68klinux-tdep.c: Include linux-tdep.h.
+	(m68k_linux_init_abi): Call linux_init_abi.
+	* microblaze-linux-tdep.c: Include linux-tdep.h.
+	(microblaze_linux_init_abi): Call linux_init_abi.
+	* mips-linux-tdep.c: Include linux-tdep.h.
+	(mips_linux_init_abi): Call linux_init_abi.
+	* mn10300-linux-tdep.c: Include linux-tdep.h.
+	(am33_linux_init_osabi): Call linux_init_abi.  Rename the
+	'gdbinfo' parameter to 'info'.
+	* ppc-linux-tdep.c: Include linux-tdep.h.
+	(ppc_linux_init_abi): Call linux_init_abi.
+	* sh-linux-tdep.c: Include linux-tdep.h.
+	(sh_linux_init_abi): Call linux_init_abi.
+	* sparc-linux-tdep.c: Include linux-tdep.h.
+	(sparc32_linux_init_abi): Call linux_init_abi.
+	* sparc64-linux-tdep.c: Include linux-tdep.h.
+	(sparc64_linux_init_abi): Call linux_init_abi.
+	* xtensa-linux-tdep.c: Include linux-tdep.h.
+	(xtensa_linux_init_abi): Call linux_init_abi.
+	* i386-cygwin-tdep.c (i386_windows_core_pid_to_str): New.
+	(i386_cygwin_init_abi): Install it as gdbarch_core_pid_to_str
+	callback.
+@
+text
+@d3 1
+a3 1
+   Copyright (C) 2009, 2010 Free Software Foundation, Inc.
+@
+
+
+1.2
+log
+@Update copyright year in most headers.
+
+Automatic update by copyright.sh.
+@
+text
+@d25 2
+@
+
+
+1.1
+log
+@2009-02-06  Pedro Alves  <pedro@@codesourcery.com>
+
+	gdb/
+	* target.h (enum target_object): Add new TARGET_OBJECT_SIGNAL_INFO.
+	* infrun.c (siginfo_value_read, siginfo_value_write): New.
+	(siginfo_value_funcs): New.
+	(siginfo_make_value): New.
+	(_initialize_infrun): Create the $_siginfo convenience variable.
+	* gdbtypes.h (append_composite_type_field_aligned): Declare.
+	* gdbtypes.c (append_composite_type_field): Rename to...
+	(append_composite_type_field_aligned): ... this.  Add ALIGNMENT
+	argument.  Handle it.
+	(append_composite_type_field): Rewrite on top of
+	append_composite_type_field_aligned.
+	* value.h (internalvar_make_value): New typedef.
+	(struct internalvar) <make_value>: New field.
+	(create_internalvar_type_lazy): Declare.
+	* value.c (create_internalvar): Clear make_value.
+	(create_internalvar_type_lazy): New.
+	(value_of_internalvar): If make_value is set use it.
+	(preserve_values): Skip internal variables that don't have a
+	value.
+	* gdbarch.sh (get_siginfo_type): New.
+	* gdbarch.h, gdbarch.c: Regenerate.
+
+	* linux-tdep.h, linux-tdep.c: New.
+	* amd64-linux-tdep.c: Include "linux-tdep.h".
+	(amd64_linux_init_abi): Register linux_get_siginfo_type and
+	linux_get_siginfo_mapper.
+	* i386-linux-tdep.c: Include "linux-tdep.h".
+	(i386_linux_init_abi): Register linux_get_siginfo_type and
+	linux_get_siginfo_mapper.
+	* arm-linux-tdep.c: Include "linux-tdep.h".
+	(i386_linux_init_abi): Register linux_get_siginfo_type and
+	linux_get_siginfo_mapper.
+
+	* linux-nat.c (linux_xfer_siginfo): New.
+	(linux_nat_xfer_partial): Handle TARGET_OBJECT_SIGNAL_INFO.
+	* remote.c (PACKET_qXfer_siginfo_read)
+	(PACKET_qXfer_siginfo_write): New.
+	(feature remote_protocol_features): Add "qXfer:siginfo:read" and
+	"qXfer:siginfo:write" features.
+	(remote_xfer_partial): Handle TARGET_OBJECT_SIGNAL_INFO.
+	(_initialize_remote): Add "set/show remote read-siginfo-object"
+	and "set/show remote write-siginfo-object" commands.
+
+	* Makefile.in (ALL_TARGET_OBS): Add linux-tdep.o.
+	(HFILES_NO_SRCDIR): Add linux-tdep.h.
+	(ALLDEPFILES): Add linux-tdep.c.
+
+	* configure.tgt (arm*-*-linux* | arm*-*-uclinux*)
+	(i[34567]86-*-linux*, x86_64-*-linux*): Add linux-tdep.o to
+	gdb_target_obs.
+
+2009-02-06  Pedro Alves  <pedro@@codesourcery.com>
+
+	gdb/gdbserver/
+	* server.c (handle_query): Report qXfer:siginfo:read and
+	qXfer:siginfo:write as supported and handle them.
+	* target.h (struct target_ops) <qxfer_siginfo>: New field.
+	* linux-low.c (linux_xfer_siginfo): New.
+	(linux_target_ops): Set it.
+
+2009-02-06  Pedro Alves  <pedro@@codesourcery.com>
+
+	gdb/doc/
+	* gdb.texinfo (Signals): Document $_siginfo.
+	(Convenience Variables): Mention $_siginfo.
+	(Remote Configuration): Document qXfer:siginfo:read,
+	qXfer:siginfo:write packets, and the read-siginfo-object,
+	write-siginfo-object commands.
+
+2009-02-06  Pedro Alves  <pedro@@codesourcery.com>
+
+	gdb/testsuite/
+	* gdb.base/siginfo-obj.c, gdb.base/siginfo-obj.exp: New.
+@
+text
+@d3 1
+a3 1
+   Copyright (C) 2009 Free Software Foundation, Inc.
+@
+

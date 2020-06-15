@@ -1,0 +1,592 @@
+head	1.8;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.5
+	gdb_7_6-2013-04-26-release:1.5
+	gdb_7_6-branch:1.5.0.6
+	gdb_7_6-2013-03-12-branchpoint:1.5
+	gdb_7_5_1-2012-11-29-release:1.5
+	gdb_7_5-2012-08-17-release:1.5
+	gdb_7_5-branch:1.5.0.4
+	gdb_7_5-2012-07-18-branchpoint:1.5
+	gdb_7_4_1-2012-04-26-release:1.5
+	gdb_7_4-2012-01-24-release:1.5
+	gdb_7_4-branch:1.5.0.2
+	gdb_7_4-2011-12-13-branchpoint:1.5
+	gdb_7_3_1-2011-09-04-release:1.4
+	gdb_7_3-2011-07-26-release:1.4
+	gdb_7_3-branch:1.4.0.4
+	gdb_7_3-2011-04-01-branchpoint:1.4
+	gdb_7_2-2010-09-02-release:1.4
+	gdb_7_2-branch:1.4.0.2
+	gdb_7_2-2010-07-07-branchpoint:1.4
+	gdb_7_1-2010-03-18-release:1.1
+	gdb_7_1-branch:1.1.0.2
+	gdb_7_1-2010-02-18-branchpoint:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.8
+date	2013.04.03.03.43.54;	author qiyao;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2013.03.26.12.46.24;	author qiyao;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2013.03.20.11.28.55;	author palves;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2011.05.14.06.06.36;	author qiyao;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2010.04.05.21.57.18;	author shebs;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2010.03.26.14.31.48;	author palves;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2010.03.26.01.46.29;	author shebs;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2010.01.15.22.37.20;	author shebs;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.8
+log
+@gdb/testsuite/
+
+	* gdb.trace/tfile.c (write_basic_trace_file): Pass argument
+	"tfile-basic.tf" instead of "basic.tf".
+	(write_error_trace_file): Pass argument "tfile-error.tf"
+	instead of "error.tf".
+	* gdb.trace/tfile.exp: Update tfile names to
+	"tfile-basic.tf" and "tfile-error.tf".
+@
+text
+@/* This testcase is part of GDB, the GNU debugger.
+
+   Copyright 2010-2013 Free Software Foundation, Inc.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+/* This program does two things; it generates valid trace files, and
+   it can also be traced so as to test trace file creation from
+   GDB.  */
+
+#include <stdio.h>
+#include <string.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+
+char spbuf[200];
+
+char trbuf[1000];
+char *trptr;
+char *tfsizeptr;
+
+/* These globals are put in the trace buffer.  */
+
+int testglob = 31415;
+
+int testglob2 = 271828;
+
+/* But these below are not.  */
+
+const int constglob = 10000;
+
+int nonconstglob = 14124;
+
+int
+start_trace_file (char *filename)
+{
+  int fd;
+
+  fd = open (filename, O_WRONLY|O_CREAT|O_APPEND,
+	     S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
+
+  if (fd < 0)
+    return fd;
+
+  /* Write a file header, with a high-bit-set char to indicate a
+     binary file, plus a hint as what this file is, and a version
+     number in case of future needs.  */
+  write (fd, "\x7fTRACE0\n", 8);
+
+  return fd;
+}
+
+void
+finish_trace_file (int fd)
+{
+  close (fd);
+}
+
+
+void
+add_memory_block (char *addr, int size)
+{
+  short short_x;
+  unsigned long long ll_x;
+
+  *((char *) trptr) = 'M';
+  trptr += 1;
+  ll_x = (unsigned long) addr;
+  memcpy (trptr, &ll_x, sizeof (unsigned long long));
+  trptr += sizeof (unsigned long long);
+  short_x = size;
+  memcpy (trptr, &short_x, 2);
+  trptr += 2;
+  memcpy (trptr, addr, size);
+  trptr += size;
+}
+
+void
+write_basic_trace_file (void)
+{
+  int fd, int_x;
+  short short_x;
+
+  fd = start_trace_file ("tfile-basic.tf");
+
+  /* The next part of the file consists of newline-separated lines
+     defining status, tracepoints, etc.  The section is terminated by
+     an empty line.  */
+
+  /* Dump the size of the R (register) blocks in traceframes.  */
+  snprintf (spbuf, sizeof spbuf, "R %x\n", 500 /* FIXME get from arch */);
+  write (fd, spbuf, strlen (spbuf));
+
+  /* Dump trace status, in the general form of the qTstatus reply.  */
+  snprintf (spbuf, sizeof spbuf, "status 0;tstop:0;tframes:1;tcreated:1;tfree:100;tsize:1000\n");
+  write (fd, spbuf, strlen (spbuf));
+
+  /* Dump tracepoint definitions, in syntax similar to that used
+     for reconnection uploads.  */
+  /* FIXME need a portable way to print function address in hex */
+  snprintf (spbuf, sizeof spbuf, "tp T1:%lx:E:0:0\n",
+	    (long) &write_basic_trace_file);
+  write (fd, spbuf, strlen (spbuf));
+  /* (Note that we would only need actions defined if we wanted to
+     test tdump.) */
+
+  /* Empty line marks the end of the definition section.  */
+  write (fd, "\n", 1);
+
+  /* Make up a simulated trace buffer.  */
+  /* (Encapsulate better if we're going to do lots of this; note that
+     buffer endianness is the target program's enddianness.) */
+  trptr = trbuf;
+  short_x = 1;
+  memcpy (trptr, &short_x, 2);
+  trptr += 2;
+  tfsizeptr = trptr;
+  trptr += 4;
+  add_memory_block (&testglob, sizeof (testglob));
+  /* Divide a variable between two separate memory blocks.  */
+  add_memory_block (&testglob2, 1);
+  add_memory_block (((char*) &testglob2) + 1, sizeof (testglob2) - 1);
+  /* Go back and patch in the frame size.  */
+  int_x = trptr - tfsizeptr - sizeof (int);
+  memcpy (tfsizeptr, &int_x, 4);
+
+  /* Write end of tracebuffer marker.  */
+  memset (trptr, 0, 6);
+  trptr += 6;
+
+  write (fd, trbuf, trptr - trbuf);
+
+  finish_trace_file (fd);
+}
+
+/* Convert number NIB to a hex digit.  */
+
+static int
+tohex (int nib)
+{
+  if (nib < 10)
+    return '0' + nib;
+  else
+    return 'a' + nib - 10;
+}
+
+int
+bin2hex (const char *bin, char *hex, int count)
+{
+  int i;
+
+  for (i = 0; i < count; i++)
+    {
+      *hex++ = tohex ((*bin >> 4) & 0xf);
+      *hex++ = tohex (*bin++ & 0xf);
+    }
+  *hex = 0;
+  return i;
+}
+
+void
+write_error_trace_file (void)
+{
+  int fd;
+  const char made_up[] = "made-up error";
+  int len = sizeof (made_up) - 1;
+  char *hex = alloca (len * 2 + 1);
+
+  fd = start_trace_file ("tfile-error.tf");
+
+  /* The next part of the file consists of newline-separated lines
+     defining status, tracepoints, etc.  The section is terminated by
+     an empty line.  */
+
+  /* Dump the size of the R (register) blocks in traceframes.  */
+  snprintf (spbuf, sizeof spbuf, "R %x\n", 500 /* FIXME get from arch */);
+  write (fd, spbuf, strlen (spbuf));
+
+  bin2hex (made_up, hex, len);
+
+  /* Dump trace status, in the general form of the qTstatus reply.  */
+  snprintf (spbuf, sizeof spbuf,
+	    "status 0;"
+	    "terror:%s:1;"
+	    "tframes:0;tcreated:0;tfree:100;tsize:1000\n",
+	    hex);
+  write (fd, spbuf, strlen (spbuf));
+
+  /* Dump tracepoint definitions, in syntax similar to that used
+     for reconnection uploads.  */
+  /* FIXME need a portable way to print function address in hex */
+  snprintf (spbuf, sizeof spbuf, "tp T1:%lx:E:0:0\n",
+	    (long) &write_basic_trace_file);
+  write (fd, spbuf, strlen (spbuf));
+  /* (Note that we would only need actions defined if we wanted to
+     test tdump.) */
+
+  /* Empty line marks the end of the definition section.  */
+  write (fd, "\n", 1);
+
+  trptr = trbuf;
+
+  /* Write end of tracebuffer marker.  */
+  memset (trptr, 0, 6);
+  trptr += 6;
+
+  write (fd, trbuf, trptr - trbuf);
+
+  finish_trace_file (fd);
+}
+
+void
+done_making_trace_files (void)
+{
+}
+
+int
+main (int argc, char **argv, char **envp)
+{
+  write_basic_trace_file ();
+
+  write_error_trace_file ();
+
+  done_making_trace_files ();
+
+  return 0;
+}
+
+@
+
+
+1.7
+log
+@gdb/testsuite/
+	* gdb.trace/actions.c, gdb.trace/circ.c: Add license header.
+	* gdb.trace/collection.c, gdb.trace/tfile.c: Likewise.
+@
+text
+@d95 1
+a95 1
+  fd = start_trace_file ("basic.tf");
+d180 1
+a180 1
+  fd = start_trace_file ("error.tf");
+@
+
+
+1.6
+log
+@tfile.exp: Test printing a non-const global that is not covered by the trace frame; test disassembling.
+
+Make sure we don't fallback to printing the initial value of a
+non-const variable in the executable.
+
+Also make sure we can do 'disassemble', as another test that GDB is
+able to read read-only parts from the executable (the existing test of
+printing constglob also covers that case).
+
+gdb/testsuite/
+2013-03-20  Pedro Alves  <palves@@redhat.com>
+	    Yao Qi  <yao@@codesourcery.com>
+
+	* gdb.trace/tfile.c: Add comments.
+	(nonconstglob): New global.
+	* gdb.trace/tfile.exp: Add comments.  Test printing a non-const
+	global that is not covered by the trace frame.  Test
+	disassembling.
+@
+text
+@d1 17
+@
+
+
+1.5
+log
+@2011-05-14  Yao Qi  <yao@@codesourcery.com>
+
+	* gdb.trace/tfile.c(add_memory_block): Store address in unsigned
+	type.
+@
+text
+@d16 2
+d22 2
+d26 2
+@
+
+
+1.4
+log
+@2010-04-05  Stan Shebs  <stan@@codesourcery.com>
+
+	* tracepoint.c: Include gdbcore.h.
+	(tfile_xfer_partial): Return partial results, also try reading
+	from executable.
+	(tfile_has_all_memory): New function.
+	(init_tfile_ops): Use it.
+
+	* gdb.trace/tfile.c: Add a variable split across two blocks, and a
+	constant global.
+	* gdb.trace/tfile.exp: Try to print them.
+@
+text
+@d52 1
+a52 1
+  long long ll_x;
+d56 3
+a58 3
+  ll_x = (long) addr;
+  memcpy (trptr, &ll_x, sizeof (long long));
+  trptr += sizeof (long long);
+@
+
+
+1.3
+log
+@	gdb/
+	* tracepoint.c (trace_save): Remove X from tracepoint error
+	description.
+
+	gdb/testsuite/
+	* gdb.trace/tfile.c (tohex, bin2hex): New.
+	(write_error_trace_file): Hexify error description.
+@
+text
+@d18 4
+d47 19
+a70 1
+  long long ll_x;
+d107 4
+a110 10
+  *((char *) trptr) = 'M';
+  trptr += 1;
+  ll_x = (long) &testglob;
+  memcpy (trptr, &ll_x, sizeof (long long));
+  trptr += sizeof (long long);
+  short_x = sizeof (testglob);
+  memcpy (trptr, &short_x, 2);
+  trptr += 2;
+  memcpy (trptr, &testglob, sizeof (testglob));
+  trptr += sizeof (testglob);
+@
+
+
+1.2
+log
+@2010-03-25  Stan Shebs  <stan@@codesourcery.com>
+
+	* tracepoint.h (trace_stop_reason): Add tracepoint_error.
+	(struct trace_status): New field error_desc.
+	* tracepoint.c (stop_reason_names): Add terror.
+	(current_trace_status): Ensure non-NULL error description.
+	(trace_status_command): Add error report.
+	(trace_status_mi): Ditto.
+	(trace_save): Add special case for error description.
+	(parse_trace_status): Add case for errors.
+
+	* gdb.texinfo (Tracepoint Packets): Document trace error status.
+
+	* gdb.trace/tfile.c: Generate an additional trace file, improve
+	portability.
+	* gdb.trace/tfile.exp: Test trace file with an error stop, delete
+	files in a better way.
+@
+text
+@d108 25
+d137 3
+d151 2
+d154 5
+a158 1
+  snprintf (spbuf, sizeof spbuf, "status 0;terror:made-up error:1;tframes:0;tcreated:0;tfree:100;tsize:1000\n");
+@
+
+
+1.1
+log
+@	Add trace file support.
+	* tracepoint.h (enum trace_stop_reason): New enum.
+	(struct trace_status): New struct.
+	(parse_trace_status): Declare.
+	(struct uploaded_tp): Move here from remote.c,
+	add fields for actions.
+	(struct uploaded_tsv): New struct.
+	* tracepoint.c (tfile_ops): New target vector.
+	(trace_fd): New global.
+	(tfile_open): New function.
+	(tfile_close): New function.
+	(tfile_files_info): New function.
+	(tfile_get_trace_status): New function.
+	(tfile_get_traceframe_address): New function.
+	(tfile_trace_find): New function.
+	(tfile_fetch_registers): New function.
+	(tfile_xfer_partial): New function.
+	(tfile_get_trace_state_variable_value): New function.
+	(init_tfile_ops): New function.
+	(_initialize_tracepoint): Call it, add tfile target.
+	(trace_status): New global.
+	(current_trace_status): New function.
+	(trace_running_p): Remove, change all users to get from
+	current_trace_status()->running.
+	(get_trace_status): Remove.
+	(trace_status_command): Call target_get_trace_status directly,
+	report more detail including tracing stop reasons.
+	(trace_find_command): Always allow tfind on a file.
+	(trace_find_pc_command): Ditto.
+	(trace_find_tracepoint_command): Ditto.
+	(trace_find_line_command): Ditto.
+	(trace_find_range_command): Ditto.
+	(trace_find_outside_command): Ditto.
+	(trace_frames_offset, cur_offset): Declare as off_t.
+	(trace_regblock_size): Rename from reg_size, update users.
+	(parse_trace_status): New function.
+	(tfile_interp_line): New function.
+	(disconnect_or_stop_tracing): Ensure current trace
+	status before asking what to do.
+	(stop_reason_names): New global.
+	(trace_save_command): New command.
+	(get_uploaded_tp): Move here from remote.c.
+	(find_matching_tracepoint): Ditto.
+	(merge_uploaded_tracepoints): New function.
+	(parse_trace_status): Use stop_reason_names.
+	(_initialize_tracepoint): Define tsave command.
+	* target.h (target_ops): New fields to_save_trace_data,
+	to_upload_tracepoints, to_upload_trace_state_variables,
+	to_get_raw_trace_data, change to_get_trace_status
+	to take a pointer to a status struct.
+	(target_save_trace_data): New macro.
+	(target_upload_tracepoints): New macro.
+	(target_upload_trace_state_variables): New macro.
+	(target_get_raw_trace_data): New macro.
+	* target.c (update_current_target): Add new methods, change
+	signature of to_get_trace_status.
+	* remote.c (hex2bin): Make globally visible.
+	(bin2hex): Ditto.
+	(remote_download_trace_state_variable): Download name also.
+	(remote_get_trace_status): Update parameter, use
+	parse_trace_status.
+	(remote_save_trace_data): New function.
+	(remote_upload_tracepoints): New function.
+	(remote_upload_trace_state_variables): New function.
+	(remote_get_raw_trace_data): New function.
+	(remote_start_remote): Use them.
+	(_initialize_remote_ops): Add operations.
+	* ax-gdb.c: Include breakpoint.h.
+	* breakpoint.c (create_tracepoint_from_upload): Use
+	break_command_really, return tracepoint, warn about unimplemented
+	parts.
+	* NEWS: Mention trace file addition.
+
+	* gdb.texinfo (Trace Files): New section.
+	(Tracepoint Packets): Document QTSave and qTBuffer.
+	(Trace File Format): New appendix.
+
+	* generic/gdbtk-bp.c (gdb_trace_status): Use current_trace_status.
+
+	* gdb.trace/tfile.c: New file.
+	* gdb.trace/tfile.exp: New file.
+@
+text
+@d44 1
+a44 1
+write_basic_trace_file ()
+d46 3
+a48 1
+  int fd;
+d66 1
+d77 2
+a78 1
+  /* (Encapsulate better if we're going to do lots of this.) */
+d80 3
+a82 2
+  *((short *) trptr) = 1;
+  trptr += sizeof (short);
+d84 1
+a84 1
+  trptr += sizeof (int);
+d87 2
+a88 1
+  *((long long *) trptr) = (long) &testglob;
+d90 4
+a93 3
+  *((short *) trptr) = sizeof (testglob);
+  trptr += sizeof (short);
+  *((int *) trptr) = testglob;
+d96 44
+a139 1
+  *((int *) tfsizeptr) = trptr - tfsizeptr - sizeof (int);
+d142 2
+a143 4
+  *((short *) trptr) = 0;
+  trptr += sizeof (short);
+  *((int *) trptr) = 0;
+  trptr += sizeof (int);
+d160 2
+@
+

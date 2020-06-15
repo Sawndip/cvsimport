@@ -1,0 +1,474 @@
+head	1.8;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.8
+	gdb_7_6-2013-04-26-release:1.8
+	gdb_7_6-branch:1.8.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.8
+	gdb_7_5_1-2012-11-29-release:1.5
+	gdb_7_5-2012-08-17-release:1.5
+	gdb_7_5-branch:1.5.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.5
+	gdb_7_4_1-2012-04-26-release:1.2.2.1
+	gdb_7_4-2012-01-24-release:1.2.2.1
+	gdb_7_4-branch:1.2.0.2
+	gdb_7_4-2011-12-13-branchpoint:1.2
+	gdb_7_3_1-2011-09-04-release:1.1
+	gdb_7_3-2011-07-26-release:1.1
+	gdb_7_3-branch:1.1.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.8
+date	2013.01.01.06.33.01;	author brobecke;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2012.11.08.19.38.43;	author tromey;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2012.08.15.14.22.02;	author tromey;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2012.05.24.16.51.38;	author palves;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2012.05.24.16.39.13;	author palves;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2012.01.04.08.17.25;	author brobecke;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2011.09.15.12.27.19;	author kpouget;	state Exp;
+branches
+	1.2.2.1;
+next	1.1;
+
+1.1
+date	2011.02.05.05.27.23;	author teawater;	state Exp;
+branches;
+next	;
+
+1.2.2.1
+date	2012.01.06.04.43.41;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.8
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@/* Python interface to inferior stop events.
+
+   Copyright (C) 2009-2013 Free Software Foundation, Inc.
+
+   This file is part of GDB.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+#include "defs.h"
+#include "py-stopevent.h"
+
+PyObject *
+create_stop_event_object (PyTypeObject *py_type)
+{
+  PyObject *stop_event_obj = create_thread_event_object (py_type);
+
+  if (!stop_event_obj)
+    goto fail;
+
+  return stop_event_obj;
+
+  fail:
+   Py_XDECREF (stop_event_obj);
+   return NULL;
+}
+
+/* Callback observers when a stop event occurs.  This function will create a
+   new Python stop event object.  If only a specific thread is stopped the
+   thread object of the event will be set to that thread.  Otherwise, if all
+   threads are stopped thread object will be set to None.
+   return 0 if the event was created and emitted successfully otherwise
+   returns -1.  */
+
+int
+emit_stop_event (struct bpstats *bs, enum gdb_signal stop_signal)
+{
+  PyObject *stop_event_obj = NULL; /* Appease GCC warning.  */
+  PyObject *list = NULL;
+  PyObject *first_bp = NULL;
+  struct bpstats *current_bs;
+
+  if (evregpy_no_listeners_p (gdb_py_events.stop))
+    return 0;
+
+  /* Add any breakpoint set at this location to the list.  */
+  for (current_bs = bs; current_bs != NULL; current_bs = current_bs->next)
+    {
+      if (current_bs->breakpoint_at
+          && current_bs->breakpoint_at->py_bp_object)
+        {
+          PyObject *current_py_bp =
+              (PyObject *) current_bs->breakpoint_at->py_bp_object;
+
+          if (list == NULL)
+            {
+              list = PyList_New (0);
+              if (!list)
+                goto fail;
+            }
+
+          if (PyList_Append (list, current_py_bp))
+            goto fail;
+
+          if (first_bp == NULL)
+            first_bp = current_py_bp;
+        }
+    }
+
+  if (list != NULL)
+    {
+      stop_event_obj = create_breakpoint_event_object (list, first_bp);
+      if (!stop_event_obj)
+        goto fail;
+      Py_DECREF (list);
+    }
+
+  /* Check if the signal is "Signal 0" or "Trace/breakpoint trap".  */
+  if (stop_signal != GDB_SIGNAL_0
+      && stop_signal != GDB_SIGNAL_TRAP)
+    {
+      stop_event_obj =
+	  create_signal_event_object (stop_signal);
+      if (!stop_event_obj)
+	goto fail;
+    }
+
+  /* If all fails emit an unknown stop event.  All event types should
+     be known and this should eventually be unused.  */
+  if (!stop_event_obj)
+    {
+      stop_event_obj = create_stop_event_object (&stop_event_object_type);
+      if (!stop_event_obj)
+        goto fail;
+    }
+
+  return evpy_emit_event (stop_event_obj, gdb_py_events.stop);
+
+ fail:
+  Py_XDECREF (list);
+  return -1;
+}
+
+GDBPY_NEW_EVENT_TYPE (stop,
+                      "gdb.StopEvent",
+                      "StopEvent",
+                      "GDB stop event object",
+                      thread_event_object_type,
+                      /*no qual*/);
+@
+
+
+1.7
+log
+@	* python/py-bpevent.c: Include defs.h.
+	* python/py-continueevent.c: Include defs.h.
+	* python/py-event.c: Include defs.h.
+	* python/py-event.h: Don't include defs.h.
+	* python/py-events.h: Don't include defs.h.
+	* python/py-evts.c: Include defs.h.
+	* python/py-exitedevent.c: Include defs.h.
+	* python/py-newobjfileevent.c: Include defs.h.
+	* python/py-signalevent.c: Include defs.h.
+	* python/py-stopevent.c: Include defs.h.
+	* python/py-threadevent.c: Include defs.h.
+@
+text
+@d3 1
+a3 1
+   Copyright (C) 2009-2012 Free Software Foundation, Inc.
+@
+
+
+1.6
+log
+@	PR python/14387:
+	* python/py-bpevent.c (create_breakpoint_event_object): Update
+	comment.
+	* python/py-event.c (evpy_add_attribute): Update comment.
+	* python/py-exitedevent.c (create_exited_event_object): Fix
+	reference counting and error handling.
+	* python/py-newobjfileevent.c (create_new_objfile_event_object):
+	Fix reference counting.
+	* python/py-signalevent.c (create_signal_event_object): Fix
+	reference counting and error handling.
+	* python/py-stopevent.c (emit_stop_event): Fix reference
+	counting.
+	* python/py-threadevent.c (get_event_thread): Return a
+	borrowed reference.
+	* python/py-type.c (convert_field): Fix reference counting.
+@
+text
+@d20 1
+@
+
+
+1.5
+log
+@gdb/
+2012-05-24  Pedro Alves  <palves@@redhat.com>
+
+	PR gdb/7205
+
+        Replace TARGET_SIGNAL_ with GDB_SIGNAL_ throughout.
+
+gdb/gdbserver/
+2012-05-24  Pedro Alves  <palves@@redhat.com>
+
+	PR gdb/7205
+
+        Replace TARGET_SIGNAL_ with GDB_SIGNAL_ throughout.
+
+include/gdb/
+2012-05-24  Pedro Alves  <palves@@redhat.com>
+
+	PR gdb/7205
+
+        * gdb/signals.def: Replace TARGET_SIGNAL_ with GDB_SIGNAL_
+	throughout.
+
+sim/arm/
+2012-05-24  Pedro Alves  <palves@@redhat.com>
+
+	PR gdb/7205
+
+        Replace TARGET_SIGNAL_ with GDB_SIGNAL_ throughout.
+
+sim/avr/
+2012-05-24  Pedro Alves  <palves@@redhat.com>
+
+	PR gdb/7205
+
+        Replace TARGET_SIGNAL_ with GDB_SIGNAL_ throughout.
+
+sim/common/
+2012-05-24  Pedro Alves  <palves@@redhat.com>
+
+	PR gdb/7205
+
+        Replace TARGET_SIGNAL_ with GDB_SIGNAL_ throughout.
+
+sim/cr16/
+2012-05-24  Pedro Alves  <palves@@redhat.com>
+
+	PR gdb/7205
+
+        Replace TARGET_SIGNAL_ with GDB_SIGNAL_ throughout.
+
+sim/d10v/
+2012-05-24  Pedro Alves  <palves@@redhat.com>
+
+	PR gdb/7205
+
+        Replace TARGET_SIGNAL_ with GDB_SIGNAL_ throughout.
+
+sim/erc32/
+2012-05-24  Pedro Alves  <palves@@redhat.com>
+
+	PR gdb/7205
+
+        Replace TARGET_SIGNAL_ with GDB_SIGNAL_ throughout.
+
+sim/m32c/
+2012-05-24  Pedro Alves  <palves@@redhat.com>
+
+	PR gdb/7205
+
+        Replace TARGET_SIGNAL_ with GDB_SIGNAL_ throughout.
+
+sim/ppc/
+2012-05-24  Pedro Alves  <palves@@redhat.com>
+
+	PR gdb/7205
+
+        Replace TARGET_SIGNAL_ with GDB_SIGNAL_ throughout.
+
+sim/rl78/
+2012-05-24  Pedro Alves  <palves@@redhat.com>
+
+	PR gdb/7205
+
+        Replace TARGET_SIGNAL_ with GDB_SIGNAL_ throughout.
+
+sim/rx/
+2012-05-24  Pedro Alves  <palves@@redhat.com>
+
+	PR gdb/7205
+
+        Replace TARGET_SIGNAL_ with GDB_SIGNAL_ throughout.
+@
+text
+@d84 1
+@
+
+
+1.4
+log
+@gdb/
+2012-05-24  Pedro Alves  <palves@@redhat.com>
+
+	PR gdb/7205
+
+	Replace target_signal with gdb_signal throughout.
+
+gdb/gdbserver/
+2012-05-24  Pedro Alves  <palves@@redhat.com>
+
+	PR gdb/7205
+
+	Replace target_signal with gdb_signal throughout.
+
+include/gdb/
+2012-05-24  Pedro Alves  <palves@@redhat.com>
+
+	PR gdb/7205
+
+	Replace target_signal with gdb_signal throughout.
+
+sim/common/
+2012-05-24  Pedro Alves  <palves@@redhat.com>
+
+	PR gdb/7205
+
+	Replace target_signal with gdb_signal throughout.
+@
+text
+@d87 2
+a88 2
+  if (stop_signal != TARGET_SIGNAL_0
+      && stop_signal != TARGET_SIGNAL_TRAP)
+@
+
+
+1.3
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d45 1
+a45 1
+emit_stop_event (struct bpstats *bs, enum target_signal stop_signal)
+@
+
+
+1.2
+log
+@2011-09-15  Kevin Pouget  <kevin.pouget@@st.com>
+
+	Handle multiple breakpoint hits in Python interface:
+	* python/py-bpevent.c (create_breakpoint_event_object): Rename C/Python
+	variable to breakpoints.
+	* python/py-stopevent.c (emit_stop_event): Return a Python tuple of
+	bps instead of single breakpoint. Fix some space typos.
+	* python/py-stopevent.c (create_breakpoint_event_object): Rename
+	variable to breakpoints.
+
+testsuite:
+	* gdb.python/py-events.exp: Set a duplicate breakpoint and check its
+	presence.
+	* gdb.python/py-events.py (breakpoint_stop_handler): Browse all the
+	breakpoint hits.
+
+doc:
+	* gdb.texinfo (Events In Python): New function documentation:
+	gdb.BreakpointEvent.breakpoints. Indicate that
+	gdb.BreakpointEvent.breakpoint is now deprecated.
+@
+text
+@d3 1
+a3 1
+   Copyright (C) 2009, 2010, 2011 Free Software Foundation, Inc.
+@
+
+
+1.2.2.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d3 1
+a3 1
+   Copyright (C) 2009-2012 Free Software Foundation, Inc.
+@
+
+
+1.1
+log
+@Add the file that prev commit forget.
+@
+text
+@d48 3
+d55 2
+a56 2
+  if (bs && bs->breakpoint_at
+      && bs->breakpoint_at->py_bp_object)
+d58 24
+a81 3
+      stop_event_obj = create_breakpoint_event_object ((PyObject *) bs
+                                                       ->breakpoint_at
+                                                       ->py_bp_object);
+d83 1
+a83 1
+	goto fail;
+d102 1
+a102 1
+	goto fail;
+d107 3
+a109 2
+  fail:
+   return -1;
+@
+

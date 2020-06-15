@@ -1,0 +1,179 @@
+head	1.2;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.2
+	gdb_7_6-2013-04-26-release:1.2
+	gdb_7_6-branch:1.2.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.2;
+locks; strict;
+comment	@# @;
+
+
+1.2
+date	2013.01.01.06.41.24;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2012.12.24.19.40.05;	author jkratoch;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@# Copyright 2012-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+standard_testfile lspec.cc
+
+set execfile $testfile
+
+set baseone base/one/thefile.cc
+set basetwo base/two/thefile.cc
+
+if {[skip_cplus_tests]} {
+    unsupported ${testfile}.exp
+    return
+}
+
+if {[prepare_for_testing ${testfile}.exp $execfile \
+	 [list $srcfile $baseone $basetwo] \
+	 {debug nowarnings c++}]} {
+    return -1
+}
+
+gdb_test "skip function dupname" \
+	 {Function dupname will be skipped when stepping\.}
+
+if ![runto_main] {
+    return -1
+}
+
+set test "dupname ignored from main"
+gdb_test_multiple "step" $test {
+    -re "^step\r\ndupname .*\r\n$gdb_prompt $" {
+	fail $test
+    }
+    -re "^step\r\nm .*\r\n$gdb_prompt $" {
+	pass $test
+    }
+}
+
+gdb_breakpoint "n"
+gdb_continue_to_breakpoint "n" ".* dupname.* thefile breakpoint .*"
+
+set test "dupname ignored from n"
+gdb_test_multiple "step" $test {
+    -re "^step\r\ndupname .*\r\n$gdb_prompt $" {
+	fail $test
+    }
+    -re "^step\r\n\[^\r\n\]* after dupname .*\r\n$gdb_prompt $" {
+	pass $test
+    }
+}
+
+gdb_test_no_output "skip delete 1"
+
+gdb_test "skip file thefile.cc" \
+	 {File thefile\.cc will be skipped when stepping\.}
+
+if ![runto_main] {
+    return -1
+}
+
+gdb_test "step" "static int dupname .*" "step into dupname"
+gdb_test "finish" "return dupname.* body_elsewhere.*" "finish from dupname"
+
+set test "dupname ignored for thefile.cc"
+gdb_test_multiple "step" $test {
+    -re "^step\r\ndupname .*\r\n$gdb_prompt $" {
+	fail $test
+    }
+    -re "^step\r\nf1 .* f1 breakpoint .*\r\n$gdb_prompt $" {
+	pass $test
+    }
+}
+@
+
+
+1.1
+log
+@gdb/
+	* breakpoint.c (breakpoint_re_set): Remove the skip_re_set call.
+	* infrun.c (handle_inferior_event): Rename the called function to
+	function_name_is_marked_for_skip, pass it TMP_SAL.
+	* skip.c (struct skiplist_entry): Update function_name comment.  Remove
+	fields pc, gdbarch and pending.
+	(skip_function_pc): Rename this forward declaration to ...
+	(skip_function): ... here.
+	(skip_file_command): Remove variable pending and its use, remove
+	initialization of E fields pending and gdbarch.  Do not use SYMTAB
+	filename, use the specified one.
+	(skip_function_command): Remove variable func_pc, do not set it.
+	Update the caller of skip_function.  Replace decode_line_1 call by
+	a lookup_symbol call.  Remove variables orig_arg, decode_exception and
+	sals.  Update the caller of skip_function.
+	(skip_info): Remove variable address_width and its use.  Do not print
+	address (PC).  Renumber column 5 to 4.
+	(skip_function_pc): Rename to ...
+	(skip_function): ... here and remove its parameters pc, arch and
+	pending.  Update the function comment and no longer use those
+	parameters.
+	(function_pc_is_marked_for_skip): Rename to ...
+	(function_name_is_marked_for_skip): ... here, update function comment
+	just to a skip.h reference, replace pc parameter by function_name and
+	function_sal.  No longer use E field pending and pc.  Remove variables
+	searched_for_sal, sal and filename.  Call compare_filenames_for_search
+	instead of just strcmp.
+	(skip_re_set): Remove the function.
+	* skip.h (struct symtab_and_line): New declaration.
+	(function_pc_is_marked_for_skip): Rename to ...
+	(function_name_is_marked_for_skip): ... here, replace pc parameter by
+	function_name and function_sal, update the function comment.
+
+gdb/testsuite/
+	* gdb.base/skip-solib.exp (info skip with pending file): Update the
+	expected output.
+	(info skip with pending file): Remove.
+	(ignoring function in solib, info skip for function multiply): Update
+	the expected output.
+	* gdb.base/skip.ex (skip (main), skip function baz, info skip)
+	(info skip (delete 1), info skip after disabling all)
+	(info skip after enabling all, info skip after disabling 4 2-3)
+	(info skip after enabling 2-3, info skip 2-3)
+	(info skip after deleting 2 3): Update the expected output.
+	* gdb.linespec/base/two/thefile.cc (n): New variable v, split the
+	statement to its initialization and return.
+	* gdb.linespec/skip-two.exp: New file.
+@
+text
+@d1 1
+a1 1
+# Copyright 2012 Free Software Foundation, Inc.
+@
+

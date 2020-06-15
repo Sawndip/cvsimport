@@ -1,0 +1,100 @@
+head	1.1;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.1
+	gdb_7_6-2013-04-26-release:1.1
+	gdb_7_6-branch:1.1.0.16
+	gdb_7_6-2013-03-12-branchpoint:1.1
+	gdb_7_5_1-2012-11-29-release:1.1
+	gdb_7_5-2012-08-17-release:1.1
+	gdb_7_5-branch:1.1.0.14
+	gdb_7_5-2012-07-18-branchpoint:1.1
+	gdb_7_4_1-2012-04-26-release:1.1
+	gdb_7_4-2012-01-24-release:1.1
+	gdb_7_4-branch:1.1.0.12
+	gdb_7_4-2011-12-13-branchpoint:1.1
+	gdb_7_3_1-2011-09-04-release:1.1
+	gdb_7_3-2011-07-26-release:1.1
+	gdb_7_3-branch:1.1.0.10
+	gdb_7_3-2011-04-01-branchpoint:1.1
+	gdb_7_2-2010-09-02-release:1.1
+	gdb_7_2-branch:1.1.0.8
+	gdb_7_2-2010-07-07-branchpoint:1.1
+	gdb_7_1-2010-03-18-release:1.1
+	gdb_7_1-branch:1.1.0.6
+	gdb_7_1-2010-02-18-branchpoint:1.1
+	gdb_7_0_1-2009-12-22-release:1.1
+	gdb_7_0-2009-10-06-release:1.1
+	gdb_7_0-branch:1.1.0.4
+	gdb_7_0-2009-09-16-branchpoint:1.1
+	msnyder-checkpoint-072509-branch:1.1.0.2
+	msnyder-checkpoint-072509-branchpoint:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.1
+date	2009.01.03.21.01.20;	author hp;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.1
+log
+@	* sim/cris/c/settls1.c: New test.
+@
+text
+@/* Check that the syscall set_thread_area is supported and does the right thing.
+#notarget: cris*-*-elf
+*/
+
+#include <unistd.h>
+#include <sys/syscall.h>
+#include <stdio.h>
+#include <errno.h>
+#include <stdlib.h>
+
+#ifndef SYS_set_thread_area
+#define SYS_set_thread_area 243
+#endif
+
+int main (void)
+{
+  int ret;
+
+  /* Check the error check that the low 8 bits must be 0.  */
+  ret = syscall (SYS_set_thread_area, 0xfeeb1ff0);
+  if (ret != -1 || errno != EINVAL)
+    {
+      perror ("tls1");
+      abort ();
+    }
+
+  ret = syscall (SYS_set_thread_area, 0xcafebe00);
+  if (ret != 0)
+    {
+      perror ("tls2");
+      abort ();
+    }
+
+  /* Check that we got the right result.  */
+#ifdef __arch_v32
+  asm ("move $pid,%0\n\tclear.b %0" : "=rm" (ret));
+#else
+  asm ("move $brp,%0" : "=rm" (ret));
+#endif
+
+  if (ret != 0xcafebe00)
+    {
+      perror ("tls2");
+      abort ();
+    }
+
+  printf ("pass\n");
+  exit (0);
+}
+@

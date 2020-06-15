@@ -1,0 +1,379 @@
+head	1.8;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.8
+	gdb_7_6-2013-04-26-release:1.8
+	gdb_7_6-branch:1.8.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.8
+	gdb_7_5_1-2012-11-29-release:1.7
+	gdb_7_5-2012-08-17-release:1.7
+	gdb_7_5-branch:1.7.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.7
+	gdb_7_4_1-2012-04-26-release:1.5.4.1
+	gdb_7_4-2012-01-24-release:1.5.4.1
+	gdb_7_4-branch:1.5.0.4
+	gdb_7_4-2011-12-13-branchpoint:1.5
+	gdb_7_3_1-2011-09-04-release:1.5
+	gdb_7_3-2011-07-26-release:1.5
+	gdb_7_3-branch:1.5.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.5
+	gdb_7_2-2010-09-02-release:1.2
+	gdb_7_2-branch:1.2.0.4
+	gdb_7_2-2010-07-07-branchpoint:1.2
+	gdb_7_1-2010-03-18-release:1.2
+	gdb_7_1-branch:1.2.0.2
+	gdb_7_1-2010-02-18-branchpoint:1.2;
+locks; strict;
+comment	@ * @;
+
+
+1.8
+date	2013.01.01.06.41.40;	author brobecke;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2012.03.03.01.23.45;	author kevinb;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2012.01.04.08.28.24;	author brobecke;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2011.01.01.15.34.04;	author brobecke;	state Exp;
+branches
+	1.5.4.1;
+next	1.4;
+
+1.4
+date	2010.09.23.23.42.53;	author kevinb;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2010.09.23.23.05.28;	author kevinb;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2010.01.01.10.03.33;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2009.11.24.19.22.45;	author dj;	state Exp;
+branches;
+next	;
+
+1.5.4.1
+date	2012.01.06.04.54.55;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.8
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@/* load.c --- loading object files into the RX simulator.
+
+Copyright (C) 2005-2013 Free Software Foundation, Inc.
+Contributed by Red Hat, Inc.
+
+This file is part of the GNU simulators.
+
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+
+#include "config.h"
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+
+#include "bfd.h"
+#include "libbfd.h"
+#include "cpu.h"
+#include "mem.h"
+#include "load.h"
+#include "elf/internal.h"
+#include "elf/common.h"
+
+/* Helper function for invoking a GDB-specified printf.  */
+static void
+xprintf (host_callback *callback, const char *fmt, ...)
+{
+  va_list ap;
+
+  va_start (ap, fmt);
+
+  (*callback->vprintf_filtered) (callback, fmt, ap);
+
+  va_end (ap);
+}
+
+/* Given a file offset, look up the section name.  */
+static const char *
+find_section_name_by_offset (bfd *abfd, file_ptr filepos)
+{
+  asection *s;
+
+  for (s = abfd->sections; s; s = s->next)
+    if (s->filepos == filepos)
+      return bfd_get_section_name (abfd, s);
+
+  return "(unknown)";
+}
+
+/* A note about endianness and swapping...
+
+   The RX chip is CISC-like in that the opcodes are variable length
+   and are read as a stream of bytes.  However, the chip itself shares
+   the code prefetch block with the data fetch block, so when it's
+   configured for big endian mode, the memory fetched for opcodes is
+   word-swapped.  To compensate for this, the ELF file has the code
+   sections pre-swapped.  Our BFD knows this, and for the convenience
+   of all the other tools, hides this swapping at a very low level.
+   I.e.  it swaps words on the way out and on the way back in.
+
+   Fortunately the iovector routines are unaffected by this, so we
+   can use them to read in the segments directly, without having
+   to worry about byte swapping anything.
+
+   However, our opcode decoder and disassemblers need to swap the data
+   after reading it from the chip memory, just like the chip does.
+   All in all, the code words are swapped four times between the
+   assembler and our decoder.
+
+   If the chip is running in little-endian mode, no swapping is done
+   anywhere.  Note also that the *operands* within opcodes are always
+   encoded in little-endian format.  */
+
+void
+rx_load (bfd *prog, host_callback *callback)
+{
+  unsigned long highest_addr_loaded = 0;
+  Elf_Internal_Phdr * phdrs;
+  long sizeof_phdrs;
+  int num_headers;
+  int i;
+
+  rx_big_endian = bfd_big_endian (prog);
+
+  /* Note we load by ELF program header not by BFD sections.
+     This is because BFD sections get their information from
+     the ELF section structure, which only includes a VMA value
+     and not an LMA value.  */
+  sizeof_phdrs = bfd_get_elf_phdr_upper_bound (prog);
+  if (sizeof_phdrs == 0)
+    {
+      fprintf (stderr, "Failed to get size of program headers\n");
+      return;
+    }
+  phdrs = malloc (sizeof_phdrs);
+  if (phdrs == NULL)
+    {
+      fprintf (stderr, "Failed allocate memory to hold program headers\n");
+      return;
+    }
+  num_headers = bfd_get_elf_phdrs (prog, phdrs);
+  if (num_headers < 1)
+    {
+      fprintf (stderr, "Failed to read program headers\n");
+      return;
+    }
+  
+  for (i = 0; i < num_headers; i++)
+    {
+      Elf_Internal_Phdr * p = phdrs + i;
+      char *buf;
+      bfd_vma size;
+      bfd_vma base;
+      file_ptr offset;
+
+      size = p->p_filesz;
+      if (size <= 0)
+	continue;
+
+      base = p->p_paddr;
+      if (verbose > 1)
+	fprintf (stderr, "[load segment: lma=%08x vma=%08x size=%08x]\n",
+		 (int) base, (int) p->p_vaddr, (int) size);
+      if (callback)
+	xprintf (callback,
+	         "Loading section %s, size %#lx lma %08lx vma %08lx\n",
+	         find_section_name_by_offset (prog, p->p_offset),
+		 size, base, p->p_vaddr);
+
+      buf = malloc (size);
+      if (buf == NULL)
+	{
+	  fprintf (stderr, "Failed to allocate buffer to hold program segment\n");
+	  continue;
+	}
+      
+      offset = p->p_offset;
+      if (prog->iovec->bseek (prog, offset, SEEK_SET) != 0)
+	{
+	  fprintf (stderr, "Failed to seek to offset %lx\n", (long) offset);
+	  continue;
+	}
+      if (prog->iovec->bread (prog, buf, size) != size)
+	{
+	  fprintf (stderr, "Failed to read %lx bytes\n", size);
+	  continue;
+	}
+
+      mem_put_blk (base, buf, size);
+      free (buf);
+      if (highest_addr_loaded < base + size - 1 && size >= 4)
+	highest_addr_loaded = base + size - 1;
+    }
+
+  free (phdrs);
+
+  regs.r_pc = prog->start_address;
+
+  if (strcmp (bfd_get_target (prog), "srec") == 0
+      || regs.r_pc == 0)
+    {
+      regs.r_pc = mem_get_si (0xfffffffc);
+      heaptop = heapbottom = 0;
+    }
+
+  reset_decoder ();
+
+  if (verbose > 1)
+    fprintf (stderr, "[start pc=%08x %s]\n",
+	     (unsigned int) regs.r_pc,
+	     rx_big_endian ? "BE" : "LE");
+}
+@
+
+
+1.7
+log
+@Update rx sim so that it'll print load statistics.
+@
+text
+@d3 1
+a3 1
+Copyright (C) 2005, 2007-2012 Free Software Foundation, Inc.
+@
+
+
+1.6
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d31 1
+d35 26
+d86 1
+a86 1
+rx_load (bfd *prog)
+d135 5
+@
+
+
+1.5
+log
+@run copyright.sh for 2011.
+@
+text
+@d3 1
+a3 2
+Copyright (C) 2005, 2007, 2008, 2009, 2010, 2011
+Free Software Foundation, Inc.
+@
+
+
+1.5.4.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d3 2
+a4 1
+Copyright (C) 2005, 2007-2012 Free Software Foundation, Inc.
+@
+
+
+1.4
+log
+@	* cpu.h (reset_decoder): Declare.
+	* load.c (rx_load): Call `reset_decoder'.
+	* rx.c (reset_decoder): New function.
+@
+text
+@d3 2
+a4 1
+Copyright (C) 2005, 2007, 2008, 2009, 2010 Free Software Foundation, Inc.
+@
+
+
+1.3
+log
+@	* fpu.c, gdb-if.c, load.c, misc.c, syscalls.c (config.h): Include.
+@
+text
+@d145 2
+@
+
+
+1.2
+log
+@Update copyright notices to add year 2010.
+@
+text
+@d22 1
+@
+
+
+1.1
+log
+@[sim]
+	* rx: New directory.
+	* configure.ac: Add entry for Renesas RX.
+	* configure: Regenerate.
+
+[include/gdb]
+	* sim-rx.h: New.
+@
+text
+@d3 1
+a3 1
+Copyright (C) 2005, 2007, 2008, 2009 Free Software Foundation, Inc.
+@
+

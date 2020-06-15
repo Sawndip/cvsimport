@@ -1,0 +1,709 @@
+head	1.9;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.3
+	gdb_7_6-2013-04-26-release:1.3
+	gdb_7_6-branch:1.3.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.3;
+locks; strict;
+comment	@ * @;
+
+
+1.9
+date	2013.10.03.14.43.31;	author pmuldoon;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2013.08.30.10.12.18;	author pmuldoon;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2013.05.20.20.36.18;	author tromey;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2013.05.20.20.28.51;	author tromey;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2013.05.20.20.19.03;	author tromey;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2013.05.20.20.09.01;	author tromey;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2013.02.28.20.14.08;	author tromey;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2013.02.21.01.46.57;	author sivachandra;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2013.01.23.19.59.11;	author sivachandra;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.9
+log
+@2013-10-03  Phil Muldoon  <pmuldoon@@redhat.com>
+
+	* python/py-value.c (convert_value_from_python): Move PyInt_Check
+	conversion logic to occur after PyLong_Check.  Comment on order
+	change significance.
+	* python/py-arch.c (archpy_disassemble): Comment on order of
+	conversion for integers and longs.
+@
+text
+@/* Python interface to architecture
+
+   Copyright (C) 2013 Free Software Foundation, Inc.
+
+   This file is part of GDB.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+#include "defs.h"
+#include "gdbarch.h"
+#include "arch-utils.h"
+#include "disasm.h"
+#include "python-internal.h"
+
+typedef struct arch_object_type_object {
+  PyObject_HEAD
+  struct gdbarch *gdbarch;
+} arch_object;
+
+static struct gdbarch_data *arch_object_data = NULL;
+
+/* Require a valid Architecture.  */
+#define ARCHPY_REQUIRE_VALID(arch_obj, arch)			\
+  do {								\
+    arch = arch_object_to_gdbarch (arch_obj);			\
+    if (arch == NULL)						\
+      {								\
+	PyErr_SetString (PyExc_RuntimeError,			\
+			 _("Architecture is invalid."));	\
+	return NULL;						\
+      }								\
+  } while (0)
+
+static PyTypeObject arch_object_type
+    CPYCHECKER_TYPE_OBJECT_FOR_TYPEDEF ("arch_object");
+
+/* Associates an arch_object with GDBARCH as gdbarch_data via the gdbarch
+   post init registration mechanism (gdbarch_data_register_post_init).  */
+
+static void *
+arch_object_data_init (struct gdbarch *gdbarch)
+{
+  arch_object *arch_obj = PyObject_New (arch_object, &arch_object_type);
+
+  if (arch_obj == NULL)
+    return NULL;
+
+  arch_obj->gdbarch = gdbarch;
+
+  return (void *) arch_obj;
+}
+
+/* Returns the struct gdbarch value corresponding to the given Python
+   architecture object OBJ.  */
+
+struct gdbarch *
+arch_object_to_gdbarch (PyObject *obj)
+{
+  arch_object *py_arch = (arch_object *) obj;
+
+  return py_arch->gdbarch;
+}
+
+/* Returns the Python architecture object corresponding to GDBARCH.
+   Returns a new reference to the arch_object associated as data with
+   GDBARCH.  */
+
+PyObject *
+gdbarch_to_arch_object (struct gdbarch *gdbarch)
+{
+  PyObject *new_ref = (PyObject *) gdbarch_data (gdbarch, arch_object_data);
+
+  /* new_ref could be NULL if registration of arch_object with GDBARCH failed
+     in arch_object_data_init.  */
+  Py_XINCREF (new_ref);
+
+  return new_ref;
+}
+
+/* Implementation of gdb.Architecture.name (self) -> String.
+   Returns the name of the architecture as a string value.  */
+
+static PyObject *
+archpy_name (PyObject *self, PyObject *args)
+{
+  struct gdbarch *gdbarch = NULL;
+  const char *name;
+  PyObject *py_name;
+
+  ARCHPY_REQUIRE_VALID (self, gdbarch);
+
+  name = (gdbarch_bfd_arch_info (gdbarch))->printable_name;
+  py_name = PyString_FromString (name);
+
+  return py_name;
+}
+
+/* Implementation of
+   gdb.Architecture.disassemble (self, start_pc [, end_pc [,count]]) -> List.
+   Returns a list of instructions in a memory address range.  Each instruction
+   in the list is a Python dict object.
+*/
+
+static PyObject *
+archpy_disassemble (PyObject *self, PyObject *args, PyObject *kw)
+{
+  static char *keywords[] = { "start_pc", "end_pc", "count", NULL };
+  CORE_ADDR start, end = 0;
+  CORE_ADDR pc;
+  gdb_py_ulongest start_temp;
+  long count = 0, i;
+  PyObject *result_list, *end_obj = NULL, *count_obj = NULL;
+  struct gdbarch *gdbarch = NULL;
+
+  ARCHPY_REQUIRE_VALID (self, gdbarch);
+
+  if (!PyArg_ParseTupleAndKeywords (args, kw, GDB_PY_LLU_ARG "|OO", keywords,
+                                    &start_temp, &end_obj, &count_obj))
+    return NULL;
+
+  start = start_temp;
+  if (end_obj)
+    {
+      /* Make a long logic check first.  In Python 3.x, internally,
+	 all integers are represented as longs.  In Python 2.x, there
+	 is still a differentiation internally between a PyInt and a
+	 PyLong.  Explicitly do this long check conversion first. In
+	 GDB, for Python 3.x, we #ifdef PyInt = PyLong.  This check has
+	 to be done first to ensure we do not lose information in the
+	 conversion process.  */
+      if (PyLong_Check (end_obj))
+        end = PyLong_AsUnsignedLongLong (end_obj);
+      else if (PyInt_Check (end_obj))
+        /* If the end_pc value is specified without a trailing 'L', end_obj will
+           be an integer and not a long integer.  */
+        end = PyInt_AsLong (end_obj);
+      else
+        {
+          Py_DECREF (end_obj);
+          Py_XDECREF (count_obj);
+          PyErr_SetString (PyExc_TypeError,
+                           _("Argument 'end_pc' should be a (long) integer."));
+
+          return NULL;
+        }
+
+      if (end < start)
+        {
+          Py_DECREF (end_obj);
+          Py_XDECREF (count_obj);
+          PyErr_SetString (PyExc_ValueError,
+                           _("Argument 'end_pc' should be greater than or "
+                             "equal to the argument 'start_pc'."));
+
+          return NULL;
+        }
+    }
+  if (count_obj)
+    {
+      count = PyInt_AsLong (count_obj);
+      if (PyErr_Occurred () || count < 0)
+        {
+          Py_DECREF (count_obj);
+          Py_XDECREF (end_obj);
+          PyErr_SetString (PyExc_TypeError,
+                           _("Argument 'count' should be an non-negative "
+                             "integer."));
+
+          return NULL;
+        }
+    }
+
+  result_list = PyList_New (0);
+  if (result_list == NULL)
+    return NULL;
+
+  for (pc = start, i = 0;
+       /* All args are specified.  */
+       (end_obj && count_obj && pc <= end && i < count)
+       /* end_pc is specified, but no count.  */
+       || (end_obj && count_obj == NULL && pc <= end)
+       /* end_pc is not specified, but a count is.  */
+       || (end_obj == NULL && count_obj && i < count)
+       /* Both end_pc and count are not specified.  */
+       || (end_obj == NULL && count_obj == NULL && pc == start);)
+    {
+      int insn_len = 0;
+      char *as = NULL;
+      struct ui_file *memfile = mem_fileopen ();
+      PyObject *insn_dict = PyDict_New ();
+      volatile struct gdb_exception except;
+
+      if (insn_dict == NULL)
+        {
+          Py_DECREF (result_list);
+          ui_file_delete (memfile);
+
+          return NULL;
+        }
+      if (PyList_Append (result_list, insn_dict))
+        {
+          Py_DECREF (result_list);
+          Py_DECREF (insn_dict);
+          ui_file_delete (memfile);
+
+          return NULL;  /* PyList_Append Sets the exception.  */
+        }
+
+      TRY_CATCH (except, RETURN_MASK_ALL)
+        {
+          insn_len = gdb_print_insn (gdbarch, pc, memfile, NULL);
+        }
+      if (except.reason < 0)
+        {
+          Py_DECREF (result_list);
+          ui_file_delete (memfile);
+
+	  gdbpy_convert_exception (except);
+	  return NULL;
+        }
+
+      as = ui_file_xstrdup (memfile, NULL);
+      if (PyDict_SetItemString (insn_dict, "addr",
+                                gdb_py_long_from_ulongest (pc))
+          || PyDict_SetItemString (insn_dict, "asm",
+                                   PyString_FromString (*as ? as : "<unknown>"))
+          || PyDict_SetItemString (insn_dict, "length",
+                                   PyInt_FromLong (insn_len)))
+        {
+          Py_DECREF (result_list);
+
+          ui_file_delete (memfile);
+          xfree (as);
+
+          return NULL;
+        }
+
+      pc += insn_len;
+      i++;
+      ui_file_delete (memfile);
+      xfree (as);
+    }
+
+  return result_list;
+}
+
+/* Initializes the Architecture class in the gdb module.  */
+
+int
+gdbpy_initialize_arch (void)
+{
+  arch_object_data = gdbarch_data_register_post_init (arch_object_data_init);
+  arch_object_type.tp_new = PyType_GenericNew;
+  if (PyType_Ready (&arch_object_type) < 0)
+    return -1;
+
+  return gdb_pymodule_addobject (gdb_module, "Architecture",
+				 (PyObject *) &arch_object_type);
+}
+
+static PyMethodDef arch_object_methods [] = {
+  { "name", archpy_name, METH_NOARGS,
+    "name () -> String.\n\
+Return the name of the architecture as a string value." },
+  { "disassemble", (PyCFunction) archpy_disassemble,
+    METH_VARARGS | METH_KEYWORDS,
+    "disassemble (start_pc [, end_pc [, count]]) -> List.\n\
+Return a list of at most COUNT disassembled instructions from START_PC to\n\
+END_PC." },
+  {NULL}  /* Sentinel */
+};
+
+static PyTypeObject arch_object_type = {
+  PyVarObject_HEAD_INIT (NULL, 0)
+  "gdb.Architecture",                 /* tp_name */
+  sizeof (arch_object),               /* tp_basicsize */
+  0,                                  /* tp_itemsize */
+  0,                                  /* tp_dealloc */
+  0,                                  /* tp_print */
+  0,                                  /* tp_getattr */
+  0,                                  /* tp_setattr */
+  0,                                  /* tp_compare */
+  0,                                  /* tp_repr */
+  0,                                  /* tp_as_number */
+  0,                                  /* tp_as_sequence */
+  0,                                  /* tp_as_mapping */
+  0,                                  /* tp_hash  */
+  0,                                  /* tp_call */
+  0,                                  /* tp_str */
+  0,                                  /* tp_getattro */
+  0,                                  /* tp_setattro */
+  0,                                  /* tp_as_buffer */
+  Py_TPFLAGS_DEFAULT,                 /* tp_flags */
+  "GDB architecture object",          /* tp_doc */
+  0,                                  /* tp_traverse */
+  0,                                  /* tp_clear */
+  0,                                  /* tp_richcompare */
+  0,                                  /* tp_weaklistoffset */
+  0,                                  /* tp_iter */
+  0,                                  /* tp_iternext */
+  arch_object_methods,                /* tp_methods */
+  0,                                  /* tp_members */
+  0,                                  /* tp_getset */
+  0,                                  /* tp_base */
+  0,                                  /* tp_dict */
+  0,                                  /* tp_descr_get */
+  0,                                  /* tp_descr_set */
+  0,                                  /* tp_dictoffset */
+  0,                                  /* tp_init */
+  0,                                  /* tp_alloc */
+};
+@
+
+
+1.8
+log
+@2013-08-30  Phil Muldoon  <pmuldoon@@redhat.com>
+
+	PR python/15461
+
+	* python/py-arch.c (ARCHPY_REQUIRE_VALID): New macro.
+	(archpy_name): Check for valid architecture.
+	(archpy_disassemble): Ditto.
+
+
+2013-08-30  Phil Muldoon  <pmuldoon@@redhat.com>
+
+	* gdb.python/py-arch.exp: Tests for invalid architecture.
+@
+text
+@d135 7
+@
+
+
+1.7
+log
+@	* python/py-arch.c (gdbpy_initialize_arch): Use
+	gdb_pymodule_addobject.
+	* python/py-block.c (gdbpy_initialize_blocks): Use
+	gdb_pymodule_addobject.
+	* python/py-breakpoint.c (gdbpy_initialize_breakpoints): Use
+	gdb_pymodule_addobject.
+	* python/py-cmd.c (gdbpy_initialize_breakpoints): Use
+	gdb_pymodule_addobject.
+	* python/py-event.c (gdbpy_initialize_event_generic): Use
+	gdb_pymodule_addobject.
+	* python/py-evtregistry.c (gdbpy_initialize_eventregistry): Use
+	gdb_pymodule_addobject.
+	* python/py-evts.c (add_new_registry): Use
+	gdb_pymodule_addobject.
+	(gdbpy_initialize_py_events): Likewise.
+	* python/py-finishbreakpoint.c
+	(gdbpy_initialize_finishbreakpoints): Use
+	gdb_pymodule_addobject.
+	* python/py-frame.c (gdbpy_initialize_frames): Use
+	gdb_pymodule_addobject.
+	* python/py-function.c (gdbpy_initialize_functions): Use
+	gdb_pymodule_addobject.
+	* python/py-inferior.c (gdbpy_initialize_inferior): Use
+	gdb_pymodule_addobject.
+	* python/py-infthread.c (gdbpy_initialize_thread): Use
+	gdb_pymodule_addobject.
+	* python/py-objfile.c (gdbpy_initialize_objfile): Use
+	gdb_pymodule_addobject.
+	* python/py-param.c (gdbpy_initialize_parameters): Use
+	gdb_pymodule_addobject.
+	* python/py-progspace.c (gdbpy_initialize_pspace): Use
+	gdb_pymodule_addobject.
+	* python/py-symbol.c (gdbpy_initialize_symbols): Use
+	gdb_pymodule_addobject.
+	* python/py-symtab.c (gdbpy_initialize_symtabs): Use
+	gdb_pymodule_addobject.
+	* python/py-type.c (gdbpy_initialize_types): Use
+	gdb_pymodule_addobject.
+	* python/py-utils.c (gdb_pymodule_addobject): New function.
+	* python/py-value.c (gdbpy_initialize_values): Use
+	gdb_pymodule_addobject.
+	* python/python-internal.h (gdb_pymodule_addobject): Declare.
+	* python/python.c (_initialize_python): Use
+	gdb_pymodule_addobject.
+@
+text
+@d33 12
+d97 8
+a104 3
+  struct gdbarch *gdbarch = arch_object_to_gdbarch (self);
+  const char *name = (gdbarch_bfd_arch_info (gdbarch))->printable_name;
+  PyObject *py_name = PyString_FromString (name);
+d124 3
+a126 1
+  struct gdbarch *gdbarch = arch_object_to_gdbarch (self);
+@
+
+
+1.6
+log
+@	* python/py-arch.c (gdbpy_initialize_arch): Return 'int'.
+	Check errors.
+	* python/py-auto-load.c (gdbpy_initialize_auto_load): Return 'int'.
+	* python/py-block.c (gdbpy_initialize_blocks): Return 'int'.
+	Check errors.
+	* python/py-breakpoint.c (gdbpy_initialize_breakpoints): Return 'int'.
+	Check errors.
+	* python/py-cmd.c (gdbpy_initialize_commands): Return 'int'.
+	Check errors.
+	* python/py-event.c (gdbpy_initialize_event): Return 'int'.
+	Check errors.
+	* python/py-event.h (GDBPY_NEW_EVENT_TYPE): Change generated
+	init function to return 'int'.
+	* python/py-evtregistry.c (gdbpy_initialize_eventregistry):
+	Return 'int'.  Check errors.
+	* python/py-evts.c (gdbpy_initialize_py_events): Return 'int'.
+	Check errors.
+	* python/py-finishbreakpoint.c (gdbpy_initialize_finishbreakpoints):
+	Return 'int'.  Check errors.
+	* python/py-frame.c (gdbpy_initialize_frames): Return 'int'.
+	Check errors.
+	* python/py-function.c (gdbpy_initialize_functions): Return 'int'.
+	Check errors.
+	* python/py-gdb-readline.c (gdbpy_initialize_gdb_readline):
+	Check errors.
+	* python/py-inferior.c (gdbpy_initialize_inferior): Return 'int'.
+	Check errors.
+	* python/py-infthread.c (gdbpy_initialize_thread): Return 'int'.
+	Check errors.
+	* python/py-lazy-string.c (gdbpy_initialize_lazy_string): Return 'int'.
+	Check errors.
+	* python/py-objfile.c (gdbpy_initialize_objfile): Return 'int'.
+	Check errors.
+	* python/py-param.c (gdbpy_initialize_parameters): Return 'int'.
+	Check errors.
+	* python/py-progspace.c (gdbpy_initialize_pspace): Return 'int'.
+	Check errors.
+	* python/py-symbol.c (gdbpy_initialize_symbols): Return 'int'.
+	Check errors.
+	* python/py-symtab.c (gdbpy_initialize_symtabs): Return 'int'.
+	Check errors.
+	* python/py-type.c (gdbpy_initialize_types): Return 'int'.
+	Check errors.
+	* python/py-value.c (gdbpy_initialize_values): Return 'int'.
+	Check errors.
+	* python/python-internal.h (gdbpy_initialize_auto_load,
+	gdbpy_initialize_values, gdbpy_initialize_frames,
+	gdbpy_initialize_symtabs, gdbpy_initialize_commands,
+	gdbpy_initialize_symbols, gdbpy_initialize_symtabs,
+	gdbpy_initialize_blocks, gdbpy_initialize_types,
+	gdbpy_initialize_functions, gdbpy_initialize_pspace,
+	gdbpy_initialize_objfile, gdbpy_initialize_breakpoints,
+	gdbpy_initialize_finishbreakpoints,
+	gdbpy_initialize_lazy_string, gdbpy_initialize_parameters,
+	gdbpy_initialize_thread, gdbpy_initialize_inferior,
+	gdbpy_initialize_eventregistry, gdbpy_initialize_event,
+	gdbpy_initialize_py_events, gdbpy_initialize_stop_event,
+	gdbpy_initialize_signal_event,
+	gdbpy_initialize_breakpoint_event,
+	gdbpy_initialize_continue_event,
+	gdbpy_initialize_exited_event, gdbpy_initialize_thread_event,
+	gdbpy_initialize_new_objfile_event, gdbpy_initialize_arch):
+	Update.  Use CPYCHECKER_NEGATIVE_RESULT_SETS_EXCEPTION.
+	* python/python.c (gdb_python_initialized): New global.
+	(gdbpy_initialize_events): Return 'int'.  Check errors.
+	(_initialize_python): Check errors.  Set
+	gdb_python_initialized.
+@
+text
+@d242 2
+a243 3
+  Py_INCREF (&arch_object_type);
+  return PyModule_AddObject (gdb_module, "Architecture",
+			     (PyObject *) &arch_object_type);
+@
+
+
+1.5
+log
+@	* python/py-arch.c (archpy_disassemble): Update.
+	* python/py-type.c (typy_get_composite, typy_lookup_typename)
+	(typy_lookup_type): Use GDB_PY_HANDLE_EXCEPTION.
+	* python/py-utils.c (gdbpy_convert_exception): Return 'void'.
+	* python/python-internal.h (CPYCHECKER_SETS_EXCEPTION): New
+	macro.
+	(GDB_PY_HANDLE_EXCEPTION): Update.
+	(gdbpy_convert_exception): Update.  Use CPYCHECKER_SETS_EXCEPTION.
+@
+text
+@d234 1
+a234 1
+void
+d240 1
+a240 1
+    return;
+d243 2
+a244 2
+  PyModule_AddObject (gdb_module, "Architecture",
+                      (PyObject *) &arch_object_type);
+@
+
+
+1.4
+log
+@	* python/py-arch.c (arch_object_type): Use
+	CPYCHECKER_TYPE_OBJECT_FOR_TYPEDEF.
+	* python/py-block.c (block_syms_iterator_object_type):
+	Use CPYCHECKER_TYPE_OBJECT_FOR_TYPEDEF.
+	* python/py-bpevent.c (breakpoint_event_object_type):
+	Use CPYCHECKER_TYPE_OBJECT_FOR_TYPEDEF.
+	* python/py-cmd.c (cmdpy_object_type): Use
+	CPYCHECKER_TYPE_OBJECT_FOR_TYPEDEF.
+	* python/py-continueevent.c (continue_event_object_type):
+	Use CPYCHECKER_TYPE_OBJECT_FOR_TYPEDEF.
+	* python/py-event.h (GDBPY_NEW_EVENT_TYPE):
+	Use CPYCHECKER_TYPE_OBJECT_FOR_TYPEDEF.
+	* python/py-events.h (thread_event_object_type):
+	Use CPYCHECKER_TYPE_OBJECT_FOR_TYPEDEF.
+	* python/py-evtregistry.c (eventregistry_object_type): Use
+	CPYCHECKER_TYPE_OBJECT_FOR_TYPEDEF.
+	* python/py-exitedevent.c (exited_event_object_type):
+	Use CPYCHECKER_TYPE_OBJECT_FOR_TYPEDEF.
+	* python/py-finishbreakpoint.c (finish_breakpoint_object_type):
+	Use CPYCHECKER_TYPE_OBJECT_FOR_TYPEDEF.
+	* python/py-function.c (fnpy_object_type): Use
+	CPYCHECKER_TYPE_OBJECT_FOR_TYPEDEF.
+	* python/py-inferior.c (inferior_object_type, membuf_object_type):
+	Use CPYCHECKER_TYPE_OBJECT_FOR_TYPEDEF.
+	* python/py-infthread.c (thread_object_type): Use
+	CPYCHECKER_TYPE_OBJECT_FOR_TYPEDEF.
+	* python/py-lazy-string.c (lazy_string_object_type):
+	Use CPYCHECKER_TYPE_OBJECT_FOR_TYPEDEF.
+	* python/py-newobjfileevent.c (new_objfile_event_object_type):
+	Use CPYCHECKER_TYPE_OBJECT_FOR_TYPEDEF.
+	* python/py-objfile.c (objfile_object_type): Use
+	CPYCHECKER_TYPE_OBJECT_FOR_TYPEDEF.
+	* python/py-param.c (parmpy_object_type):
+	Use CPYCHECKER_TYPE_OBJECT_FOR_TYPEDEF.
+	* python/py-progspace.c (pspace_object_type):
+	Use CPYCHECKER_TYPE_OBJECT_FOR_TYPEDEF.
+	* python/py-signalevent.c (signal_event_object_type):
+	Use CPYCHECKER_TYPE_OBJECT_FOR_TYPEDEF.
+	* python/py-symtab.c (symtab_object_type, sal_object_type): Use
+	CPYCHECKER_TYPE_OBJECT_FOR_TYPEDEF.
+	* python/py-type.c (type_object_type, field_object_type)
+	(type_iterator_object_type): Use CPYCHECKER_TYPE_OBJECT_FOR_TYPEDEF.
+	* python/py-internal.h (CPYCHECKER_TYPE_OBJECT_FOR_TYPEDEF): New
+	define.
+	(value_object_type, block_object_type, symbol_object_type)
+	(event_object_type, stop_event_object_type, breakpoint_object_type)
+	(frame_object_type): Use CPYCHECKER_TYPE_OBJECT_FOR_TYPEDEF.
+@
+text
+@d203 2
+a204 1
+          return gdbpy_convert_exception (except);
+@
+
+
+1.3
+log
+@	* python/py-arch.c (archpy_disassemble): Use PyInt_Check and
+	PyLong_Check.
+@
+text
+@d32 3
+a34 1
+static PyTypeObject arch_object_type;
+@
+
+
+1.2
+log
+@	Add a new method 'disassemble' to gdb.Architecture class.
+
+	* python/py-arch.c (archpy_disassmble): Implementation of the
+	new method gdb.Architecture.disassemble.
+	(arch_object_methods): Add entry for the new method.
+
+	* doc/gdb.texinfo (Architectures In Python): Add description
+	about the new method gdb.Architecture.disassemble.
+
+	* testsuite/gdb.python/py-arch.c: New test case
+	* testsuite/gdb.python/py-arch.exp: New tests to test
+	gdb.Architecture.disassemble
+	* testsuite/gdb.python/Makefile.in: Add py-arch to the list of
+	EXECUTABLES.
+@
+text
+@d114 3
+a116 1
+      if (PyObject_TypeCheck (end_obj, &PyInt_Type))
+a119 2
+      else if (PyObject_TypeCheck (end_obj, &PyLong_Type))
+        end = PyLong_AsUnsignedLongLong (end_obj);
+@
+
+
+1.1
+log
+@	Add a new class gdb.Architecture which exposes GDB's
+	internal representation of architecture via GDB Python API.
+
+	* Makefile.in: Add entries corresponding to the new file
+	python/py-arch.c.
+	* NEWS (Python Scripting): Add entries for the new class
+	gdb.Architecture and the new method gdb.Frame.architecture.
+	* python/py-arch.c: Implement gdb.Architecture class.
+	* python/py-frame.c (frapy_arch): Implement the method
+	gdb.Frame.architecture().
+	(frame_object_methods): Add 'architecture' to the method table.
+	* python/python-internal.h: Add declarations of new utility
+	functions.
+	* python/python.c (_initialize_python): Initialize
+	gdb.Architecture class.
+
+	* doc/gdb.texinfo (Architectures In Python): New sub-sub-section
+	describing the gdb.Architecture class.
+	(Frames In Python): Add description about the new method
+	gdb.Frame.architecture().
+
+	* testsuite/gdb.python/frame.exp: Add a test for
+	gdb.Frame.architecture() method.
+@
+text
+@d23 1
+d90 139
+d248 5
+@
+

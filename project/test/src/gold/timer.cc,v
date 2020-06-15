@@ -1,0 +1,397 @@
+head	1.6;
+access;
+symbols
+	binutils-2_24-branch:1.6.0.4
+	binutils-2_24-branchpoint:1.6
+	binutils-2_21_1:1.3
+	binutils-2_23_2:1.6
+	binutils-2_23_1:1.6
+	binutils-2_23:1.6
+	binutils-2_23-branch:1.6.0.2
+	binutils-2_23-branchpoint:1.6
+	binutils-2_22_branch:1.4.0.4
+	binutils-2_22:1.4
+	binutils-2_22-branch:1.4.0.2
+	binutils-2_22-branchpoint:1.4
+	binutils-2_21:1.3
+	binutils-2_21-branch:1.3.0.2
+	binutils-2_21-branchpoint:1.3
+	binutils_latest_snapshot:1.6;
+locks; strict;
+comment	@// @;
+
+
+1.6
+date	2012.04.06.17.21.55;	author ian;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2011.10.18.00.06.10;	author ccoutant;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2010.12.14.19.03.30;	author rwild;	state Exp;
+branches
+	1.4.2.1;
+next	1.3;
+
+1.3
+date	2010.08.25.08.36.54;	author nickc;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2010.05.26.00.13.05;	author ian;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2009.12.17.16.02.03;	author espindola;	state Exp;
+branches;
+next	;
+
+1.4.2.1
+date	2012.04.06.17.23.59;	author ian;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.6
+log
+@	* timer.cc: #include <unistd.h>.
+@
+text
+@// timer.cc -- helper class for time accounting
+
+// Copyright 2009, 2010 Free Software Foundation, Inc.
+// Written by Rafael Avila de Espindola <espindola@@google.com>.
+
+// This file is part of gold.
+
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 3 of the License, or
+// (at your option) any later version.
+
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+// MA 02110-1301, USA.
+
+#include "gold.h"
+
+#include <unistd.h>
+
+#ifdef HAVE_TIMES
+#include <sys/times.h>
+#endif
+
+#include "libiberty.h"
+
+#include "timer.h"
+
+namespace gold
+{
+
+// Class Timer
+
+Timer::Timer()
+{
+  this->start_time_.wall = 0;
+  this->start_time_.user = 0;
+  this->start_time_.sys = 0;
+}
+
+// Start counting the time.
+void
+Timer::start()
+{
+  this->get_time(&this->start_time_);
+}
+
+// Record the time used by pass N (0 <= N <= 2).
+void
+Timer::stamp(int n)
+{
+  gold_assert(n >= 0 && n <= 2);
+  TimeStats& thispass = this->pass_times_[n];
+  this->get_time(&thispass);
+}
+
+#if HAVE_SYSCONF && defined _SC_CLK_TCK
+# define TICKS_PER_SECOND sysconf (_SC_CLK_TCK) /* POSIX 1003.1-1996 */
+#else
+# ifdef CLK_TCK
+#  define TICKS_PER_SECOND CLK_TCK /* POSIX 1003.1-1988; obsolescent */
+# else
+#  ifdef HZ
+#   define TICKS_PER_SECOND HZ  /* traditional UNIX */
+#  else
+#   define TICKS_PER_SECOND 100 /* often the correct value */
+#  endif
+# endif
+#endif
+
+// times returns statistics in clock_t units.  This variable will hold the
+// conversion factor to seconds.  We use a variable that is initialized once
+// because sysconf can be slow.
+static long ticks_per_sec;
+class Timer_init
+{
+ public:
+  Timer_init()
+  {
+    ticks_per_sec = TICKS_PER_SECOND;
+  }
+};
+Timer_init timer_init;
+
+// Write the current time information.
+void
+Timer::get_time(TimeStats *now)
+{
+#ifdef HAVE_TIMES
+  tms t;
+  now->wall = (times(&t) * 1000) / ticks_per_sec;
+  now->user = (t.tms_utime * 1000) / ticks_per_sec;
+  now->sys  = (t.tms_stime * 1000) / ticks_per_sec;
+#else
+  now->wall = get_run_time() / 1000;
+  now->user = 0;
+  now->sys = 0;
+#endif
+}
+
+// Return the stats since start was called.
+Timer::TimeStats
+Timer::get_elapsed_time()
+{
+  TimeStats now;
+  this->get_time(&now);
+  TimeStats delta;
+  delta.wall = now.wall - this->start_time_.wall;
+  delta.user = now.user - this->start_time_.user;
+  delta.sys = now.sys - this->start_time_.sys;
+  return delta;
+}
+
+// Return the stats for pass N (0 <= N <= 2).
+Timer::TimeStats
+Timer::get_pass_time(int n)
+{
+  gold_assert(n >= 0 && n <= 2);
+  TimeStats thispass = this->pass_times_[n];
+  TimeStats& lastpass = n > 0 ? this->pass_times_[n-1] : this->start_time_;
+  thispass.wall -= lastpass.wall;
+  thispass.user -= lastpass.user;
+  thispass.sys -= lastpass.sys;
+  return thispass;
+}
+
+}
+@
+
+
+1.5
+log
+@	* gold.cc: Include timer.h.
+	(queue_middle_tasks): Stamp time.
+	(queue_final_tasks): Likewise.
+	* main.cc (main): Store timer in parameters.  Print timers
+	for each pass.
+	* parameters.cc (Parameters::Parameters): Initialize timer_.
+	(Parameters::set_timer): New function.
+	(set_parameters_timer): New function.
+	* parameters.h (Parameters::set_timer): New function.
+	(Parameters::timer): New function.
+	(Parameters::timer_): New data member.
+	(set_parameters_timer): New function.
+	* timer.cc (Timer::stamp): New function.
+	(Timer::get_pass_time): New function.
+	* timer.h (Timer::stamp): New function.
+	(Timer::get_pass_time): New function.
+	(Timer::pass_times_): New data member.
+@
+text
+@d25 2
+@
+
+
+1.4
+log
+@Fix typos in gold.
+
+gold/:
+	* dwarf_reader.cc: Remove outdated comment.
+	* gold-threads.cc: Fix typo in error message.
+	* archive.cc: Fix typos in comments.
+	* archive.h: Likewise.
+	* arm-reloc-property.cc: Likewise.
+	* arm-reloc-property.h: Likewise.
+	* arm-reloc.def: Likewise.
+	* arm.cc: Likewise.
+	* attributes.h: Likewise.
+	* cref.cc: Likewise.
+	* ehframe.cc: Likewise.
+	* fileread.h: Likewise.
+	* gold.h: Likewise.
+	* i386.cc: Likewise.
+	* icf.cc: Likewise.
+	* incremental.h: Likewise.
+	* int_encoding.cc: Likewise.
+	* layout.h: Likewise.
+	* main.cc: Likewise.
+	* merge.h: Likewise.
+	* object.cc: Likewise.
+	* object.h: Likewise.
+	* options.cc: Likewise.
+	* readsyms.cc: Likewise.
+	* reduced_debug_output.cc: Likewise.
+	* reloc.cc: Likewise.
+	* script-sections.cc: Likewise.
+	* sparc.cc: Likewise.
+	* symtab.h: Likewise.
+	* target-reloc.h: Likewise.
+	* target.cc: Likewise.
+	* target.h: Likewise.
+	* timer.cc: Likewise.
+	* timer.h: Likewise.
+	* x86_64.cc: Likewise.
+@
+text
+@d52 9
+d118 13
+@
+
+
+1.4.2.1
+log
+@	* timer.cc: #include <unistd.h>.
+@
+text
+@a24 2
+#include <unistd.h>
+
+@
+
+
+1.3
+log
+@        * archive.cc: Formatting fixes: Remove whitespace between
+        typename and following asterisk.  Remove whitespace between
+        function name and opening parenthesis.
+        * archive.h: Likewise.
+        * arm.cc: Likewise.
+        * attributes.cc: Likewise.
+        * attributes.h: Likewise.
+        * common.cc: Likewise.
+        * copy-relocs.cc: Likewise.
+        * dirsearch.h: Likewise.
+        * dynobj.cc: Likewise.
+        * ehframe.cc: Likewise.
+        * ehframe.h: Likewise.
+        * expression.cc: Likewise.
+        * fileread.cc: Likewise.
+        * fileread.h: Likewise.
+        * gc.h: Likewise.
+        * gold-threads.cc: Likewise.
+        * gold.cc: Likewise.
+        * i386.cc: Likewise.
+        * icf.h: Likewise.
+        * incremental-dump.cc: Likewise.
+        * incremental.cc: Likewise.
+        * layout.cc: Likewise.
+        * layout.h: Likewise.
+        * main.cc: Likewise.
+        * merge.cc: Likewise.
+        * merge.h: Likewise.
+        * object.cc: Likewise.
+        * object.h: Likewise.
+        * options.cc: Likewise.
+        * options.h: Likewise.
+        * output.cc: Likewise.
+        * output.h: Likewise.
+        * plugin.cc: Likewise.
+        * plugin.h: Likewise.
+        * powerpc.cc: Likewise.
+        * reloc.cc: Likewise.
+        * script-c.h: Likewise.
+        * script-sections.cc: Likewise.
+        * script.cc: Likewise.
+        * stringpool.cc: Likewise.
+        * symtab.cc: Likewise.
+        * symtab.h: Likewise.
+        * target.cc: Likewise.
+        * timer.cc: Likewise.
+        * timer.h: Likewise.
+        * version.cc: Likewise.
+        * x86_64.cc: Likewise.
+@
+text
+@d45 1
+a45 1
+// Start couting the time.
+d66 2
+a67 2
+// times returns statistics in clock_t units. This variable will hold the
+// conversion factor to seconds. We use a variable that is initialize once
+d80 1
+a80 1
+// Write the current time infortamion.
+@
+
+
+1.2
+log
+@	* timer.cc: Only #include <sys/times.h> if HAVE_TIMES is defined.
+@
+text
+@d47 1
+a47 1
+Timer::start ()
+d82 1
+a82 1
+Timer::get_time (TimeStats *now)
+d98 1
+a98 1
+Timer::get_elapsed_time ()
+@
+
+
+1.1
+log
+@2009-12-17  Rafael Avila de Espindola  <espindola@@google.com>
+
+	* Makefile.am (CCFILES): Add timer.cc.
+	(HFILES): Add timer.h.
+	* configure.ac: Check for sysconf and times.
+	* main.cc: include timer.h.
+	(main): Use Timer instead of get_run_time.
+	* timer.cc: New.
+	* timer.h: New.
+	* workqueue.cc: include timer.h.
+	(Workqueue::find_and_run_task):
+	Report user, sys and wall time.
+	* Makefile.in: Regenerate.
+	* config.in: Regenerate.
+	* configure: Regenerate.
+@
+text
+@d3 1
+a3 1
+// Copyright 2009 Free Software Foundation, Inc.
+d25 1
+d27 1
+@
+

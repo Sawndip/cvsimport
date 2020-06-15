@@ -1,0 +1,526 @@
+head	1.10;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.9
+	gdb_7_6-2013-04-26-release:1.9
+	gdb_7_6-branch:1.9.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.9
+	gdb_7_5_1-2012-11-29-release:1.8
+	gdb_7_5-2012-08-17-release:1.8
+	gdb_7_5-branch:1.8.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.8
+	gdb_7_4_1-2012-04-26-release:1.4.4.1
+	gdb_7_4-2012-01-24-release:1.4.4.1
+	gdb_7_4-branch:1.4.0.4
+	gdb_7_4-2011-12-13-branchpoint:1.4
+	gdb_7_3_1-2011-09-04-release:1.4
+	gdb_7_3-2011-07-26-release:1.4
+	gdb_7_3-branch:1.4.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.4
+	gdb_7_2-2010-09-02-release:1.3
+	gdb_7_2-branch:1.3.0.4
+	gdb_7_2-2010-07-07-branchpoint:1.3
+	gdb_7_1-2010-03-18-release:1.3
+	gdb_7_1-branch:1.3.0.2
+	gdb_7_1-2010-02-18-branchpoint:1.3
+	gdb_7_0_1-2009-12-22-release:1.2
+	gdb_7_0-2009-10-06-release:1.2
+	gdb_7_0-branch:1.2.0.4
+	gdb_7_0-2009-09-16-branchpoint:1.2
+	msnyder-checkpoint-072509-branch:1.2.0.2
+	msnyder-checkpoint-072509-branchpoint:1.2;
+locks; strict;
+comment	@# @;
+
+
+1.10
+date	2013.06.27.18.53.49;	author tromey;	state Exp;
+branches;
+next	1.9;
+
+1.9
+date	2013.01.01.06.33.26;	author brobecke;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2012.05.16.14.35.09;	author macro;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2012.02.22.00.04.58;	author palves;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2012.02.21.21.55.39;	author palves;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2012.01.04.08.17.46;	author brobecke;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2011.01.01.15.33.42;	author brobecke;	state Exp;
+branches
+	1.4.4.1;
+next	1.3;
+
+1.3
+date	2010.01.01.07.32.01;	author brobecke;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2009.03.18.15.36.01;	author palves;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2009.03.15.09.19.40;	author jkratoch;	state Exp;
+branches;
+next	;
+
+1.4.4.1
+date	2012.01.06.04.44.01;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.10
+log
+@test suite update - gdb.base/[n-r]
+
+Convert files gdb.base/[n-r]*.exp to use standard_output_file et al.
+
+	* gdb.base/nextoverexit.exp, gdb.base/nextoverexit.exp,
+	gdb.base/nodebug.exp, gdb.base/nofield.exp, gdb.base/nostdlib.exp,
+	gdb.base/opaque.exp, gdb.base/overlays.exp, gdb.base/pc-fp.exp,
+	gdb.base/pending.exp, gdb.base/permissions.exp,
+	gdb.base/pie-execl.exp, gdb.base/pointers.exp,
+	gdb.base/pr11022.exp, gdb.base/print-file-var.exp,
+	gdb.base/printcmds.exp, gdb.base/prologue.exp,
+	gdb.base/psymtab.exp, gdb.base/ptr-typedef.exp,
+	gdb.base/ptype.exp, gdb.base/randomize.exp,
+	gdb.base/readline-ask.exp, gdb.base/recpar.exp,
+	gdb.base/recurse.exp, gdb.base/relativedebug.exp,
+	gdb.base/relocate.exp, gdb.base/remote.exp, gdb.base/reread.exp,
+	gdb.base/return-nodebug.exp, gdb.base/return2.exp: Use
+	standard_testfile, standard_output_file, prepare_for_testing,
+	clean_restart.
+@
+text
+@# Copyright (C) 2009-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+proc do_test {type} {
+    set typenospace [string map {{ } -} $type]
+
+    with_test_prefix "$typenospace" {
+	if {[runto "func"]} {
+	    # Verify that we do not crash when using "return" from a
+	    # function with no debugging info.  Such function has no
+	    # `struct symbol'.  It may still have an associated
+	    # `struct minimal_symbol'.
+
+	    gdb_test "return -1" \
+		"Return value type not available for selected stack frame\\.\r\nPlease use an explicit cast of the value to return\\." \
+		"return from function with no debug info without a cast"
+
+	    # Cast of the result to the proper width must be done explicitely.
+	    gdb_test "return ($type) -1" "#0 .* main \\(.*" \
+		"return from function with no debug info with a cast" \
+		"Make selected stack frame return now\\? \\(y or n\\) " "y"
+
+	    gdb_test "advance marker" "marker \\(.*" \
+		"advance to marker"
+
+	    # And if it returned the full width of the result.
+	    gdb_test "print /d t" " = -1" "full width of the returned result"
+	}
+    }
+}
+
+foreach type {{signed char} {short} {int} {long} {long long} {float} {double}} {
+    set typeesc [string map {{ } {\ }} $type]
+    set typenospace [string map {{ } -} $type]
+
+    standard_testfile .c return-nodebug1.c
+
+    set additional_flags "additional_flags=-DTYPE=$typeesc"
+
+    if {[prepare_for_testing_full $testfile.exp \
+	     [list ${testfile}-${typenospace} debug \
+		  $srcfile [list debug $additional_flags] \
+		  $srcfile2 [list $additional_flags]]]} {
+	continue
+    }
+
+    do_test $type
+}
+@
+
+
+1.9
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@d48 1
+a48 4
+    set testfile "return-nodebug"
+    set srcfile ${testfile}.c
+    set srcfile1 ${testfile}1.c
+    set binfile ${objdir}/${subdir}/${testfile}-${typenospace}
+d52 4
+a55 1
+    if { [gdb_compile "${srcdir}/${subdir}/${srcfile}" "${binfile}0.o" object [list debug $additional_flags]] != "" } {
+a58 14
+    # This one is compiled without debug info.
+    if { [gdb_compile "${srcdir}/${subdir}/${srcfile1}" "${binfile}1.o" object [list $additional_flags]] != "" } {
+	continue
+    }
+
+    if { [gdb_compile "${binfile}0.o ${binfile}1.o" "${binfile}" executable {debug}] != "" } {
+	continue
+    }
+
+    gdb_exit
+    gdb_start
+    gdb_reinitialize_dir $srcdir/$subdir
+    gdb_load ${binfile}
+
+@
+
+
+1.8
+log
+@	gdb/
+	* breakpoint.h (bp_location): Add related_address member.
+	* inferior.h (get_return_value): Take a pointer to struct value
+	instead of struct type for the function requested.
+	* value.h (using_struct_return): Likewise.
+	* gdbarch.sh (return_value): Take a pointer to struct value
+	instead of struct type for the function requested.
+	* breakpoint.c (set_breakpoint_location_function): Initialize
+	related_address for bp_gnu_ifunc_resolver breakpoints.
+	* elfread.c (elf_gnu_ifunc_resolver_return_stop): Pass the
+	requested function's address to gdbarch_return_value.
+	* eval.c (evaluate_subexp_standard): Pass the requested
+	function's address to using_struct_return.
+	* infcall.c (call_function_by_hand): Pass the requested
+	function's address to using_struct_return and
+	gdbarch_return_value.
+	* infcmd.c (get_return_value): Take a pointer to struct value
+	instead of struct type for the function requested.
+	(print_return_value): Update accordingly.
+	(finish_command_continuation): Likewise.
+	* stack.c (return_command): Pass the requested function's
+	address to using_struct_return and gdbarch_return_value.
+	* value.c (using_struct_return): Take a pointer to struct value
+	instead of struct type for the function requested.  Pass the
+	requested function's address to gdbarch_return_value.
+	* python/py-finishbreakpoint.c (finish_breakpoint_object):
+	New function_value member, replacing function_type.
+	(bpfinishpy_dealloc): Update accordingly.
+	(bpfinishpy_pre_stop_hook): Likewise.
+	(bpfinishpy_init): Likewise.  Record the requested function's
+	address.
+	* mips-tdep.c (mips_fval_reg): New enum.
+	(mips_o32_push_dummy_call): For MIPS16 FP doubles do not swap
+	words put in GP registers.
+	(mips_o64_push_dummy_call): Update a comment.
+	(mips_o32_return_value): Take a pointer to struct value instead
+	of struct type for the function requested and use it to check if
+	using the MIPS16 calling convention.  Return the designated
+	general purpose registers for floating-point values returned in
+	MIPS16 mode.
+	(mips_o64_return_value): Likewise.
+	* ppc-tdep.h (ppc_sysv_abi_return_value): Update prototype.
+	(ppc_sysv_abi_broken_return_value): Likewise.
+	(ppc64_sysv_abi_return_value): Likewise.
+	* alpha-tdep.c (alpha_return_value): Take a pointer to struct
+	value instead of struct type for the function requested.
+	* amd64-tdep.c (amd64_return_value): Likewise.
+	* amd64-windows-tdep.c (amd64_windows_return_value): Likewise.
+	* arm-tdep.c (arm_return_value): Likewise.
+	* avr-tdep.c (avr_return_value): Likewise.
+	* bfin-tdep.c (bfin_return_value): Likewise.
+	* cris-tdep.c (cris_return_value): Likewise.
+	* frv-tdep.c (frv_return_value): Likewise.
+	* h8300-tdep.c (h8300_return_value): Likewise.
+	(h8300h_return_value): Likewise.
+	* hppa-tdep.c (hppa32_return_value): Likewise.
+	(hppa64_return_value): Likewise.
+	* i386-tdep.c (i386_return_value): Likewise.
+	* ia64-tdep.c (ia64_return_value): Likewise.
+	* iq2000-tdep.c (iq2000_return_value): Likewise.
+	* lm32-tdep.c (lm32_return_value): Likewise.
+	* m32c-tdep.c (m32c_return_value): Likewise.
+	* m32r-tdep.c (m32r_return_value): Likewise.
+	* m68hc11-tdep.c (m68hc11_return_value): Likewise.
+	* m68k-tdep.c (m68k_return_value): Likewise.
+	(m68k_svr4_return_value): Likewise.
+	* m88k-tdep.c (m88k_return_value): Likewise.
+	* mep-tdep.c (mep_return_value): Likewise.
+	* microblaze-tdep.c (microblaze_return_value): Likewise.
+	* mn10300-tdep.c (mn10300_return_value): Likewise.
+	* moxie-tdep.c (moxie_return_value): Likewise.
+	* mt-tdep.c (mt_return_value): Likewise.
+	* ppc-linux-tdep.c (ppc_linux_return_value): Likewise.
+	* ppc-sysv-tdep.c (ppc_sysv_abi_return_value): Likewise.
+	(ppc_sysv_abi_broken_return_value): Likewise.
+	(ppc64_sysv_abi_return_value): Likewise.
+	* ppcnbsd-tdep.c (ppcnbsd_return_value): Likewise.
+	* rl78-tdep.c (rl78_return_value): Likewise.
+	* rs6000-aix-tdep.c (rs6000_return_value): Likewise.
+	* rx-tdep.c (rx_return_value): Likewise.
+	* s390-tdep.c (s390_return_value): Likewise.
+	* score-tdep.c (score_return_value): Likewise.
+	* sh-tdep.c (sh_return_value_nofpu): Likewise.
+	(sh_return_value_fpu): Likewise.
+	* sh64-tdep.c (sh64_return_value): Likewise.
+	* sparc-tdep.c (sparc32_return_value): Likewise.
+	* sparc64-tdep.c (sparc64_return_value): Likewise.
+	* spu-tdep.c (spu_return_value): Likewise.
+	* tic6x-tdep.c (tic6x_return_value): Likewise.
+	* v850-tdep.c (v850_return_value): Likewise.
+	* vax-tdep.c (vax_return_value): Likewise.
+	* xstormy16-tdep.c (xstormy16_return_value): Likewise.
+	* xtensa-tdep.c (xtensa_return_value): Likewise.
+	* gdbarch.c: Regenerate.
+	* gdbarch.h: Regenerate.
+
+	gdb/testsuite/
+	* gdb.base/return-nodebug.exp: Also test float and double types.
+@
+text
+@d1 1
+a1 1
+# Copyright (C) 2009-2012 Free Software Foundation, Inc.
+@
+
+
+1.7
+log
+@2012-02-21  Pedro Alves  <palves@@redhat.com>
+
+	* gdb.base/return-nodebug.exp (do_test): Use with_test_prefix.
+@
+text
+@d44 1
+a44 1
+foreach type {{signed char} {short} {int} {long} {long long}} {
+@
+
+
+1.6
+log
+@2012-02-21  Pedro Alves  <palves@@redhat.com>
+	    Tom Tromey  <tromey@@redhat.com>
+
+	* lib/gdb.exp: Add description of test prefixes.
+	(with_test_prefix): New procedure.
+	* gdb.arch/altivec-abi.exp: Use with_test_prefix.
+	* gdb.base/attach-pie-misread.exp: Use with_test_prefix.
+	* gdb.base/break-interp.exp: Use with_test_prefix.  Use append
+	instead of lappend to append to pf_prefix.
+	* gdb.base/catch-load.exp: Use with_test_prefix.
+	* gdb.base/disp-step-syscall.exp: Use with_test_prefix.
+	* gdb.base/jit-so.exp: Use with_test_prefix.
+	* gdb.base/jit.exp: Use with_test_prefix.
+	* gdb.base/return-nodebug.exp (do_test): Use append instead of
+	lappend to append to pf_prefix.
+	* gdb.base/sepdebug.exp: Use with_test_prefix.
+	* gdb.base/solib-display.exp: Use with_test_prefix.
+	* gdb.base/solib-overlap.exp: Use with_test_prefix.
+	* gdb.base/watch-cond-infcall.exp: Use with_test_prefix.
+	* gdb.base/watchpoint.exp: Use with_test_prefix.
+	* gdb.dwarf2/dw2-noloc.exp: Use with_test_prefix.
+	* gdb.mi/mi-watch.exp: Use with_test_prefix.
+	* gdb.mi/mi2-watch.exp: Use with_test_prefix.
+	* gdb.threads/non-ldr-exc-1.exp: Use with_test_prefix.
+	* gdb.threads/non-ldr-exc-2.exp: Use with_test_prefix.
+	* gdb.threads/non-ldr-exc-3.exp: Use with_test_prefix.
+	* gdb.threads/non-ldr-exc-4.exp: Use with_test_prefix.
+	* gdb.threads/watchpoint-fork.exp: Use with_test_prefix.  Use
+	append instead of lappend to append to pf_prefix.
+	* gdb.threads/watchthreads-reorder.exp: Use with_test_prefix.
+	* gdb.trace/change-loc.exp: Use with_test_prefix.
+	* gdb.trace/pending.exp: Use with_test_prefix.
+	* gdb.trace/status-stop.exp: Use with_test_prefix.
+	* gdb.trace/strace.exp: Use with_test_prefix.
+	* gdb.trace/trace-break.exp: Use with_test_prefix.
+	* gdb.trace/unavailable.exp: Use with_test_prefix.  Use append
+	instead of lappend to append to pf_prefix.
+@
+text
+@d19 22
+a40 23
+    global pf_prefix
+    set old_prefix $pf_prefix
+    append pf_prefix " $typenospace:"
+
+    if {[runto "func"]} {
+	# Verify that we do not crash when using "return" from a function with
+	# no debugging info.  Such function has no `struct symbol'.  It may
+	# still have an associated `struct minimal_symbol'.
+
+    	gdb_test "return -1" \
+		 "Return value type not available for selected stack frame\\.\r\nPlease use an explicit cast of the value to return\\." \
+		 "return from function with no debug info without a cast"
+
+	# Cast of the result to the proper width must be done explicitely.
+	gdb_test "return ($type) -1" "#0 .* main \\(.*"			\
+		 "return from function with no debug info with a cast"	\
+		 "Make selected stack frame return now\\? \\(y or n\\) " "y"
+
+	gdb_test "advance marker" "marker \\(.*" \
+		 "advance to marker"
+
+	# And if it returned the full width of the result.
+	gdb_test "print /d t" " = -1" "full width of the returned result"
+a41 2
+
+    set pf_prefix $old_prefix
+@
+
+
+1.5
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d21 1
+a21 1
+    lappend pf_prefix "$typenospace:"
+@
+
+
+1.4
+log
+@run copyright.sh for 2011.
+@
+text
+@d1 1
+a1 1
+# Copyright (C) 2009, 2010, 2011 Free Software Foundation, Inc.
+@
+
+
+1.4.4.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d1 1
+a1 1
+# Copyright (C) 2009-2012 Free Software Foundation, Inc.
+@
+
+
+1.3
+log
+@Update copyright year in most headers.
+
+Automatic update by copyright.sh.
+@
+text
+@d1 1
+a1 1
+# Copyright (C) 2009, 2010 Free Software Foundation, Inc.
+@
+
+
+1.2
+log
+@	* return-nodebug.c: Don't include stdio.h.
+	(init): Delete.
+	(func): Delete definition and provide extern declaration.
+	(t): New.
+	(main): Don't call printf.  Call func and store its result in t.
+	* return-nodebug1.c: New.
+	* return-nodebug.exp: Don't expect stdio output.  Instead, print
+	the global variable t.  Drop printf formatters and cast types from
+	foreach loop.  Don't use prepare_for_testing.  Compile
+	return-nodebug.c and return-nodebug1.c in separate steps.  Don't
+	define FORMAT or CAST.
+@
+text
+@d1 1
+a1 1
+# Copyright (C) 2009 Free Software Foundation, Inc.
+@
+
+
+1.1
+log
+@gdb/
+	* stack.c (return_command <retval_exp>): New variables retval_expr
+	and old_chain.  Inline parse_and_eval to initialize retval_expr.  Check
+	RETVAL_EXPR for UNOP_CAST and set RETURN_TYPE to the RETURN_VALUE type
+	if RETURN_TYPE is NULL.
+
+gdb/doc/
+	* gdb.texinfo (Returning): New description for missing debug info.
+
+gdb/testsuite/
+	* gdb.base/return-nodebug.exp, gdb.base/return-nodebug.c: New.
+@
+text
+@d37 3
+d41 1
+a41 2
+	gdb_test "adv marker" "\r\nresult=-1\r\n.* in marker \\(.*" \
+		 "full width of the returned result"
+d47 1
+a47 9
+foreach case {{{signed char} %d (int)}	\
+	      {{short}       %d (int)}	\
+	      {{int}         %d}	\
+	      {{long}        %ld}	\
+	      {{long long}   %lld}}	{
+    set type [lindex $case 0]
+    set format [lindex $case 1]
+    set cast [lindex $case 2]
+
+d51 18
+a68 3
+    if {[prepare_for_testing return-nodebug.exp "return-nodebug-$typenospace" "return-nodebug.c" \
+	 [list "additional_flags=-DFORMAT=\"$format\" -DTYPE=$typeesc -DCAST=$cast"]] == 0} {
+	do_test $type
+d70 7
+@
+

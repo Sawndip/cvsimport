@@ -1,0 +1,199 @@
+head	1.3;
+access;
+symbols
+	binutils-2_24-branch:1.3.0.2
+	binutils-2_24-branchpoint:1.3
+	binutils-2_21_1:1.2
+	binutils-2_23_2:1.2
+	binutils-2_23_1:1.2
+	binutils-2_23:1.2
+	binutils-2_23-branch:1.2.0.12
+	binutils-2_23-branchpoint:1.2
+	binutils-2_22_branch:1.2.0.10
+	binutils-2_22:1.2
+	binutils-2_22-branch:1.2.0.8
+	binutils-2_22-branchpoint:1.2
+	binutils-2_21:1.2
+	binutils-2_21-branch:1.2.0.6
+	binutils-2_21-branchpoint:1.2
+	binutils-2_20_1:1.2
+	binutils-2_20:1.2
+	binutils-2_20-branch:1.2.0.4
+	binutils-2_20-branchpoint:1.2
+	dje-cgen-play1-branch:1.2.0.2
+	dje-cgen-play1-branchpoint:1.2
+	binutils_latest_snapshot:1.3;
+locks; strict;
+comment	@ * @;
+
+
+1.3
+date	2012.12.17.16.56.02;	author nickc;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2009.03.28.05.22.30;	author ian;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2009.03.17.22.25.30;	author ian;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.3
+log
+@Add copyright notices
+@
+text
+@/* ftruncate emulations that work on some System V's.
+   This file is in the public domain.  */
+
+/* Copyright 2012 Free Software Foundation, Inc.
+
+   This file is part of gold.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+   MA 02110-1301, USA.  */
+
+#include <config.h>
+
+/* Specification.  */
+#include <unistd.h>
+
+#include <sys/types.h>
+#include <fcntl.h>
+
+extern int ftruncate (int, off_t);
+
+#ifdef F_CHSIZE
+
+int
+ftruncate (int fd, off_t length)
+{
+  return fcntl (fd, F_CHSIZE, length);
+}
+
+#else /* not F_CHSIZE */
+# ifdef F_FREESP
+
+/* By William Kucharski <kucharsk@@netcom.com>.  */
+
+#  include <sys/stat.h>
+#  include <errno.h>
+
+int
+ftruncate (int fd, off_t length)
+{
+  struct flock fl;
+  struct stat filebuf;
+
+  if (fstat (fd, &filebuf) < 0)
+    return -1;
+
+  if (filebuf.st_size < length)
+    {
+      /* Extend file length. */
+      if (lseek (fd, (length - 1), SEEK_SET) < 0)
+	return -1;
+
+      /* Write a "0" byte. */
+      if (write (fd, "", 1) != 1)
+	return -1;
+    }
+  else
+    {
+
+      /* Truncate length. */
+
+      fl.l_whence = 0;
+      fl.l_len = 0;
+      fl.l_start = length;
+      fl.l_type = F_WRLCK;	/* write lock on file space */
+
+      /* This relies on the *undocumented* F_FREESP argument to fcntl,
+	 which truncates the file so that it ends at the position
+	 indicated by fl.l_start.  Will minor miracles never cease?  */
+
+      if (fcntl (fd, F_FREESP, &fl) < 0)
+	return -1;
+    }
+
+  return 0;
+}
+
+# else /* not F_CHSIZE nor F_FREESP */
+#  if HAVE_CHSIZE                      /* native Windows, e.g. mingw */
+
+int
+ftruncate (int fd, off_t length)
+{
+  return chsize (fd, length);
+}
+
+#  else /* not F_CHSIZE nor F_FREESP nor HAVE_CHSIZE */
+
+#   include <errno.h>
+
+int
+ftruncate (int fd, off_t length)
+{
+  errno = EIO;
+  return -1;
+}
+
+#  endif /* not HAVE_CHSIZE */
+# endif /* not F_FREESP */
+#endif /* not F_CHSIZE */
+@
+
+
+1.2
+log
+@	* ffsll.c: New file.
+	* configure.ac: Call AC_REPLACE_FUNCS on ffsll.
+	* gold.h (ffsll): Declare if HAVE_FFSLL is not defined.
+	* ftruncate.c (ftruncate): Declare before definition.
+	* mremap.c (mremap): Likewise.
+	* pread.c (pread): Likewise.
+	* configure, Makefile.in, config.in: Rebuild.
+@
+text
+@d4 19
+@
+
+
+1.1
+log
+@	* configure.ac: Check for chsize and posix_fallocate.  Replace
+	ftruncate.
+	* ftruncate.c: New file, from gnulib.
+	* output.cc (posix_fallocate): Define dummy version if not
+	HAVE_POSIX_FALLOCATE.
+	(Output_file::map): Call posix_fallocate rather than lseek and
+	write.
+	* gold.h (ftruncate): Declare if not HAVE_FTRUNCATE.
+	* configure, Makefile.in, config.in: Rebuild.
+@
+text
+@d12 2
+@
+

@@ -1,0 +1,328 @@
+head	1.3;
+access;
+symbols
+	gdb_5_3-2002-12-12-release:1.2
+	gdb_5_3-branch:1.2.0.4
+	gdb_5_3-2002-09-04-branchpoint:1.2
+	gdb_5_2_1-2002-07-23-release:1.2
+	gdb_5_2-2002-04-29-release:1.2
+	gdb_5_2-branch:1.2.0.2
+	gdb_5_2-2002-03-03-branchpoint:1.2
+	gdb_5_1_1-2002-01-24-release:1.1.1.1
+	cygnus_cvs_20020108_pre:1.2
+	gdb_5_1_0_1-2002-01-03-branch:1.1.1.1.0.8
+	gdb_5_1_0_1-2002-01-03-branchpoint:1.1.1.1
+	gdb_5_1-2001-11-21-release:1.1.1.1
+	gdb_s390-2001-09-26-branch:1.1.1.1.0.6
+	gdb_s390-2001-09-26-branchpoint:1.1.1.1
+	TIX_TCL_8_3:1.1.1.1
+	NET:1.1.1
+	gdb_5_1-2001-07-29-branch:1.1.1.1.0.4
+	gdb_5_1-2001-07-29-branchpoint:1.1.1.1
+	insight-precleanup-2001-01-01:1.1.1.1
+	gdb_5_0-2000-05-19-release:1.1.1.1
+	gdb_4_18_2-2000-05-18-release:1.1.1.1
+	gdb_4_95_1-2000-05-11-snapshot:1.1.1.1
+	gdb_4_95_0-2000-04-27-snapshot:1.1.1.1
+	gdb_5_0-2000-04-10-branch:1.1.1.1.0.2
+	gdb_5_0-2000-04-10-branchpoint:1.1.1.1
+	repo-unification-2000-02-06:1.1.1.1
+	insight-2000-02-04:1.1.1.1
+	SNAPSHOT:1.1.1;
+locks; strict;
+comment	@# @;
+expand	@o@;
+
+
+1.3
+date	2003.03.07.23.09.23;	author hunt;	state dead;
+branches;
+next	1.2;
+
+1.2
+date	2001.09.08.23.25.53;	author irox;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2000.02.07.00.19.29;	author jsm;	state Exp;
+branches
+	1.1.1.1;
+next	;
+
+1.1.1.1
+date	2000.02.07.00.19.29;	author jsm;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.3
+log
+@Remove directory.
+@
+text
+@# fs.tcl --
+#
+#	Test the portable file handling ("FS") routines.
+#
+# Copyright (c) 1996, Expert Interface Technologies
+#
+# See the file "license.terms" for information on usage and redistribution
+# of this file, and for a DISCLAIMER OF ALL WARRANTIES.
+#
+
+proc About {} {
+    return "Testing portable file handling routines"
+}
+
+proc Test {} {
+    global tixPriv errorInfo
+
+    TestBlock fs-1.1 {tixFSPath command} {
+	if {$tixPriv(test:platform) == "windows"} {
+	    #   PATHNAME		     expected VPATH result
+	    #-------------------------------------------------------
+	    set list [list \
+	        [list :px:\\C:	      C:\\	0] \
+	        [list :px:\\c:	       ""       1] \
+	    ]
+	    regsub -all :px: $list $tixPriv(WinPrefix) list
+
+	    foreach item "$list" {
+		set vpath [lindex $item 0]
+		set want  [lindex $item 1]
+		set experr [lindex $item 2]
+		
+
+		TestBlock fs-1.1.1 "tixFSPath $vpath" {
+		    set err [catch {
+			set got [tixFSPath $vpath]
+		    }]
+
+		    if $experr {
+			Assert {$err == $experr}
+		    } else {
+			Assert {[tixStrEq $want $got]}
+		    }
+		}
+	    }
+	}
+    }
+
+    TestBlock fs-1.2 {tixFSIsNorm command} {
+	if {$tixPriv(test:platform) == "unix"} {
+
+	    #   PATHNAME to TEST		     expected result
+	    #-------------------------------------------------------
+	    set list {
+		{/home/ioi			1}
+		{/foo.bar			1}
+		{/.../foo			1}
+		{/.../foo/bar/...		1}
+		{/.../.foo/bar/...		1}
+		{/.../.f./bar/...		1}
+		{/.../.f./bar/...		1}
+		{/..a/...			1}
+		{"/. / "			1}
+		{//a				0}
+		{/a/b/				0}
+		{/a/b//				0}
+		{/a/b/.				0}
+		{a/b				0}
+		{a/b/.				0}
+		{/./b				0}
+		{/../b				0}
+		{/../../b			0}
+		{/./a/../b/..			0}
+		{~ioi				0}
+		{/~ioi				1}
+		{/				1}
+	    }
+	} else {
+	    set list {
+		{C:/				0}
+		{foo				0}
+		{c:				0}
+		{C:				1}
+		{C:\\Windows			1}
+		{C:\\				0}
+		{C:\\..\\Windows		0}
+		{C:\\...\\Windows		1}
+		{C:\\.../Windows		1}
+		{C:\\.\\Windows			0}
+		{..				0}
+		{..\\..				0}
+		{..\\				0}
+		{.				0}
+		{.\\.				0}
+		{.\\				0}
+		{C:\\.				0}
+		{C:Windows			0}
+		{C:\\Windows\\App		1}
+		{"C:\\My Programs\\~App"	1}
+	    }
+	}
+
+	foreach item $list {
+	    set text [lindex $item 0]
+	    set want [lindex $item 1]
+
+
+	    TestBlock fs-1.2.1 "tixFSIsNorm $text" {
+		Assert {[tixFSIsNorm $text] == $want}
+	    }
+	}
+    }
+
+    TestBlock fs-1.3 {tixFSNormDir command} {
+	foreach item [GetCases_FsNormDir] {
+	    set text    [lindex $item 0]
+	    set want    [lindex $item 1]
+	    set wanterr [lindex $item 2]
+
+	    if !$wanterr {
+		# Check test case error
+		Assert {[tixFSIsNorm $want]}
+	    }
+
+	    TestBlock fs-1.3.1 "tixFSNormDir $text" {
+		set err [catch {
+		    set got [tixFSNormDir $text]
+		}]
+		
+		Assert {$err == $wanterr}
+		if {!$err} {
+		    Assert {[tixStrEq $want $got]}
+		}
+	    }
+	}
+    }
+
+    TestBlock fs-1.4 {tixFSNorm command} {
+	set list [GetCases_FSNorm]
+
+	set appPWD [pwd]
+	foreach item $list {
+	    set text    [lindex $item 0]
+	    set context [lindex $item 1]
+	    set want    [lindex $item 2]
+
+	    TestBlock fs-1.4.1 "tixFSNorm $context $text" {
+		set lst [tixFSNorm $context $text]
+		set dir [lindex $lst 1]
+		Assert {[tixStrEq $want $dir]}
+		Assert {[tixStrEq [pwd] $appPWD]}
+	    }
+	}
+    }
+
+    TestBlock fs-1.5 {tilde handling} {
+	if {$tixPriv(test:platform) == "unix"} {
+	    set who "nobody"
+	    if {[string comp $who "nobody"] == 0} {
+		catch {set who [exec whoami]}
+	    }
+	    if {[string comp $who "nobody"] == 0} {
+		catch {set who [exec logname]}
+	    }
+	    set home /
+	    catch {
+		set home [glob ~$who]
+	    }
+	    set list {
+		{~$who		{$home		    $home   ""  ""}}
+		{~		{$home		    $home   ""  ""}}
+		{~/*.*		{$home/*.*	    $home   ""  "*.*"}}
+		{"~/*.* *.tcl"	{"$home/*.* *.tcl"  $home   ""  "*.* *.tcl"}}
+	    }
+
+	    foreach item $list {
+		set item [subst $item]
+		set text [lindex $item 0]
+		set want [lindex $item 1]
+
+		TestBlock fs-1.5.1 "tixFSNorm \[pwd\] $text" {
+		    set list [tixFSNorm [pwd] $text]
+
+		    Assert {
+			[tixStrEq [lindex $list 0] [lindex $want 0]] &&
+			[tixStrEq [lindex $list 1] [lindex $want 1]] &&
+			[tixStrEq [lindex $list 2] [lindex $want 2]] &&
+			[tixStrEq [lindex $list 3] [lindex $want 3]]
+		    }
+		}
+	    }
+	}
+    }
+
+    TestBlock fs-1.6 {tixFSVPath} {
+	if {$tixPriv(test:platform) == "unix"} {
+
+	    #   PATHNAME to TEST	    expected     Causes error for
+	    #				    result	  tixFSVPath?
+	    #----------------------------------------------------------------
+	    set list {
+		{.				""		1}
+		{foo				""		1}
+		{./				""		1}
+	    }
+	} else {
+	    set list {
+		{.				""		1}
+	    }
+	    regsub -all ^:px: $list $tixPriv(WinPrefix) list
+	}
+
+	# (ToDo): write the test
+	#
+    }
+
+    TestBlock fs-2.1 {obsolete tests} {
+	# Some obsolete test. Should be taken out.
+	#
+	if {$tixPriv(test:platform) == "unix"} {
+	    set home [glob ~]
+	    if {$home == "/"} {
+		set homeprefix {}
+	    } else {
+		set homeprefix $home
+	    }
+
+	    # it shouldn't do itemname substitution
+	    #
+	    Assert {[tixFileIntName *] == "*"}
+	    Assert {[tixFileIntName ~/*] == "$homeprefix/*"}
+
+	    Assert {[tixFileIntName /home/ioi/../foo/bar/..] == "/home/foo"}
+	}
+    }
+}
+@
+
+
+1.2
+log
+@Touched all tix files to ease next import.
+@
+text
+@@
+
+
+1.1
+log
+@Initial revision
+@
+text
+@@
+
+
+1.1.1.1
+log
+@import insight-2000-02-04 snapshot (2nd try)
+@
+text
+@@

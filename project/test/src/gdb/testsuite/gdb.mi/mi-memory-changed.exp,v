@@ -1,0 +1,157 @@
+head	1.2;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.2
+	gdb_7_6-2013-04-26-release:1.2
+	gdb_7_6-branch:1.2.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.2;
+locks; strict;
+comment	@# @;
+
+
+1.2
+date	2013.01.01.06.41.24;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2012.10.17.00.53.24;	author qiyao;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@# Copyright 2012-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+standard_testfile basics.c
+if { [gdb_compile "$srcdir/$subdir/$srcfile" $binfile \
+	  executable {debug nowarnings}] != "" } {
+    untested mi-record-changed.exp
+    return -1
+}
+
+load_lib mi-support.exp
+
+if [mi_gdb_start] {
+    return
+}
+mi_gdb_reinitialize_dir $srcdir/$subdir
+mi_gdb_load ${binfile}
+
+mi_gdb_test "-break-insert -t ${srcfile}:[gdb_get_line_number "C = A + B"]" \
+    "\\^done,bkpt=\{number=\"1\".*" \
+    "insert breakpoint"
+mi_run_cmd
+mi_expect_stop "breakpoint-hit" "callee4" "" ".*" ".*" {"" "disp=\"del\""} \
+    "continue to callee4"
+
+mi_gdb_test "set var C = 4" \
+    ".*=memory-changed,thread-group=\"i${decimal}\".addr=\"${hex}\",len=\"${hex}\".*\\^done" \
+    "set var C = 4"
+
+# Write memory through MI commands shouldn't trigger MI notification.
+mi_gdb_test "-var-create var_c * C" \
+    "\\^done,name=\"var_c\",numchild=\"0\",value=\"4\",type=\"int\",thread-id=\"1\",has_more=\"0\"" \
+    "create objvar for C"
+
+mi_gdb_test "-var-assign var_c 5" \
+    "-var-assign var_c 5\r\n\\^done,value=\"5\"" \
+    "change C thru. varobj"
+
+mi_gdb_test  "-data-write-memory-bytes &C \"00\"" \
+    {\^done} \
+    "change C thru. -data-write-memory-bytes"
+
+# Modify code section also triggers MI notification.
+
+# Get the instruction content of function main and its address.
+set main_addr ""
+set main_insn ""
+set test "get address of main"
+send_gdb "x/x main\n"
+gdb_expect {
+    -re ".*(${hex}) <main>:.*(${hex}).*$mi_gdb_prompt$" {
+	set main_addr $expect_out(1,string)
+	set main_insn $expect_out(2,string)
+	pass $test
+    }
+    -re ".*$mi_gdb_prompt$" {
+	fail $test
+	return
+    }
+    timeout {
+	fail "$test (timeout)"
+	return
+    }
+}
+
+mi_gdb_test "set var *(unsigned int *) ${main_addr} = ${main_insn}" \
+    ".*=memory-changed,thread-group=\"i${decimal}\".addr=\"${main_addr}\",len=\"0x4\",type=\"code\".*\\^done"
+mi_gdb_exit
+return 0
+@
+
+
+1.1
+log
+@gdb:
+	* breakpoint.c (invalidate_bp_value_on_memory_change): Add one
+	more parameter 'inferior'.
+	* corefile.c (write_memory_with_notification): Caller update.
+
+	* mi/mi-cmd-var.c: Include "mi-main.h".
+	(mi_cmd_var_assign): Set mi_suppress_notification.data_write_memory
+	to 1 and restore it later.
+	* mi/mi-cmds.c (mi_cmd mi_cmds): Update for "data-write-memory"
+	and "data-write-memory-bytes.
+	* mi/mi-interp.c: Include objfiles.h.
+	(mi_interpreter_init): Call observer_attach_memory_changed.
+	(mi_memory_changed): New.
+	* mi/mi-main.h (struct mi_suppress_notification) <memory>:
+	New field.
+
+	* NEWS: Mention new MI notification "memory-changed".
+
+gdb/doc:
+
+	* observer.texi (GDB Observers): Update observer
+	'memory_changed'.
+	* gdb.texinfo (GDB/MI Async Records): Document for
+	"memory-changed" notification.
+
+gdb/testsuite:
+
+	* gdb.mi/mi-memory-changed.exp: New.
+@
+text
+@d1 1
+a1 1
+# Copyright 2012 Free Software Foundation, Inc.
+@
+

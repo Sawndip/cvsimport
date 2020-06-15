@@ -1,0 +1,279 @@
+head	1.2;
+access;
+symbols
+	LIBGUI_TCL_8_3:1.1.1.1
+	NET:1.1.1
+	gdb_5_0-2000-05-19-release:1.1.1.1
+	gdb_4_18_2-2000-05-18-release:1.1.1.1
+	gdb_4_95_1-2000-05-11-snapshot:1.1.1.1
+	gdb_4_95_0-2000-04-27-snapshot:1.1.1.1
+	gdb_5_0-2000-04-10-branch:1.1.1.1.0.2
+	gdb_5_0-2000-04-10-branchpoint:1.1.1.1
+	repo-unification-2000-02-06:1.1.1.1
+	insight-2000-02-04:1.1.1.1
+	SNAPSHOT:1.1.1;
+locks; strict;
+comment	@# @;
+expand	@o@;
+
+
+1.2
+date	2000.07.11.09.14.25;	author mdejong;	state dead;
+branches;
+next	1.1;
+
+1.1
+date	2000.02.07.00.19.47;	author jsm;	state Exp;
+branches
+	1.1.1.1;
+next	;
+
+1.1.1.1
+date	2000.02.07.00.19.47;	author jsm;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@	* README:
+	* library/Makefile.am:
+	* library/Makefile.in:
+	* library/tclIndex:
+	* library/tree.tcl:
+	* library/treetable.tcl:
+	* src/Makefile.am:
+	* src/Makefile.in:
+	* src/guitcl.h:
+	* src/tkTreeTable.c:
+	* src/tkTreeTable.h: Moved implementation of
+	"treetable" command out back into snavigator.
+@
+text
+@# treetable.tcl - some treetable bindings; from S-N.
+# Copyright (C) 1997 Cygnus Solutions.
+
+proc multix_treetable_bindings {t} {
+  # The keybindings to the treetable are compatible with those of
+  # listbox.
+  bind $t <1> {
+    if [winfo exists %W] {
+      tkListboxBeginSelect %W [%W index @@%x,%y]
+    }
+  }
+
+  bind $t <B1-Motion> {
+    set tkPriv(x) %x
+    set tkPriv(y) %y
+    tkListboxMotion %W [%W index @@%x,%y]
+  }
+  bind $t <ButtonRelease-1> {
+    tkCancelRepeat
+    %W activate @@%x,%y
+  }
+  bind $t <Shift-1> {
+    tkListboxBeginExtend %W [%W index @@%x,%y]
+  }
+  bind $t <Control-1> {
+    tkListboxBeginToggle %W [%W index @@%x,%y]
+  }
+  bind $t <B1-Leave> {
+    set tkPriv(x) %x
+    set tkPriv(y) %y
+    tkListboxAutoScan %W
+  }
+  bind $t <B1-Enter> {
+    tkCancelRepeat
+  }
+
+  bind $t <Up> {
+    tkListboxUpDown %W -1
+  }
+  bind $t <Shift-Up> {
+    tkListboxExtendUpDown %W -1
+  }
+  bind $t <Down> {
+    tkListboxUpDown %W 1
+  }
+  bind $t <Shift-Down> {
+    tkListboxExtendUpDown %W 1
+  }
+  bind $t <Left> {
+    %W xview scroll -1 units
+  }
+  bind $t <Control-Left> {
+    %W xview scroll -1 pages
+  }
+  bind $t <Right> {
+    %W xview scroll 1 units
+  }
+  bind $t <Control-Right> {
+    %W xview scroll 1 pages
+  }
+  bind $t <Prior> {
+    %W yview scroll -1 pages
+    %W activate @@0,0
+  }
+  bind $t <Next> {
+    %W yview scroll 1 pages
+    %W activate @@0,0
+  }
+  bind $t <Control-Prior> {
+    %W xview scroll -1 pages
+  }
+  bind $t <Control-Next> {
+    %W xview scroll 1 pages
+  }
+  bind $t <Home> {
+    %W xview moveto 0
+  }
+  bind $t <End> {
+    %W xview moveto 1
+  }
+  bind $t <Control-Home> {
+    %W activate 0
+    %W see 0
+    %W selection clear 0 end
+    %W selection set 0
+  }
+  bind $t <Shift-Control-Home> {
+    tkListboxDataExtend %W 0
+  }
+  bind $t <Control-End> {
+    %W activate end
+    %W see end
+    %W selection clear 0 end
+    %W selection set end
+  }
+  bind $t <Shift-Control-End> {
+    tkListboxDataExtend %W end
+  }
+  bind $t <F16> {
+    if {[selection own -displayof %W] == "%W"} {
+      clipboard clear -displayof %W
+      clipboard append -displayof %W [selection get -displayof %W]
+    }
+  }
+  bind $t <space> {
+    tkListboxBeginSelect %W [%W index active]
+  }
+  bind $t <Select> {
+    tkListboxBeginSelect %W [%W index active]
+  }
+  bind $t <Control-Shift-space> {
+    tkListboxBeginExtend %W [%W index active]
+  }
+  bind $t <Shift-Select> {
+    tkListboxBeginExtend %W [%W index active]
+  }
+  bind $t <Escape> {
+    tkListboxCancel %W
+  }
+  bind $t <Control-slash> {
+    tkListboxSelectAll %W
+  }
+  bind $t <Control-backslash> {
+    if {[%W cget -selectmode] != "browse"} {
+      %W selection clear 0 end
+    }
+  }
+
+  bind $t <3> {
+    %W scan mark %x %y
+  }
+  bind $t <B3-Motion> {
+    %W scan dragto %x %y
+  }
+  
+  # Explicitly exclude traversal keys.
+  bind $t <Tab> {;}
+  bind $t <Shift-Tab> {;}
+
+  # Other bindings added to default listbox bindings.
+  bind $t <KeyPress> {multix_tree_table_search_region %W %A}
+  bind $t <Any-F27> 		[bind $t <Home>]; # Sun Home
+  bind $t <Any-R13> 		[bind $t <End>]; # Sun End
+  bind $t <Any-R15> 		[bind $t <Next>]; # Sun Next
+  bind $t <Any-R9> 		[bind $t <Prior>]; # Sun Prior
+}
+
+proc multix_tree_table_search_in_widget {w a beg {end end}} {
+  if {[$w size] > 20000} {
+    $w config -cursor watch
+    update idletasks
+  }
+  set res [$w search -nocase -begins $a $beg $end]
+  $w config -cursor {}
+  if {$res == ""} {
+    return -1
+  }
+  $w activate $res
+  return $res
+}
+
+proc multix_tree_table_search_region {w a} {
+  if {[string compare $a ""] == 0} {
+    return
+  }
+
+  upvar #0 $w-pat pat
+
+  append pat $a
+  set srch $pat
+  set off [$w index active]
+  if {[string compare $off ""] == 0} {
+    set sel 0
+  } else {
+    set sel [expr $off + 1]
+  }
+  # Search from the selection!
+  set off [multix_tree_table_search_in_widget $w $srch $sel]
+
+  if {$off == -1 && $sel != 0} {
+    # 	Search until the selection!
+    set off [multix_tree_table_search_in_widget $w $srch 0 $sel]
+  }
+  if {$off == -1} {
+    if {[string length $pat] > 1} {
+      set pat $a
+      set srch $pat
+
+      # Search from the selection!
+      set off [multix_tree_table_search_in_widget $w $srch $sel]
+      if {$off == -1} {
+	# 	Search until the selection!
+	set off [multix_tree_table_search_in_widget $w $srch 0 $sel]
+      }
+    }
+    if {$off == -1} {
+      set pat ""
+      bell -displayof $w
+      $w selection clear 0 end
+      return
+    }
+  }
+  $w activate $off
+  $w activate $off
+  $w yview see $off
+}
+@
+
+
+1.1
+log
+@Initial revision
+@
+text
+@@
+
+
+1.1.1.1
+log
+@import insight-2000-02-04 snapshot (2nd try)
+@
+text
+@@

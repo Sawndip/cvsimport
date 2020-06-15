@@ -1,0 +1,789 @@
+head	1.13;
+access;
+symbols
+	binutils-2_24-branch:1.13.0.10
+	binutils-2_24-branchpoint:1.13
+	binutils-2_21_1:1.13
+	binutils-2_23_2:1.13
+	binutils-2_23_1:1.13
+	binutils-2_23:1.13
+	binutils-2_23-branch:1.13.0.8
+	binutils-2_23-branchpoint:1.13
+	binutils-2_22_branch:1.13.0.6
+	binutils-2_22:1.13
+	binutils-2_22-branch:1.13.0.4
+	binutils-2_22-branchpoint:1.13
+	binutils-2_21:1.13
+	binutils-2_21-branch:1.13.0.2
+	binutils-2_21-branchpoint:1.13
+	binutils-2_20_1:1.9
+	binutils-2_20:1.9
+	binutils-arc-20081103-branch:1.9.0.10
+	binutils-arc-20081103-branchpoint:1.9
+	binutils-2_20-branch:1.9.0.8
+	binutils-2_20-branchpoint:1.9
+	dje-cgen-play1-branch:1.9.0.6
+	dje-cgen-play1-branchpoint:1.9
+	arc-20081103-branch:1.9.0.4
+	arc-20081103-branchpoint:1.9
+	binutils-2_19_1:1.9
+	binutils-2_19:1.9
+	binutils-2_19-branch:1.9.0.2
+	binutils-2_19-branchpoint:1.9
+	binutils_latest_snapshot:1.13
+	added-to-binutils:1.8;
+locks; strict;
+comment	@// @;
+
+
+1.13
+date	2010.07.13.11.59.02;	author ian;	state Exp;
+branches;
+next	1.12;
+
+1.12
+date	2010.07.12.17.59.58;	author ccoutant;	state Exp;
+branches;
+next	1.11;
+
+1.11
+date	2009.12.14.19.53.04;	author ian;	state Exp;
+branches;
+next	1.10;
+
+1.10
+date	2009.12.11.13.42.12;	author nickc;	state Exp;
+branches;
+next	1.9;
+
+1.9
+date	2008.04.03.14.18.37;	author ian;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2008.03.13.21.04.21;	author iant;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2008.03.04.23.10.38;	author iant;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2008.02.28.00.18.24;	author iant;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2008.02.26.21.45.30;	author iant;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2008.01.18.23.26.48;	author iant;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2007.12.01.06.34.12;	author iant;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2007.11.30.22.38.01;	author iant;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2007.11.30.00.35.27;	author iant;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.13
+log
+@	* compressed_output.cc (zlib_decompress): Fix signature in
+	!HAVE_ZLIB_H case.
+@
+text
+@// compressed_output.cc -- manage compressed debug sections for gold
+
+// Copyright 2007, 2008, 2010 Free Software Foundation, Inc.
+// Written by Ian Lance Taylor <iant@@google.com>.
+
+// This file is part of gold.
+
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 3 of the License, or
+// (at your option) any later version.
+
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+// MA 02110-1301, USA.
+
+#include "gold.h"
+
+#ifdef HAVE_ZLIB_H
+#include <zlib.h>
+#endif
+
+#include "parameters.h"
+#include "options.h"
+#include "compressed_output.h"
+
+namespace gold
+{
+
+#ifdef HAVE_ZLIB_H
+
+// Compress UNCOMPRESSED_DATA of size UNCOMPRESSED_SIZE.  Returns true
+// if it successfully compressed, false if it failed for any reason
+// (including not having zlib support in the library).  If it returns
+// true, it allocates memory for the compressed data using new, and
+// sets *COMPRESSED_DATA and *COMPRESSED_SIZE to appropriate values.
+// It also writes a header before COMPRESSED_DATA: 4 bytes saying
+// "ZLIB", and 8 bytes indicating the uncompressed size, in big-endian
+// order.
+
+static bool
+zlib_compress(const unsigned char* uncompressed_data,
+              unsigned long uncompressed_size,
+              unsigned char** compressed_data,
+              unsigned long* compressed_size)
+{
+  const int header_size = 12;
+  *compressed_size = uncompressed_size + uncompressed_size / 1000 + 128;
+  *compressed_data = new unsigned char[*compressed_size + header_size];
+
+  int compress_level;
+  if (parameters->options().optimize() >= 1)
+    compress_level = 9;
+  else
+    compress_level = 1;
+
+  int rc = compress2(reinterpret_cast<Bytef*>(*compressed_data) + header_size,
+                     compressed_size,
+                     reinterpret_cast<const Bytef*>(uncompressed_data),
+                     uncompressed_size,
+                     compress_level);
+  if (rc == Z_OK)
+    {
+      memcpy(*compressed_data, "ZLIB", 4);
+      elfcpp::Swap_unaligned<64, true>::writeval(*compressed_data + 4,
+						 uncompressed_size);
+      *compressed_size += header_size;
+      return true;
+    }
+  else
+    {
+      delete[] *compressed_data;
+      *compressed_data = NULL;
+      return false;
+    }
+}
+
+// Decompress COMPRESSED_DATA of size COMPRESSED_SIZE, into a buffer
+// UNCOMPRESSED_DATA of size UNCOMPRESSED_SIZE.  Returns TRUE if it
+// decompressed successfully, false if it failed.  The buffer, of
+// appropriate size, is provided by the caller, and is typically part
+// of the memory-mapped output file.
+
+static bool
+zlib_decompress(const unsigned char* compressed_data,
+		unsigned long compressed_size,
+		unsigned char* uncompressed_data,
+		unsigned long uncompressed_size)
+{
+  z_stream strm;
+  int rc;
+
+  /* It is possible the section consists of several compressed
+     buffers concatenated together, so we uncompress in a loop.  */
+  strm.zalloc = NULL;
+  strm.zfree = NULL;
+  strm.opaque = NULL;
+  strm.avail_in = compressed_size;
+  strm.next_in = const_cast<Bytef*>(compressed_data);
+  strm.avail_out = uncompressed_size;
+
+  rc = inflateInit(&strm);
+  while (strm.avail_in > 0)
+    {
+      if (rc != Z_OK)
+        return false;
+      strm.next_out = ((Bytef*) uncompressed_data
+                       + (uncompressed_size - strm.avail_out));
+      rc = inflate(&strm, Z_FINISH);
+      if (rc != Z_STREAM_END)
+        return false;
+      rc = inflateReset(&strm);
+    }
+  rc = inflateEnd(&strm);
+  if (rc != Z_OK || strm.avail_out != 0)
+    return false;
+
+  return true;
+}
+
+#else // !defined(HAVE_ZLIB_H)
+
+static bool
+zlib_compress(const unsigned char*, unsigned long,
+              unsigned char**, unsigned long*)
+{
+  return false;
+}
+
+static bool
+zlib_decompress(const unsigned char*, unsigned long,
+		unsigned char*, unsigned long)
+{
+  return false;
+}
+
+#endif // !defined(HAVE_ZLIB_H)
+
+// Read the compression header of a compressed debug section and return
+// the uncompressed size.
+
+uint64_t
+get_uncompressed_size(const unsigned char* compressed_data,
+		      section_size_type compressed_size)
+{
+  const unsigned int zlib_header_size = 12;
+
+  /* Verify the compression header.  Currently, we support only zlib
+     compression, so it should be "ZLIB" followed by the uncompressed
+     section size, 8 bytes in big-endian order.  */
+  if (compressed_size >= zlib_header_size
+      && strncmp(reinterpret_cast<const char*>(compressed_data),
+		 "ZLIB", 4) == 0)
+    return elfcpp::Swap_unaligned<64, true>::readval(compressed_data + 4);
+  return -1ULL;
+}
+
+// Decompress a compressed debug section directly into the output file.
+
+bool
+decompress_input_section(const unsigned char* compressed_data,
+			 unsigned long compressed_size,
+			 unsigned char* uncompressed_data,
+			 unsigned long uncompressed_size)
+{
+  const unsigned int zlib_header_size = 12;
+
+  /* Verify the compression header.  Currently, we support only zlib
+     compression, so it should be "ZLIB" followed by the uncompressed
+     section size, 8 bytes in big-endian order.  */
+  if (compressed_size >= zlib_header_size
+      && strncmp(reinterpret_cast<const char*>(compressed_data),
+		 "ZLIB", 4) == 0)
+    {
+      unsigned long uncompressed_size_check =
+	  elfcpp::Swap_unaligned<64, true>::readval(compressed_data + 4);
+      gold_assert(uncompressed_size_check == uncompressed_size);
+      return zlib_decompress(compressed_data + zlib_header_size,
+			     compressed_size - zlib_header_size,
+			     uncompressed_data,
+			     uncompressed_size);
+    }
+  return false;
+}
+
+// Class Output_compressed_section.
+
+// Set the final data size of a compressed section.  This is where
+// we actually compress the section data.
+
+void
+Output_compressed_section::set_final_data_size()
+{
+  off_t uncompressed_size = this->postprocessing_buffer_size();
+
+  // (Try to) compress the data.
+  unsigned long compressed_size;
+  unsigned char* uncompressed_data = this->postprocessing_buffer();
+
+  // At this point the contents of all regular input sections will
+  // have been copied into the postprocessing buffer, and relocations
+  // will have been applied.  Now we need to copy in the contents of
+  // anything other than a regular input section.
+  this->write_to_postprocessing_buffer();
+
+  bool success = false;
+  if (strcmp(this->options_->compress_debug_sections(), "zlib") == 0)
+    success = zlib_compress(uncompressed_data, uncompressed_size,
+                            &this->data_, &compressed_size);
+  if (success)
+    {
+      // This converts .debug_foo to .zdebug_foo
+      this->new_section_name_ = std::string(".z") + (this->name() + 1);
+      this->set_name(this->new_section_name_.c_str());
+      this->set_data_size(compressed_size);
+    }
+  else
+    {
+      gold_warning(_("not compressing section data: zlib error"));
+      gold_assert(this->data_ == NULL);
+      this->set_data_size(uncompressed_size);
+    }
+}
+
+// Write out a compressed section.  If we couldn't compress, we just
+// write it out as normal, uncompressed data.
+
+void
+Output_compressed_section::do_write(Output_file* of)
+{
+  off_t offset = this->offset();
+  off_t data_size = this->data_size();
+  unsigned char* view = of->get_output_view(offset, data_size);
+  if (this->data_ == NULL)
+    memcpy(view, this->postprocessing_buffer(), data_size);
+  else
+    memcpy(view, this->data_, data_size);
+  of->write_output_view(offset, data_size, view);
+}
+
+} // End namespace gold.
+@
+
+
+1.12
+log
+@	* compressed_output.cc (zlib_decompress): New function.
+	(get_uncompressed_size): New function.
+	(decompress_input_section): New function.
+	* compressed_output.h (get_uncompressed_size): New function.
+	(decompress_input_section): New function.
+	* dwarf_reader.cc (Sized_dwarf_line_info::Sized_dwarf_line_info)
+	Handle compressed debug sections.
+	* layout.cc (is_compressed_debug_section): New function.
+	(Layout::output_section_name): Map compressed section names to
+	canonical names.
+	* layout.h (is_compressed_debug_section): New function.
+	(is_debug_info_section): Recognize compressed debug sections.
+	* merge.cc: Include compressed_output.h.
+	(Output_merge_data::do_add_input_section): Handle compressed
+	debug sections.
+	(Output_merge_string::do_add_input_section): Handle compressed
+	debug sections.
+	* object.cc: Include compressed_output.h.
+	(Sized_relobj::Sized_relobj): Initialize new data members.
+	(build_compressed_section_map): New function.
+	(Sized_relobj::do_read_symbols): Handle compressed debug sections.
+	* object.h (Object::section_is_compressed): New method.
+	(Object::do_section_is_compressed): New method.
+	(Sized_relobj::Compressed_section_map): New type.
+	(Sized_relobj::do_section_is_compressed): New method.
+	(Sized_relobj::compressed_sections_): New data member.
+	* output.cc (Output_section::add_input_section): Handle compressed
+	debug sections.
+	* reloc.cc: Include compressed_output.h.
+	(Sized_relobj::write_sections): Handle compressed debug sections.
+@
+text
+@d138 1
+a138 1
+		unsigned char**, unsigned long*)
+@
+
+
+1.11
+log
+@	Revert -Wshadow changes, all changes from:
+	2009-12-11  Doug Kwan  <dougkwan@@google.com>
+	2009-12-11  Nick Clifton  <nickc@@redhat.com>
+	* configure.ac: Remove -Wshadow when setting WARN_CXXFLAGS.
+@
+text
+@d1 1
+a1 1
+// compressed_output.cc -- manage compressed output sections for gold
+d3 1
+a3 1
+// Copyright 2007, 2008 Free Software Foundation, Inc.
+d36 2
+a46 2
+#ifdef HAVE_ZLIB_H
+
+d84 43
+d136 7
+d145 47
+@
+
+
+1.10
+log
+@Add -Wshadow to the gcc command line options used when compiling the binutils.
+Fix up all warnings generated by the addition of this switch.
+@
+text
+@d3 1
+a3 1
+// Copyright 2007, 2008, 2009 Free Software Foundation, Inc.
+d140 3
+a142 3
+  off_t off = this->offset();
+  off_t datasize = this->data_size();
+  unsigned char* view = of->get_output_view(off, datasize);
+d144 1
+a144 1
+    memcpy(view, this->postprocessing_buffer(), datasize);
+d146 2
+a147 2
+    memcpy(view, this->data_, datasize);
+  of->write_output_view(off, datasize, view);
+@
+
+
+1.9
+log
+@	* compressed_output.h (class Output_compressed_section): Use
+	unsigned buffer.
+	* compressed_output.cc (zlib_compress): Use unsigned buffers,
+	add zlib header.
+	(zlib_compressed_suffix): Removed.
+	(Output_compressed_section::set_final_data_size): Use unsigned
+	buffers.
+	* testsuite/Makefile.am (flagstest_compress_debug_sections):
+	Fix linker invocation.
+	(flagstest_o_specialfile_and_compress_debug_sections):
+	Likewise.
+	* testsuite/Makefile.in: Regenerated.
+@
+text
+@d3 1
+a3 1
+// Copyright 2007, 2008 Free Software Foundation, Inc.
+d140 3
+a142 3
+  off_t offset = this->offset();
+  off_t data_size = this->data_size();
+  unsigned char* view = of->get_output_view(offset, data_size);
+d144 1
+a144 1
+    memcpy(view, this->postprocessing_buffer(), data_size);
+d146 2
+a147 2
+    memcpy(view, this->data_, data_size);
+  of->write_output_view(offset, data_size, view);
+@
+
+
+1.8
+log
+@Update copyright years.  Update language files.
+@
+text
+@d41 3
+d48 4
+a51 2
+zlib_compress(const char* uncompressed_data, unsigned long uncompressed_size,
+              char** compressed_data, unsigned long* compressed_size)
+d53 1
+d55 1
+a55 1
+  *compressed_data = new char[*compressed_size];
+d63 1
+a63 1
+  int rc = compress2(reinterpret_cast<Bytef*>(*compressed_data),
+d69 7
+a75 1
+    return true;
+d87 2
+a88 1
+zlib_compress(const char*, unsigned long, char**, unsigned long*)
+a94 11
+// After compressing an output section, we rename it from foo to
+// foo.zlib.nnnn, where nnnn is the uncompressed size of the section.
+
+static std::string
+zlib_compressed_suffix(unsigned long uncompressed_size)
+{
+  char size_string[64];
+  snprintf(size_string, sizeof(size_string), "%lu", uncompressed_size);
+  return std::string(".zlib.") + size_string;
+}
+
+d107 1
+a107 2
+  unsigned char* u_uncompressed_data = this->postprocessing_buffer();
+  char* uncompressed_data = reinterpret_cast<char*>(u_uncompressed_data);
+d121 2
+a122 2
+      std::string suffix(zlib_compressed_suffix(uncompressed_size));
+      this->new_section_name_ = std::string(this->name()) + suffix;
+@
+
+
+1.7
+log
+@From Craig Silverstein: rework option handling to make it easier to
+add a new option.
+@
+text
+@d3 1
+a3 1
+// Copyright 2007 Free Software Foundation, Inc.
+@
+
+
+1.6
+log
+@From Craig Silverstein: Have Parameters point to General_options.
+@
+text
+@d115 1
+a115 1
+  if (this->options_->zlib_compress_debug_sections())
+@
+
+
+1.5
+log
+@From Craig Silverstein: rename option functions for future option
+handling rewrite.
+@
+text
+@d52 1
+a52 1
+  if (parameters->optimize() >= 1)
+@
+
+
+1.4
+log
+@Don't include options.h in fileread.h.  Remove General_options
+reference from Output_file class.
+@
+text
+@d52 1
+a52 1
+  if (parameters->optimization_level() >= 1)
+@
+
+
+1.3
+log
+@Compress all debug sections.
+@
+text
+@d30 1
+@
+
+
+1.2
+log
+@From Cary Coutant: Avoid compilation warnings if no zlib.h.
+@
+text
+@d29 1
+a30 1
+#include "parameters.h"
+d92 1
+a92 11
+// Class Output_compressed_section_data.
+
+// Add an input section.  In this case, we just keep track of the sections.
+
+bool
+Output_compressed_section_data::do_add_input_section(Relobj* obj,
+                                                     unsigned int shndx)
+{
+  this->objects_.push_back(Object_entry(obj, shndx));
+  return true;
+}
+d98 1
+a98 1
+Output_compressed_section_data::set_final_data_size()
+d100 1
+a100 11
+  // FIXME: assert that relocations have already been applied.
+
+  off_t uncompressed_size = 0;
+  for (std::vector<Object_entry>::iterator it = this->objects_.begin();
+       it != this->objects_.end();
+       ++it)
+    {
+      it->contents
+        = it->object->section_contents(it->shndx, &it->length, false);
+      uncompressed_size += it->length;
+    }
+d104 8
+a111 11
+  char* uncompressed_data = new char[uncompressed_size];
+  off_t pos = 0;
+  for (std::vector<Object_entry>::const_iterator it = this->objects_.begin();
+       it != this->objects_.end();
+       ++it)
+    {
+      memcpy(uncompressed_data + pos,
+             reinterpret_cast<const char*>(it->contents),
+             it->length);
+      pos += it->length;
+    }
+d114 1
+a114 1
+  if (options_.zlib_compress_debug_sections())
+d119 3
+a121 1
+      delete[] uncompressed_data;
+a122 1
+      this->new_section_name_ = zlib_compressed_suffix(uncompressed_size);
+d126 1
+a126 1
+      gold_warning(_("Not compressing section data: zlib error"));
+a127 1
+      this->data_ = uncompressed_data;
+a131 15
+// Change the name of the output section to reflect it's compressed.
+// The layout routines call into this right before finalizing the
+// shstrtab.
+
+const char*
+Output_compressed_section_data::do_modified_output_section_name(
+  const char* name)
+{
+  // This mean we never compressed the data.
+  if (this->new_section_name_.empty())
+    return NULL;
+  this->new_section_name_ = std::string(name) + this->new_section_name_;
+  return this->new_section_name_.c_str();
+}
+
+d136 1
+a136 27
+Output_compressed_section_data::do_write(Output_file* of)
+{
+  unsigned char* uview = of->get_output_view(this->offset(),
+                                             this->data_size());
+  char* view = reinterpret_cast<char*>(uview);
+  memcpy(view, this->data_, this->data_size());
+  of->write_output_view(this->offset(), this->data_size(), uview);
+}
+
+// Class Output_compressed_string.
+
+// Add an input section.  We don't do anything special here.
+
+template<typename Char_type>
+bool
+Output_compressed_string<Char_type>::do_add_input_section(Relobj* object,
+                                                          unsigned int shndx)
+{
+  return Output_merge_string<Char_type>::do_add_input_section(object, shndx);
+}
+
+// Set the final data size of a compressed section.  This is where
+// we actually compress the section data.
+
+template<typename Char_type>
+void
+Output_compressed_string<Char_type>::set_final_data_size()
+d138 5
+a142 18
+  // First let the superclass finalize all its data, then write it to
+  // a buffer.
+  unsigned long uncompressed_size = this->finalize_merged_data();
+  char* uncompressed_data = new char[uncompressed_size];
+  this->stringpool_to_buffer(uncompressed_data, uncompressed_size);
+
+  // (Try to) compress the data.
+  unsigned long compressed_size;
+  if (options_.zlib_compress_debug_sections()
+      && zlib_compress(uncompressed_data, uncompressed_size,
+                       &this->compressed_data_, &compressed_size))
+    {
+      this->set_data_size(compressed_size);
+      // Save some memory.
+      this->clear_stringpool();
+      // We will be renaming the section to name.zlib.uncompressed_size.
+      this->new_section_name_ = zlib_compressed_suffix(uncompressed_size);
+    }
+d144 2
+a145 22
+    {
+      this->compressed_data_ = NULL;
+      this->set_data_size(uncompressed_size);
+    }
+
+  delete[] uncompressed_data;
+}
+
+// Change the name of the output section to reflect it's compressed.
+// The layout routines call into this right before finalizing the
+// shstrtab.
+
+template<typename Char_type>
+const char*
+Output_compressed_string<Char_type>::do_modified_output_section_name(
+  const char* name)
+{
+  // This mean we never compressed the data
+  if (this->new_section_name_.empty())
+    return NULL;
+  this->new_section_name_ = std::string(name) + this->new_section_name_;
+  return this->new_section_name_.c_str();
+a146 30
+
+// Write out a compressed string section.  If we couldn't compress,
+// we just write out the normal string section.
+
+template<typename Char_type>
+void
+Output_compressed_string<Char_type>::do_write(Output_file* of)
+{
+  if (this->compressed_data_ == NULL)
+    Output_merge_string<Char_type>::do_write(of);
+  else
+    {
+      unsigned char* uview = of->get_output_view(this->offset(),
+                                                 this->data_size());
+      char* view = reinterpret_cast<char*>(uview);
+      memcpy(view, this->compressed_data_, this->data_size());
+      of->write_output_view(this->offset(), this->data_size(), uview);
+    }
+}
+
+// Instantiate the templates we need.
+
+template
+class Output_compressed_string<char>;
+
+template
+class Output_compressed_string<uint16_t>;
+
+template
+class Output_compressed_string<uint32_t>;
+@
+
+
+1.1
+log
+@From Craig Silverstein: Add support for compressing .debug_str section.
+@
+text
+@d41 2
+a46 3
+#ifndef HAVE_ZLIB_H
+  return false;
+#else
+a68 1
+#endif  // #ifdef HAVE_ZLIB_H
+d70 10
+@
+

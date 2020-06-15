@@ -1,0 +1,495 @@
+head	1.5;
+access;
+symbols
+	binutils-2_24-branch:1.5.0.4
+	binutils-2_24-branchpoint:1.5
+	binutils-2_21_1:1.4
+	binutils-2_23_2:1.5
+	binutils-2_23_1:1.5
+	binutils-2_23:1.5
+	binutils-2_23-branch:1.5.0.2
+	binutils-2_23-branchpoint:1.5
+	binutils-2_22_branch:1.4.0.6
+	binutils-2_22:1.4
+	binutils-2_22-branch:1.4.0.4
+	binutils-2_22-branchpoint:1.4
+	binutils-2_21:1.4
+	binutils-2_21-branch:1.4.0.2
+	binutils-2_21-branchpoint:1.4
+	binutils-2_20_1:1.2
+	binutils-2_20:1.2
+	binutils-2_20-branch:1.2.0.2
+	binutils-2_20-branchpoint:1.2
+	binutils_latest_snapshot:1.5;
+locks; strict;
+comment	@ * @;
+
+
+1.5
+date	2012.05.05.03.05.27;	author amodra;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2010.09.15.19.43.54;	author ktietz;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2010.08.30.21.51.28;	author rth;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2009.08.18.16.44.35;	author ktietz;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2009.08.17.11.46.29;	author ktietz;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.5
+log
+@Replace all uses of bfd_abs_section, bfd_com_section, bfd_und_section
+and bfd_ind_section with their _ptr variants, or use corresponding
+bfd_is_* macros.
+@
+text
+@/* seh pdata/xdata coff object file format
+   Copyright 2009, 2010, 2012
+   Free Software Foundation, Inc.
+
+   This file is part of GAS.
+
+   GAS is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3, or (at your option)
+   any later version.
+
+   GAS is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with GAS; see the file COPYING.  If not, write to the Free
+   Software Foundation, 51 Franklin Street - Fifth Floor, Boston, MA
+   02110-1301, USA.  */
+
+/* Short overview:
+  There are at the moment three different function entry formats preset.
+  The first is the MIPS one. The second version
+  is for ARM, PPC, SH3, and SH4 mainly for Windows CE.
+  The third is the IA64 and x64 version. Note, the IA64 isn't implemented yet,
+  but to find information about it, please see specification about IA64 on
+  http://download.intel.com/design/Itanium/Downloads/245358.pdf file.
+
+  The first version has just entries in the pdata section: BeginAddress,
+  EndAddress, ExceptionHandler, HandlerData, and PrologueEndAddress. Each
+  value is a pointer to the corresponding data and has size of 4 bytes.
+
+  The second variant has the following entries in the pdata section.
+  BeginAddress, PrologueLength (8 bits), EndAddress (22 bits),
+  Use-32-bit-instruction (1 bit), and Exception-Handler-Exists (1 bit).
+  If the FunctionLength is zero, or the Exception-Handler-Exists bit
+  is true, a PDATA_EH block is placed directly before function entry.
+
+  The third version has a function entry block of BeginAddress (RVA),
+  EndAddress (RVA), and UnwindData (RVA). The description of the
+  prologue, excepetion-handler, and additional SEH data is stored
+  within the UNWIND_DATA field in the xdata section.
+
+  The pseudos:
+  .seh_proc <fct_name>
+  .seh_endprologue
+  .seh_handler <handler>[,@@unwind][,@@except]	(x64)
+  .seh_handler <handler>[,<handler_data>]	(others)
+  .seh_handlerdata
+  .seh_eh
+  .seh_32/.seh_no32
+  .seh_endproc
+  .seh_setframe <reg>,<offset>
+  .seh_stackalloc
+  .seh_pushreg
+  .seh_savereg
+  .seh_savexmm
+  .seh_pushframe
+*/
+
+/* architecture specific pdata/xdata handling.  */
+#define SEH_CMDS \
+        {"seh_proc", obj_coff_seh_proc, 0}, \
+        {"seh_endproc", obj_coff_seh_endproc, 0}, \
+        {"seh_pushreg", obj_coff_seh_pushreg, 0}, \
+        {"seh_savereg", obj_coff_seh_save, 1}, \
+        {"seh_savexmm", obj_coff_seh_save, 2}, \
+        {"seh_pushframe", obj_coff_seh_pushframe, 0}, \
+        {"seh_endprologue", obj_coff_seh_endprologue, 0}, \
+        {"seh_setframe", obj_coff_seh_setframe, 0}, \
+        {"seh_stackalloc", obj_coff_seh_stackalloc, 0}, \
+	{"seh_eh", obj_coff_seh_eh, 0}, \
+	{"seh_32", obj_coff_seh_32, 1}, \
+	{"seh_no32", obj_coff_seh_32, 0}, \
+	{"seh_handler", obj_coff_seh_handler, 0}, \
+	{"seh_handlerdata", obj_coff_seh_handlerdata, 0},
+
+/* Type definitions.  */
+
+typedef struct seh_prologue_element
+{
+  int code;
+  int info;
+  offsetT off;
+  symbolS *pc_addr;
+} seh_prologue_element;
+
+typedef struct seh_context
+{
+  struct seh_context *next;
+
+  /* Initial code-segment.  */
+  segT code_seg;
+  /* Function name.  */
+  char *func_name;
+  /* BeginAddress.  */
+  symbolS *start_addr;
+  /* EndAddress.  */
+  symbolS *end_addr;
+  /* Unwind data.  */
+  symbolS *xdata_addr;
+  /* PrologueEnd.  */
+  symbolS *endprologue_addr;
+  /* ExceptionHandler.  */
+  expressionS handler;
+  /* ExceptionHandlerData. (arm, mips)  */
+  expressionS handler_data;
+
+  /* ARM .seh_eh directive seen.  */
+  int handler_written;
+
+  /* WinCE specific data.  */
+  int use_instruction_32;
+  /* Was record already processed.  */
+  int done;
+
+  /* x64 flags for the xdata header.  */
+  int handler_flags;
+  int subsection;
+
+  /* x64 framereg and frame offset information.  */
+  int framereg;
+  int frameoff;
+
+  /* Information about x64 specific unwind data fields.  */
+  int elems_count;
+  int elems_max;
+  seh_prologue_element *elems;
+} seh_context;
+
+typedef enum seh_kind {
+  seh_kind_unknown = 0,
+  seh_kind_mips = 1,  /* Used for MIPS and x86 pdata generation.  */
+  seh_kind_arm = 2,   /* Used for ARM, PPC, SH3, and SH4 pdata (PDATA_EH) generation.  */
+  seh_kind_x64 = 3    /* Used for IA64 and x64 pdata/xdata generation.  */
+} seh_kind;
+
+/* Forward declarations.  */
+static void obj_coff_seh_stackalloc (int);
+static void obj_coff_seh_setframe (int);
+static void obj_coff_seh_endprologue (int);
+static void obj_coff_seh_save (int);
+static void obj_coff_seh_pushreg (int);
+static void obj_coff_seh_pushframe (int);
+static void obj_coff_seh_endproc  (int);
+static void obj_coff_seh_eh (int);
+static void obj_coff_seh_32 (int);
+static void obj_coff_seh_proc  (int);
+static void obj_coff_seh_handler (int);
+static void obj_coff_seh_handlerdata (int);
+
+#define UNDSEC bfd_und_section_ptr
+
+/* Check if x64 UNW_... macros are already defined.  */
+#ifndef PEX64_FLAG_NHANDLER
+/* We can't include here coff/pe.h header. So we have to copy macros
+   from coff/pe.h here.  */
+#define PEX64_UNWCODE_CODE(VAL) ((VAL) & 0xf)
+#define PEX64_UNWCODE_INFO(VAL) (((VAL) >> 4) & 0xf)
+
+/* The unwind info.  */
+#define UNW_FLAG_NHANDLER     0
+#define UNW_FLAG_EHANDLER     1
+#define UNW_FLAG_UHANDLER     2
+#define UNW_FLAG_FHANDLER     3
+#define UNW_FLAG_CHAININFO    4
+
+#define UNW_FLAG_MASK         0x1f
+
+/* The unwind codes.  */
+#define UWOP_PUSH_NONVOL      0
+#define UWOP_ALLOC_LARGE      1
+#define UWOP_ALLOC_SMALL      2
+#define UWOP_SET_FPREG        3
+#define UWOP_SAVE_NONVOL      4
+#define UWOP_SAVE_NONVOL_FAR  5
+#define UWOP_SAVE_XMM         6
+#define UWOP_SAVE_XMM_FAR     7
+#define UWOP_SAVE_XMM128      8
+#define UWOP_SAVE_XMM128_FAR  9
+#define UWOP_PUSH_MACHFRAME   10
+
+#define PEX64_UWI_VERSION(VAL)  ((VAL) & 7)
+#define PEX64_UWI_FLAGS(VAL)    (((VAL) >> 3) & 0x1f)
+#define PEX64_UWI_FRAMEREG(VAL) ((VAL) & 0xf)
+#define PEX64_UWI_FRAMEOFF(VAL) (((VAL) >> 4) & 0xf)
+#define PEX64_UWI_SIZEOF_UWCODE_ARRAY(VAL) \
+  ((((VAL) + 1) & ~1) * 2)
+
+#define PEX64_OFFSET_TO_UNWIND_CODE 0x4
+
+#define PEX64_OFFSET_TO_HANDLER_RVA (COUNTOFUNWINDCODES) \
+  (PEX64_OFFSET_TO_UNWIND_CODE + \
+   PEX64_UWI_SIZEOF_UWCODE_ARRAY(COUNTOFUNWINDCODES))
+
+#define PEX64_OFFSET_TO_SCOPE_COUNT(COUNTOFUNWINDCODES) \
+  (PEX64_OFFSET_TO_HANDLER_RVA(COUNTOFUNWINDCODES) + 4)
+
+#define PEX64_SCOPE_ENTRY(COUNTOFUNWINDCODES, IDX) \
+  (PEX64_OFFSET_TO_SCOPE_COUNT(COUNTOFUNWINDCODES) + \
+   PEX64_SCOPE_ENTRY_SIZE * (IDX))
+
+#endif
+
+@
+
+
+1.4
+log
+@ChangeLog gas
+
+2010-09-15  Kai Tietz  <kai.tietz@@onevision.com>
+
+       * config/obj-coff-seh.h (seh_context): New member code_seg.
+       * config/obj-coff-seh.c: Implementing xdata/pdata section cloning
+       for link-once code-segment.
+
+ChangeLog ld
+
+2010-09-15  Kai Tietz  <kai.tietz@@onevision.com>
+
+       * scripttempl/pep.sc: Add .xdata segment and
+       put into .pdata all segments beginning with .pdata.
+
+ChangeLog gas/testsuite
+2010-09-15  Kai Tietz  <kai.tietz@@onevision.com>
+
+       * gas/pe/pe.exp: Add peseh-x64-4,5,6 tests.
+       * gas/pe/peseh-x64-4.s: New.
+       * gas/pe/peseh-x64-4.d: New.
+       * gas/pe/peseh-x64-5.d: New.
+       * gas/pe/peseh-x64-6.d: New.
+@
+text
+@d2 1
+a2 1
+   Copyright 2009
+d153 1
+a153 1
+#define UNDSEC (asection *) &bfd_und_section
+@
+
+
+1.3
+log
+@	* config/obj-coff-seh.c: Rewrite the entire file.
+	(symtab, symptr, reltab, relcount, relsize): Remove.
+	(seh_ctx_root, seh_ctx): Remove.
+	(xdata_seg, xdata_subseg, pdata_seg): New.
+	(switch_xdata, switch_pdata): New.
+	(verify_context, verify_context_and_target, skip_whitespace_and_comma):
+	New parsing functions.  Rewrite all parsing functions to use them.
+	(obj_coff_seh_32): Fix != arm thinko.
+	(obj_coff_seh_handler): For x64, don't accept handler pointer here,
+	only flags.
+	(obj_coff_seh_handlerdata): New.
+	(do_seh_endproc): Split out of ...
+	(obj_coff_seh_endproc): ... here.
+	(obj_coff_seh_proc): Use it, if needed.
+	(seh_x64_make_prologue_element): Use XRESIZEVEC, symbol_temp_new_now.
+	(seh_x64_read_reg): Remove mm_regs alternative.  Tidy integer reg
+	alternatives.  Don't slurp commas.
+	(seh_read_offset): Remove.
+	(obj_coff_seh_pushframe): Split out from obj_coff_seh_push.
+	(obj_coff_seh_scope): Remove.
+	(obj_coff_seh_save): Decide UWOP_SAVE_* vs _FAR immediately.
+	(obj_coff_seh_stackalloc): Decide _SMALL vs _LARGE immediately.
+	(out_one, out_two, out_four): New.
+	(seh_x64_write_prologue_data, seh_x64_size_prologue_data,
+	seh_x64_write_function_xdata, write_function_xdata): Rewrite
+	from seh_x64_write_xdata, seh_needed_unwind_info, seh_store_elm_data,
+	seh_getelm_data_size, seh_getsize_of_unwind_entry,
+	seh_make_unwind_entry, seh_getsize_unwind_data, and
+	seh_create_unwind_data.
+	(seh_arm_write_function_pdata): Rewrite from seh_arm_create_pdata.
+	(write_function_pdata): Rewrite from make_function_entry_pdata.
+	(seh_write_text_eh_data, make_function_entry_pdata,
+	seh_arm_create_pdata, seh_arm_write_pdata, seh_reloc, save_relocs,
+	seh_symbol_init, seh_symbol, quick_section, seh_emit_rva,
+	seh_emit_long, seh_make_globl, seh_make_section2, seh_make_section,
+	seh_make_xlbl_name, make_seh_text_label, seh_fill_pcsyms,
+	seh_needed_unwind_info, seh_store_elm_data, seh_getelm_data_size,
+	seh_getsize_of_unwind_entry, seh_make_unwind_entry,
+	seh_getsize_unwind_data, seh_create_unwind_data,
+	seh_make_function_entry_xdata, seh_x64_makescope_elem): Remove.
+	* config/obj-coff-seh.h (SEH_CMDS): Remove seh_savemm, seh_scope.
+	Add seh_handlerdata.  Adjust function/what arguments for
+	seh_savereg, seh_pushframe, seh_stackalloc.
+	(struct seh_prologue_element): Adjust members to closer match
+	the elements of the UNWIND_CODE structure.
+	(struct seh_scope_elem): Remove.
+	(struct seh_context): Replace char* members with symbolS or
+	expressionS as appropriate.  Sort members by ARM/x64 applicability.
+	Remove obsolete stuff wrt direct symbol and reloc manipulation.
+@
+text
+@d93 2
+@
+
+
+1.2
+log
+@2009-08-18  Kai Tietz  <kai.tietz@@onevision.com>
+
+        * config/obj-coff-seh.c: Add copyright notice.
+        * config/obj-coff-seh.h: Add copyright notice.
+        Add x64 specific macros from coff/pe.h header.
+@
+text
+@d48 3
+a50 1
+  .seh_handler <handler>[,<handler-data>]]
+a57 1
+  .seh_savemm
+d60 1
+a60 2
+  .seh_scope
+  */
+d66 2
+a67 3
+        {"seh_pushreg", obj_coff_seh_push, 0}, \
+        {"seh_savereg", obj_coff_seh_save, 0}, \
+        {"seh_savemm", obj_coff_seh_save, 1}, \
+d69 1
+a69 1
+        {"seh_pushframe", obj_coff_seh_push, 1}, \
+d72 1
+a72 2
+        {"seh_stackalloc", obj_coff_seh_stack_alloc, 0}, \
+	{"seh_handler", obj_coff_seh_handler, 0}, \
+d76 2
+a77 1
+	{"seh_scope", obj_coff_seh_scope, 0},
+d83 3
+a86 4
+  char *pc_symbol;
+  int kind;
+  int reg;
+  bfd_vma offset;
+a88 7
+typedef struct seh_scope_elem {
+  char *begin_addr;
+  char *end_addr;
+  char *handler_addr;
+  char *jump_addr;
+} seh_scope_elem;
+
+d92 1
+a92 2
+  /* Was record alread processed.  */
+  int done;
+a95 1
+  char *start_symbol;
+a96 1
+  bfd_vma start_offset;
+a97 1
+  char *end_symbol;
+d99 2
+a100 1
+  bfd_vma end_offset;
+a101 1
+  char *endprologue_symbol;
+a102 1
+  bfd_vma endprologue_offset;
+d104 5
+a108 3
+  char *handler_name;
+  /* ExceptionHandlerData.  */
+  char *handler_data_name;
+d110 1
+d113 6
+a119 21
+  /* the bfd to store data within.  */
+  bfd *abfd;
+  /* the current section to generate data within.  */
+  asection *section;
+  /* Relocations for section.  */
+  unsigned int count_reloc;
+  /* Symbols within section.  */
+  unsigned int count_syms;
+  /* Iterator for text lable generation.  */
+  unsigned int tlbl_count;
+  /* Iterator for xdata lable generation.  */
+  unsigned int xlbl_count;
+  /* The name of the first xdata label.  */
+  char *xdata_first;
+  /* FIelds used for x64 generation of chained information.  */
+  char **xdata_names;
+  char **xdata_pcsyms;
+  int *xdata_elm_start;
+  /* Size and offset within current generated xdata section.  */
+  size_t xdata_sz;
+  size_t xdata_offset;
+d122 2
+a123 1
+  bfd_vma frameoff;
+d125 2
+a126 2
+  size_t elems_count;
+  size_t elems_max;
+a127 3
+  size_t scope_max;
+  size_t scope_count;
+  seh_scope_elem *scopes;
+d138 1
+a138 1
+static void obj_coff_seh_stack_alloc (int);
+d141 3
+a143 2
+static void obj_coff_seh_save  (int);
+static void obj_coff_seh_push  (int);
+d149 1
+a149 5
+static void obj_coff_seh_scope (int);
+static int seh_read_offset (const char *, bfd_vma *);
+static int seh_x64_read_reg (const char *, int, int *);
+static void seh_x64_make_prologue_element (int, int, bfd_vma);
+static void make_function_entry_pdata (seh_context *c);
+@
+
+
+1.1
+log
+@Add missed files.
+@
+text
+@d1 21
+d183 52
+@
+

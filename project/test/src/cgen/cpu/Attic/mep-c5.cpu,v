@@ -1,0 +1,459 @@
+head	1.3;
+access;
+symbols
+	sid-snapshot-20110801:1.2
+	cgen-snapshot-20110801:1.2
+	sid-snapshot-20110701:1.2
+	cgen-snapshot-20110701:1.2
+	sid-snapshot-20110601:1.2
+	cgen-snapshot-20110601:1.2
+	sid-snapshot-20110501:1.2
+	cgen-snapshot-20110501:1.2
+	sid-snapshot-20110401:1.2
+	cgen-snapshot-20110401:1.2
+	sid-snapshot-20110301:1.2
+	cgen-snapshot-20110301:1.2
+	sid-snapshot-20110201:1.2
+	cgen-snapshot-20110201:1.2
+	sid-snapshot-20110101:1.2
+	cgen-snapshot-20110101:1.2
+	sid-snapshot-20101201:1.2
+	cgen-snapshot-20101201:1.2
+	sid-snapshot-20101101:1.2
+	cgen-snapshot-20101101:1.2
+	sid-snapshot-20101001:1.2
+	cgen-snapshot-20101001:1.2
+	sid-snapshot-20100901:1.2
+	cgen-snapshot-20100901:1.2
+	sid-snapshot-20100801:1.2
+	cgen-snapshot-20100801:1.2
+	sid-snapshot-20100701:1.2
+	cgen-snapshot-20100701:1.2
+	sid-snapshot-20100601:1.2
+	cgen-snapshot-20100601:1.2
+	sid-snapshot-20100501:1.2
+	cgen-snapshot-20100501:1.2
+	sid-snapshot-20100401:1.2
+	cgen-snapshot-20100401:1.2
+	sid-snapshot-20100301:1.2
+	cgen-snapshot-20100301:1.2
+	sid-snapshot-20100201:1.2
+	cgen-snapshot-20100201:1.2
+	sid-snapshot-20100101:1.2
+	cgen-snapshot-20100101:1.2
+	sid-snapshot-20091201:1.2
+	cgen-snapshot-20091201:1.2
+	sid-snapshot-20091101:1.2
+	cgen-snapshot-20091101:1.2
+	sid-snapshot-20091001:1.2
+	cgen-snapshot-20091001:1.2
+	sid-snapshot-20090901:1.2
+	cgen-snapshot-20090901:1.2
+	sid-snapshot-20090801:1.2
+	cgen-snapshot-20090801:1.2
+	sid-snapshot-20090701:1.2
+	cgen-snapshot-20090701:1.2
+	dje-cgen-play1-branch:1.2.0.4
+	dje-cgen-play1-branchpoint:1.2
+	cgen-1_1-branch:1.2.0.2
+	cgen-1_1-branchpoint:1.2
+	sid-snapshot-20090601:1.2
+	cgen-snapshot-20090601:1.2
+	sid-snapshot-20090501:1.2
+	cgen-snapshot-20090501:1.2;
+locks; strict;
+comment	@# @;
+
+
+1.3
+date	2011.08.22.15.25.09;	author nickc;	state dead;
+branches;
+next	1.2;
+
+1.2
+date	2009.04.18.02.56.43;	author dj;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2009.04.08.20.39.34;	author dj;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.3
+log
+@Move cpu files from cgen/cpu to top level cpu directory.
+@
+text
+@; Insns introduced for the MeP-c5 core
+;
+
+(dnf f-c5n4     "extended field"     (all-mep-core-isas)   16  4)
+(dnf f-c5n5     "extended field"     (all-mep-core-isas)   20  4)
+(dnf f-c5n6     "extended field"     (all-mep-core-isas)   24  4)
+(dnf f-c5n7     "extended field"     (all-mep-core-isas)   28  4)
+(dnf f-rl5      "register l c5"      (all-mep-core-isas)   20  4)
+(df  f-12s20    "extended field"     (all-mep-core-isas)   20  12  INT #f #f)
+
+(dnop rl5       "register Rl c5"     (all-mep-core-isas) h-gpr   f-rl5)
+(dnop cdisp12   "copro addend (12 bits)" (all-mep-core-isas) h-sint  f-12s20)
+
+(dnci stcb_r "store in control bus space" (VOLATILE (MACH c5))
+     "stcb $rn,($rma)"
+     (+ MAJ_7 rn rma (f-sub4 12))
+     (c-call VOID "do_stcb" rn (and rma #xffff))
+     ((mep (unit u-use-gpr (in usereg rn))
+	   (unit u-use-gpr (in usereg rma))
+	   (unit u-exec)
+	   (unit u-stcb))))
+
+(dnci ldcb_r "load from control bus space" (VOLATILE (MACH c5) (LATENCY 3))
+     "ldcb $rn,($rma)"
+     (+ MAJ_7 rn rma (f-sub4 13))
+     (set rn (c-call SI "do_ldcb" (and rma #xffff)))
+      ((mep (unit u-use-gpr (in usereg rma))
+	    (unit u-ldcb)
+	    (unit u-exec)
+	    (unit u-ldcb-gpr (out loadreg rn)))))
+
+(dnci pref "cache prefetch" ((MACH c5) VOLATILE)
+     "pref $cimm4,($rma)"
+     (+ MAJ_7 cimm4 rma (f-sub4 5))
+     (sequence ()
+	       (c-call VOID "check_option_dcache" pc)
+	       (c-call VOID "do_cache_prefetch" cimm4 rma pc))
+     ((mep (unit u-use-gpr (in usereg rma))
+	   (unit u-exec))))
+
+(dnci prefd "cache prefetch" ((MACH c5) VOLATILE)
+     "pref $cimm4,$sdisp16($rma)"
+     (+ MAJ_15 cimm4 rma (f-sub4 3) sdisp16)
+     (sequence ()
+	       (c-call VOID "check_option_dcache" pc)
+	       (c-call VOID "do_cache_prefetch" cimm4 (add INT rma (ext SI sdisp16)) pc))
+     ((mep (unit u-use-gpr (in usereg rma))
+	   (unit u-exec))))
+
+(dnci casb3 "compare and swap byte 3" ((MACH c5) VOLATILE OPTIONAL_BIT_INSN)
+      "casb3 $rl5,$rn,($rm)"
+      (+ MAJ_15 rn rm (f-sub4 #x1) (f-c5n4 #x2) rl5 (f-c5n6 #x0) (f-c5n7 #x0))
+      (sequence ()
+		(c-call VOID "do_casb3" (index-of rl5) rn rm pc)
+		(set rl5 rl5)
+		)
+      ((mep (unit u-use-gpr (in usereg rl5))
+	    (unit u-load-gpr (out loadreg rl5))
+	    (unit u-exec))))
+
+(dnci cash3 "compare and swap halfword 3" ((MACH c5) VOLATILE OPTIONAL_BIT_INSN)
+      "cash3 $rl5,$rn,($rm)"
+      (+ MAJ_15 rn rm (f-sub4 #x1) (f-c5n4 #x2) rl5 (f-c5n6 #x0) (f-c5n7 #x1))
+      (sequence ()
+		(c-call VOID "do_cash3" (index-of rl5) rn rm pc)
+		(set rl5 rl5)
+		)
+      ((mep (unit u-use-gpr (in usereg rl5))
+	    (unit u-load-gpr (out loadreg rl5))
+	    (unit u-exec))))
+
+(dnci casw3 "compare and swap word 3" ((MACH c5) VOLATILE OPTIONAL_BIT_INSN)
+      "casw3 $rl5,$rn,($rm)"
+      (+ MAJ_15 rn rm (f-sub4 #x1) (f-c5n4 #x2) rl5 (f-c5n6 #x0) (f-c5n7 #x2))
+      (sequence ()
+		(c-call VOID "do_casw3" (index-of rl5) rn rm pc)
+		(set rl5 rl5)
+		)
+      ((mep (unit u-use-gpr (in usereg rl5))
+	    (unit u-load-gpr (out loadreg rl5))
+	    (unit u-exec))))
+
+
+
+(dnci sbcp "store byte coprocessor" (OPTIONAL_CP_INSN (STALL STORE) (MACH c5))
+     "sbcp $crn,$cdisp12($rma)"
+     (+ MAJ_15 crn rma (f-sub4 6) (f-ext4 0) cdisp12)
+     (sequence ()
+	       (c-call "check_option_cp" pc)
+	       (c-call VOID "check_write_to_text" (add rma (ext SI cdisp12)))
+	       (set (mem QI (add rma (ext SI cdisp12))) (and crn #xff)))
+     ((mep (unit u-use-gpr (in usereg rma))
+	   (unit u-exec))))
+
+(dnci lbcp "load byte coprocessor" (OPTIONAL_CP_INSN (STALL STORE) (MACH c5))
+     "lbcp $crn,$cdisp12($rma)"
+     (+ MAJ_15 crn rma (f-sub4 6) (f-ext4 4) cdisp12)
+     (sequence ()
+	       (c-call "check_option_cp" pc)
+	       (set crn (ext SI (mem QI (add rma (ext SI cdisp12))))))
+     ((mep (unit u-use-gpr (in usereg rma))
+	   (unit u-exec))))
+
+(dnci lbucp "load byte coprocessor" (OPTIONAL_CP_INSN (STALL STORE) (MACH c5))
+     "lbucp $crn,$cdisp12($rma)"
+     (+ MAJ_15 crn rma (f-sub4 6) (f-ext4 12) cdisp12)
+     (sequence ()
+	       (c-call "check_option_cp" pc)
+	       (set crn (zext SI (mem QI (add rma (ext SI cdisp12))))))
+     ((mep (unit u-use-gpr (in usereg rma))
+	   (unit u-exec))))
+
+
+(dnci shcp "store half-word coprocessor" (OPTIONAL_CP_INSN (STALL STORE) (MACH c5))
+     "shcp $crn,$cdisp12($rma)"
+     (+ MAJ_15 crn rma (f-sub4 6) (f-ext4 1) cdisp12)
+     (sequence ()
+	       (c-call "check_option_cp" pc)
+	       (c-call VOID "check_write_to_text" (add rma (ext SI cdisp12)))
+	       (set (mem HI (add rma (ext SI cdisp12))) (and crn #xffff)))
+     ((mep (unit u-use-gpr (in usereg rma))
+	   (unit u-exec))))
+
+(dnci lhcp "load half-word coprocessor" (OPTIONAL_CP_INSN (STALL STORE) (MACH c5))
+     "lhcp $crn,$cdisp12($rma)"
+     (+ MAJ_15 crn rma (f-sub4 6) (f-ext4 5) cdisp12)
+     (sequence ()
+	       (c-call "check_option_cp" pc)
+	       (set crn (ext SI (mem HI (add rma (ext SI cdisp12))))))
+     ((mep (unit u-use-gpr (in usereg rma))
+	   (unit u-exec))))
+
+(dnci lhucp "load half-word coprocessor" (OPTIONAL_CP_INSN (STALL STORE) (MACH c5))
+     "lhucp $crn,$cdisp12($rma)"
+     (+ MAJ_15 crn rma (f-sub4 6) (f-ext4 13) cdisp12)
+     (sequence ()
+	       (c-call "check_option_cp" pc)
+	       (set crn (zext SI (mem HI (add rma (ext SI cdisp12))))))
+     ((mep (unit u-use-gpr (in usereg rma))
+	   (unit u-exec))))
+
+
+(dnci lbucpa "load byte coprocessor" (OPTIONAL_CP_INSN (STALL LOAD) (MACH c5))
+     "lbucpa $crn,($rma+),$cdisp10"
+     (+ MAJ_15 crn rma (f-sub4 5) (f-ext4 #xC) (f-ext62 #x0) cdisp10)
+     (sequence ()
+	       (c-call "check_option_cp" pc)
+	       (set crn (zext SI (mem QI rma)))
+	       (set rma (add rma cdisp10)))
+     ((mep (unit u-use-gpr (in usereg rma))
+	   (unit u-exec))))
+
+(dnci lhucpa "load half-word coprocessor" (OPTIONAL_CP_INSN (STALL LOAD) (MACH c5))
+     "lhucpa $crn,($rma+),$cdisp10a2"
+     (+ MAJ_15 crn rma (f-sub4 5) (f-ext4 #xD) (f-ext62 #x0) cdisp10a2)
+     (sequence ()
+	       (c-call "check_option_cp" pc)
+	       (set crn (zext SI (mem HI (and rma (inv SI 1)))))
+	       (set rma (add rma (ext SI cdisp10a2))))
+     ((mep (unit u-use-gpr (in usereg rma))
+	   (unit u-exec))))
+
+(dnci lbucpm0 "lbucpm0" (OPTIONAL_CP_INSN (MACH c5))
+     "lbucpm0 $crn,($rma+),$cdisp10"
+     (+ MAJ_15 crn rma (f-sub4 5) (f-ext4 #xc) (f-ext62 #x2) cdisp10)
+     (sequence ()
+	       (c-call "check_option_cp" pc)
+	       (set crn (zext SI (mem QI rma)))
+	       (set rma (mod0 cdisp10)))
+     ((mep (unit u-use-gpr (in usereg rma))
+	   (unit u-exec))))
+
+(dnci lhucpm0 "lhucpm0" (OPTIONAL_CP_INSN (MACH c5))
+     "lhucpm0 $crn,($rma+),$cdisp10a2"
+     (+ MAJ_15 crn rma (f-sub4 5) (f-ext4 #xd) (f-ext62 #x2) cdisp10a2)
+     (sequence ()
+	       (c-call "check_option_cp" pc)
+	       (set crn (zext SI (mem HI (and rma (inv SI 1)))))
+	       (set rma (mod0 cdisp10a2)))
+     ((mep (unit u-use-gpr (in usereg rma))
+	   (unit u-exec))))
+
+(dnci lbucpm1 "lbucpm1" (OPTIONAL_CP_INSN (MACH c5))
+     "lbucpm1 $crn,($rma+),$cdisp10"
+     (+ MAJ_15 crn rma (f-sub4 5) (f-ext4 #xc) (f-ext62 #x3) cdisp10)
+     (sequence ()
+	       (c-call "check_option_cp" pc)
+	       (set crn (zext SI (mem QI rma)))
+	       (set rma (mod1 cdisp10)))
+     ((mep (unit u-use-gpr (in usereg rma))
+	   (unit u-exec))))
+
+(dnci lhucpm1 "lhucpm1" (OPTIONAL_CP_INSN (MACH c5))
+     "lhucpm1 $crn,($rma+),$cdisp10a2"
+     (+ MAJ_15 crn rma (f-sub4 5) (f-ext4 #xd) (f-ext62 #x3) cdisp10a2)
+     (sequence ()
+	       (c-call "check_option_cp" pc)
+	       (set crn (zext SI (mem HI (and rma (inv SI 1)))))
+	       (set rma (mod1 cdisp10a2)))
+     ((mep (unit u-use-gpr (in usereg rma))
+	   (unit u-exec))))
+
+(dnci uci "uci" ((MACH c5) VOLATILE)
+     "uci $rn,$rm,$uimm16"
+     (+ MAJ_15 rn rm (f-sub4 2) simm16)
+     (set rn (c-call SI "do_UCI" rn rm (zext SI uimm16) pc))
+     ((mep (unit u-use-gpr (in usereg rm))
+	   (unit u-use-gpr (in usereg rn))
+	   (unit u-exec))))
+
+(dnf f-c5-rnm     "register n/m"              (all-mep-isas)    4  8)
+(dnf f-c5-rm      "register m"              (all-mep-isas)    8  4)
+(df  f-c5-16u16  "general 16-bit u-val"    (all-mep-isas) 16 16 UINT #f #f)
+
+(dnmf f-c5-rmuimm20 "20-bit immediate in Rm/Imm16" (all-mep-isas) UINT
+      (f-c5-rm f-c5-16u16)
+      (sequence () ; insert
+		(set (ifield f-c5-rm)    (srl (ifield f-c5-rmuimm20) 16))
+		(set (ifield f-c5-16u16) (and (ifield f-c5-rmuimm20) #xffff))
+		)
+      (sequence () ; extract
+		(set (ifield f-c5-rmuimm20) (or (ifield f-c5-16u16)
+						(sll (ifield f-c5-rm) 16)))
+		)
+      )
+(dnop c5rmuimm20 "20-bit immediate in rm and imm16" (all-mep-core-isas) h-uint f-c5-rmuimm20)
+
+(dnmf f-c5-rnmuimm24 "24-bit immediate in Rm/Imm16" (all-mep-isas) UINT
+      (f-c5-rnm f-c5-16u16)
+      (sequence () ; insert
+		(set (ifield f-c5-rnm)    (srl (ifield f-c5-rnmuimm24) 16))
+		(set (ifield f-c5-16u16) (and (ifield f-c5-rnmuimm24) #xffff))
+		)
+      (sequence () ; extract
+		(set (ifield f-c5-rnmuimm24) (or (ifield f-c5-16u16)
+						(sll (ifield f-c5-rnm) 16)))
+		)
+      )
+(dnop c5rnmuimm24 "24-bit immediate in rn, rm, and imm16" (all-mep-core-isas) h-uint f-c5-rnmuimm24)
+
+(dnci dsp "dsp" ((MACH c5) VOLATILE)
+     "dsp $rn,$rm,$uimm16"
+     (+ MAJ_15 rn rm (f-sub4 0) uimm16)
+     (set rn (c-call SI "do_DSP" rn rm (zext SI uimm16) pc))
+     ((mep (unit u-use-gpr (in usereg rm))
+	   (unit u-use-gpr (in usereg rn))
+	   (unit u-exec))))
+
+(dnci dsp0 "dsp0" ((MACH c5) VOLATILE NO-DIS ALIAS)
+     "dsp0 $c5rnmuimm24"
+     (+ MAJ_15 c5rnmuimm24 (f-sub4 0))
+     (c-call VOID "do_DSP" (zext SI c5rnmuimm24) pc)
+     ((mep (unit u-exec))))
+
+(dnci dsp1 "dsp1" ((MACH c5) VOLATILE NO-DIS ALIAS)
+     "dsp1 $rn,$c5rmuimm20"
+     (+ MAJ_15 rn (f-sub4 0) c5rmuimm20)
+     (set rn (c-call SI "do_DSP" rn (zext SI c5rmuimm20) pc))
+     ((mep (unit u-use-gpr (in usereg rn))
+	   (unit u-exec))))
+@
+
+
+1.2
+log
+@[cgen]
+	* cpu/mep-c5.cpu (f-12s20): Change to signed.
+	(lhucpm1): Limit to C5 mach.
+	(dsp0,dsp1): Rewrite as aliases so that intrinsics are generated.
+	* cpu/mep-core.cpu (extend-cdisp10): New.
+	(f-cdisp10): Change to signed, use extend-cdisp10 to sign extend.
+
+[opcodes]
+	* mep-desc.c: Regenerate.
+	* mep-ibld.c: Regenerate.
+	* mep-opc.c: Regenerate.
+	* mep-opc.h: Regenerate.
+
+[sid/component/cgen-cpu/mep]
+	* mep-core1-decode.cxx: Regenerate.
+	* mep-core1-decode.h: Regenerate.
+	* mep-decode.cxx: Regenerate.
+	* mep-decode.h: Regenerate.
+@
+text
+@@
+
+
+1.1
+log
+@[cgen]
+	* cpu/mep-c5.cpu: New.
+	* cpu/mep-core.cpu: Add C5 support.
+	* cpu/mep.opc: Likewise.
+[opcodes]
+	* mep-asm.c: Regenerate.
+	* mep-desc.c: Regenerate.
+	* mep-desc.h: Regenerate.
+	* mep-dis.c: Regenerate.
+	* mep-ibld.c: Regenerate.
+	* mep-opc.c: Regenerate.
+	* mep-opc.h: Regenerate.
+[sid]
+	* component/cache/cache.cxx (cache_component::cache_component):
+	Add write_hint_pin().  Attach it to write-hint.
+	(cache_component::write_hint): New.
+	* component/cache/cache.h (write_hint_pin): New.
+	(write_hint): New.
+
+	* component/cgen-cpu/mep/Makefile.am: Regenerate.
+	* component/cgen-cpu/mep/Makefile.in: Regenerate.
+	* component/cgen-cpu/mep/mep-core1-decode.cxx: Regenerate.
+	* component/cgen-cpu/mep/mep-core1-decode.h: Regenerate.
+	* component/cgen-cpu/mep/mep-core1-defs.h: Regenerate.
+	* component/cgen-cpu/mep/mep-core1-model.cxx: Regenerate.
+	* component/cgen-cpu/mep/mep-core1-model.h: Regenerate.
+	* component/cgen-cpu/mep/mep-core1-sem.cxx: Regenerate.
+	* component/cgen-cpu/mep/mep-decode.cxx: Regenerate.
+	* component/cgen-cpu/mep/mep-decode.h: Regenerate.
+	* component/cgen-cpu/mep/mep-defs.h: Regenerate.
+	* component/cgen-cpu/mep/mep-desc.h: Regenerate.
+	* component/cgen-cpu/mep/mep-model.cxx: Regenerate.
+	* component/cgen-cpu/mep/mep-model.h: Regenerate.
+	* component/cgen-cpu/mep/mep-sem.cxx: Regenerate.
+	* component/cgen-cpu/mep/mep.cxx (mep_cpu): Connect
+	write-hint pin.
+	(do_cache): Add C5 support.
+	(do_cache_prefetch): Likewise.
+	(do_casb3, do_cash3, do_casw3): New.
+	* component/cgen-cpu/mep/mep.h: Add C5 support and write-hint pin.
+	(do_casb3, do_cash3, do_casw3): New.
+
+	* component/families/mep/Makefile.in: Regenerate.
+	* component/families/mep/dsu.in: Add C5 support.
+	* main/dynamic/mainDynamic.cxx: Add C5 support.
+	* main/dynamic/mepCfg.cxx: Connect write-hint pin.
+	* main/dynamic/mepCfg.h: Add C5 support.
+@
+text
+@d9 1
+a9 1
+(dnf f-12s20    "extended field"     (all-mep-core-isas)   20  12)
+d193 1
+a193 1
+(dnci lhucpm1 "lhucpm1" (OPTIONAL_CP_INSN)
+d249 1
+a249 1
+(dncmi dsp0 "dsp0" ((MACH c5) NO-DIS VOLATILE)
+d251 3
+a253 5
+     (emit dsp
+	   (rn (sll c5rnmuimm24 20))
+	   (rm (and (sll c5rnmuimm24 16) #xf))
+	   (uimm16 (and c5rnmuimm24 #xffff)))
+     )
+d255 1
+a255 1
+(dncmi dsp1 "dsp1" ((MACH c5) NO-DIS VOLATILE)
+d257 4
+a260 5
+     (emit dsp
+	   rn
+	   (rm (sll c5rnmuimm24 16))
+	   (uimm16 (and c5rnmuimm24 #xffff)))
+     )
+@
+

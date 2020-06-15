@@ -1,0 +1,295 @@
+head	1.8;
+access;
+symbols
+	gdb_7_5_1-2012-11-29-release:1.7
+	gdb_7_5-2012-08-17-release:1.7
+	gdb_7_5-branch:1.7.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.7
+	gdb_7_4_1-2012-04-26-release:1.5.2.1
+	gdb_7_4-2012-01-24-release:1.5.2.1
+	gdb_7_4-branch:1.5.0.2
+	gdb_7_4-2011-12-13-branchpoint:1.5
+	gdb_7_3_1-2011-09-04-release:1.3
+	gdb_7_3-2011-07-26-release:1.3
+	gdb_7_3-branch:1.3.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.3;
+locks; strict;
+comment	@# @;
+
+
+1.8
+date	2012.07.18.20.04.43;	author tromey;	state dead;
+branches;
+next	1.7;
+
+1.7
+date	2012.06.24.06.58.11;	author jkratoch;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2012.01.04.08.17.00;	author brobecke;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2011.06.08.01.40.58;	author devans;	state Exp;
+branches
+	1.5.2.1;
+next	1.4;
+
+1.4
+date	2011.06.08.00.15.54;	author devans;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2011.01.01.15.32.58;	author brobecke;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2010.10.07.19.34.52;	author devans;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2010.10.05.04.28.15;	author devans;	state Exp;
+branches;
+next	;
+
+1.5.2.1
+date	2012.01.06.04.43.06;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.8
+log
+@	* cc-with-index.sh, cc-with-dwz.sh: Remove.
+	* contrib/cc-with-tweaks.sh: New file.
+@
+text
+@#! /bin/sh
+# Wrapper around gcc to add the .gdb_index section when running the testsuite.
+
+# Copyright (C) 2010-2012 Free Software Foundation, Inc.
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# This program requires gdb and objcopy in addition to gcc.
+# The default values are gdb from the build tree and objcopy from $PATH.
+# They may be overridden by setting environment variables GDB and OBJCOPY
+# respectively.
+# We assume the current directory is either $obj/gdb or $obj/gdb/testsuite.
+#
+# Example usage:
+#
+# bash$ cd $objdir/gdb/testsuite
+# bash$ runtest \
+#   CC_FOR_TARGET="/bin/sh $srcdir/cc-with-index.sh gcc" \
+#   CXX_FOR_TARGET="/bin/sh $srcdir/cc-with-index.sh g++"
+#
+# For documentation on index files: info -f gdb.info -n "Index Files"
+
+myname=cc-with-index.sh
+
+if [ -z "$GDB" ]
+then
+    if [ -f ./gdb ]
+    then
+	GDB="./gdb"
+    elif [ -f ../gdb ]
+    then
+	GDB="../gdb"
+    elif [ -f ../../gdb ]
+    then
+	GDB="../../gdb"
+    else
+	echo "$myname: unable to find usable gdb" >&2
+	exit 1
+    fi
+fi
+
+OBJCOPY=${OBJCOPY:-objcopy}
+
+have_link=unknown
+next_is_output_file=no
+output_file=a.out
+
+for arg in "$@@"
+do
+    if [ "$next_is_output_file" = "yes" ]
+    then
+	output_file="$arg"
+	next_is_output_file=no
+	continue
+    fi
+
+    # Poor man's gcc argument parser.
+    # We don't need to handle all arguments, we just need to know if we're
+    # doing a link and what the output file is.
+    # It's not perfect, but it seems to work well enough for the task at hand.
+    case "$arg" in
+    "-c") have_link=no ;;
+    "-E") have_link=no ;;
+    "-S") have_link=no ;;
+    "-o") next_is_output_file=yes ;;
+    esac
+done
+
+if [ "$next_is_output_file" = "yes" ]
+then
+    echo "$myname: Unable to find output file" >&2
+    exit 1
+fi
+
+if [ "$have_link" = "no" ]
+then
+    "$@@"
+    exit $?
+fi
+
+index_file="${output_file}.gdb-index"
+if [ -f "$index_file" ]
+then
+    echo "$myname: Index file $index_file exists, won't clobber." >&2
+    exit 1
+fi
+
+output_dir="${output_file%/*}"
+[ "$output_dir" = "$output_file" ] && output_dir="."
+
+"$@@"
+rc=$?
+[ $rc != 0 ] && exit $rc
+if [ ! -f "$output_file" ]
+then
+    echo "$myname: Internal error: $output_file missing." >&2
+    exit 1
+fi
+
+$GDB --batch-silent -nx -ex "set auto-load no" -ex "file $output_file" -ex "save gdb-index $output_dir"
+rc=$?
+[ $rc != 0 ] && exit $rc
+
+# GDB might not always create an index.  Cope.
+if [ -f "$index_file" ]
+then
+    $OBJCOPY --add-section .gdb_index="$index_file" \
+	--set-section-flags .gdb_index=readonly \
+	"$output_file" "$output_file"
+    rc=$?
+else
+    rc=0
+fi
+
+rm -f "$index_file"
+exit $rc
+@
+
+
+1.7
+log
+@gdb/
+	* cc-with-index.sh: Use also -ex "set auto-load no".
+@
+text
+@@
+
+
+1.6
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d110 1
+a110 1
+$GDB --batch-silent -nx -ex "file $output_file" -ex "save gdb-index $output_dir"
+@
+
+
+1.5
+log
+@	* cc-with-index.sh: Look for ../../gdb, for fullname.exp.
+@
+text
+@d4 1
+a4 1
+# Copyright (C) 2010, 2011 Free Software Foundation, Inc.
+@
+
+
+1.5.2.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d4 1
+a4 1
+# Copyright (C) 2010-2012 Free Software Foundation, Inc.
+@
+
+
+1.4
+log
+@	* cc-with-index.sh: Fix typos in comment.
+@
+text
+@d43 3
+@
+
+
+1.3
+log
+@run copyright.sh for 2011.
+@
+text
+@d19 2
+a20 2
+# The default values are gdb from the build tree and objdump from $PATH.
+# They may be overridden by setting environment variables GDB and OBJDUMP
+@
+
+
+1.2
+log
+@	* cc-with-index.sh (output_file): Default to a.out.
+@
+text
+@d4 1
+a4 1
+# Copyright (C) 2010 Free Software Foundation, Inc.
+@
+
+
+1.1
+log
+@	* cc-with-index.sh: New file.
+@
+text
+@d53 1
+@
+

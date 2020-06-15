@@ -1,0 +1,725 @@
+head	1.5;
+access;
+symbols
+	binutils-2_24-branch:1.5.0.2
+	binutils-2_24-branchpoint:1.5
+	binutils-2_23_2:1.4
+	binutils-2_23_1:1.4
+	binutils-2_23:1.4
+	binutils-2_23-branch:1.4.0.2
+	binutils-2_23-branchpoint:1.4
+	binutils-2_22_branch:1.3.0.4
+	binutils-2_22:1.3
+	binutils-2_22-branch:1.3.0.2
+	binutils-2_22-branchpoint:1.3
+	binutils_latest_snapshot:1.5;
+locks; strict;
+comment	@# @;
+
+
+1.5
+date	2013.01.10.20.08.03;	author hjl;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2012.04.24.05.12.40;	author amodra;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2011.05.13.18.15.33;	author bernds;	state Exp;
+branches
+	1.3.2.1;
+next	1.2;
+
+1.2
+date	2011.05.09.13.23.25;	author pbrook;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2011.03.31.08.58.26;	author bernds;	state Exp;
+branches;
+next	;
+
+1.3.2.1
+date	2012.05.11.12.24.39;	author nickc;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.5
+log
+@Remove trailing white spaces in ld
+
+	* deffilep.y: Remove trailing white spaces.
+	* elf-hints-local.h: Likewise.
+	* ldexp.c: Likewise.
+	* ldlang.h: Likewise.
+	* ldmisc.c: Likewise.
+	* ldwrite.c: Likewise.
+	* pe-dll.c: Likewise.
+	* emulparams/criself.sh: Likewise.
+	* emulparams/crislinux.sh: Likewise.
+	* emulparams/elf32_tic6x_le.sh: Likewise.
+	* emulparams/elf32bmipn32-defs.sh: Likewise.
+	* emulparams/elf32mb_linux.sh: Likewise.
+	* emulparams/elf32mep.sh: Likewise.
+	* emulparams/elf32microblaze.sh: Likewise.
+	* emulparams/elf32ppc.sh: Likewise.
+	* emulparams/elf64_s390.sh: Likewise.
+	* emulparams/elf64alpha.sh: Likewise.
+	* emulparams/elf_s390.sh: Likewise.
+	* emulparams/elf_x86_64.sh: Likewise.
+	* emulparams/tic80coff.sh: Likewise.
+	* emultempl/aix.em: Likewise.
+	* emultempl/avrelf.em: Likewise.
+	* emultempl/cr16elf.em: Likewise.
+	* emultempl/pe.em: Likewise.
+	* emultempl/pep.em: Likewise.
+	* emultempl/spuelf.em: Likewise.
+	* emultempl/tic6xdsbt.em: Likewise.
+@
+text
+@# This shell script emits a C file. -*- C -*-
+#   Copyright 2011, 2012 Free Software Foundation, Inc.
+#
+# This file is part of the GNU Binutils.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+# MA 02110-1301, USA.
+#
+
+# This file is sourced from elf32.em, and defines extra C6X DSBT specific
+# features.
+#
+fragment <<EOF
+#include "ldctor.h"
+#include "elf32-tic6x.h"
+
+static struct elf32_tic6x_params params =
+{
+  0, 64
+};
+
+static int merge_exidx_entries = -1;
+
+static int
+is_tic6x_target (void)
+{
+  extern const bfd_target bfd_elf32_tic6x_le_vec;
+  extern const bfd_target bfd_elf32_tic6x_be_vec;
+  extern const bfd_target bfd_elf32_tic6x_linux_le_vec;
+  extern const bfd_target bfd_elf32_tic6x_linux_be_vec;
+  extern const bfd_target bfd_elf32_tic6x_elf_le_vec;
+  extern const bfd_target bfd_elf32_tic6x_elf_be_vec;
+
+  return (link_info.output_bfd->xvec == &bfd_elf32_tic6x_le_vec
+  	  || link_info.output_bfd->xvec == &bfd_elf32_tic6x_be_vec
+	  || link_info.output_bfd->xvec == &bfd_elf32_tic6x_linux_le_vec
+  	  || link_info.output_bfd->xvec == &bfd_elf32_tic6x_linux_be_vec
+	  || link_info.output_bfd->xvec == &bfd_elf32_tic6x_elf_le_vec
+  	  || link_info.output_bfd->xvec == &bfd_elf32_tic6x_elf_be_vec);
+}
+
+/* Pass params to backend.  */
+
+static void
+tic6x_after_open (void)
+{
+  if (is_tic6x_target ())
+    {
+      if (params.dsbt_index >= params.dsbt_size)
+	{
+	  einfo (_("%P%F: invalid --dsbt-index %d, outside DSBT size.\n"),
+		 params.dsbt_index);
+	}
+      elf32_tic6x_setup (&link_info, &params);
+    }
+
+  gld${EMULATION_NAME}_after_open ();
+}
+
+static int
+compare_output_sec_vma (const void *a, const void *b)
+{
+  asection *asec = *(asection **) a, *bsec = *(asection **) b;
+  asection *aout = asec->output_section, *bout = bsec->output_section;
+  bfd_vma avma, bvma;
+
+  /* If there's no output section for some reason, compare equal.  */
+  if (!aout || !bout)
+    return 0;
+
+  avma = aout->vma + asec->output_offset;
+  bvma = bout->vma + bsec->output_offset;
+
+  if (avma > bvma)
+    return 1;
+  else if (avma < bvma)
+    return -1;
+
+  return 0;
+}
+
+static void
+gld${EMULATION_NAME}_after_allocation (void)
+{
+  int layout_changed = 0;
+
+  if (!link_info.relocatable)
+    {
+      /* Build a sorted list of input text sections, then use that to process
+	 the unwind table index.  */
+      unsigned int list_size = 10;
+      asection **sec_list = (asection **)
+          xmalloc (list_size * sizeof (asection *));
+      unsigned int sec_count = 0;
+
+      LANG_FOR_EACH_INPUT_STATEMENT (is)
+	{
+	  bfd *abfd = is->the_bfd;
+	  asection *sec;
+
+	  if ((abfd->flags & (EXEC_P | DYNAMIC)) != 0)
+	    continue;
+
+	  for (sec = abfd->sections; sec != NULL; sec = sec->next)
+	    {
+	      asection *out_sec = sec->output_section;
+
+	      if (out_sec
+		  && elf_section_data (sec)
+		  && elf_section_type (sec) == SHT_PROGBITS
+		  && (elf_section_flags (sec) & SHF_EXECINSTR) != 0
+		  && (sec->flags & SEC_EXCLUDE) == 0
+		  && sec->sec_info_type != SEC_INFO_TYPE_JUST_SYMS
+		  && out_sec != bfd_abs_section_ptr)
+		{
+		  if (sec_count == list_size)
+		    {
+		      list_size *= 2;
+		      sec_list = (asection **)
+                          xrealloc (sec_list, list_size * sizeof (asection *));
+		    }
+
+		  sec_list[sec_count++] = sec;
+		}
+	    }
+	}
+
+      qsort (sec_list, sec_count, sizeof (asection *), &compare_output_sec_vma);
+
+      if (elf32_tic6x_fix_exidx_coverage (sec_list, sec_count, &link_info,
+					   merge_exidx_entries))
+	layout_changed = 1;
+
+      free (sec_list);
+    }
+
+  /* bfd_elf32_discard_info just plays with debugging sections,
+     ie. doesn't affect any code, so we can delay resizing the
+     sections.  */
+  if (bfd_elf_discard_info (link_info.output_bfd, & link_info))
+    layout_changed = 1;
+
+  gld${EMULATION_NAME}_map_segments (layout_changed);
+}
+EOF
+
+# This code gets inserted into the generic elf32.sc linker script
+# and allows us to define our own command line switches.
+PARSE_AND_LIST_PROLOGUE='
+#define OPTION_DSBT_INDEX		300
+#define OPTION_DSBT_SIZE		301
+#define OPTION_NO_MERGE_EXIDX_ENTRIES   302
+'
+
+PARSE_AND_LIST_LONGOPTS='
+  {"dsbt-index", required_argument, NULL, OPTION_DSBT_INDEX},
+  {"dsbt-size", required_argument, NULL, OPTION_DSBT_SIZE},
+  { "no-merge-exidx-entries", no_argument, NULL, OPTION_NO_MERGE_EXIDX_ENTRIES },
+'
+
+PARSE_AND_LIST_OPTIONS='
+  fprintf (file, _("  --dsbt-index <index>\n"));
+  fprintf (file, _("\t\t\tUse this as the DSBT index for the output object\n"));
+  fprintf (file, _("  --dsbt-size <index>\n"));
+  fprintf (file, _("\t\t\tUse this as the number of entries in the DSBT table\n"));
+  fprintf (file, _("  --no-merge-exidx-entries    Disable merging exidx entries\n"));
+'
+
+PARSE_AND_LIST_ARGS_CASES='
+    case OPTION_DSBT_INDEX:
+      {
+	char *end;
+	params.dsbt_index = strtol (optarg, &end, 0);
+	if (*end == 0
+	    && params.dsbt_index >= 0 && params.dsbt_index < 0x7fff)
+	  break;
+	einfo (_("%P%F: invalid --dsbt-index %s\n"), optarg);
+      }
+      break;
+    case OPTION_DSBT_SIZE:
+      {
+	char *end;
+	params.dsbt_size = strtol (optarg, &end, 0);
+	if (*end == 0
+	    && params.dsbt_size >= 0 && params.dsbt_size < 0x7fff)
+	  break;
+	einfo (_("%P%F: invalid --dsbt-size %s\n"), optarg);
+      }
+      break;
+   case OPTION_NO_MERGE_EXIDX_ENTRIES:
+      merge_exidx_entries = 0;
+'
+
+LDEMUL_AFTER_OPEN=tic6x_after_open
+LDEMUL_AFTER_ALLOCATION=gld${EMULATION_NAME}_after_allocation
+@
+
+
+1.4
+log
+@	PR ld/13991
+bfd/
+	* bfd/elf-bfd.h (_bfd_elf_link_just_syms): Define as
+	_bfd_generic_link_just_syms.
+	* bfd/elflink.c (_bfd_elf_link_just_syms): Delete.
+	* bfd/linker.c (_bfd_generic_link_just_syms): Set sec_info_type.
+
+	* bfd/bfd-in.h (discarded_section): Renamed from elf_discarded_section.
+	* bfd/section.c (SEC_INFO_TYPE_NONE, SEC_INFO_TYPE_STABS,
+	SEC_INFO_TYPE_MERGE, SEC_INFO_TYPE_EH_FRAME,
+	SEC_INFO_TYPE_JUST_SYMS): Renamed from corresponding ELF_INFO_TYPE.
+	* bfd/elf-eh-frame.c, * bfd/elf-m10200.c, * bfd/elf-m10300.c,
+	* bfd/elf.c, * bfd/elf32-arm.c, * bfd/elf32-avr.c, * bfd/elf32-bfin.c,
+	* bfd/elf32-cr16.c, * bfd/elf32-cr16c.c, * bfd/elf32-cris.c,
+	* bfd/elf32-crx.c, * bfd/elf32-d10v.c, * bfd/elf32-epiphany.c,
+	* bfd/elf32-fr30.c, * bfd/elf32-frv.c, * bfd/elf32-h8300.c,
+	* bfd/elf32-hppa.c, * bfd/elf32-i370.c, * bfd/elf32-i386.c,
+	* bfd/elf32-i860.c, * bfd/elf32-ip2k.c, * bfd/elf32-iq2000.c,
+	* bfd/elf32-lm32.c, * bfd/elf32-m32c.c, * bfd/elf32-m32r.c,
+	* bfd/elf32-m68hc1x.c, * bfd/elf32-m68k.c, * bfd/elf32-mcore.c,
+	* bfd/elf32-mep.c, * bfd/elf32-moxie.c, * bfd/elf32-msp430.c,
+	* bfd/elf32-mt.c, * bfd/elf32-openrisc.c, * bfd/elf32-ppc.c,
+	* bfd/elf32-rl78.c, * bfd/elf32-rx.c, * bfd/elf32-s390.c,
+	* bfd/elf32-score.c, * bfd/elf32-score7.c, * bfd/elf32-sh.c,
+	* bfd/elf32-spu.c, * bfd/elf32-tic6x.c, * bfd/elf32-tilepro.c,
+	* bfd/elf32-v850.c, * bfd/elf32-vax.c, * bfd/elf32-xc16x.c,
+	* bfd/elf32-xstormy16.c, * bfd/elf32-xtensa.c, * bfd/elf64-alpha.c,
+	* bfd/elf64-hppa.c, * bfd/elf64-ia64-vms.c, * bfd/elf64-mmix.c,
+	* bfd/elf64-ppc.c, * bfd/elf64-s390.c, * bfd/elf64-sh64.c,
+	* bfd/elf64-x86-64.c, * bfd/elflink.c, * bfd/elfnn-ia64.c,
+	* bfd/elfxx-mips.c, * bfd/elfxx-sparc.c, * bfd/elfxx-tilegx.c,
+	* bfd/reloc.c: Update all references.
+	* bfd/bfd-in2.h: Regenerate.
+ld/
+	* ld/ldlang.c (size_input_section): Use sec_info_type rather than
+	usrdata->flags.just_syms.
+	* ld/ldwrite.c (build_link_order): Likewise.
+	* ld/emultempl/hppaelf.em (build_section_lists): Likewise.
+	* ld/emultempl/ppc64elf.em (build_toc_list): Likewise.
+	* ld/emultempl/armelf.em (build_section_lists): Likewise.
+	(after_allocation): Update for renamed sec_info_type value.
+	* ld/emultempl/tic6xdsbt.em: Likewise.
+@
+text
+@d78 1
+a78 1
+  
+d82 1
+a82 1
+  
+d85 1
+a85 1
+  
+d90 1
+a90 1
+  
+d112 1
+a112 1
+	  
+d115 1
+a115 1
+	  
+d131 1
+a131 1
+		      sec_list = (asection **) 
+d139 1
+a139 1
+	
+d141 1
+a141 1
+      
+d145 1
+a145 1
+      
+@
+
+
+1.3
+log
+@	ld/
+	(eelf32_tic6x_linux_be.c, eelf32_tic6x_linux_le.c,
+	eelf32_tic6x_elf_be.c, eelf32_tic6x_elf_le.c): New rules.
+	* Makefile.am (ALL_EMULATIONS): Add these files.
+	(eelf32_tic6x_be.c, eelf32_tic6x_le.c): Depend on tic6xdsbt.em.
+	* Makefile.in: Regenerated.
+	* emultempl/tic6xdsbt.em (is_tic6x_target): Allow more tic6x target
+	vectors.
+	* emulparams/elf32_tic6x_elf_be.sh: New file.
+	* emulparams/elf32_tic6x_elf_le.sh: New file.
+	* emulparams/elf32_tic6x_linux_be.sh: New file.
+	* emulparams/elf32_tic6x_linux_le.sh: New file.
+	* configure.tgt (tic6x-*-elf, tic6x-*-uclinux): New.
+	(tic6x-*-*): Replaced by these.
+
+	ld/testsuite/
+	* ld-tic6x/dsbt.ld (OUTPUT_FORMAT): Add.
+	* ld-tic6x/tic6x.exp: Add OSABI tests.
+
+	bfd/
+	* config.bfd (tic6x-*-elf, tic6x-*-uclinux): New.
+	(tic6x-*-*): Replaced by these.
+	* elf32-tic6x.c (elf32_tic6x_set_osabi): New static function.
+	(elf32_tic6x_check_relocs): Create dynamic sections if -shared.
+	(elf_backend_relocs_compatible, elf_backend_post_process_headers):
+	Define.
+	(elf32_bed, TARGET_LITTLE_SYM, TARGET_LITTLE_NAME, TARGET_BIG_SYM,
+	TARGET_BIG_NAME, ELF_OSABI): Redefine twice, and include
+	"elf32-target.h" two more times.
+	* configure.in: Handle bfd_elf32_tic6x_linux_be_vec,
+	bfd_elf32_tic6x_linux_le_vec, bfd_elf32_tic6x_elf_be_vec and
+	bfd_elf32_tic6x_elf_le_vec.
+	* configure: Regenerate.
+@
+text
+@d2 1
+a2 1
+#   Copyright 2011 Free Software Foundation, Inc.
+d125 1
+a125 1
+		  && sec->sec_info_type != ELF_INFO_TYPE_JUST_SYMS
+@
+
+
+1.3.2.1
+log
+@    PR ld/13991
+    bfd/
+    * bfd/elf-bfd.h (_bfd_elf_link_just_syms): Define as
+    _bfd_generic_link_just_syms.
+    * bfd/elflink.c (_bfd_elf_link_just_syms): Delete.
+    * bfd/linker.c (_bfd_generic_link_just_syms): Set sec_info_type.
+
+    * bfd/bfd-in.h (discarded_section): Renamed from elf_discarded_section.
+    * bfd/section.c (SEC_INFO_TYPE_NONE, SEC_INFO_TYPE_STABS,
+    SEC_INFO_TYPE_MERGE, SEC_INFO_TYPE_EH_FRAME,
+    SEC_INFO_TYPE_JUST_SYMS): Renamed from corresponding ELF_INFO_TYPE.
+    * bfd/elf-eh-frame.c, * bfd/elf-m10200.c, * bfd/elf-m10300.c,
+    * bfd/elf.c, * bfd/elf32-arm.c, * bfd/elf32-avr.c, * bfd/elf32-bfin.c,
+    * bfd/elf32-cr16.c, * bfd/elf32-cr16c.c, * bfd/elf32-cris.c,
+    * bfd/elf32-crx.c, * bfd/elf32-d10v.c, * bfd/elf32-epiphany.c,
+    * bfd/elf32-fr30.c, * bfd/elf32-frv.c, * bfd/elf32-h8300.c,
+    * bfd/elf32-hppa.c, * bfd/elf32-i370.c, * bfd/elf32-i386.c,
+    * bfd/elf32-i860.c, * bfd/elf32-ip2k.c, * bfd/elf32-iq2000.c,
+    * bfd/elf32-lm32.c, * bfd/elf32-m32c.c, * bfd/elf32-m32r.c,
+    * bfd/elf32-m68hc1x.c, * bfd/elf32-m68k.c, * bfd/elf32-mcore.c,
+    * bfd/elf32-mep.c, * bfd/elf32-moxie.c, * bfd/elf32-msp430.c,
+    * bfd/elf32-mt.c, * bfd/elf32-openrisc.c, * bfd/elf32-ppc.c,
+    * bfd/elf32-rl78.c, * bfd/elf32-rx.c, * bfd/elf32-s390.c,
+    * bfd/elf32-score.c, * bfd/elf32-score7.c, * bfd/elf32-sh.c,
+    * bfd/elf32-spu.c, * bfd/elf32-tic6x.c, * bfd/elf32-tilepro.c,
+    * bfd/elf32-v850.c, * bfd/elf32-vax.c, * bfd/elf32-xc16x.c,
+    * bfd/elf32-xstormy16.c, * bfd/elf32-xtensa.c, * bfd/elf64-alpha.c,
+    * bfd/elf64-hppa.c, * bfd/elf64-ia64-vms.c, * bfd/elf64-mmix.c,
+    * bfd/elf64-ppc.c, * bfd/elf64-s390.c, * bfd/elf64-sh64.c,
+    * bfd/elf64-x86-64.c, * bfd/elflink.c, * bfd/elfnn-ia64.c,
+    * bfd/elfxx-mips.c, * bfd/elfxx-sparc.c, * bfd/elfxx-tilegx.c,
+    * bfd/reloc.c: Update all references.
+    * bfd/bfd-in2.h: Regenerate.
+    ld/
+    * ld/ldlang.c (size_input_section): Use sec_info_type rather than
+    usrdata->flags.just_syms.
+    * ld/ldwrite.c (build_link_order): Likewise.
+    * ld/emultempl/hppaelf.em (build_section_lists): Likewise.
+    * ld/emultempl/ppc64elf.em (build_toc_list): Likewise.
+    * ld/emultempl/armelf.em (build_section_lists): Likewise.
+    (after_allocation): Update for renamed sec_info_type value.
+    * ld/emultempl/tic6xdsbt.em: Likewise.
+@
+text
+@d125 1
+a125 1
+		  && sec->sec_info_type != SEC_INFO_TYPE_JUST_SYMS
+@
+
+
+1.2
+log
+@2011-05-09  Paul Brook  <paul@@codesourcery.com>
+
+	bfd/
+	* bfd-in.h (elf32_tic6x_fix_exidx_coverage): Add prototype.
+	* bfd-in2.h: Regenerate.
+	* elf32-tic6x.c: Include limits.h.
+	(tic6x_unwind_edit_type, tic6x_unwind_table_edit,
+	_tic6x_elf_section_data): New.
+	(elf32_tic6x_section_data): Define.
+	(elf32_tic6x_new_section_hook): Allocate target specific data.
+	(elf32_tic6x_add_unwind_table_edit): New function.
+	(get_tic6x_elf_section_data, elf32_tic6x_adjust_exidx_size,
+	elf32_tic6x_insert_cantunwind_after, elf32_tic6x_add_low31,
+	elf32_tic6x_copy_exidx_entry): New functions.
+	(elf_backend_write_section): Define.
+
+	ld/
+	* emultempl/tic6xdsbt.em (merge_exidx_entries): New.
+	(compare_output_sec_vma): New function.
+	(gld${EMULATION_NAME}_after_allocation): New function.
+	(OPTION_NO_MERGE_EXIDX_ENTRIES): Define.
+	(PARSE_AND_LIST_OPTIONS): Add --no-merge-exidx-entries.
+	(PARSE_AND_LIST_ARGS_CASES): Add OPTION_NO_MERGE_EXIDX_ENTRIES.
+	(LDEMUL_AFTER_ALLOCATION): Set.
+	* ld.texinfo: Document c6x --no-merge-exidx-entries.
+
+	ld/testsuite/
+	* ld-tic6x/discard-unwind.ld: New.
+	* ld-tic6x/unwind.ld: New.
+	* ld-tic6x/unwind-1.d: New test.
+	* ld-tic6x/unwind-1.s: New test.
+	* ld-tic6x/unwind-2.d: New test.
+	* ld-tic6x/unwind-2.s: New test.
+	* ld-tic6x/unwind-3.d: New test.
+	* ld-tic6x/unwind-3.s: New test.
+	* ld-tic6x/unwind-4.d: New test.
+	* ld-tic6x/unwind-4.s: New test.
+	* ld-tic6x/unwind-5.d: New test.
+	* ld-tic6x/unwind-5.s: New test.
+	* ld-tic6x/unwind-6.d: New test.
+@
+text
+@d41 4
+d47 5
+a51 1
+  	  || link_info.output_bfd->xvec == &bfd_elf32_tic6x_be_vec);
+@
+
+
+1.1
+log
+@include/elf/
+	* tic6x.h (R_C6000_JUMP_SPLOT, R_C6000_EHTYPE,
+	R_C6000_PCR_H16, R_C6000_PCR_L16): New relocs.
+	(SHN_TIC6X_SCOMMON): Define.
+
+bfd/
+	* elf32-tic6x.h (struct elf32_tic6x_params): New.
+	(elf32_tic6x_setup): Declare.
+	* elf32-tic6x.c: Include <limits.h>.
+	(ELF_DYNAMIC_LINKER, DEFAULT_STACK_SIZE, PLT_ENTRY_SIZE): Define.
+	(struct elf32_tic6x_link_hash_table, struct elf32_link_hash_entry):
+	New structures.
+	(elf32_tic6x_link_hash_table, is_tic6x_elf): New macros.
+	(tic6x_elf_scom_section, tic6x_elf_scom_symbol,
+	tic6x_elf_scom_symbol_ptr): New static variables.
+	(elf32_tic6x_howto_table, elf32_tic6x_howto_table_rel,
+	elf32_tic6x_reloc_map): Add R_C6000_JUMP_SLOT, R_C6000_EHTYPE,
+	R_C6000_PCR_H16 and R_C6000_PCR_L16.
+	(elf32_tic6x_link_hash_newfunc, elf32_tic6x_link_hash_table_create,
+	elf32_tic6x_link_hash_table_free, elf32_tic6x_setup,
+	elf32_tic6x_using_dsbt, elf32_tic6x_install_rela,
+	elf32_tic6x_create_dynamic_sections, elf32_tic6x_make_got_dynreloc,
+	elf32_tic6x_finish_dynamic_symbol, elf32_tic6x_gc_sweep_hook,
+	elf32_tic6x_adjust_dynamic_symbol): New static functions.
+	(elf32_tic6x_relocate_section): For R_C6000_PCR_S21, convert branches
+	to weak symbols as required by the ABI.
+	Handle GOT and DSBT_INDEX relocs, and copy relocs to the output file
+	as needed when generating DSBT output.
+	(elf32_tic6x_check_relocs, elf32_tic6x_add_symbol_hook,
+	elf32_tic6x_symbol_processing, elf32_tic6x_section_from_bfd_section,
+	elf32_tic6x_allocate_dynrelocs, elf32_tic6x_size_dynamic_sections,
+	elf32_tic6x_always_size_sections, elf32_tic6x_modify_program_headers,
+	elf32_tic6x_finish_dynamic_sections, elf32_tic6x_plt_sym_val,
+	elf32_tic6x_copy_private_data, elf32_tic6x_link_omit_section_dynsym):
+	New static functions.
+	(ELF_MAXPAGESIZE): Define to 0x1000.
+	(bfd_elf32_bfd_copy_private_bfd_data,
+	bfd_elf32_bfd_link_hash_table_create,
+	bfd_elf32_bfd_link_hash_table_free, elf_backend_can_refcount,
+	elf_backend_want_got_plt, elf_backend_want_dynbss,
+	elf_backend_plt_readonly, elf_backend_got_header_size,
+	elf_backend_gc_sweep_hook, elf_backend_modify_program_headers,
+	elf_backend_create_dynamic_sections, elf_backend_adjust_dynamic_symbol,
+	elf_backend_check_relocs, elf_backend_add_symbol_hook,
+	elf_backend_symbol_processing, elf_backend_link_output_symbol_hook,
+	elf_backend_section_from_bfd_section,
+	elf_backend_finish_dynamic_symbol, elf_backend_always_size_sections,
+	elf32_tic6x_size_dynamic_sections, elf_backend_finish_dynamic_sections,
+	elf_backend_omit_section_dynsym, elf_backend_plt_sym_val): Define.
+
+	* bfd/reloc.c (BFD_RELOC_C6000_JUMP_SLOT, BFD_RELOC_C6000_EHTYPE,
+	BFD_RELOC_C6000_PCR_H16, BFD_RELOC_C6000_PCR_S16): Add.
+	* bfd/bfd-in2.h: Regenerate.
+	* bfd/libbfd.h: Regenerate.
+	* config.bfd: Accept tic6x-*-* instead of tic6x-*-elf.
+
+gas/
+	* config/tc-tic6x.c (sbss_section, scom_section, scom_symbol): New
+	static variables.
+	(md_begin): Initialize them.
+	(s_tic6x_scomm): New static function.
+	(md_pseudo_table): Add "scomm".
+	(tc_gen_reloc): Really undo all adjustments made by
+	bfd_install_relocation.
+	* doc/c-tic6x.texi: Document the .scomm directive.
+
+gas/testsuite/
+	* gas/tic6x/scomm-directive-1.s: New test.
+	* gas/tic6x/scomm-directive-1.d: New test.
+	* gas/tic6x/scomm-directive-2.s: New test.
+	* gas/tic6x/scomm-directive-2.d: New test.
+	* gas/tic6x/scomm-directive-3.s: New test.
+	* gas/tic6x/scomm-directive-3.d: New test.
+	* gas/tic6x/scomm-directive-4.s: New test.
+	* gas/tic6x/scomm-directive-4.d: New test.
+	* gas/tic6x/scomm-directive-5.s: New test.
+	* gas/tic6x/scomm-directive-5.d: New test.
+	* gas/tic6x/scomm-directive-6.s: New test.
+	* gas/tic6x/scomm-directive-6.d: New test.
+	* gas/tic6x/scomm-directive-7.s: New test.
+	* gas/tic6x/scomm-directive-7.d: New test.
+	* gas/tic6x/scomm-directive-8.s: New test.
+	* gas/tic6x/scomm-directive-8.d: New test.
+
+ld/
+	* emulparams/elf32_tic6x_le.sh (BIG_OUTPUT_FORMAT, EXTRA_EM_FILE,
+	GENERATE_SHLIB_SCRIPT): New defines.
+	(TEXT_START_ADDR): Define differently depending on target.
+	(.got): Redefine to include "*(.dsbt)".
+	(SDATA_START_SYMBOLS): Remove, replace with
+	(OTHER_GOT_SYMBOLS): New.
+	(OTHER_BSS_SECTIONS): Define only for ELF targets.
+	* emultempl/tic6xdsbt.em: New file.
+	* gen-doc.texi: Set C6X.
+	* ld.texinfo: Likewise.
+	(Options specific to C6X uClinux targets): New section.
+
+binutils/
+	* readelf.c (get_symbol_index_type): Handle SCOM for TIC6X.
+	(dump_relocations): Likewise.
+
+binutils/testsuite/
+	* lib/binutils-common.exp (is_elf_format): Accept tic6x*-*-uclinux*.
+
+ld/testsuite/
+	* ld-scripts/crossref.exp: Add CFLAGS for tic6x*-*-*.
+	* ld-elf/sec-to-seg.exp: Remove tic6x from list of targets defining
+	pagesize to 1.
+	* ld-tic6x/tic6x.exp: Add support for DSBT shared library/executable
+	linking tests.
+	* ld-tic6x/dsbt.ld: New linker script.
+	* ld-tic6x/dsbt-be.ld: New linker script.
+	* ld-tic6x/dsbt-overflow.ld: New linker script.
+	* ld-tic6x/dsbt-inrange.ld: New linker script.
+	* ld-tic6x/shlib-1.s: New test.
+	* ld-tic6x/shlib-2.s: New test.
+	* ld-tic6x/shlib-app-1r.s: New test.
+	* ld-tic6x/shlib-app-1.s: New test.
+	* ld-tic6x/shlib-1.sd: New test.
+	* ld-tic6x/shlib-1.dd: New test.
+	* ld-tic6x/shlib-app-1.rd: New test.
+	* ld-tic6x/shlib-app-1rb.rd: New test.
+	* ld-tic6x/shlib-app-1.sd: New test.
+	* ld-tic6x/static-app-1rb.od: New test.
+	* ld-tic6x/shlib-app-1.dd: New test.
+	* ld-tic6x/shlib-app-1rb.sd: New test.
+	* ld-tic6x/static-app-1b.od: New test.
+	* ld-tic6x/static-app-1r.od: New test.
+	* ld-tic6x/shlib-1rb.rd: New test.
+	* ld-tic6x/shlib-app-1rb.dd: New test.
+	* ld-tic6x/shlib-1rb.sd: New test.
+	* ld-tic6x/shlib-1rb.dd: New test.
+	* ld-tic6x/shlib-app-1b.od: New test.
+	* ld-tic6x/tic6x.exp: New test.
+	* ld-tic6x/static-app-1rb.rd: New test.
+	* ld-tic6x/shlib-app-1r.od: New test.
+	* ld-tic6x/static-app-1.od: New test.
+	* ld-tic6x/static-app-1b.rd: New test.
+	* ld-tic6x/static-app-1r.rd: New test.
+	* ld-tic6x/static-app-1rb.sd: New test.
+	* ld-tic6x/static-app-1b.sd: New test.
+	* ld-tic6x/static-app-1rb.dd: New test.
+	* ld-tic6x/static-app-1r.sd: New test.
+	* ld-tic6x/static-app-1b.dd: New test.
+	* ld-tic6x/shlib-1b.rd: New test.
+	* ld-tic6x/static-app-1r.dd: New test.
+	* ld-tic6x/shlib-app-1b.rd: New test.
+	* ld-tic6x/shlib-1r.rd: New test.
+	* ld-tic6x/shlib-app-1r.rd: New test.
+	* ld-tic6x/shlib-1b.sd: New test.
+	* ld-tic6x/static-app-1.rd: New test.
+	* ld-tic6x/shlib-app-1b.sd: New test.
+	* ld-tic6x/shlib-1r.sd: New test.
+	* ld-tic6x/shlib-1b.dd: New test.
+	* ld-tic6x/shlib-app-1r.sd: New test.
+	* ld-tic6x/shlib-app-1b.dd: New test.
+	* ld-tic6x/shlib-1r.dd: New test.
+	* ld-tic6x/static-app-1.sd: New test.
+	* ld-tic6x/shlib-app-1r.dd: New test.
+	* ld-tic6x/static-app-1.dd: New test.
+	* ld-tic6x/shlib-noindex.rd: New test.
+	* ld-tic6x/shlib-noindex.dd: New test.
+	* ld-tic6x/shlib-noindex.sd: New test.
+	* ld-tic6x/got-reloc-local-1.s: New test.
+	* ld-tic6x/got-reloc-local-2.s: New test.
+	* ld-tic6x/got-reloc-local-r.d: New test.
+	* ld-tic6x/got-reloc-global.s: New test.
+	* ld-tic6x/got-reloc-global-addend-1.d: New test.
+	* ld-tic6x/got-reloc-global-addend-1.s: New test.
+	* ld-tic6x/got-reloc-global-addend-2.d: New test.
+	* ld-tic6x/got-reloc-inrange.d: New test.
+	* ld-tic6x/got-reloc-overflow.d: New test.
+	* ld-tic6x/got-reloc-global-addend-2.s: New test.
+	* ld-tic6x/dsbt-index-error.d: New test.
+	* ld-tic6x/dsbt-index.d: New test.
+	* ld-tic6x/dsbt-index.s: New test.
+	* ld-tic6x/shlib-app-1.od: New test.
+	* ld-tic6x/shlib-app-1rb.od: New test.
+	* ld-tic6x/shlib-1.rd: New test.
+	* ld-tic6x/weak.d: New test.
+	* ld-tic6x/weak-be.d: New test.
+	* ld-tic6x/weak.s: New test.
+ 	* ld-tic6x/weak-data.d: New test.
+	* ld-tic6x/common.d: New test.
+	* ld-tic6x/common.ld: New test.
+	* ld-tic6x/common.s: New test.
+@
+text
+@d34 2
+d63 86
+d156 1
+d162 1
+d170 1
+d194 2
+d199 1
+@
+

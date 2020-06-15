@@ -1,0 +1,129 @@
+head	1.1;
+access;
+symbols
+	insight_7_6-2013-04-10-branchpoint:1.1
+	gdb_7_6-branch:1.1.0.42
+	gdb_7_5-branch:1.1.0.40
+	gdb_7_4-branch:1.1.0.38
+	gdb_7_3-branch:1.1.0.36
+	gdb_7_1-branch:1.1.0.34
+	gdb_7_0-branch:1.1.0.32
+	arc-sim-20090309:1.1
+	arc-insight_6_8-branch:1.1.0.30
+	arc-insight_6_8-branchpoint:1.1
+	insight_6_8-branch:1.1.0.28
+	insight_6_8-branchpoint:1.1
+	gdb_6_8-branch:1.1.0.26
+	insight_6_6-20070208-release:1.1
+	gdb_6_6-branch:1.1.0.24
+	gdb_6_6-2006-11-15-branchpoint:1.1
+	insight_6_5-20061003-release:1.1
+	gdb_6_5-branch:1.1.0.22
+	gdb_6_5-2006-05-14-branchpoint:1.1
+	gdb-csl-gxxpro-6_3-branch:1.1.0.20
+	gdb-csl-gxxpro-6_3-branchpoint:1.1
+	gdb_6_4-branch:1.1.0.18
+	gdb_6_4-2005-11-01-branchpoint:1.1
+	gdb_6_1-2004-04-05-release:1.1
+	gdb_6_1-branch:1.1.0.16
+	gdb_6_1-2004-03-01-gmt-branchpoint:1.1
+	gdb_6_0-2003-10-04-release:1.1
+	gdb_6_0-branch:1.1.0.14
+	gdb_6_0-2003-06-23-branchpoint:1.1
+	gdb_5_3-2002-12-12-release:1.1
+	gdb_5_3-branch:1.1.0.12
+	gdb_5_3-2002-09-04-branchpoint:1.1
+	gdb_5_2_1-2002-07-23-release:1.1
+	gdb_5_2-2002-04-29-release:1.1
+	gdb_5_2-branch:1.1.0.10
+	gdb_5_2-2002-03-03-branchpoint:1.1
+	gdb_5_1_1-2002-01-24-release:1.1
+	cygnus_cvs_20020108_pre:1.1
+	gdb_5_1_0_1-2002-01-03-branch:1.1.0.8
+	gdb_5_1_0_1-2002-01-03-branchpoint:1.1
+	gdb_5_1-2001-11-21-release:1.1
+	gdb_s390-2001-09-26-branch:1.1.0.6
+	gdb_s390-2001-09-26-branchpoint:1.1
+	gdb_5_1-2001-07-29-branch:1.1.0.4
+	gdb_5_1-2001-07-29-branchpoint:1.1
+	dberlin-typesystem-branch:1.1.0.2
+	dberlin-typesystem-branchpoint:1.1
+	insight-precleanup-2001-01-01:1.1;
+locks; strict;
+comment	@# @;
+
+
+1.1
+date	2000.12.06.18.27.15;	author tromey;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.1
+log
+@	* targetselection.itb (TargetSelection::build_win): Add option to
+	start xterm.
+	* interface.tcl (run_executable): Call tty::create if requested.
+	* tty.tcl: New file.
+@
+text
+@# tty.tcl - xterm as tty for the inferior
+# Copyright (C) 1996, 2000 Red Hat, Inc
+# Written by Tom Tromey <tromey@@cygnus.com>
+#
+# Interface to the inferior's terminal.  This is very rough, and is
+# guaranteed to only work on Unix machines (if even there).
+#
+
+namespace eval tty {
+  namespace export create
+
+  variable _xterm_fd {}
+
+  proc create {} {
+    variable _xterm_fd
+
+    destroy
+
+    # Tricky: we exec /bin/cat so that the xterm will exit whenever we
+    # close the write end of the pipe.  Note that the stdin
+    # redirection must come after tty is run; tty looks at its stdin.
+    set shcmd {/bin/sh -c 'exec 1>&7; tty; exec /bin/cat 0<&6'}
+
+    set fg [option get . foreground Foreground]
+    if {$fg == ""} then {
+      set fg black
+    }
+
+    set bg [. cget -background]
+    if {$bg == ""} then {
+      set bg [lindex [. configure -background] 3]
+    }
+
+    set xterm [list /bin/sh -c "exec xterm -T 'Gdb Child' -n Gdb -bg '$bg' -fg '$fg' -e $shcmd 6<&0 7>&1"]
+
+    # Need both read and write access to xterm process.
+    set _xterm_fd [open "| $xterm" w+]
+    set tty [gets $_xterm_fd]
+
+    # On failure we don't try the tty command.
+    if {$tty != ""} {
+      gdb_cmd "tty $tty"
+    }
+  }
+
+  proc destroy {} {
+    variable _xterm_fd
+
+    if {$_xterm_fd != ""} then {
+      # We don't care if this fails.
+      catch {close $_xterm_fd}
+    }
+    set _xterm_fd {}
+  }
+}
+@

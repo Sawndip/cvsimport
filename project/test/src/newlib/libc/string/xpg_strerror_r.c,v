@@ -1,0 +1,124 @@
+head	1.2;
+access;
+symbols
+	cygwin-1_7_35-release:1.2
+	cygwin-1_7_34-release:1.2
+	newlib-2_2_0:1.2.0.6
+	cygwin-1_7_33-release:1.2
+	cygwin-1_7_32-release:1.2
+	cygwin-1_7_31-release:1.2
+	cygwin-1_7_30-release:1.2
+	cygwin-1_7_29-release:1.2
+	cygwin-1_7_28-release:1.2
+	newlib-2_1_0:1.2
+	cygwin-1_7_27-release:1.2
+	cygwin-1_7_26-release:1.2
+	cygwin-1_7_25-release:1.2
+	cygwin-1_7_24-release:1.2
+	cygwin-1_7_23-release:1.2
+	cygwin-1_7_22-release:1.2
+	cygwin-1_7_21-release:1.2
+	cygwin-1_7_20-release:1.2
+	cygwin-1_7_19-release:1.2
+	cygwin-64bit-postmerge:1.2
+	cygwin-64bit-premerge-branch:1.2.0.4
+	cygwin-64bit-premerge:1.2
+	cygwin-1_7_18-release:1.2
+	newlib-2_0_0:1.2
+	cygwin-1_7_17-release:1.2
+	cygwin-64bit-branch:1.2.0.2
+	cygwin-1_7_16-release:1.2
+	cygwin-1_7_15-release:1.2
+	cygwin-1_7_14_2-release:1.2
+	cygwin-1_7_14-release:1.2
+	cygwin-1_7_12-release:1.2
+	cygwin-1_7_11-release:1.2
+	cygwin-1_7_10-release:1.2
+	newlib-1_20_0:1.2
+	cygwin-1_7_9-release:1.1
+	cygwin-1_7_8-release:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.2
+date	2011.05.25.18.41.10;	author ericb;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2011.02.10.16.48.18;	author ericb;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@strerror: allow user hook to comply with POSIX rules
+
+* libc/string/strerror.c (strerror): Split body into...
+(_strerror_r): ...new reentrant function.
+* libc/string/u_strerr.c (_user_strerror): Update signature.
+* libc/include/stdio.h (_strerror_r): New prototype.
+* libc/posix/collate.c (__collate_err): Adjust callers.
+* libc/stdio/perror.c (_perror_r): Likewise.
+* libc/string/strerror_r.c (strerror_r): Likewise.
+* libc/string/xpg_strerror_r.c (__xpg_strerror_r): Likewise.
+@
+text
+@/* POSIX variant of strerror_r. */
+#undef __STRICT_ANSI__
+#include <errno.h>
+#include <string.h>
+
+int
+_DEFUN (__xpg_strerror_r, (errnum, buffer, n),
+	int errnum _AND
+	char *buffer _AND
+	size_t n)
+{
+  char *error;
+  int result = 0;
+
+  if (!n)
+    return ERANGE;
+  error = _strerror_r (_REENT, errnum, 1, &result);
+  if (strlen (error) >= n)
+    {
+      memcpy (buffer, error, n - 1);
+      buffer[n - 1] = '\0';
+      return ERANGE;
+    }
+  strcpy (buffer, error);
+  return (result || *error) ? result : EINVAL;
+}
+@
+
+
+1.1
+log
+@strerror_r: provide POSIX implementation
+
+* libc/include/string.h (strerror_r): Update declaration.
+* libc/string/strerror.c (strerror): Update documentation.
+* libc/string/strerror_r.c (strerror_r): Always return
+NUL-terminated string; don't overwrite too-short buf.
+* libc/string/xpg_strerror_r.c (__xpg_strerror_r): Implement POSIX
+variant.
+* libc/string/Makefile.am (GENERAL_SOURCES): Build new file.
+* libc/string/Makefile.in: Regenerate.
+@
+text
+@d13 1
+d17 1
+a17 1
+  error = strerror (errnum);
+d25 1
+a25 1
+  return *error ? 0 : EINVAL;
+@
+

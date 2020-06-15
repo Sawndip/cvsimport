@@ -1,0 +1,264 @@
+head	1.3;
+access;
+symbols
+	msnyder-checkpoint-072509-branch:1.2.0.2
+	msnyder-checkpoint-072509-branchpoint:1.2;
+locks; strict;
+comment	@# @;
+
+
+1.3
+date	2009.09.09.17.45.42;	author brobecke;	state dead;
+branches;
+next	1.2;
+
+1.2
+date	2009.03.21.03.13.02;	author bauermann;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2009.02.14.21.58.29;	author bauermann;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.3
+log
+@Checking in this patch for Thiago: Rename python-* files into py-*,
+more 8+3 friendly.
+
+
+gdb/
+        * Makefile.in (py-cmd.o): Renamed from python-cmd.o.  Updated
+        references.
+        (py-frame.o): Renamed from python-frame.o.  Updated references.
+        (py-function.o): Renamed from python-function.o.  Updated references.
+        (py-objfile.o): Renamed from python-objfile.o.  Updated references.
+        (py-prettyprint.o): Renamed from python-prettyprint.o.  Updated
++references.
+        (py-type.o): Renamed from python-type.o.  Updated references.
+        (py-utils.o): Renamed from python-utils.o.  Updated references.
+        (py-value.o): Renamed from python-value.o.  Updated references.
+        * py-cmd.o: Renamed from python-cmd.o.
+        * py-frame.o: Renamed from python-frame.o.
+        * py-function.o: Renamed from python-function.o.
+        * py-objfile.o: Renamed from python-objfile.o.
+        * py-prettyprint.o: Renamed from python-prettyprint.o.
+        * py-type.o: Renamed from python-type.o.
+        * py-utils.o: Renamed from python-utils.o.
+        * py-value.o: Renamed from python-value.o.
+
+gdb/testsuite/
+        * gdb.python/Makefile.in (EXECUTABLES): Adjust to new executable
+        names, add missing ones.
+        * gdb.python/py-cmd.exp: Rename from python-cmd.exp.
+        * gdb.python/py-frame.c: Rename from python-frame.c.
+        * gdb.python/py-frame.exp: Rename from python-frame.exp.  Adjust
+        testfile name.
+        * gdb.python/py-function.exp: Rename from python-function.exp.
+        * gdb.python/py-mi.exp: Rename from python-mi.exp.  Adjust
+        testfile name.
+        * gdb.python/py-prettyprint.c: Rename from python-prettyprint.c.
+        * gdb.python/py-prettyprint.exp: Rename from python-prettyprint.exp.
+        Adjust testfile name.
+        * gdb.python/py-prettyprint.py: Rename from python-prettyprint.py.
+        * gdb.python/py-template.cc: Rename from python-template.cc.
+        * gdb.python/py-template.exp: Rename from python-template.exp.
+        Adjust testfile name.
+        * gdb.python/py-value.c: Rename from python-value.c.
+        * gdb.python/py-value.exp: Rename from python-value.exp.  Adjust
+        testfile name.
+@
+text
+@# Copyright (C) 2009 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# This file is part of the GDB testsuite.  It tests the mechanism
+# for defining new GDB commands in Python.
+
+if $tracelevel then {
+    strace $tracelevel
+}
+
+# Usage: gdb_py_test_multiple NAME INPUT RESULT {INPUT RESULT}...
+# Run a test named NAME, consisting of multiple lines of input.
+# After each input line INPUT, search for result line RESULT.
+# Succeed if all results are seen; fail otherwise.
+proc gdb_py_test_multiple {name args} {
+    global gdb_prompt
+    foreach {input result} $args {
+	if {[gdb_test_multiple $input "$name - $input" {
+	    -re "\[\r\n\]*($result)\[\r\n\]+($gdb_prompt | *>)$" {
+		pass "$name - $input"
+	    }
+	}]} {
+	    return 1
+	}
+    }
+    return 0
+}
+
+# Start with a fresh gdb.
+
+gdb_exit
+gdb_start
+gdb_reinitialize_dir $srcdir/$subdir
+
+gdb_test_multiple "python print 'hello, world!'" "verify python support" {
+    -re "not supported.*$gdb_prompt $"	{
+      unsupported "python support is disabled"
+      return -1
+    }
+    -re "$gdb_prompt $"	{}
+}
+
+# Test a simple command.
+
+gdb_py_test_multiple "input simple command" \
+  "python" "" \
+  "class test_cmd (gdb.Command):" "" \
+  "  def __init__ (self):" "" \
+  "    super (test_cmd, self).__init__ (\"test_cmd\", gdb.COMMAND_OBSCURE)" "" \
+  "  def invoke (self, arg, from_tty):" "" \
+  "    print \"test_cmd output, arg = %s\" % arg" "" \
+  "test_cmd ()" "" \
+  "end" ""
+
+gdb_test "test_cmd ugh" "test_cmd output, arg = ugh" "call simple command"
+
+# Test a prefix command, and a subcommand within it.
+
+gdb_py_test_multiple "input prefix command" \
+  "python" "" \
+  "class prefix_cmd (gdb.Command):" "" \
+  "  def __init__ (self):" "" \
+  "    super (prefix_cmd, self).__init__ (\"prefix_cmd\", gdb.COMMAND_OBSCURE, gdb.COMPLETE_NONE, True)" "" \
+  "  def invoke (self, arg, from_tty):" "" \
+  "    print \"prefix_cmd output, arg = %s\" % arg" "" \
+  "prefix_cmd ()" "" \
+  "end" ""
+
+gdb_test "prefix_cmd ugh" "prefix_cmd output, arg = ugh" "call prefix command"
+
+gdb_py_test_multiple "input subcommand" \
+  "python" "" \
+  "class subcmd (gdb.Command):" "" \
+  "  def __init__ (self):" "" \
+  "    super (subcmd, self).__init__ (\"prefix_cmd subcmd\", gdb.COMMAND_OBSCURE)" "" \
+  "  def invoke (self, arg, from_tty):" "" \
+  "    print \"subcmd output, arg = %s\" % arg" "" \
+  "subcmd ()" "" \
+  "end" ""
+
+gdb_test "prefix_cmd subcmd ugh" "subcmd output, arg = ugh" "call subcmd"
+
+# Test prefix command using keyword arguments.
+
+gdb_py_test_multiple "input prefix command, keyword arguments" \
+  "python" "" \
+  "class prefix_cmd2 (gdb.Command):" "" \
+  "  def __init__ (self):" "" \
+  "    super (prefix_cmd2, self).__init__ (\"prefix_cmd2\", gdb.COMMAND_OBSCURE, prefix = True, completer_class = gdb.COMPLETE_FILENAME)" "" \
+  "  def invoke (self, arg, from_tty):" "" \
+  "    print \"prefix_cmd2 output, arg = %s\" % arg" "" \
+  "prefix_cmd2 ()" "" \
+  "end" ""
+
+gdb_test "prefix_cmd2 argh" "prefix_cmd2 output, arg = argh" "call prefix command, keyword arguments"
+
+gdb_py_test_multiple "input subcommand under prefix_cmd2" \
+  "python" "" \
+  "class subcmd (gdb.Command):" "" \
+  "  def __init__ (self):" "" \
+  "    super (subcmd, self).__init__ (\"prefix_cmd2 subcmd\", gdb.COMMAND_OBSCURE)" "" \
+  "  def invoke (self, arg, from_tty):" "" \
+  "    print \"subcmd output, arg = %s\" % arg" "" \
+  "subcmd ()" "" \
+  "end" ""
+
+gdb_test "prefix_cmd2 subcmd ugh" "subcmd output, arg = ugh" "call subcmd under prefix_cmd2"
+
+# Test a subcommand in an existing GDB prefix.
+
+gdb_py_test_multiple "input new subcommand" \
+  "python" "" \
+  "class newsubcmd (gdb.Command):" "" \
+  "  def __init__ (self):" "" \
+  "    super (newsubcmd, self).__init__ (\"info newsubcmd\", gdb.COMMAND_OBSCURE)" "" \
+  "  def invoke (self, arg, from_tty):" "" \
+  "    print \"newsubcmd output, arg = %s\" % arg" "" \
+  "newsubcmd ()" "" \
+  "end" ""
+
+gdb_test "info newsubcmd ugh" "newsubcmd output, arg = ugh" "call newsubcmd"
+@
+
+
+1.2
+log
+@gdb/
+2009-03-21  Jan Kratochvil  <jan.kratochvil@@redhat.com>
+	    Jim Blandy  <jimb@@red-bean.com>
+	    Thiago Jung Bauermann  <bauerman@@br.ibm.com>
+	    Tom Tromey  <tromey@@redhat.com>
+
+	Miscellaneous fixes to the Python code.
+	* python/python-cmd.c (cmdpy_init): Accept keyword
+	arguments.
+	* python/python-value.c (valpy_string): Accept keyword
+	arguments.
+	(valpy_binop): Use `break' to exit from the TRY_CATCH block.
+	Do not call value_to_value_object on NULL RES_VAL.
+	(value_object_methods): Change `string' entry to also accept
+	keyword arguments.
+	(convert_value_from_python): Return a copy of the value if obj is
+	a gdb.Value object.
+	(value_object_methods): Mark the `string' method as accepting
+	keywords, and show method "prototype" in the doc string.
+	* python/python.c (get_parameter): Don't return inside a
+	TRY_CATCH.
+
+gdb/doc/
+2009-03-21  Thiago Jung Bauermann  <bauerman@@br.ibm.com>
+
+	* gdb.texinfo (Values From Inferior): Fix optional arguments
+	markup.
+	(Commands In Python): Adjust argument names of gdb.Command.__init__
+	to what the function accepts as keywords.
+
+gdb/testsuite/
+2009-03-21  Thiago Jung Bauermann  <bauerman@@br.ibm.com>
+
+	* gdb.python/python-cmd.exp: Add tests for keyword arguments.
+	* gdb.python/python-function.exp: Add test for function returning
+	a GDB value.
+@
+text
+@@
+
+
+1.1
+log
+@Adding gdb.python/python-cmd.exp which I forgot to commit earlier.
+@
+text
+@d95 26
+@
+

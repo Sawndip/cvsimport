@@ -1,0 +1,369 @@
+head	1.7;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.7
+	gdb_7_6-2013-04-26-release:1.7
+	gdb_7_6-branch:1.7.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.7
+	gdb_7_5_1-2012-11-29-release:1.5
+	gdb_7_5-2012-08-17-release:1.5
+	gdb_7_5-branch:1.5.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.5
+	gdb_7_4_1-2012-04-26-release:1.3.4.1
+	gdb_7_4-2012-01-24-release:1.3.4.1
+	gdb_7_4-branch:1.3.0.4
+	gdb_7_4-2011-12-13-branchpoint:1.3
+	gdb_7_3_1-2011-09-04-release:1.3
+	gdb_7_3-2011-07-26-release:1.3
+	gdb_7_3-branch:1.3.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.3
+	gdb_7_2-2010-09-02-release:1.2
+	gdb_7_2-branch:1.2.0.2
+	gdb_7_2-2010-07-07-branchpoint:1.2;
+locks; strict;
+comment	@ * @;
+
+
+1.7
+date	2013.01.01.06.32.42;	author brobecke;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2012.11.09.19.57.58;	author tromey;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2012.01.28.18.08.17;	author jkratoch;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2012.01.04.08.17.02;	author brobecke;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2011.01.01.15.33.04;	author brobecke;	state Exp;
+branches
+	1.3.4.1;
+next	1.2;
+
+1.2
+date	2010.07.01.15.36.15;	author palves;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2010.04.24.13.12.53;	author palves;	state Exp;
+branches;
+next	;
+
+1.3.4.1
+date	2012.01.06.04.43.11;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.7
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@/* Handle different target file systems for GDB, the GNU Debugger.
+
+   Copyright (C) 2010-2013 Free Software Foundation, Inc.
+
+   This file is part of GDB.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+#include "defs.h"
+#include "filesystem.h"
+#include "gdbarch.h"
+#include "gdbcmd.h"
+
+const char file_system_kind_auto[] = "auto";
+const char file_system_kind_unix[] = "unix";
+const char file_system_kind_dos_based[] = "dos-based";
+const char *const target_file_system_kinds[] =
+{
+  file_system_kind_auto,
+  file_system_kind_unix,
+  file_system_kind_dos_based,
+  NULL
+};
+const char *target_file_system_kind = file_system_kind_auto;
+
+const char *
+effective_target_file_system_kind (void)
+{
+  if (target_file_system_kind == file_system_kind_auto)
+    {
+      if (gdbarch_has_dos_based_file_system (target_gdbarch ()))
+	return file_system_kind_dos_based;
+      else
+	return file_system_kind_unix;
+    }
+  else
+    return target_file_system_kind;
+}
+
+const char *
+target_lbasename (const char *kind, const char *name)
+{
+  if (kind == file_system_kind_dos_based)
+    return dos_lbasename (name);
+  else
+    return unix_lbasename (name);
+}
+
+static void
+show_target_file_system_kind_command (struct ui_file *file,
+				      int from_tty,
+				      struct cmd_list_element *c,
+				      const char *value)
+{
+  if (target_file_system_kind == file_system_kind_auto)
+    fprintf_filtered (file, _("\
+The assumed file system kind for target reported file names \
+is \"%s\" (currently \"%s\").\n"),
+		      value,
+		      effective_target_file_system_kind ());
+  else
+    fprintf_filtered (file, _("\
+The assumed file system kind for target reported file names \
+is \"%s\".\n"),
+		      value);
+}
+
+/* Provide a prototype to silence -Wmissing-prototypes.  */
+extern initialize_file_ftype _initialize_filesystem;
+
+void
+_initialize_filesystem (void)
+{
+  add_setshow_enum_cmd ("target-file-system-kind",
+			class_files,
+			target_file_system_kinds,
+			&target_file_system_kind, _("\
+Set assumed file system kind for target reported file names"), _("\
+Show assumed file system kind for target reported file names"),
+			_("\
+If `unix', target file names (e.g., loaded shared library file names)\n\
+starting the forward slash (`/') character are considered absolute,\n\
+and the directory separator character is the forward slash (`/').  If\n\
+`dos-based', target file names starting with a drive letter followed\n\
+by a colon (e.g., `c:'), are also considered absolute, and the\n\
+backslash (`\\') is also considered a directory separator.  Set to\n\
+`auto' (which is the default), to let GDB decide, based on its\n\
+knowledge of the target operating system."),
+			NULL, /* setfunc */
+			show_target_file_system_kind_command,
+			&setlist, &showlist);
+}
+@
+
+
+1.6
+log
+@	* gdbarch.sh (target_gdbarch): Remove macro.
+	(get_target_gdbarch): Rename to target_gdbarch.
+	* gdbarch.c, gdbarch.h: Rebuild.
+	* ada-tasks.c, aix-thread.c, amd64-linux-nat.c, arch-utils.c,
+	arm-tdep.c, auxv.c, breakpoint.c, bsd-uthread.c, corefile.c,
+	darwin-nat-info.c, dcache.c, dsrec.c, exec.c, fbsd-nat.c,
+	filesystem.c, gcore.c, gnu-nat.c, i386-darwin-nat.c, i386-nat.c,
+	ia64-vms-tdep.c, inf-ptrace.c, infcmd.c, jit.c, linux-nat.c,
+	linux-tdep.c, linux-thread-db.c, m32r-rom.c, memattr.c,
+	mep-tdep.c, microblaze-tdep.c, mips-linux-nat.c,
+	mips-linux-tdep.c, mips-tdep.c, monitor.c, moxie-tdep.c,
+	nto-procfs.c, nto-tdep.c, ppc-linux-nat.c, proc-service.c,
+	procfs.c, progspace.c, ravenscar-thread.c, record.c,
+	remote-m32r-sdi.c, remote-mips.c, remote-sim.c, remote.c,
+	rl78-tdep.c, rs6000-nat.c, rx-tdep.c, s390-nat.c, sol-thread.c,
+	solib-darwin.c, solib-dsbt.c, solib-frv.c, solib-ia64-hpux.c,
+	solib-irix.c, solib-pa64.c, solib-som.c, solib-spu.c,
+	solib-sunos.c, solib-svr4.c, solib.c, spu-linux-nat.c,
+	spu-multiarch.c, spu-tdep.c, symfile-mem.c, symfile.c, symtab.c,
+	target-descriptions.c, target.c, target.h, tracepoint.c,
+	windows-nat.c, windows-tdep.c, xcoffsolib.c, cli/cli-dump.c,
+	common/agent.c, mi/mi-interp.c, python/py-finishbreakpoint.c,
+	python/py-inferior.c, python/python.c: Update.
+@
+text
+@d3 1
+a3 1
+   Copyright (C) 2010-2012 Free Software Foundation, Inc.
+@
+
+
+1.5
+log
+@gdb/
+	Code cleanup: Make 1440 bytes of data segment read-only.
+	* arch-utils.c (endian_enum): Make it const char *const [].
+	* arm-tdep.c (fp_model_strings, arm_abi_strings, arm_mode_strings):
+	Likewise.
+	* breakpoint.c (always_inserted_enums): Likewise.
+	* cli/cli-cmds.c (script_ext_enums): Likewise.
+	* cli/cli-decode.c (add_setshow_enum_cmd, complete_on_enum): Make the
+	enumlist parameter const char *const *.
+	* cli/cli-decode.h (struct cmd_list_element): Make the enums field
+	const char *const *.
+	* command.h (complete_on_enum, add_setshow_enum_cmd): Make the enumlist
+	parameter const char *const *.
+	* cris-tdep.c (cris_modes): Make it const char *const [].
+	* filesystem.c (target_file_system_kinds): Likewise.
+	* i386-tdep.c (valid_flavors, valid_conventions): Likewise.
+	* infrun.c (follow_fork_mode_kind_names, follow_exec_mode_names)
+	(can_use_displaced_stepping_enum, scheduler_enums)
+	(exec_direction_names): Likewise.
+	* language.c (_initialize_language): Make the type_or_range_names and
+	case_sensitive_names variables const char *const [].
+	* mips-tdep.c (mips_abi_strings): Make it const char *const [].
+	* python/python.c (python_excp_enums): Likewise.
+	* remote.c (interrupt_sequence_modes): Likewise.
+	* rs6000-tdep.c (powerpc_vector_strings): Likewise.
+	* serial.c (logbase_enums): Likewise.
+	* sh-tdep.c (sh_cc_enum): Likewise.
+	* stack.c (print_frame_arguments_choices, print_entry_values_choices):
+	Likewise.
+	* symtab.c (multiple_symbols_modes): Likewise.
+	* tui/tui-win.c (tui_border_kind_enums, tui_border_mode_enums):
+	Likewise.
+	* utils.c (internal_problem_modes): Likewise.
+@
+text
+@d42 1
+a42 1
+      if (gdbarch_has_dos_based_file_system (target_gdbarch))
+@
+
+
+1.4
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d28 1
+a28 1
+const char *target_file_system_kinds[] =
+@
+
+
+1.3
+log
+@run copyright.sh for 2011.
+@
+text
+@d3 1
+a3 1
+   Copyright (C) 2010, 2011 Free Software Foundation, Inc.
+@
+
+
+1.3.4.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d3 1
+a3 1
+   Copyright (C) 2010-2012 Free Software Foundation, Inc.
+@
+
+
+1.2
+log
+@	* breakpoint.c (update_watchpoint, _initialize_breakpoint): Remove
+	unnecessary space in string.
+	* filesystem.c (_initialize_filesystem): Ditto.
+	* frame.c (_initialize_frame): Ditto.
+	* infcmd.c (step_once): Ditto.
+	* infrun.c (_initialize_infrun): Ditto.
+	* linux-nat.c (linux_child_follow_fork): Ditto.
+	* maint.c (maintenance_deprecate): Ditto.
+	* memattr.c (_initialize_mem): Ditto.
+	* mips-tdep.c (_initialize_mips_tdep): Ditto.
+	* monitor.c (monitor_open): Ditto.
+	* procfs.c (procfs_xfer_memory): Ditto.
+	* reverse.c (bookmarks_info): Ditto.
+	* sh64-tdep.c (sh64_show_media_regs, sh64_show_compact_regs): Ditto.
+	* stack.c (_initialize_stack): Ditto.
+	* tracepoint.c (_initialize_tracepoint): Ditto.
+	* xtensa-tdep.c (xtensa_supply_gregset,
+	xtensa_regset_from_core_section): Ditto.
+@
+text
+@d3 1
+a3 1
+   Copyright (C) 2010 Free Software Foundation, Inc.
+@
+
+
+1.1
+log
+@	* defs.h: Adjust comment.
+	* filesystem.h, filesystem.c: New files.
+	* Makefile.in (SFILES): Add filesystem.c.
+	(COMMON_OBS): Add filesystem.o.
+	* solib.c (solib_find): Handle DOS-based filesystems.  Handle
+	different target and host path flavours.
+	* arm-symbian-tdep.c (arm_symbian_init_abi): Set
+	has_dos_based_file_system on the gdbarch.
+	* arm-wince-tdep.c (arm_wince_init_abi): Ditto.
+	* i386-cygwin-tdep.c (i386_cygwin_init_abi): Ditto.
+	* i386-tdep.c (i386_go32_init_abi): Ditto.
+	* gdbarch.sh (has_dos_based_file_system): New.
+	* gdbarch.h, gdbarch.c: Regenerate.
+	* NEWS: Mention improved support for remote targets with DOS-based
+	filesystems.  Mention new `set/show target-file-system-kind'
+	commands.
+
+	gdb/doc/
+	* gdb.texinfo (Commands to specify files): Describe what how GDB
+	looks up DOS-based filesystem paths on the system root.  Document
+	the new `set/show target-file-system-kind' commands.
+@
+text
+@d92 7
+a98 7
+If `unix', target file names (e.g., loaded shared library file names) \n\
+starting the forward slash (`/') character are considered absolute, \n\
+and the directory separator character is the forward slash (`/').  If \n\
+`dos-based', target file names starting with a drive letter followed \n\
+by a colon (e.g., `c:'), are also considered absolute, and the \n\
+backslash (`\\') is also considered a directory separator.  Set to \n\
+`auto' (which is the default), to let GDB decide, based on its \n\
+@
+

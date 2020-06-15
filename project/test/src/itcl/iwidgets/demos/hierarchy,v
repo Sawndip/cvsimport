@@ -1,0 +1,235 @@
+head	1.2;
+access;
+symbols
+	insight_7_6-2013-04-10-branchpoint:1.2
+	gdb_7_6-branch:1.2.0.12
+	gdb_7_5-branch:1.2.0.10
+	gdb_7_4-branch:1.2.0.8
+	gdb_7_3-branch:1.2.0.6
+	gdb_7_1-branch:1.2.0.4
+	gdb_7_0-branch:1.2.0.2
+	arc-sim-20090309:1.1.1.1
+	arc-insight_6_8-branch:1.1.1.1.0.16
+	arc-insight_6_8-branchpoint:1.1.1.1
+	insight_6_8-branch:1.1.1.1.0.14
+	insight_6_8-branchpoint:1.1.1.1
+	ITCL_3_3:1.1.1.1
+	gdb_6_8-branch:1.1.1.1.0.12
+	insight_6_6-20070208-release:1.1.1.1
+	gdb_6_6-branch:1.1.1.1.0.10
+	gdb_6_6-2006-11-15-branchpoint:1.1.1.1
+	insight_6_5-20061003-release:1.1.1.1
+	gdb_6_5-branch:1.1.1.1.0.8
+	gdb_6_5-2006-05-14-branchpoint:1.1.1.1
+	gdb_6_4-branch:1.1.1.1.0.6
+	gdb_6_4-2005-11-01-branchpoint:1.1.1.1
+	gdb_6_1-2004-04-05-release:1.1.1.1
+	gdb_6_1-branch:1.1.1.1.0.4
+	gdb_6_1-2004-03-01-gmt-branchpoint:1.1.1.1
+	gdb_6_0-2003-10-04-release:1.1.1.1
+	gdb_6_0-branch:1.1.1.1.0.2
+	gdb_6_0-2003-06-23-branchpoint:1.1.1.1
+	ITCL3_2_1:1.1.1.1
+	NET:1.1.1;
+locks; strict;
+comment	@# @;
+expand	@o@;
+
+
+1.2
+date	2008.07.22.20.32.46;	author kseitz;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2003.01.21.20.43.09;	author hunt;	state Exp;
+branches
+	1.1.1.1;
+next	;
+
+1.1.1.1
+date	2003.01.21.20.43.09;	author hunt;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@touch all sources for Itcl 3.3/Iwidgets 4.0.1 upgrade
+@
+text
+@# ----------------------------------------------------------------------
+#  DEMO: hierarchy in [incr Widgets]
+# ----------------------------------------------------------------------
+package require Iwidgets 4.0
+
+# This demo displays a users file system starting at thier HOME
+# directory.  You can change the starting directory by setting the
+# environment variable SHOWDIR.
+#
+if {![info exists env(SHOWDIR)]} {
+    set env(SHOWDIR) $env(HOME)
+}
+
+# ----------------------------------------------------------------------
+# PROC: get_files file
+#
+# Used as the -querycommand for the hierarchy viewer.  Returns the
+# list of files under a particular directory.  If the file is "",
+# then the SHOWDIR is used as the directory.  Otherwise, the node itself
+# is treated as a directory.  The procedure returns a unique id and
+# the text to be displayed for each file.  The unique id is the complete
+# path name and the text is the file name.
+# ----------------------------------------------------------------------
+proc get_files {file} {
+    global env
+
+    if {$file == ""} {
+	set dir $env(SHOWDIR)
+    } else {
+	set dir $file
+    }
+
+    if {[catch {cd $dir}] != 0} {
+	return ""
+    }
+
+    set rlist ""
+
+    foreach file [lsort [glob -nocomplain *]] {
+	lappend rlist [list [file join $dir $file] $file]
+    }
+
+    return $rlist
+}
+
+# ----------------------------------------------------------------------
+# PROC: select_node tags status
+#
+# Select/Deselect the node given the tags and current selection status.
+# The unique id which is the complete file path name is mixed in with 
+# all the tags for the node.  So, we'll find it by searching for our 
+# SHOWDIR and then doing the selection or deselection.
+# ----------------------------------------------------------------------
+proc select_node {tags status} {
+    global env
+
+    set uid [lindex $tags [lsearch -regexp $tags $env(SHOWDIR)]]
+
+    if {$status} {
+	.h selection remove $uid
+    } else {
+	.h selection add $uid
+    }
+}
+
+# ----------------------------------------------------------------------
+# PROC: expand_node tags
+#
+# Expand the node given the tags.  The unique id which is the complete 
+# file path name is mixed in with all the tags for the node.  So, we'll 
+# find it by searching for our SHOWDIR and then doing the expansion.
+# ----------------------------------------------------------------------
+proc expand_node {tags} {
+    global env
+
+    set uid [lindex $tags [lsearch -regexp $tags $env(SHOWDIR)]]
+
+    .h expand $uid
+}
+
+# ----------------------------------------------------------------------
+# PROC: collapse_node tags
+#
+# Collapse the node given the tags.  The unique id which is the complete 
+# file path name is mixed in with all the tags for the node.  So, we'll 
+# find it by searching for our SHOWDIR and then doing the collapse.
+# ----------------------------------------------------------------------
+proc collapse_node {tags} {
+    global env
+
+    set uid [lindex $tags [lsearch -regexp $tags $env(SHOWDIR)]]
+
+    .h collapse $uid
+}
+
+# ----------------------------------------------------------------------
+# PROC: expand_recursive
+#
+# Recursively expand all the file nodes in the hierarchy.  
+# ----------------------------------------------------------------------
+proc expand_recursive {node} {
+    set files [get_files $node]
+
+    foreach tagset $files {
+	set uid [lindex $tagset 0]
+
+	.h expand $uid
+
+	if {[get_files $uid] != {}} {
+	    expand_recursive $uid
+	}
+    }
+}
+
+# ----------------------------------------------------------------------
+# PROC: expand_all
+#
+# Expand all the file nodes in the hierarchy.  
+# ----------------------------------------------------------------------
+proc expand_all {} {
+    expand_recursive ""
+}
+
+# ----------------------------------------------------------------------
+# PROC: collapse_all
+#
+# Collapse all the nodes in the hierarchy.
+# ----------------------------------------------------------------------
+proc collapse_all {} {
+    .h configure -querycommand "get_files %n"
+}
+
+# 
+# Create the hierarchy mega-widget, adding commands to both the item
+# and background popup menus.
+#
+iwidgets::hierarchy .h -querycommand "get_files %n" -visibleitems 30x15 \
+    -labeltext $env(SHOWDIR) -selectcommand "select_node %n %s"
+pack .h -side left -expand yes -fill both
+
+.h component itemMenu add command -label "Select" \
+    -command {select_node [.h current] 0}
+.h component itemMenu add command -label "Deselect" \
+    -command {select_node [.h current] 1}
+.h component itemMenu add separator
+.h component itemMenu add command -label "Expand" \
+    -command {expand_node [.h current]}
+.h component itemMenu add command -label "Collapse" \
+    -command {collapse_node [.h current]}
+
+.h component bgMenu add command -label "Expand All" -command expand_all
+.h component bgMenu add command -label "Collapse All" -command collapse_all
+.h component bgMenu add command -label "Clear Selections" \
+    -command {.h selection clear}
+@
+
+
+1.1
+log
+@Initial revision
+@
+text
+@@
+
+
+1.1.1.1
+log
+@imported itcl 3.2.1
+@
+text
+@@

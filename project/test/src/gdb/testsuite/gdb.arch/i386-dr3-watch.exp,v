@@ -1,0 +1,351 @@
+head	1.6;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.5
+	gdb_7_6-2013-04-26-release:1.5
+	gdb_7_6-branch:1.5.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.5
+	gdb_7_5_1-2012-11-29-release:1.4
+	gdb_7_5-2012-08-17-release:1.4
+	gdb_7_5-branch:1.4.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.4
+	gdb_7_4_1-2012-04-26-release:1.3.2.1
+	gdb_7_4-2012-01-24-release:1.3.2.1
+	gdb_7_4-branch:1.3.0.2
+	gdb_7_4-2011-12-13-branchpoint:1.3
+	gdb_7_3_1-2011-09-04-release:1.1.2.1
+	gdb_7_3-2011-07-26-release:1.1.2.1
+	gdb_7_3-branch:1.1.0.2;
+locks; strict;
+comment	@# @;
+
+
+1.6
+date	2013.08.22.13.54.15;	author tromey;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2013.01.01.06.33.24;	author brobecke;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2012.01.04.08.17.44;	author brobecke;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2011.08.15.07.56.20;	author jkratoch;	state Exp;
+branches
+	1.3.2.1;
+next	1.2;
+
+1.2
+date	2011.07.22.16.58.32;	author palves;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2011.05.31.21.18.56;	author palves;	state Exp;
+branches
+	1.1.2.1;
+next	;
+
+1.3.2.1
+date	2012.01.06.04.43.59;	author brobecke;	state Exp;
+branches;
+next	;
+
+1.1.2.1
+date	2011.05.31.21.23.41;	author palves;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.6
+log
+@fix gdb.arch to be parallel-safe
+
+This fixes parts of gdb.arch to be parallel-safe.
+I only changed the bits I could test on this machine.
+
+I don't have access to many of the machines needed to fully switch
+gdb.arch; but I am happy to provide advice to others attempting this.
+Or, I can send an untested patch to convert it all.
+
+Tested on x86-64 Fedora 18.
+
+	* gdb.arch/amd64-byte.exp: Use standard_testfile,
+	clean_restart.
+	* gdb.arch/amd64-disp-step.exp: Use standard_testfile.
+	* gdb.arch/amd64-dword.exp: Use standard_testfile,
+	clean_restart.
+	* gdb.arch/amd64-entry-value-param.exp: Use standard_testfile.
+	* gdb.arch/amd64-entry-value.exp: Use standard_testfile.
+	* gdb.arch/amd64-prologue-xmm.exp: Use standard_testfile.
+	* gdb.arch/amd64-word.exp: Use standard_testfile,
+	clean_restart.
+	* gdb.arch/i386-avx.exp: Use standard_testfile, clean_restart.
+	* gdb.arch/i386-byte.exp: Use standard_testfile, clean_restart.
+	* gdb.arch/i386-disp-step.exp: Use standard_testfile.
+	* gdb.arch/i386-dr3-watch.exp: Use standard_testfile.
+	* gdb.arch/i386-permbkpt.exp: Use standard_testfile, clean_restart.
+	* gdb.arch/i386-signal.exp: Use standard_testfile.
+	* gdb.arch/i386-size-overlap.exp: Use standard_testfile, clean_restart.
+	* gdb.arch/i386-sse.exp: Use standard_testfile, clean_restart.
+	* gdb.arch/i386-unwind.exp: Use standard_testfile.
+	* gdb.arch/i386-word.exp: Use standard_testfile, clean_restart.
+@
+text
+@# Copyright 2011-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# x86 and amd64 gdbserver had a bug where a watchpoint triggered by
+# the DR3 debug register would trip on a bogus assertion.
+
+# This test relies on being able to set 4 hardware watchpoints.  Since
+# that is not a valid assumption across most targets, and we're
+# testing a x86 specific bug, skip everywhere else.
+if { ![istarget "i?86-*-*"] && ![istarget "x86_64-*-*"] } then {
+    return 0
+}
+
+standard_testfile
+
+if [prepare_for_testing ${testfile}.exp ${binfile} ${srcfile} {debug $additional_flags}] {
+    untested "failed to compile ${testfile}"
+    return -1
+}
+
+if ![runto_main] then {
+    untested "could not run to main"
+    return -1
+}
+
+gdb_test_no_output "set breakpoint always-inserted on"
+
+# Test that we handle watchpoints in all of DR0-DR3.
+
+gdb_test "watch i1" "Hardware watchpoint .*: i1"
+gdb_test "watch i2" "Hardware watchpoint .*: i2"
+gdb_test "watch i3" "Hardware watchpoint .*: i3"
+gdb_test "watch i4" "Hardware watchpoint .*: i4"
+
+gdb_test "c" "Hardware watchpoint.*: i1.*" "continue to i1 watchpoint"
+gdb_test "c" "Hardware watchpoint.*: i2.*" "continue to i2 watchpoint"
+gdb_test "c" "Hardware watchpoint.*: i3.*" "continue to i3 watchpoint"
+gdb_test "c" "Hardware watchpoint.*: i4.*" "continue to i4 watchpoint"
+
+delete_breakpoints
+
+# Regression test for a bug where the i386 watchpoints support backend
+# would leave some debug registers occupied even if not enough debug
+# registers were available to cover a single watchpoint location.
+
+gdb_test "watch i1" \
+    "Hardware watchpoint .*: i1" \
+    "set watchpoint occuping one debug register"
+
+# gap1 too long to fit the 3 left over debug registers (but would fit
+# 4 if all were available).
+set test "watchpoint on gap1 does not fit debug registers"
+gdb_test_multiple "watch gap1" "$test" {
+    -re "Hardware watchpoint .*: gap1.*Warning:.*Could not insert hardware watchpoint.*You may have requested too many.*\r\n$gdb_prompt $" {
+	pass $test
+    }
+    -re "Hardware watchpoint .*: gap1\r\n$gdb_prompt $" {
+	pass "$test (target emulates hardware watchpoints)"
+	return
+    }
+    -re "Watchpoint .*: gap1\r\n$gdb_prompt $" {
+	pass "$test (gdb figured out itself the watchpoint does not fit)"
+	return
+    }
+}
+
+# Start over.
+gdb_test "delete" \
+    "" \
+    "delete all watchpoints" \
+    {Delete all breakpoints\? \(y or n\) $} \
+    "y"
+
+# If debug registers were left occupied by mistake, we'll fail to set
+# some of these watchpoints.  Each watchpoint should fit in one of the
+# 4 debug registers available.
+gdb_test "watch i1" "Hardware watchpoint .*: i1" "watch i1 still fits"
+gdb_test "watch i2" "Hardware watchpoint .*: i2" "watch i2 still fits"
+gdb_test "watch i3" "Hardware watchpoint .*: i3" "watch i3 still fits"
+gdb_test "watch i4" "Hardware watchpoint .*: i4" "watch i4 still fits"
+@
+
+
+1.5
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@d26 1
+a26 2
+set testfile "i386-dr3-watch"
+set srcfile ${testfile}.c
+d28 1
+a28 1
+if [prepare_for_testing ${testfile}.exp ${testfile} ${srcfile} {debug $additional_flags}] {
+@
+
+
+1.4
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d1 1
+a1 1
+# Copyright 2011-2012 Free Software Foundation, Inc.
+@
+
+
+1.3
+log
+@gdb/testsuite/
+	* gdb.arch/i386-dr3-watch.exp
+	(watchpoint on gap1 does not fit debug registers)
+	(delete all watchpoints): Fix racy expect strings.
+@
+text
+@d1 1
+a1 1
+# Copyright 2011 Free Software Foundation, Inc.
+@
+
+
+1.3.2.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d1 1
+a1 1
+# Copyright 2011-2012 Free Software Foundation, Inc.
+@
+
+
+1.2
+log
+@2011-07-22  Pedro Alves  <pedro@@codesourcery.com>
+
+	gdb/testsuite/
+	* gdb.arch/i386-dr3-watch.exp: Test that the i386 watchpoints
+	backend doesn't leave used debug registers behind.
+
+	gdb/gdbserver/
+	* i386-low.c (i386_insert_aligned_watchpoint): Don't pass the info
+	to the inferior here.
+	(i386_remove_aligned_watchpoint): Ditto.
+	(i386_handle_nonaligned_watchpoint): Return immediate on fail to
+	fit part of the watchpoint in the debug registers.
+	(i386_update_inferior_debug_regs): New.
+	(i386_low_insert_watchpoint): Work on a local mirror of the debug
+	registers, and only update the inferior on success.
+	(i386_low_remove_watchpoint): Ditto.
+
+	gdb/
+	* i386-nat.c (I386_DR_VACANT, I386_DR_LOCAL_ENABLE)
+	(I386_DR_GLOBAL_ENABLE, I386_DR_DISABLE, I386_DR_SET_RW_LEN)
+	(I386_DR_GET_RW_LEN, I386_DR_WATCH_HIT): Add state parameter and
+	adjust.
+	(dr_mirror, dr_status_mirror, dr_control_mirror): Delete.
+	(struct i386_debug_reg_state): New.
+	(i386_init_dregs): New.
+	(dr_mirror): New.
+	(i386_cleanup_dregs): Use i386_init_dregs.
+	(i386_show_dr): Add state parameter and adjust.
+	(i386_insert_aligned_watchpoint): Ditto.  Don't pass the info to
+	the inferior here.
+	(i386_remove_aligned_watchpoint): Likewise.
+	(i386_handle_nonaligned_watchpoint): Add state parameter and adjust.
+	(i386_update_inferior_debug_regs): New.
+	(i386_insert_watchpoint): Work on a local mirror of the debug
+	registers, and only update the inferior on success.
+	(i386_remove_watchpoint): Ditto.
+	(i386_region_ok_for_watchpoint): Adjust.
+	(i386_stopped_data_address): Adjust.
+	(i386_insert_hw_breakpoint): Adjust.
+	(i386_remove_hw_breakpoint): Adjust.
+@
+text
+@d67 1
+a67 1
+    -re "Hardware watchpoint .*: gap1.*Warning:.*Could not insert hardware watchpoint.*You may have requested too many.*" {
+d84 1
+a84 1
+    "Delete all breakpoints.*$" \
+@
+
+
+1.1
+log
+@2011-05-31  Pedro Alves  <pedro@@codesourcery.com>
+
+	gdb/gdbserver/
+	* linux-x86-low.c (i386_dr_low_get_addr): Fix off by one in
+	assertion.
+	* win32-i386-low.c (i386_dr_low_get_addr): Ditto.
+
+	gdb/testsuite/
+	* gdb.arch/i386-dr3-watch.c: New file.
+	* gdb.arch/i386-dr3-watch.exp: New file.
+@
+text
+@d41 2
+d52 42
+@
+
+
+1.1.2.1
+log
+@2011-05-31  Pedro Alves  <pedro@@codesourcery.com>
+
+	gdb/gdbserver/
+	* linux-x86-low.c (i386_dr_low_get_addr): Fix off by one in
+	assertion.
+	* win32-i386-low.c (i386_dr_low_get_addr): Ditto.
+
+	gdb/testsuite/
+	* gdb.arch/i386-dr3-watch.c: New file.
+	* gdb.arch/i386-dr3-watch.exp: New file.
+@
+text
+@@
+

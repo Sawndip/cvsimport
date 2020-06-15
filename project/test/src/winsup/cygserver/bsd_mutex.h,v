@@ -1,0 +1,257 @@
+head	1.2;
+access;
+symbols
+	cygwin-1_7_35-release:1.2
+	cygwin-1_7_34-release:1.2
+	cygwin-1_7_33-release:1.2
+	cygwin-1_7_32-release:1.2
+	cygwin-1_7_31-release:1.2
+	cygwin-1_7_30-release:1.2
+	cygwin-1_7_29-release:1.2
+	cygwin-1_7_29-release-branchpoint:1.2.0.14
+	cygwin-1_7_28-release:1.2
+	cygwin-1_7_27-release:1.2
+	cygwin-1_7_26-release:1.2
+	cygwin-1_7_25-release:1.2
+	cygwin-1_7_24-release:1.2
+	cygwin-1_7_23-release:1.2
+	cygwin-1_7_22-release:1.2
+	cygwin-1_7_21-release:1.2
+	cygwin-1_7_20-release:1.2
+	cygwin-1_7_19-release:1.2
+	cygwin-64bit-postmerge:1.2
+	cygwin-64bit-premerge-branch:1.2.0.12
+	cygwin-64bit-premerge:1.2
+	cygwin-1_7_18-release:1.2
+	cygwin-1_7_17-release:1.2
+	cygwin-64bit-branch:1.2.0.10
+	cygwin-1_7_16-release:1.2
+	cygwin-1_7_15-release:1.2
+	cygwin-1_7_14_2-release:1.2
+	cygwin-1_7_14-release:1.2
+	cygwin-1_7_12-release:1.2
+	cygwin-1_7_11-release:1.2
+	cygwin-1_7_10-release:1.2
+	cygwin-1_7_9-release:1.2
+	cygwin-1_7_8-release:1.2
+	cygwin-1_7_7-release:1.2
+	cygwin-1_7_5-release:1.2
+	cygwin-1_7_4-release:1.2
+	cygwin-1_7_3-release:1.2
+	cygwin-1_7_2-release:1.2
+	cygwin-1_7_1-release:1.2
+	cv-branch-2:1.2.0.8
+	cr-0x5f1:1.2.0.6
+	cv-branch:1.2.0.4
+	cr-0x3b58:1.2.0.2
+	cr-0x9e:1.1.0.4
+	cr-0x9d:1.1.0.2;
+locks; strict;
+comment	@ * @;
+
+
+1.2
+date	2005.04.06.11.11.07;	author corinna;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2003.11.19.18.49.40;	author corinna;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@	* bsd_helper.cc (ipcexit_hookthread): Fix whitespace and handle leak.
+	* bsd_mutex.cc: Include stdlib.h, sys/msg.h and sys/sem.h.
+	(mtx_init): Initialize lock counter to 0.
+	(_mtx_lock): Increment and log mutex lock counter.
+	(mtx_owned): Add winpid argument. Return true only if mutex is
+	actually owned by process winpid.
+	(_mtx_assert): Add winpid argument accordingly.
+	(_mtx_unlock): Log owner and lock count.
+	(MSLEEP_MUTEX): Remove.
+	(MSLEEP_SEM): Ditto.
+	(MSLEEP_EVENT): Ditto.
+	(msleep_event_name): Ditto.
+	(msleep_cs): New global critical section.
+	(msleep_cnt): New global variable indicating msleep record usage.
+	(msleep_max_cnt): New global variable indicating msleep record size.
+	(msleep_arr): New global pointer to msleep records.
+	(msleep_init): Initialize msleep_cs. Allocate msleep_arr array.
+	(_msleep): Rewrite using new msleep_cs/msleep_arr based thread
+	synchronization. Don't be shy with debug output.
+	(wakeup): Rewrite using new msleep_cs/msleep_arr based thread
+	synchronization.
+	* bsd_mutex.h (struct mtx): Add lock counter for better debugging.
+	(mtx_owned): Declare with winpid argument.
+	(_mtx_assert): Ditto.
+	(mtx_assert): Define with winpid argument.
+	* cygserver.cc (version): Remove.
+	(SERVER_VERSION): New define, decoupling server version information
+	from source code control system.
+	(print_version): Simplify printing server version.
+	* process.cc (process::process): Fix wrong bracketing (and handle leak).
+	(process::~process): Only try to close _signal_arrived if valid.
+	* sysv_sem.cc: Include sys/smallprint.h.
+	(semundo_clear): Define with additional struct thread pointer argument.
+	Accomodate throughout.
+	(SEMUNDO_LOCKASSERT): Define with winpid argument. Accomodate
+	throughout.
+	(struct sem_undo): Define un_proc as pid_t on Cygwin. Accomodate
+	throughout.
+	(seminit): Improve debugging by adding the semid to the mutex name.
+	(semget): Correctly print key value as 64 bit hex value in debug
+	output.
+	(semexit_myhook): Remove Cygwin specific unlocking of mutexes owned
+	by exiting process.  Keep semaphore global lock throughout whole
+	function to avoid races.
+	* sysv_shm.cc (GIANT_REQUIRED): Define empty on Cygwin. We know that
+	Giant is locked.
+@
+text
+@/* bsd_mutex.h: BSD Mutex helper
+
+   Copyright 2003, 2005 Red Hat, Inc.
+
+This file is part of Cygwin.
+
+This software is a copyrighted work licensed under the terms of the
+Cygwin license.  Please consult the file "CYGWIN_LICENSE" for
+details. */
+#ifndef _BSD_MUTEX_H
+#define _BSD_MUTEX_H
+
+#define MTX_DEF 0
+
+#define MA_OWNED 1
+#define MA_NOTOWNED 2
+
+#define PZERO	  (0x20)
+#define PRIO_MASK (0x1f)
+#define PDROP  0x1000
+#define PCATCH 0x2000
+#define PLOCK  0x3000
+
+struct mtx {
+  HANDLE h;
+  const char *name;
+  DWORD owner;
+  unsigned long cnt;
+};
+
+/* Some BSD kernel global mutex. */
+extern struct mtx Giant;
+
+void mtx_init (mtx *, const char *, const void *, int);
+void _mtx_lock (mtx *, DWORD winpid, const char *, int);
+#define mtx_lock(m) _mtx_lock((m), (td->ipcblk->winpid), __FILE__, __LINE__)
+int mtx_owned (mtx *, DWORD);
+void _mtx_assert(mtx *, int, DWORD winpid, const char *, int);
+#define mtx_assert(m,w,p) _mtx_assert((m),(w),(p),__FILE__,__LINE__)
+void _mtx_unlock (mtx *, const char *, int);
+#define mtx_unlock(m) _mtx_unlock((m),__FILE__,__LINE__)
+
+void mtx_destroy (mtx *);
+
+void msleep_init (void);
+int _msleep (void *, struct mtx *, int, const char *, int, struct thread *);
+#define msleep(i,m,p,w,t) _msleep((i),(m),(p),(w),(t),(td))
+#define tsleep(i,p,w,t)   _msleep((i),NULL,(p),(w),(t),(td))
+int wakeup (void *);
+void wakeup_all (void);
+
+#endif /* _BSD_MUTEX_H */
+@
+
+
+1.1
+log
+@	Don't use safe_new but new throughout.  Fix copyright dates
+	throughout.
+	* Makefile.in: Accomodate all new files and name changes.
+	Add a *.d dependency.
+	(sbindir): Add.
+	(etcdir): Drop in favor of more appropriate sysconfdir definition.
+	(sysconfdir): Add.
+	(CXXFLAGS): Add -MMD flag. Add SYSCONFDIR definition.
+	(.SUFFIXES): Add.
+	(install): Add action items.
+	(libclean): New target.
+	(fullclean): Ditto.
+	* bsd_helper.cc: New file.
+	* bsd_helper.h: Ditto.
+	* bsd_log.cc: Ditto.
+	* bsd_log.h: Ditto.
+	* bsd_mutex.cc: Ditto.
+	* bsd_mutex.h: Ditto.
+	* client.cc: Rearrange to build as less as possible if
+	__INSIDE_CYGWIN__.
+	(client_request::handle_request): Add Message Queue and Semaphore
+	handling.
+	* cygserver.cc: Rearrange to build as less as possible if
+	__INSIDE_CYGWIN__. Use new debug/log/panic logging functions.
+	(DEF_CONFIG_FILE): New definition for configuration file.  Use
+	throughout.
+	(getfunc): Remove.
+	(__cygserver__printf): Remove.
+	(client_request_attach_tty::serve): Return error if impersonation
+	fails.
+	(print_usage): Pump up help message.
+	(print_version): Add output of default configuration file.
+	(main): Accommodate new options.  Allow overwrite of threading options
+	from config file.  Call several new initialization functions.  Drop
+	printing dots.  Don't define SIGHANDLE inline.
+	* cygserver.conf: New file.
+	* cygserver_process.h: Rename to process.h.
+	* cygserver_transport.h: Rename to transport.h.
+	* cygserver_transport_pipes.h: Rename to transport_pipes.h.
+	* cygserver_transport_sockets.h: Rename to transport_sockets.h.
+	* msg.cc: Rewrite.
+	* sem.cc: Rewrite.
+	* shm.cc: Rewrite.
+	* sysv_msg.cc: New file, derived from FreeBSD version 1.52.
+	* sysv_sem.cc: New file, derived from FreeBSD version 1.66.
+	* sysv_shm.cc: New file, derived from FreeBSD version 1.89.
+	* threaded_queue.cc: Rearrange to build as less as possible if
+	__INSIDE_CYGWIN__.
+	* transport.cc (transport_layer_base::impersonate_client): Define bool.
+	(transport_layer_base::revert_to_self): Ditto.
+	* transport.h (transport_layer_base::impersonate_client): Declare bool.
+	(transport_layer_base::revert_to_self): Ditto.
+	* transport_pipes.cc (transport_layer_pipes::transport_layer_pipes):
+	Don't call init_security.
+	(init_security): Remove.
+	(transport_layer_pipes::accept): Use global sec_all_nih.
+	(transport_layer_pipes::connect): Ditto.
+	(transport_layer_pipes::impersonate_client): Define bool.
+	(transport_layer_pipes::revert_to_self): Ditt.
+	* transport_pipes.h (transport_layer_pipes::impersonate_client): Declare
+	bool.
+	(transport_layer_pipes::revert_to_self): Ditto.
+	* woutsup.h: Include bsd compatibility headers.
+	(SIGHANDLE): Add definition.
+	(__cygserver__printf): Remove definition.
+	(__noop_printf): Ditto.
+	(debug_printf): Define using debug.
+	(syscall_printf): Define using log.
+	(system_printf): Ditto.
+	Drop all other _printf definitions.
+@
+text
+@d3 1
+a3 1
+   Copyright 2003 Red Hat, Inc.
+d28 1
+d37 3
+a39 3
+int mtx_owned (mtx *);
+void _mtx_assert(mtx *, int, const char *, int);
+#define mtx_assert(m,w) _mtx_assert((m),(w),__FILE__,__LINE__)
+@
+

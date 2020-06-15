@@ -1,0 +1,585 @@
+head	1.9;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.9
+	gdb_7_6-2013-04-26-release:1.9
+	gdb_7_6-branch:1.9.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.9
+	gdb_7_5_1-2012-11-29-release:1.8
+	gdb_7_5-2012-08-17-release:1.8
+	gdb_7_5-branch:1.8.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.8
+	gdb_7_4_1-2012-04-26-release:1.6.4.1
+	gdb_7_4-2012-01-24-release:1.6.4.1
+	gdb_7_4-branch:1.6.0.4
+	gdb_7_4-2011-12-13-branchpoint:1.6
+	gdb_7_3_1-2011-09-04-release:1.6
+	gdb_7_3-2011-07-26-release:1.6
+	gdb_7_3-branch:1.6.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.6
+	gdb_7_2-2010-09-02-release:1.3
+	gdb_7_2-branch:1.3.0.2
+	gdb_7_2-2010-07-07-branchpoint:1.3;
+locks; strict;
+comment	@ * @;
+
+
+1.9
+date	2013.01.01.06.32.41;	author brobecke;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2012.03.01.19.26.12;	author tromey;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2012.01.04.08.17.00;	author brobecke;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2011.02.27.21.24.27;	author msnyder;	state Exp;
+branches
+	1.6.4.1;
+next	1.5;
+
+1.5
+date	2011.01.24.18.54.15;	author palves;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2011.01.01.15.32.59;	author brobecke;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2010.06.11.15.36.04;	author tromey;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2010.05.07.00.28.32;	author msnyder;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2010.04.29.14.45.38;	author brobecke;	state Exp;
+branches;
+next	;
+
+1.6.4.1
+date	2012.01.06.04.43.06;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.9
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@/* Support for printing D values for GDB, the GNU debugger.
+
+   Copyright (C) 2008-2013 Free Software Foundation, Inc.
+
+   This file is part of GDB.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+#include "defs.h"
+#include "gdbtypes.h"
+#include "gdbcore.h"
+#include "d-lang.h"
+#include "c-lang.h"
+
+/* Assuming that TYPE is a TYPE_CODE_STRUCT, verify that TYPE is a
+   dynamic array, and then print its value to STREAM.  Return zero if
+   TYPE is a dynamic array, non-zero otherwise.  */
+
+static int
+dynamic_array_type (struct type *type, const gdb_byte *valaddr,
+		    int embedded_offset, CORE_ADDR address,
+		    struct ui_file *stream, int recurse,
+		    const struct value *val,
+		    const struct value_print_options *options)
+{
+  if (TYPE_NFIELDS (type) == 2
+      && TYPE_CODE (TYPE_FIELD_TYPE (type, 0)) == TYPE_CODE_INT
+      && strcmp (TYPE_FIELD_NAME (type, 0), "length") == 0
+      && strcmp (TYPE_FIELD_NAME (type, 1), "ptr") == 0
+      && value_bits_valid (val, TARGET_CHAR_BIT * embedded_offset,
+			   TARGET_CHAR_BIT * TYPE_LENGTH (type)))
+    {
+      CORE_ADDR addr;
+      struct type *elttype;
+      struct type *true_type;
+      struct type *ptr_type;
+      struct value *ival;
+      int length;
+
+      length = unpack_field_as_long (type, valaddr + embedded_offset, 0);
+
+      ptr_type = TYPE_FIELD_TYPE (type, 1);
+      elttype = check_typedef (TYPE_TARGET_TYPE (ptr_type));
+      addr = unpack_pointer (ptr_type,
+			     valaddr + TYPE_FIELD_BITPOS (type, 1) / 8
+			     + embedded_offset);
+      true_type = check_typedef (elttype);
+
+      true_type = lookup_array_range_type (true_type, 0, length - 1);
+      ival = value_at (true_type, addr);
+
+      d_val_print (true_type,
+		   value_contents_for_printing (ival),
+		   value_embedded_offset (ival), addr,
+		   stream, recurse + 1, ival, options);
+      return 0;
+    }
+  return 1;
+}
+
+/* Implements the la_val_print routine for language D.  */
+void
+d_val_print (struct type *type, const gdb_byte *valaddr, int embedded_offset,
+             CORE_ADDR address, struct ui_file *stream, int recurse,
+	     const struct value *val,
+             const struct value_print_options *options)
+{
+  int ret;
+
+  CHECK_TYPEDEF (type);
+  switch (TYPE_CODE (type))
+    {
+      case TYPE_CODE_STRUCT:
+        ret = dynamic_array_type (type, valaddr, embedded_offset, address,
+				  stream, recurse, val, options);
+	if (ret == 0)
+	  break;
+      default:
+	c_val_print (type, valaddr, embedded_offset, address, stream,
+		     recurse, val, options);
+    }
+}
+@
+
+
+1.8
+log
+@	* valprint.c (val_print): Update.
+	* p-valprint (pascal_val_print): Return void.
+	* p-lang.h (pascal_val_print): Return void.
+	* m2-valprint.c (m2_val_print): Return void.
+	* m2-lang.h (m2_val_print): Return void.
+	* language.h (struct language_defn) <la_val_print>: Return void.
+	* language.c (unk_lang_val_print): Return void.
+	* jv-valprint.c (java_val_print): Return void.
+	* jv-lang.h (java_val_print): Return void.
+	* f-valprint.c (f_val_print): Return void.
+	* f-lang.h (f_val_print): Return void.
+	* d-valprint.c (d_val_print): Return void.
+	(dynamic_array_type): Update.
+	* d-lang.h (d_val_print): Return void.
+	* c-valprint.c (c_val_print): Return void.
+	* c-lang.h (c_val_print): Return void.
+	* ada-valprint.c (ada_vada_val_print, ada_val_print_1): Return
+	void.
+	* ada-lang.h (ada_val_print): Return void.
+@
+text
+@d3 1
+a3 1
+   Copyright (C) 2008-2012 Free Software Foundation, Inc.
+@
+
+
+1.7
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d26 4
+a29 4
+/* Assuming that TYPE is a TYPE_CODE_STRUCT, verify that TYPE is
+   a dynamic array, and then print its value to STREAM.  Return
+   the number of string characters printed, or -1 if TYPE is not
+   a dynamic array.  */
+d63 5
+a67 4
+      return d_val_print (true_type,
+			  value_contents_for_printing (ival),
+			  value_embedded_offset (ival), addr,
+			  stream, recurse + 1, ival, options);
+d69 1
+a69 1
+  return -1;
+d73 1
+a73 1
+int
+d87 2
+a88 2
+	if (ret != -1)
+	   break;
+d90 2
+a91 2
+	ret = c_val_print (type, valaddr, embedded_offset, address, stream,
+			   recurse, val, options);
+a92 2
+
+  return ret;
+@
+
+
+1.6
+log
+@2011-02-27  Michael Snyder  <msnyder@@vmware.com>
+
+	* d-valprint.c (dynamic_array_type): Avoid shadowing a function
+	param with a local variable of the same name.
+@
+text
+@d3 1
+a3 1
+   Copyright (C) 2008, 2009, 2010, 2011 Free Software Foundation, Inc.
+@
+
+
+1.6.4.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d3 1
+a3 1
+   Copyright (C) 2008-2012 Free Software Foundation, Inc.
+@
+
+
+1.5
+log
+@2011-01-24  Pedro Alves  <pedro@@codesourcery.com>
+
+	Don't lose embedded_offset in printing routines throughout.
+
+	gdb/
+	* valprint.h (val_print_array_elements): Change prototype.
+	* valprint.c (val_print_array_elements): Add `embedded_offset'
+	parameter, and adjust to pass it down to val_print, while passing
+	`valaddr' or `address' unmodified.  Take embedded_offset into
+	account when checking repetitions.
+	* c-valprint.c (c_val_print): Pass embedded_offset to
+	val_print_array_elements instead of adjusting `valaddr' and
+	`address'.
+	* m2-valprint.c (m2_print_array_contents, m2_val_print): Pass
+	embedded_offset to val_print_array_elements instead of adjusting
+	`valaddr'.
+	* p-lang.h (pascal_object_print_value_fields): Adjust prototype.
+	* p-valprint.c (pascal_val_print): Pass embedded_offset to
+	val_print_array_elements and pascal_object_print_value_fields
+	instead of adjusting `valaddr'.
+	(pascal_object_print_value_fields): Add `offset' parameter, and
+	adjust to use it.
+	(pascal_object_print_value): Add `offset' parameter, and adjust to
+	use it.
+	(pascal_object_print_static_field): Use
+	value_contents_for_printing/value_embedded_offset, rather than
+	value_contents.
+	* ada-valprint.c (val_print_packed_array_elements): Add `offset'
+	parameter, and adjust to use it.  Use
+	value_contents_for_printing/value_embedded_offset, rather than
+	value_contents.
+	(ada_val_print): Rename `valaddr0' parameter to `valaddr'.
+	(ada_val_print_array): Add `offset' parameter, and adjust to use
+	it.
+	(ada_val_print_1): Rename `valaddr0' parameter to `valaddr', and
+	`embedded_offset' to `offset'.  Don't re-adjust `valaddr'.
+	Instead work with offsets.  Use
+	value_contents_for_printing/value_embedded_offset, rather than
+	value_contents.  Change `defer_val_int' local type to CORE_ADDR,
+	and use value_from_pointer to extract a target pointer, rather
+	than value_from_longest.
+	(print_variant_part): Add `offset' parameter.  Replace
+	`outer_valaddr' parameter by a new `outer_offset' parameter.
+	Don't re-adjust `valaddr'.  Instead pass down adjusted offsets.
+	(ada_value_print): Use
+	value_contents_for_printing/value_embedded_offset, rather than
+	value_contents.
+	(print_record): Add `offset' parameter, and adjust to pass it
+	down.
+	(print_field_values): Add `offset' parameter.  Replace
+	`outer_valaddr' parameter by a new `outer_offset' parameter.
+	Don't re-adjust `valaddr'.  Instead pass down adjusted offsets.
+	Use value_contents_for_printing/value_embedded_offset, rather than
+	value_contents.
+	* d-valprint.c (dynamic_array_type): Use
+	value_contents_for_printing/value_embedded_offset, rather than
+	value_contents.
+	* jv-valprint.c (java_print_value_fields): Add `offset' parameter.
+	Don't re-adjust `valaddr'.  Instead pass down adjusted offsets.
+	(java_print_value_fields): Take `offset' into account.  Don't
+	re-adjust `valaddr'.  Instead pass down adjusted offsets.
+	(java_val_print): Take `embedded_offset' into account.  Pass it to
+	java_print_value_fields.
+	* f-valprint.c (f77_print_array_1): Add `embedded_offset'
+	parameter.  Don't re-adjust `valaddr' or `address'.  Instead pass
+	down adjusted offsets.
+	(f77_print_array): Add `embedded_offset' parameter.  Pass it down.
+	(f_val_print): Take `embedded_offset' into account.
+
+	gdb/testsuite/
+	* gdb.base/printcmds.c (some_struct): New struct and instance.
+	* gdb.base/printcmds.exp (test_print_repeats_embedded_array): New
+	procedure.
+	<global scope>: Call it.
+@
+text
+@d48 1
+a48 1
+      struct value *val;
+d61 1
+a61 1
+      val = value_at (true_type, addr);
+d64 3
+a66 3
+			  value_contents_for_printing (val),
+			  value_embedded_offset (val), addr,
+			  stream, recurse + 1, val, options);
+@
+
+
+1.4
+log
+@run copyright.sh for 2011.
+@
+text
+@a47 1
+      const gdb_byte *ptraddr;
+a61 1
+      ptraddr = value_contents (val);
+d63 4
+a66 2
+      return d_val_print (true_type, ptraddr, 0, addr, stream, recurse + 1,
+			  NULL, options);
+@
+
+
+1.3
+log
+@gdb
+	PR gdb/9977, PR exp/11636:
+	* value.h (value_offset): Update.
+	(struct lval_funcs) <check_validity>: New field.
+	<copy_closure>: Make argument const.
+	(value_computed_closure): Update.
+	(value_contents_for_printing): Declare.
+	(value_bits_valid): Likewise.
+	(val_print): Likewise.
+	(set_value_component_location): Update.
+	(value_entirely_optimized_out): Declare.
+	* value.c (value_offset): Argument now const.
+	(require_not_optimized_out): New function.
+	(value_contents_for_printing): New function.
+	(value_contents_all): Call require_not_optimized_out.
+	(value_contents): Likewise.
+	(value_bits_valid): New function.
+	(value_computed_closure): Argument now const.
+	(set_value_component_location): Make 'whole' argument const.
+	(value_entirely_optimized_out): New function.
+	(value_bitsize): Argument now 'const'.
+	(value_bitpos): Likewise.
+	(value_type): Likewise.
+	* valprint.h (val_print_array_elements): Update.
+	* valprint.c (val_print): Add 'val' argument.  Use
+	valprint_check_validity.
+	(valprint_check_validity): New function.
+	(value_check_printable): Use value_entirely_optimized_out.
+	(common_val_print): Update.
+	(value_print): Likewise.
+	(val_print_array_elements): Add 'val' argument.
+	* valops.c (value_fetch_lazy): Use value_contents_for_printing,
+	value_bits_valid.  Reinit frame cache for lval_computed.
+	* sh64-tdep.c (sh64_do_register): Update.
+	* scm-valprint.c (scm_val_print): Add 'val' argument.
+	* scm-lang.h (scm_val_print): Update.
+	* python/python.h (apply_val_pretty_printer): Update.
+	* python/py-prettyprint.c (apply_val_pretty_printer): Add 'val'
+	argument.  Call set_value_component_location.
+	* printcmd.c (print_scalar_formatted): Update.
+	* p-valprint.c (pascal_val_print): Add 'val' argument.
+	(pascal_object_print_value_fields): Likewise.
+	(pascal_object_print_value): Likewise.
+	(pascal_object_print_static_field): Update.
+	* p-lang.h (pascal_val_print): Update.
+	(pascal_object_print_value_fields): Update.
+	* mt-tdep.c (mt_registers_info): Update.
+	* mi/mi-main.c (get_register): Update.
+	(mi_cmd_data_evaluate_expression): Use common_val_print.
+	* m2-valprint.c (m2_print_array_contents): Add 'val' argument.
+	(m2_print_unbounded_array): Likewise.
+	(m2_val_print): Likewise.
+	* m2-lang.h (m2_val_print): Update.
+	* language.h (struct language_defn) <la_val_print>: Add 'val'
+	argument.
+	(LA_VAL_PRINT): Likewise.
+	* language.c (unk_lang_val_print): Add 'val' argument.
+	* jv-valprint.c (java_print_value_fields): Add 'val' argument.
+	(java_val_print): Likewise.
+	* jv-lang.h (java_val_print): Add 'val' argument.
+	* infcmd.c (default_print_registers_info): Update.
+	* f-valprint.c (f77_print_array_1): Add 'val' argument.
+	(f77_print_array): Likewise.
+	(f_val_print): Likewise.
+	* f-lang.h (f_val_print): Add 'val' argument.
+	* dwarf2loc.c (read_pieced_value): Use value_bitsize and
+	value_bitpos.
+	<DWARF_VALUE_OPTIMIZED_OUT>: Don't print warning.  Call
+	set_value_optimized_out.
+	(write_pieced_value): Use value_bitsize and value_bitpos.
+	<default>: Don't exit loop.
+	(check_pieced_value_validity): New function.
+	(pieced_value_funcs): Reference check_pieced_value_validity,
+	check_pieced_value_invalid.
+	(copy_pieced_value_closure): Update.
+	(check_pieced_value_bits): New function.
+	(check_pieced_value_invalid): New function.
+	* d-valprint.c (dynamic_array_type): Add 'val' argument.
+	(d_val_print): Likewise.
+	* d-lang.h (d_val_print): Update.
+	* cp-valprint.c (cp_print_value_fields): Add 'val' argument.
+	(cp_print_value_fields_rtti): Likewise.
+	(cp_print_value): Likewise.
+	(cp_print_static_field): Update.
+	* c-valprint.c (c_val_print): Add 'val' argument.
+	(c_value_print): Update.
+	* c-lang.h (c_val_print): Update.
+	(cp_print_value_fields): Likewise.
+	(cp_print_value_fields_rtti): Likewise.
+	* ada-valprint.c (struct ada_val_print_args): Remove.
+	(val_print_packed_array_elements): Add 'val' argument.
+	(ada_val_print): Likewise.  Rewrite.
+	(ada_val_print_stub): Remove.
+	(ada_val_print_array): Add 'val' argument.
+	(ada_val_print_1): Likewise.
+	(print_variant_part): Likewise.
+	(ada_value_print): Update.
+	(print_record): Add 'val' argument.
+	(print_field_values): Likewise.
+	* ada-lang.h (ada_val_print): Update.
+gdb/testsuite
+	PR gdb/9977, PR exp/11636::
+	* gdb.dwarf2/pieces.exp (pieces_test_f3): Remove kfail.
+	(pieces_test_f6): Update expected output.
+@
+text
+@d3 1
+a3 1
+   Copyright (C) 2008, 2009, 2010 Free Software Foundation, Inc.
+@
+
+
+1.2
+log
+@2010-05-06  Michael Snyder  <msnyder@@vmware.com>
+
+	* p-typeprint.c (pascal_type_print_base): Delete unused variable.
+	(pascal_type_print_varspec_prefix): Delete unused variable.
+	* f-typeprint.c (f_type_print_base): Delete unused variable.
+	(f_type_print_varspec_suffix): Delete unused variable.
+	* m2-typeprint.c (m2_print_type): Delete unused variable.
+	(m2_long_set): Delete unused variable.
+	* ada-valprint.c (ada_val_print_1): Delete unused variable.
+	* d-valprint.c (dynamic_array_type): Delete unused variable.
+	* f-valprint.c (f77_get_dynamic_length_of_aggregate):
+	Delete unused variable.
+	(f77_create_arrayprint_offset_tbl): Delete unused variable.
+	* m2-valprint.c (m2_val_print): Delete unused variable.
+@
+text
+@d34 1
+d40 3
+a42 1
+      && strcmp (TYPE_FIELD_NAME (type, 1), "ptr") == 0)
+d66 1
+a66 1
+			  options);
+d75 1
+d85 1
+a85 1
+				  stream, recurse, options);
+d90 1
+a90 1
+			   recurse, options);
+@
+
+
+1.1
+log
+@D language support.
+
+gdb/ChangeLog:
+
+        D language support.
+        * Makefile.in (SFILES): Add d-lang.c d-valprint.c.
+        (COMMON_OBS): Add d-lang.o d-valprint.o.
+        (HFILES_NO_SRCDIR): Add d-lang.h.
+        * NEWS: Mention D language support.
+        * c-lang.c (c_emit_char, exp_descriptor_c): Make public.
+        * c-lang.h (c_emit_char, exp_descriptor_c): Add declaration.
+        * d-lang.c: New file.
+        * d-lang.h: New file.
+        * d-valprint.c: New file.
+        * defs.h (enum language): Add language_d.
+        * dwarf2read.c (set_cu_language): Add DW_LANG_D.
+        * language.c (binop_result_type, integral_type, character_type)
+        (string_type, boolean_type, structured_type): Add language_d.
+        * symfile.c (init_filename_language_table): Add language_d.
+        * symtab.c: Include d-lang.h.
+        (symbol_init_language_specific, symbol_find_demangled_name)
+        (symbol_natural_name, lookup_symbol_in_language)
+        (symbol_demangled_name, symbol_matches_domain): Add language_d.
+
+gdb/doc/ChangeLog:
+
+        * gdb.texinfo: (Summary) Add mention about D language support.
+        (Filenames): Add D suffixes.
+        (D): New node.
+
+gdb/testsuite/ChangeLog:
+
+        * gdb.base/default.exp: Fix "set language" test.
+@
+text
+@a44 1
+      struct type *range_type;
+@
+

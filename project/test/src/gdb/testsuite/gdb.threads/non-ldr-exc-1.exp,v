@@ -1,0 +1,488 @@
+head	1.7;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.6
+	gdb_7_6-2013-04-26-release:1.6
+	gdb_7_6-branch:1.6.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.6
+	gdb_7_5_1-2012-11-29-release:1.5
+	gdb_7_5-2012-08-17-release:1.5
+	gdb_7_5-branch:1.5.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.5
+	gdb_7_4_1-2012-04-26-release:1.1.2.1
+	gdb_7_4-2012-01-24-release:1.1.2.1
+	gdb_7_4-branch:1.1.0.2
+	gdb_7_4-2011-12-13-branchpoint:1.1;
+locks; strict;
+comment	@# @;
+
+
+1.7
+date	2013.03.15.01.41.29;	author qiyao;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2013.01.01.06.41.27;	author brobecke;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2012.06.26.19.23.20;	author tromey;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2012.02.21.22.01.09;	author palves;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2012.02.21.21.55.39;	author palves;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2012.01.04.08.27.55;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2011.10.28.18.30.00;	author palves;	state Exp;
+branches
+	1.1.2.1;
+next	;
+
+1.1.2.1
+date	2012.01.06.04.54.29;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.7
+log
+@gdb/testsuite/
+	* gdb.threads/non-ldr-exc-1.exp (do_test): Fix the indent of
+	using with_test_prefix.
+	* gdb.threads/non-ldr-exc-2.exp (do_test): Likewise.
+	* gdb.threads/non-ldr-exc-3.exp (do_test): Likewise.
+	* gdb.threads/non-ldr-exc-4.exp (do_test): Likewise.
+	* gdb.threads/watchpoint-fork.exp (test): Likewise.
+	* gdb.base/break-interp.exp (test_core): Likewise.
+	(test_attach_gdb): Likewise.
+	* gdb.base/catch-load.exp (one_catch_load_test): Likewise.
+	* gdb.base/disp-step-syscall.exp (disp_step_cross_syscall):
+	Likewise.
+	* gdb.base/jit-so.exp (one_jit_test): Likewise.
+	* gdb.base/jit.exp (one_jit_test): Likewise.
+	* gdb.base/sepdebug.exp (test_different_dir): Likewise.
+	* gdb.dwarf2/dw2-dir-file-name.exp (test): Likewise.
+	* gdb.dwarf2/dw2-noloc.exp (file_symbols): Likewise.
+	* gdb.mi/mi-breakpoint-changed.exp (test_pending_resolved):
+	Likewise.
+	* gdb.mi/mi-cmd-param-changed.exp (test_command_param_changed):
+	Likewise.
+	* gdb.mi/mi-watch.exp test_watchpoint_all): Likewise.
+	* gdb.mi/pr11022.exp (test_memory_changed_observer): Likewise.
+	* gdb.trace/change-loc.exp (tracepoint_change_loc_1): Likewise.
+	(tracepoint_change_loc_2): Likewise.
+	* gdb.trace/disconnected-tracing.exp (disconnected_tracing):
+	Likewise.
+	(disconnected_tfind): Likewise.
+	* gdb.trace/mi-traceframe-changed.exp (test_tfind_tfile):
+	Likewise.
+	(test_tfind_remote): Likewise.
+	* gdb.trace/mi-tracepoint-changed.exp (test_reconnect):
+	Likewise.
+	(test_pending_resolved): Likewise.
+	* gdb.trace/mi-tsv-changed.exp (test_create_delete_modify_tsv):
+	Likewise.
+	(test_upload_tsv): Likewise.
+	* gdb.trace/pending.exp (pending_tracepoint_resolved):
+	Likewise.
+	(pending_tracepoint_works): Likewise.
+	* gdb.trace/report.exp (use_collected_data): Likewise.
+	* gdb.trace/status-stop.exp (test_tstart_tstop_tstart):
+	Likewise.
+	(test_tstart_tstart, test_buffer_full_tstart): Likewise.
+	* gdb.trace/strace.exp (strace_info_marker): Likewise.
+	(strace_trace_on_same_addr): Likewise.
+	(strace_trace_on_diff_addr): Likewise.
+	* gdb.trace/unavailable.exp (gdb_collect_args_test): Likewise.
+	(gdb_collect_locals_test): Likewise.
+	(gdb_unavailable_registers_test): Likewise.
+	(gdb_collect_globals_test): Likewise.
+@
+text
+@# Copyright 2009-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# Test that when a thread other than the main thread execs, we follow
+# through to the new incarnation of the main thread.
+
+# No exec event support in the remote protocol.
+if { [is_remote target] } then {
+    continue
+}
+
+standard_testfile
+set executable ${testfile}
+
+if {[gdb_compile_pthreads "${srcdir}/${subdir}/${srcfile}" "${binfile}" executable {debug}] != "" } {
+    return -1
+}
+
+proc do_test { lock_sched } {
+    with_test_prefix "lock-sched$lock_sched" {
+	global executable
+
+	clean_restart ${executable}
+
+	if ![runto_main] {
+	    return -1
+	}
+
+	gdb_breakpoint [gdb_get_line_number "break-here"]
+	gdb_continue_to_breakpoint "break-here" ".* break-here .*"
+
+	# Also test with sched-lock to make sure we can follow the
+	# non-leader thread execing even though the main thread wasn't
+	# resumed before the exec.
+	if { $lock_sched } {
+	    gdb_test_no_output "set scheduler-locking on"
+	}
+
+	gdb_test "continue" \
+	    ".*is executing new program.*Breakpoint 1, main.* at .*" \
+	    "continue over exec"
+    }
+}
+
+do_test 0
+do_test 1
+@
+
+
+1.6
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@d31 23
+a53 17
+proc do_test { lock_sched } { with_test_prefix "lock-sched$lock_sched" {
+    global executable
+
+    clean_restart ${executable}
+
+    if ![runto_main] {
+	return -1
+    }
+
+    gdb_breakpoint [gdb_get_line_number "break-here"]
+    gdb_continue_to_breakpoint "break-here" ".* break-here .*"
+
+    # Also test with sched-lock to make sure we can follow the
+    # non-leader thread execing even though the main thread wasn't
+    # resumed before the exec.
+    if { $lock_sched } {
+	gdb_test_no_output "set scheduler-locking on"
+d55 1
+a55 5
+
+    gdb_test "continue" \
+	".*is executing new program.*Breakpoint 1, main.* at .*" \
+	"continue over exec"
+}}
+@
+
+
+1.5
+log
+@	* gdb.threads/watchpoint-fork.exp (test): Use
+	standard_output_file.  Don't declare objdir.
+	* gdb.threads/attach-into-signal.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.threads/attach-stopped.exp: Use standard_testfile.
+	* gdb.threads/bp_in_thread.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/corethreads.exp: Use standard_testfile.
+	* gdb.threads/execl.exp: Use standard_testfile,
+	standard_output_file, clean_restart.
+	* gdb.threads/fork-child-threads.exp: Use standard_testfile,
+	clean_restart.
+	* gdb.threads/fork-thread-pending.exp: Use standard_testfile,
+	clean_restart.
+	* gdb.threads/gcore-thread.exp: Use standard_testfile.  Remove
+	incdir.
+	* gdb.threads/hand-call-in-threads.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/ia64-sigill.exp: Use standard_testfile.
+	* gdb.threads/interrupted-hand-call.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/killed.exp: Use standard_testfile, clean_restart.
+	Remove incdir.
+	* gdb.threads/leader-exit.exp: Use standard_testfile.
+	* gdb.threads/linux-dp.exp: Use standard_testfile, clean_restart.
+	* gdb.threads/local-watch-wrong-thread.exp: Use standard_testfile,
+	clean_restart.
+	* gdb.threads/manythreads.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/multi-create.exp: Use standard_testfile,
+	clean_restart.
+	* gdb.threads/no-unwaited-for-left.exp: Use standard_testfile.
+	* gdb.threads/non-ldr-exc-1.exp: Use standard_testfile.
+	* gdb.threads/non-ldr-exc-2.exp: Use standard_testfile.
+	* gdb.threads/non-ldr-exc-3.exp: Use standard_testfile.
+	* gdb.threads/non-ldr-exc-4.exp: Use standard_testfile.
+	* gdb.threads/pending-step.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/print-threads.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/pthread_cond_wait.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/pthreads.exp: Use standard_testfile, clean_restart.
+	Remove incdir.
+	* gdb.threads/schedlock.exp: Use standard_testfile.  Remove
+	incdir.
+	* gdb.threads/sigthread.exp: Use standard_testfile,
+	clean_restart.
+	* gdb.threads/staticthreads.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/switch-threads.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/thread-execl.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/thread-find.exp: Use standard_testfile,
+	clean_restart.
+	* gdb.threads/thread-specific.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/thread-unwindonsignal.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/thread_check.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/thread_events.exp: Use standard_testfile.  Remove
+	incdir.
+	* gdb.threads/threadapply.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/threxit-hop-specific.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/tls-nodebug.exp: Use standard_testfile,
+	clean_restart.
+	* gdb.threads/tls-shared.exp: Use standard_testfile,
+	clean_restart, standard_output_file.
+	* gdb.threads/tls-var.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.threads/tls.exp: Use standard_testfile, clean_restart.
+	Remove incdir.
+	* gdb.threads/watchthreads-reorder.exp: Use standard_testfile.
+	* gdb.threads/watchthreads.exp: Use standard_testfile.  Remove
+	incdir.
+	* gdb.threads/watchthreads2.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+@
+text
+@d1 1
+a1 1
+# Copyright 2009-2012 Free Software Foundation, Inc.
+@
+
+
+1.4
+log
+@2012-02-21  Pedro Alves  <palves@@redhat.com>
+
+	* gdb.arch/altivec-abi.exp (altivec_abi_tests): Don't do
+	with_test_prefix here.
+	(top level): Do it here instead.  Remove `:' from the
+	with_test_prefix string.
+	* gdb.base/attach-pie-misread.exp: Remove the leading space the
+	the suffix `:' from the with_test_prefix prefix string.
+	* gdb.base/break-interp.exp: Ditto.
+	* gdb.base/catch-load.exp: Ditto.
+	* gdb.base/disp-step-syscall.exp: Ditto.
+	* gdb.base/jit-so.exp: Ditto.
+	* gdb.base/jit.exp: Ditto.
+	* gdb.base/sepdebug.exp: Ditto.
+	* gdb.base/solib-display.exp: Ditto.
+	* gdb.base/solib-overlap.exp: Ditto.
+	* gdb.base/watch-cond-infcall.exp: Ditto.
+	* gdb.base/watchpoint.exp: Ditto.
+	* gdb.dwarf2/dw2-noloc.exp: Ditto.
+	* gdb.mi/mi-watch.exp: Ditto.
+	* gdb.mi/mi2-watch.exp: Ditto.
+	* gdb.threads/non-ldr-exc-1.exp: Ditto.
+	* gdb.threads/non-ldr-exc-2.exp: Ditto.
+	* gdb.threads/non-ldr-exc-3.exp: Ditto.
+	* gdb.threads/non-ldr-exc-4.exp: Ditto.
+	* gdb.threads/watchpoint-fork.exp: Ditto.
+	* gdb.threads/watchthreads-reorder.exp: Ditto.
+	* gdb.trace/change-loc.exp: Ditto.
+	* gdb.trace/pending.exp: Ditto.
+	* gdb.trace/status-stop.exp: Ditto.
+	* gdb.trace/strace.exp: Ditto.
+	* gdb.trace/trace-break.exp: Ditto.
+	* gdb.trace/unavailable.exp: Ditto.
+	* lib/gdb.exp (with_test_prefix): Always prefix with space and
+	suffix with colon.  Adjust leading comments.
+@
+text
+@d24 1
+a24 2
+set testfile "non-ldr-exc-1"
+set srcfile ${testfile}.c
+a25 1
+set binfile ${objdir}/${subdir}/${executable}
+@
+
+
+1.3
+log
+@2012-02-21  Pedro Alves  <palves@@redhat.com>
+	    Tom Tromey  <tromey@@redhat.com>
+
+	* lib/gdb.exp: Add description of test prefixes.
+	(with_test_prefix): New procedure.
+	* gdb.arch/altivec-abi.exp: Use with_test_prefix.
+	* gdb.base/attach-pie-misread.exp: Use with_test_prefix.
+	* gdb.base/break-interp.exp: Use with_test_prefix.  Use append
+	instead of lappend to append to pf_prefix.
+	* gdb.base/catch-load.exp: Use with_test_prefix.
+	* gdb.base/disp-step-syscall.exp: Use with_test_prefix.
+	* gdb.base/jit-so.exp: Use with_test_prefix.
+	* gdb.base/jit.exp: Use with_test_prefix.
+	* gdb.base/return-nodebug.exp (do_test): Use append instead of
+	lappend to append to pf_prefix.
+	* gdb.base/sepdebug.exp: Use with_test_prefix.
+	* gdb.base/solib-display.exp: Use with_test_prefix.
+	* gdb.base/solib-overlap.exp: Use with_test_prefix.
+	* gdb.base/watch-cond-infcall.exp: Use with_test_prefix.
+	* gdb.base/watchpoint.exp: Use with_test_prefix.
+	* gdb.dwarf2/dw2-noloc.exp: Use with_test_prefix.
+	* gdb.mi/mi-watch.exp: Use with_test_prefix.
+	* gdb.mi/mi2-watch.exp: Use with_test_prefix.
+	* gdb.threads/non-ldr-exc-1.exp: Use with_test_prefix.
+	* gdb.threads/non-ldr-exc-2.exp: Use with_test_prefix.
+	* gdb.threads/non-ldr-exc-3.exp: Use with_test_prefix.
+	* gdb.threads/non-ldr-exc-4.exp: Use with_test_prefix.
+	* gdb.threads/watchpoint-fork.exp: Use with_test_prefix.  Use
+	append instead of lappend to append to pf_prefix.
+	* gdb.threads/watchthreads-reorder.exp: Use with_test_prefix.
+	* gdb.trace/change-loc.exp: Use with_test_prefix.
+	* gdb.trace/pending.exp: Use with_test_prefix.
+	* gdb.trace/status-stop.exp: Use with_test_prefix.
+	* gdb.trace/strace.exp: Use with_test_prefix.
+	* gdb.trace/trace-break.exp: Use with_test_prefix.
+	* gdb.trace/unavailable.exp: Use with_test_prefix.  Use append
+	instead of lappend to append to pf_prefix.
+@
+text
+@d33 1
+a33 1
+proc do_test { lock_sched } { with_test_prefix " lock-sched$lock_sched:" {
+@
+
+
+1.2
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d33 1
+a33 2
+proc do_test { lock_sched } {
+    global pf_prefix
+a35 3
+    set save_pf_prefix $pf_prefix
+    lappend pf_prefix "lock-sched$lock_sched:"
+
+a38 1
+	set pf_prefix $save_pf_prefix
+d55 1
+a55 3
+
+    set pf_prefix $save_pf_prefix
+}
+@
+
+
+1.1
+log
+@2011-10-28  Pedro Alves  <pedro@@codesourcery.com>
+
+	gdb/
+	* linux-nat.c (linux_nat_filter_event): Remove `options'
+	parameter, and dead code that used it.  If we're handling a
+	PTRACE_EVENT_EXEC event, and the thread group leader is no longer
+	in our lwp list, re-add it.
+	(check_zombie_leaders): New.
+	(linux_nat_wait_1): Remove `options' and `pid' locals.  Always
+	wait for children with WNOHANG, and always wait for all children.
+	Don't check for no resumed children upfront.  Simplify wait loop.
+	Check for zombie thread group leaders after handling all wait
+	statuses.  Return TARGET_WAITKIND_NO_RESUMED if there no
+	unwaited-for children left.
+	* infrun.c (fetch_inferior_event): Handle TARGET_WAITKIND_NO_RESUMED.
+	(handle_inferior_event): Handle TARGET_WAITKIND_NO_RESUMED.
+	(normal_stop): Handle TARGET_WAITKIND_NO_RESUMED.
+	* target.h (enum target_waitkind) <TARGET_WAITKIND_NO_RESUMED>: New.
+
+	gdb/testsuite/
+	* gdb.threads/no-unwaited-for-left.c: New.
+	* gdb.threads/no-unwaited-for-left.exp: New.
+	* gdb.threads/non-ldr-exc-1.c: New.
+	* gdb.threads/non-ldr-exc-1.exp: New.
+	* gdb.threads/non-ldr-exc-2.c: New.
+	* gdb.threads/non-ldr-exc-2.exp: New.
+	* gdb.threads/non-ldr-exc-3.c: New.
+	* gdb.threads/non-ldr-exc-3.exp: New.
+	* gdb.threads/non-ldr-exc-4.c: New.
+	* gdb.threads/non-ldr-exc-4.exp: New.
+@
+text
+@d1 1
+a1 1
+# Copyright 2009, 2010, 2011 Free Software Foundation, Inc.
+@
+
+
+1.1.2.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d1 1
+a1 1
+# Copyright 2009-2012 Free Software Foundation, Inc.
+@
+
+

@@ -1,0 +1,927 @@
+head	1.14;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.5.2.2
+	gdb_7_6-2013-04-26-release:1.5.2.1
+	gdb_7_6-branch:1.5.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.5;
+locks; strict;
+comment	@ * @;
+
+
+1.14
+date	2013.10.13.16.11.08;	author jkratoch;	state Exp;
+branches;
+next	1.13;
+
+1.13
+date	2013.10.11.08.23.10;	author brobecke;	state Exp;
+branches;
+next	1.12;
+
+1.12
+date	2013.10.02.00.46.07;	author kseitz;	state Exp;
+branches;
+next	1.11;
+
+1.11
+date	2013.08.01.09.09.58;	author aburgess;	state Exp;
+branches;
+next	1.10;
+
+1.10
+date	2013.06.28.17.19.39;	author palves;	state Exp;
+branches;
+next	1.9;
+
+1.9
+date	2013.06.18.18.11.19;	author tromey;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2013.05.15.12.49.05;	author brobecke;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2013.03.22.20.39.28;	author jkratoch;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2013.03.21.17.37.29;	author devans;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2013.02.03.15.54.17;	author jkratoch;	state Exp;
+branches
+	1.5.2.1;
+next	1.4;
+
+1.4
+date	2013.01.30.20.38.04;	author tromey;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2013.01.13.18.57.01;	author jkratoch;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2013.01.01.06.41.29;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2012.07.18.23.37.58;	author devans;	state Exp;
+branches;
+next	;
+
+1.5.2.1
+date	2013.03.22.20.41.46;	author jkratoch;	state Exp;
+branches;
+next	1.5.2.2;
+
+1.5.2.2
+date	2013.05.16.10.42.58;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.14
+log
+@Improve Executable displayed path (PR 15415 regression kind #2)
+
+gdb/
+2013-10-13  Jan Kratochvil  <jan.kratochvil@@redhat.com>
+
+	Canonicalize directories for EXEC_FILENAME.
+	* exec.c (exec_file_attach): Use gdb_realpath_keepfile for
+	exec_filename.
+	* utils.c (gdb_realpath_keepfile): New function.
+	* utils.h (gdb_realpath_keepfile): New declaration.
+
+gdb/testsuite/
+2013-10-13  Jan Kratochvil  <jan.kratochvil@@redhat.com>
+
+	Canonicalize directories for EXEC_FILENAME.
+	* gdb.base/argv0-symlink.exp
+	(kept file symbolic link name for info inferiors): New.
+	(kept directory symbolic link name): Setup kfail.
+	(kept directory symbolic link name for info inferiors): New.
+@
+text
+@/* *INDENT-OFF* */ /* ATTRIBUTE_PRINTF confuses indent, avoid running it
+		      for now.  */
+/* I/O, string, cleanup, and other random utilities for GDB.
+   Copyright (C) 1986-2013 Free Software Foundation, Inc.
+
+   This file is part of GDB.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+#ifndef UTILS_H
+#define UTILS_H
+
+#include "cleanups.h"
+#include "exceptions.h"
+
+extern void initialize_utils (void);
+
+/* String utilities.  */
+
+extern int sevenbit_strings;
+
+extern char *savestring (const char *, size_t);
+
+extern int strcmp_iw (const char *, const char *);
+
+extern int strcmp_iw_ordered (const char *, const char *);
+
+extern int streq (const char *, const char *);
+
+extern int subset_compare (char *, char *);
+
+ULONGEST strtoulst (const char *num, const char **trailer, int base);
+
+int compare_positive_ints (const void *ap, const void *bp);
+int compare_strings (const void *ap, const void *bp);
+
+/* This is defined in *-hdep.c, e.g., posix-hdep.c.  */
+extern char *safe_strerror (int);
+
+/* A wrapper for bfd_errmsg to produce a more helpful error message
+   in the case of bfd_error_file_ambiguously recognized.
+   MATCHING, if non-NULL, is the corresponding argument to
+   bfd_check_format_matches, and will be freed.  */
+
+extern const char *gdb_bfd_errmsg (bfd_error_type error_tag, char **matching);
+
+/* Reset the prompt_for_continue clock.  */
+void reset_prompt_for_continue_wait_time (void);
+/* Return the time spent in prompt_for_continue.  */
+struct timeval get_prompt_for_continue_wait_time (void);
+
+/* Parsing utilites.  */
+
+extern int parse_pid_to_attach (char *args);
+
+extern int parse_escape (struct gdbarch *, const char **);
+
+char **gdb_buildargv (const char *);
+
+/* Cleanup utilities.  */
+
+extern struct cleanup *make_cleanup_freeargv (char **);
+
+struct dyn_string;
+extern struct cleanup *make_cleanup_dyn_string_delete (struct dyn_string *);
+
+struct ui_file;
+extern struct cleanup *make_cleanup_ui_file_delete (struct ui_file *);
+
+struct ui_out;
+extern struct cleanup *
+  make_cleanup_ui_out_redirect_pop (struct ui_out *uiout);
+
+struct section_addr_info;
+extern struct cleanup *(make_cleanup_free_section_addr_info 
+                        (struct section_addr_info *));
+
+extern struct cleanup *make_cleanup_close (int fd);
+
+extern struct cleanup *make_cleanup_fclose (FILE *file);
+
+extern struct cleanup *make_cleanup_bfd_unref (bfd *abfd);
+
+struct obstack;
+extern struct cleanup *make_cleanup_obstack_free (struct obstack *obstack);
+
+extern struct cleanup *make_cleanup_restore_integer (int *variable);
+extern struct cleanup *make_cleanup_restore_uinteger (unsigned int *variable);
+
+struct target_ops;
+extern struct cleanup *make_cleanup_unpush_target (struct target_ops *ops);
+
+extern struct cleanup *
+  make_cleanup_restore_ui_file (struct ui_file **variable);
+
+extern struct cleanup *make_cleanup_value_free_to_mark (struct value *);
+extern struct cleanup *make_cleanup_value_free (struct value *);
+
+struct so_list;
+extern struct cleanup *make_cleanup_free_so (struct so_list *so);
+
+extern struct cleanup *make_cleanup_restore_current_language (void);
+
+extern struct cleanup *make_cleanup_htab_delete (htab_t htab);
+
+extern void free_current_contents (void *);
+
+extern void init_page_info (void);
+
+extern struct cleanup *make_cleanup_restore_page_info (void);
+extern struct cleanup *
+  set_batch_flag_and_make_cleanup_restore_page_info (void);
+
+extern struct cleanup *make_bpstat_clear_actions_cleanup (void);
+
+/* Path utilities.  */
+
+extern char *gdb_realpath (const char *);
+
+extern char *gdb_realpath_keepfile (const char *);
+
+extern int gdb_filename_fnmatch (const char *pattern, const char *string,
+				 int flags);
+
+extern void substitute_path_component (char **stringp, const char *from,
+				       const char *to);
+
+char *ldirname (const char *filename);
+
+/* GDB output, ui_file utilities.  */
+
+struct ui_file;
+
+extern int query (const char *, ...) ATTRIBUTE_PRINTF (1, 2);
+extern int nquery (const char *, ...) ATTRIBUTE_PRINTF (1, 2);
+extern int yquery (const char *, ...) ATTRIBUTE_PRINTF (1, 2);
+
+extern void begin_line (void);
+
+extern void wrap_here (char *);
+
+extern void reinitialize_more_filter (void);
+
+extern int pagination_enabled;
+
+/* Global ui_file streams.  These are all defined in main.c.  */
+/* Normal results */
+extern struct ui_file *gdb_stdout;
+/* Input stream */
+extern struct ui_file *gdb_stdin;
+/* Serious error notifications */
+extern struct ui_file *gdb_stderr;
+/* Log/debug/trace messages that should bypass normal stdout/stderr
+   filtering.  For moment, always call this stream using
+   *_unfiltered.  In the very near future that restriction shall be
+   removed - either call shall be unfiltered.  (cagney 1999-06-13).  */
+extern struct ui_file *gdb_stdlog;
+/* Target output that should bypass normal stdout/stderr filtering.
+   For moment, always call this stream using *_unfiltered.  In the
+   very near future that restriction shall be removed - either call
+   shall be unfiltered.  (cagney 1999-07-02).  */
+extern struct ui_file *gdb_stdtarg;
+extern struct ui_file *gdb_stdtargerr;
+extern struct ui_file *gdb_stdtargin;
+
+/* More generic printf like operations.  Filtered versions may return
+   non-locally on error.  */
+
+extern void fputs_filtered (const char *, struct ui_file *);
+
+extern void fputs_unfiltered (const char *, struct ui_file *);
+
+extern int fputc_filtered (int c, struct ui_file *);
+
+extern int fputc_unfiltered (int c, struct ui_file *);
+
+extern int putchar_filtered (int c);
+
+extern int putchar_unfiltered (int c);
+
+extern void puts_filtered (const char *);
+
+extern void puts_unfiltered (const char *);
+
+extern void puts_filtered_tabular (char *string, int width, int right);
+
+extern void puts_debug (char *prefix, char *string, char *suffix);
+
+extern void vprintf_filtered (const char *, va_list) ATTRIBUTE_PRINTF (1, 0);
+
+extern void vfprintf_filtered (struct ui_file *, const char *, va_list)
+  ATTRIBUTE_PRINTF (2, 0);
+
+extern void fprintf_filtered (struct ui_file *, const char *, ...)
+  ATTRIBUTE_PRINTF (2, 3);
+
+extern void fprintfi_filtered (int, struct ui_file *, const char *, ...)
+  ATTRIBUTE_PRINTF (3, 4);
+
+extern void printf_filtered (const char *, ...) ATTRIBUTE_PRINTF (1, 2);
+
+extern void printfi_filtered (int, const char *, ...) ATTRIBUTE_PRINTF (2, 3);
+
+extern void vprintf_unfiltered (const char *, va_list) ATTRIBUTE_PRINTF (1, 0);
+
+extern void vfprintf_unfiltered (struct ui_file *, const char *, va_list)
+  ATTRIBUTE_PRINTF (2, 0);
+
+extern void fprintf_unfiltered (struct ui_file *, const char *, ...)
+  ATTRIBUTE_PRINTF (2, 3);
+
+extern void printf_unfiltered (const char *, ...) ATTRIBUTE_PRINTF (1, 2);
+
+extern void print_spaces (int, struct ui_file *);
+
+extern void print_spaces_filtered (int, struct ui_file *);
+
+extern char *n_spaces (int);
+
+extern void fputstr_filtered (const char *str, int quotr,
+			      struct ui_file * stream);
+
+extern void fputstr_unfiltered (const char *str, int quotr,
+				struct ui_file * stream);
+
+extern void fputstrn_filtered (const char *str, int n, int quotr,
+			       struct ui_file * stream);
+
+extern void fputstrn_unfiltered (const char *str, int n, int quotr,
+				 struct ui_file * stream);
+
+/* Display the host ADDR on STREAM formatted as ``0x%x''.  */
+extern void gdb_print_host_address (const void *addr, struct ui_file *stream);
+
+extern const char *host_address_to_string (const void *addr);
+
+/* Convert CORE_ADDR to string in platform-specific manner.
+   This is usually formatted similar to 0x%lx.  */
+extern const char *paddress (struct gdbarch *gdbarch, CORE_ADDR addr);
+
+/* Return a string representation in hexadecimal notation of ADDRESS,
+   which is suitable for printing.  */
+
+extern const char *print_core_address (struct gdbarch *gdbarch,
+				       CORE_ADDR address);
+
+/* Callback hash_f and eq_f for htab_create_alloc or htab_create_alloc_ex.  */
+extern hashval_t core_addr_hash (const void *ap);
+extern int core_addr_eq (const void *ap, const void *bp);
+
+/* %d for LONGEST */
+extern char *plongest (LONGEST l);
+/* %u for ULONGEST */
+extern char *pulongest (ULONGEST l);
+
+extern char *phex (ULONGEST l, int sizeof_l);
+extern char *phex_nz (ULONGEST l, int sizeof_l);
+extern char *int_string (LONGEST, int, int, int, int);
+
+/* Convert a CORE_ADDR into a HEX string with leading zeros.
+   The output from core_addr_to_string() can be passed direct to
+   string_to_core_addr().  */
+extern const char *core_addr_to_string (const CORE_ADDR addr);
+extern const char *core_addr_to_string_nz (const CORE_ADDR addr);
+extern CORE_ADDR string_to_core_addr (const char *my_string);
+
+/* Return a string that contains a number formatted as a hex
+   string.  */
+extern char *hex_string (LONGEST);
+extern char *hex_string_custom (LONGEST, int);
+
+extern void fprintf_symbol_filtered (struct ui_file *, const char *,
+				     enum language, int);
+
+extern void throw_perror_with_name (enum errors errcode, const char *string)
+  ATTRIBUTE_NORETURN;
+extern void perror_with_name (const char *) ATTRIBUTE_NORETURN;
+
+extern void perror_warning_with_name (const char *string);
+
+extern void print_sys_errmsg (const char *, int);
+
+/* Warnings and error messages.  */
+
+extern void (*deprecated_error_begin_hook) (void);
+
+/* Message to be printed before the warning message, when a warning occurs.  */
+
+extern char *warning_pre_print;
+
+extern void verror (const char *fmt, va_list ap)
+     ATTRIBUTE_NORETURN ATTRIBUTE_PRINTF (1, 0);
+
+extern void error (const char *fmt, ...)
+     ATTRIBUTE_NORETURN ATTRIBUTE_PRINTF (1, 2);
+
+extern void error_stream (struct ui_file *) ATTRIBUTE_NORETURN;
+
+extern void vfatal (const char *fmt, va_list ap)
+     ATTRIBUTE_NORETURN ATTRIBUTE_PRINTF (1, 0);
+
+extern void fatal (const char *fmt, ...)
+     ATTRIBUTE_NORETURN ATTRIBUTE_PRINTF (1, 2);
+
+extern void internal_verror (const char *file, int line, const char *,
+			     va_list ap)
+     ATTRIBUTE_NORETURN ATTRIBUTE_PRINTF (3, 0);
+
+extern void internal_vwarning (const char *file, int line,
+			       const char *, va_list ap)
+     ATTRIBUTE_PRINTF (3, 0);
+
+extern void internal_warning (const char *file, int line,
+			      const char *, ...) ATTRIBUTE_PRINTF (3, 4);
+
+extern void warning (const char *, ...) ATTRIBUTE_PRINTF (1, 2);
+
+extern void vwarning (const char *, va_list args) ATTRIBUTE_PRINTF (1, 0);
+
+/* Misc. utilities.  */
+
+/* Allocation and deallocation functions for the libiberty hash table
+   which use obstacks.  */
+void *hashtab_obstack_allocate (void *data, size_t size, size_t count);
+void dummy_obstack_deallocate (void *object, void *data);
+
+#ifdef HAVE_WAITPID
+extern pid_t wait_to_die_with_timeout (pid_t pid, int *status, int timeout);
+#endif
+
+extern int producer_is_gcc_ge_4 (const char *producer);
+
+extern int myread (int, char *, int);
+
+/* Ensure that V is aligned to an N byte boundary (B's assumed to be a
+   power of 2).  Round up/down when necessary.  Examples of correct
+   use include:
+
+   addr = align_up (addr, 8); -- VALUE needs 8 byte alignment
+   write_memory (addr, value, len);
+   addr += len;
+
+   and:
+
+   sp = align_down (sp - len, 16); -- Keep SP 16 byte aligned
+   write_memory (sp, value, len);
+
+   Note that uses such as:
+
+   write_memory (addr, value, len);
+   addr += align_up (len, 8);
+
+   and:
+
+   sp -= align_up (len, 8);
+   write_memory (sp, value, len);
+
+   are typically not correct as they don't ensure that the address (SP
+   or ADDR) is correctly aligned (relying on previous alignment to
+   keep things right).  This is also why the methods are called
+   "align_..." instead of "round_..." as the latter reads better with
+   this incorrect coding style.  */
+
+extern ULONGEST align_up (ULONGEST v, int n);
+extern ULONGEST align_down (ULONGEST v, int n);
+
+/* Sign extend VALUE.  BIT is the (1-based) index of the bit in VALUE
+   to sign-extend.  */
+
+extern LONGEST gdb_sign_extend (LONGEST value, int bit);
+
+#endif /* UTILS_H */
+@
+
+
+1.13
+log
+@warn if "source" fails to open the file when from_tty == 0
+
+Consider the following example:
+
+    % gdb -q -batch -ex 'source nonexistant-file'
+    [nothing]
+
+One would have at least expected the debugger to warn about
+not finding the file, similar to the error shown when using
+a more interactive mode. Eg:
+
+    (gdb) source nonexistant-file
+    nonexistant-file: No such file or directory.
+
+Not raising an error appears to be intentional, presumably in order
+to prevent this situation from stoping the execution of a GDB script.
+But the lack of at least a warning makes it harder for a user to
+diagnose any issue, if the file was expected to be there and readable.
+
+This patch adds a warning in that case:
+
+    % gdb -q -batch -ex 'source nonexistant-file'
+    warning: nonexistant-file: No such file or directory.
+
+gdb/ChangeLog:
+
+        * utils.h (perror_warning_with_name): Add declaration.
+        * utils.c (perror_warning_with_name): New function.
+        * cli/cli-cmds.c (source_script_with_search): Add call to
+        perror_warning_with_name if from_tty is nul.
+
+gdb/testsuite/ChangeLog:
+
+        * gdb.base/source-nofile.gdb: New file.
+        * gdb.base/source.exp: Add two tests verifying the behavior when
+        the "source" command is given a non-existant filename.
+@
+text
+@d131 2
+@
+
+
+1.12
+log
+@Constification of parse_linespec and fallout:
+https://sourceware.org/ml/gdb-patches/2013-09/msg01017.html
+https://sourceware.org/ml/gdb-patches/2013-09/msg01018.html
+https://sourceware.org/ml/gdb-patches/2013-09/msg01019.html
+https://sourceware.org/ml/gdb-patches/2013-09/msg01020.html
+@
+text
+@d288 2
+@
+
+
+1.11
+log
+@Remove error_pre_print and quit_pre_print.
+
+  http://sourceware.org/ml/gdb-patches/2013-07/msg00844.html
+
+gdb/ChangeLog
+
+        * cli/cli-script.c (script_from_file): Remove use of
+        error_pre_print.
+        * main.c (captured_main): Remove use of error_pre_print and
+        quit_pre_print.
+        * utils.c (error_pre_print, quit_pre_print): Remove.
+        * utils.h (error_pre_print, quit_pre_print): Likewise.
+@
+text
+@d67 1
+a67 1
+extern int parse_escape (struct gdbarch *, char **);
+@
+
+
+1.10
+log
+@Move pagination_enabled declaration to a proper place.
+
+Declare it close to other related declarations in utils.h, and remove
+local extern declaration hack.
+
+gdb/
+2013-06-28  Pedro Alves  <palves@@redhat.com>
+
+	* infrun.c (set_observer_mode): Don't declare pagination_enabled
+	here.
+	* utils.h (pagination_enabled): Declare.
+@
+text
+@a293 8
+/* Message to be printed before the error message, when an error occurs.  */
+
+extern char *error_pre_print;
+
+/* Message to be printed before the error message, when an error occurs.  */
+
+extern char *quit_pre_print;
+
+@
+
+
+1.9
+log
+@Fix PR symtab/15391
+
+PR symtab/15391 is a failure with the DW_OP_GNU_implicit_pointer
+feature.
+
+I tracked it down to a logic error in read_pieced_value.  The code
+truncates this_size_bits according to the type size and offset too
+early -- it should do it after taking bits_to_skip into account.
+
+This patch fixes the bug.
+
+While testing this, I also tripped across a latent bug because
+indirect_pieced_value does not sign-extend where needed.  This patch
+fixes this bug as well.
+
+Finally, Pedro pointed out that a previous version implemented sign
+extension incorrectly.  This version introduces a new gdb_sign_extend
+function for this.  A couple of notes on this function:
+
+* It has the gdb_ prefix to avoid clashes with various libraries that
+  felt free to avoid proper namespacing.  There is a "sign_extend"
+  function in a Tile GX header, in an SOM-related BFD header (and in
+  sh64-tdep.c and as a macro in arm-wince-tdep.c, but those are
+  ours...)
+
+* I looked at all the sign extensions in gdb and didn't see ones that
+  I felt comfortable converting to use this function; in large part
+  because I don't have a good way to test the conversion.
+
+Built and regtested on x86-64 Fedora 18.  New test cases included;
+this required a minor addition to the DWARF assembler.  Note that the
+DWARF CU made by implptrpiece.exp uses a funny pointer size in order
+to show the sign-extension bug on all platforms.
+
+	* dwarf2loc.c (read_pieced_value): Truncate this_size_bits
+	after taking bits_to_skip into account.  Sign extend byte_offset.
+	* utils.h (gdb_sign_extend): Declare.
+	* utils.c (gdb_sign_extend): New function.
+
+	* gdb.dwarf2/implptrpiece.exp: New file.
+	* gdb.dwarf2/implptrconst.exp (d): New variable.
+	Print d.
+	* lib/dwarf2.exp (Dwarf::_location): Handle DW_OP_piece.
+@
+text
+@d153 2
+@
+
+
+1.8
+log
+@Remove forward enum declaration in utils.h.
+
+These forward declarations are a GNU extension, and they trigger
+a build warning when the compiler does not support it.
+
+gdb/ChangeLog:
+
+        * utils.h: #include "exceptions.h".
+        (enum errors): Remove partial declaration.
+@
+text
+@d380 5
+@
+
+
+1.7
+log
+@gdb/
+	* exceptions.h (enum errors): New entry TARGET_CLOSE_ERROR.
+	* remote.c (trace_error): Remove the special handling of '2'.
+	(readchar) <SERIAL_EOF>
+	(readchar) <SERIAL_ERROR>
+	(getpkt_or_notif_sane_1): Use TARGET_CLOSE_ERROR for them.
+	(remote_get_trace_status): Call throw_exception if EX is
+	TARGET_CLOSE_ERROR.
+	* utils.c (perror_with_name): Rename to ...
+	(throw_perror_with_name): ... here.  New parameter errcode, describe it
+	in the function comment.
+	(perror_with_name): New function wrapper.
+	* utils.h (enum errors): New stub declaration.
+	(throw_perror_with_name): New declaration.
+
+gdb/testsuite/
+	* gdb.server/server-kill.c: New file.
+	* gdb.server/server-kill.exp: New file.
+@
+text
+@d25 1
+a281 1
+enum errors;
+@
+
+
+1.6
+log
+@	New commands "mt set per-command {space,time,symtab} {on,off}".
+	* NEWS: Add entry.
+	* event-top.c: #include "maint.h".
+	* main.c: #include "maint.h".
+	* maint.c: #include <sys/time.h>, <time.h>, block.h, top.h,
+	timeval-utils.h, maint.h, cli/cli-setshow.h.
+	(per_command_time, per_command_space): New static globals.
+	(per_command_symtab): New static global.
+	(per_command_setlist, per_command_showlist): New static globals.
+	(struct cmd_stats): Move here from utils.c.
+	(set_per_command_time): Renamed from set_display_time in utils.c
+	and moved here.  All callers updated.
+	(set_per_command_space): Renamed from set_display_space in utils.c
+	and moved here.  All callers updated.
+	(count_symtabs_and_blocks): New function.
+	(report_command_stats): Moved here from utils.c.  Add support for
+	printing symtab stats.  Only print data if enabled before command
+	executed.
+	(make_command_stats_cleanup): Ditto.
+	(sert_per_command_cmd, show_per_command_cmd): New functions.
+	(_initialize_maint_cmds): Add new commands
+	mt set per-command {space,time,symtab} {on,off}.
+	* maint.h: New file.
+	* top.c: #include "maint.h".
+	* utils.c (reset_prompt_for_continue_wait_time): New function.
+	(get_prompt_for_continue_wait_time): New function.
+	* utils.h (reset_prompt_for_continue_wait_time): Declare
+	(get_prompt_for_continue_wait_time): Declare.
+	(make_command_stats_cleanup): Moved to maint.h.
+	(set_display_time, set_display_space): Moved to maint.h and renamed
+	to set_per_command_time, set_per_command_space.
+	* cli/cli-setshow.c (parse_cli_boolean_value): Renamed from
+	parse_binary_operation and made non-static.  Don't call error,
+	just return an error marker.  All callers updated.
+	* cli/cli-setshow.h (parse_cli_boolean_value): Declare.
+
+	doc/
+	* gdb.texinfo (Maintenance Commands): Add docs for
+	"mt set per-command {space,time,symtab} {on,off}".
+
+	testsuite/
+	* gdb.base/maint.exp: Update tests for per-command stats.
+@
+text
+@d281 3
+@
+
+
+1.5
+log
+@gdb/
+	Replace xfullpath calls by gdb_realpath calls.
+	* cli/cli-cmds.c (find_and_open_script): Remove xfullpath from the
+	function comment.
+	* dwarf2read.c (dw2_map_expand_apply): Remove parameter full_path.
+	Remove it from the iterate_over_some_symtabs call.
+	(dw2_map_symtabs_matching_filename): Remove parameter full_path.
+	Remove it from the dw2_map_expand_apply calls, remove a block handling
+	it.
+	* psymtab.c (partial_map_expand_apply): Remove parameter full_path.
+	Remove it from the iterate_over_some_symtabs call.
+	(partial_map_symtabs_matching_filename): Remove parameter full_path.
+	Remove it from the partial_map_expand_apply calls, remove a block
+	handling it.  Drop gdb_realpath call and cleanups from the real_path
+	handling.
+	* source.c (openp): Drop the comment part about xfullpath.  Replace
+	xfullpath calls by gdb_realpath calls.
+	(find_and_open_source): Replace xfullpath call by gdb_realpath call.
+	* symfile.h (struct quick_symbol_functions): Remove parameter full_path
+	from method map_symtabs_matching_filename and its comment.
+	* symmisc.c (maintenance_print_msymbols): Replace xfullpath call by
+	gdb_realpath call.
+	* symtab.c (iterate_over_some_symtabs): Remove parameter full_path,
+	remove it also from the function comment, remove a block handling it.
+	Drop gdb_realpath call and cleanups from the real_path handling.
+	(iterate_over_symtabs): Drop variable full_path and its use.
+	* symtab.h (iterate_over_some_symtabs): Remove parameter full_path.
+	* utils.c (xfullpath): Remove.
+	* utils.h (xfullpath): Remove.
+
+gdb/testsuite/
+	* gdb.gdb/xfullpath.exp: Replace xfullpath calls by gdb_realpath calls.
+@
+text
+@d56 5
+a117 2
+extern struct cleanup *make_command_stats_cleanup (int);
+
+a141 4
+extern void set_display_time (int);
+
+extern void set_display_space (int);
+
+@
+
+
+1.5.2.1
+log
+@gdb/
+	* exceptions.h (enum errors): New entry TARGET_CLOSE_ERROR.
+	* remote.c (trace_error): Remove the special handling of '2'.
+	(readchar) <SERIAL_EOF>
+	(readchar) <SERIAL_ERROR>
+	(getpkt_or_notif_sane_1): Use TARGET_CLOSE_ERROR for them.
+	(remote_get_trace_status): Call throw_exception if EX is
+	TARGET_CLOSE_ERROR.
+	* utils.c (perror_with_name): Rename to ...
+	(throw_perror_with_name): ... here.  New parameter errcode, describe it
+	in the function comment.
+	(perror_with_name): New function wrapper.
+	* utils.h (enum errors): New stub declaration.
+	(throw_perror_with_name): New declaration.
+
+gdb/testsuite/
+	* gdb.server/server-kill.c: New file.
+	* gdb.server/server-kill.exp: New file.
+@
+text
+@a281 3
+enum errors;
+extern void throw_perror_with_name (enum errors errcode, const char *string)
+  ATTRIBUTE_NORETURN;
+@
+
+
+1.5.2.2
+log
+@Remove forward enum declaration in utils.h.
+
+These forward declarations are a GNU extension, and they trigger
+a build warning when the compiler does not support it.
+
+gdb/ChangeLog:
+
+        * utils.h: #include "exceptions.h".
+        (enum errors): Remove partial declaration.
+@
+text
+@a24 1
+#include "exceptions.h"
+d282 1
+@
+
+
+1.4
+log
+@	* symfile.c (get_file_crc): Use bfd_calc_gnu_debuglink_crc32.
+	* utils.c (gnu_debuglink_crc32): Remove.
+	* utils.h (gnu_debuglink_crc32): Don't declare.
+@
+text
+@a126 2
+extern char *xfullpath (const char *);
+
+@
+
+
+1.3
+log
+@gdb/
+	* parse.c (parse_exp_in_context): New variable inner_chain.  Call
+	make_cleanup_restore_current_language.  Call set_language.  Move
+	OLD_CHAIN and INNER_CHAIN cleanups.
+	* utils.c (do_restore_current_language)
+	(make_cleanup_restore_current_language): New functions.
+	* utils.h (make_cleanup_restore_current_language): New declaration.
+
+gdb/testsuite/
+	* gdb.cp/parse-lang.cc: New file.
+	* gdb.cp/parse-lang.exp: New file.
+@
+text
+@a345 3
+extern unsigned long gnu_debuglink_crc32 (unsigned long crc,
+                                          unsigned char *buf, size_t len);
+
+@
+
+
+1.2
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@d107 2
+@
+
+
+1.1
+log
+@	* common/gdb_vecs.h: Moved here from ./gdb_vecs.h.
+	* common/gdb_vecs.c: New file, contents from utils.c.
+	* common/host-defs.h: New file, contents from defs.h.
+	* utils.h: New file, contents from defs.h.
+	* defs.h: Move all declarations of objects defined in utils.c
+	to utils.h (except QUIT() and related).
+	#include "utils.h", "host-defs.h".
+	* probe.h (probe_p): Move here from gdb_vecs.h.
+	* symfile.c: #include "probe.h" instead of "gdb_vecs.h".
+	* utils.c (free_char_ptr_vec): Moved to common/gdb_vecs.c.
+	(dirnames_to_char_ptr_vec_append, dirnames_to_char_ptr_vec): Ditto.
+	* Makefile.in (SFILES): Add common/gdb_vecs.c.
+	(HFILES_NO_SRCDIR): Add common/gdb_vecs.h, common/host-defs.h, utils.h.
+	(COMMON_OBS): Add gdb_vecs.o.
+	(gdb_vecs.o): New rule.
+@
+text
+@d4 1
+a4 1
+   Copyright (C) 1986, 1988-2005, 2007-2012 Free Software Foundation, Inc.
+@
+

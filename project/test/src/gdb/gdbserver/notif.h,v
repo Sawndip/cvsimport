@@ -1,0 +1,164 @@
+head	1.3;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.2
+	gdb_7_6-2013-04-26-release:1.2
+	gdb_7_6-branch:1.2.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.2;
+locks; strict;
+comment	@ * @;
+
+
+1.3
+date	2013.07.02.10.08.01;	author mgherzan;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2013.01.01.06.33.00;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2012.12.15.02.48.17;	author qiyao;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.3
+log
+@gdbserver: avoid empty structs
+
+2013-06-25  Mircea Gherzan  <mircea.gherzan@@intel.com>
+
+gdbserver/
+
+	* notif.h (notif_event): Add a dummy member to avoid compiler
+	errors.
+
+Change-Id: I490dbdb70a24f52b3947371f7c0397bf7a18423c
+Signed-off-by: Mircea Gherzan <mircea.gherzan@@intel.com>
+@
+text
+@/* Notification to GDB.
+   Copyright (C) 1989-2013 Free Software Foundation, Inc.
+
+   This file is part of GDB.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+#include "ptid.h"
+#include "server.h"
+#include "target.h"
+#include "queue.h"
+
+/* Structure holding information related to a single event.  We
+   keep a queue of these to push to GDB.  It can be extended if
+   the event of given notification contains more information.  */
+
+typedef struct notif_event
+{
+  /* C requires that a struct or union has at least one member.  */
+  char dummy;
+} *notif_event_p;
+
+DECLARE_QUEUE_P (notif_event_p);
+
+/* A type notification to GDB.  An object of 'struct notif_server'
+   represents a type of notification.  */
+
+typedef struct notif_server
+{
+  /* The name of ack packet, for example, 'vStopped'.  */
+  const char *ack_name;
+
+  /* The notification packet, for example, '%Stop'.  Note that '%' is
+     not in 'notif_name'.  */
+  const char *notif_name;
+
+  /* A queue of events to GDB.  A new notif_event can be enque'ed
+     into QUEUE at any appropriate time, and the notif_reply is
+     deque'ed only when the ack from GDB arrives.  */
+  QUEUE (notif_event_p) *queue;
+
+  /* Write event EVENT to OWN_BUF.  */
+  void (*write) (struct notif_event *event, char *own_buf);
+} *notif_server_p;
+
+extern struct notif_server notif_stop;
+
+int handle_notif_ack (char *own_buf, int packet_len);
+void notif_write_event (struct notif_server *notif, char *own_buf);
+
+void notif_push (struct notif_server *np, struct notif_event *event);
+void notif_event_enque (struct notif_server *notif,
+			struct notif_event *event);
+
+void initialize_notif (void);
+@
+
+
+1.2
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@d30 2
+@
+
+
+1.1
+log
+@gdb/gdbserver/
+2012-12-15  Yao Qi  <yao@@codesourcery.com>
+
+	* Makefile.in (OBS): Add notif.o.
+	* notif.c, notif.h: New.
+	* server.c: Include "notif.h".
+	(struct vstop_notif) <next>: Remove.
+	<base>: New field.
+	(queue_stop_reply): Update.
+	(push_event, send_next_stop_reply): Remove.
+	(discard_queued_stop_replies): Update.
+	(notif_stop): New variable.
+	(handle_v_stopped): Remove.
+	(handle_v_requests): Don't call handle_v_stopped.  Call
+	handle_ack_notif instead.
+	(queue_stop_reply_callback): Call notif_event_enque instead
+	of queue_stop_reply.
+	(handle_status): Don't call send_next_stop_reply, call
+	notif_write_event instead.
+	(kill_inferior_callback): Likewise.
+	(detach_or_kill_inferior_callback): Likewise.
+	(main): Call initialize_notif.
+	(process_serial_event): Call QUEUE_is_empty.
+	(handle_target_event): Call notif_push instead of push event.
+	* server.h (push_event): Remove declaration.
+@
+text
+@d2 1
+a2 2
+   Copyright (C) 1989, 1993-1995, 1997-2000, 2002-2012 Free Software
+   Foundation, Inc.
+@
+

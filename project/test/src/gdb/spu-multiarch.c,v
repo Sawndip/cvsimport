@@ -1,0 +1,1082 @@
+head	1.13;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.11
+	gdb_7_6-2013-04-26-release:1.11
+	gdb_7_6-branch:1.11.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.11
+	gdb_7_5_1-2012-11-29-release:1.8
+	gdb_7_5-2012-08-17-release:1.8
+	gdb_7_5-branch:1.8.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.8
+	gdb_7_4_1-2012-04-26-release:1.5.4.1
+	gdb_7_4-2012-01-24-release:1.5.4.1
+	gdb_7_4-branch:1.5.0.4
+	gdb_7_4-2011-12-13-branchpoint:1.5
+	gdb_7_3_1-2011-09-04-release:1.5
+	gdb_7_3-2011-07-26-release:1.5
+	gdb_7_3-branch:1.5.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.5
+	gdb_7_2-2010-09-02-release:1.4
+	gdb_7_2-branch:1.4.0.2
+	gdb_7_2-2010-07-07-branchpoint:1.4
+	gdb_7_1-2010-03-18-release:1.3
+	gdb_7_1-branch:1.3.0.2
+	gdb_7_1-2010-02-18-branchpoint:1.3
+	gdb_7_0_1-2009-12-22-release:1.1
+	gdb_7_0-2009-10-06-release:1.1
+	gdb_7_0-branch:1.1.0.2
+	gdb_7_0-2009-09-16-branchpoint:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.13
+date	2013.08.05.16.54.27;	author tromey;	state Exp;
+branches;
+next	1.12;
+
+1.12
+date	2013.04.19.15.10.53;	author palves;	state Exp;
+branches;
+next	1.11;
+
+1.11
+date	2013.03.01.15.38.26;	author palves;	state Exp;
+branches;
+next	1.10;
+
+1.10
+date	2013.01.01.06.32.51;	author brobecke;	state Exp;
+branches;
+next	1.9;
+
+1.9
+date	2012.11.09.19.58.01;	author tromey;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2012.05.18.21.02.50;	author sergiodj;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2012.03.02.00.06.13;	author jkratoch;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2012.01.04.08.17.12;	author brobecke;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2011.01.01.15.33.15;	author brobecke;	state Exp;
+branches
+	1.5.4.1;
+next	1.4;
+
+1.4
+date	2010.06.19.17.36.50;	author uweigand;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2010.01.01.07.31.42;	author brobecke;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2009.12.20.11.51.26;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2009.07.31.15.28.27;	author uweigand;	state Exp;
+branches;
+next	;
+
+1.5.4.1
+date	2012.01.06.04.43.30;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.13
+log
+@more add_target removals
+
+This removes a few more erroneous calls to add_target.  These calls
+end up installing the target in a user-visible way; but these targets
+are all auto-activated and, I think, should never be explicitly
+requested.
+
+I have no way to test these.
+
+	* aix-thread.c (_initialize_aix_thread): Use
+	complete_target_initialization.
+	* bsd-uthread.c (_initialize_bsd_uthread): Use
+	complete_target_initialization.
+	* dec-thread.c (_initialize_dec_thread): Use
+	complete_target_initialization.
+	* ravenscar-thread.c (_initialize_ravenscar): Use
+	complete_target_initialization.
+	* sol-thread.c (_initialize_sol_thread): Use
+	complete_target_initialization.
+	* spu-multiarch.c (_initialize_spu_multiarch): Use
+	complete_target_initialization.
+@
+text
+@/* Cell SPU GNU/Linux multi-architecture debugging support.
+   Copyright (C) 2009-2013 Free Software Foundation, Inc.
+
+   Contributed by Ulrich Weigand <uweigand@@de.ibm.com>.
+
+   This file is part of GDB.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+#include "defs.h"
+#include "gdbcore.h"
+#include "gdbcmd.h"
+#include "gdb_string.h"
+#include "gdb_assert.h"
+#include "arch-utils.h"
+#include "observer.h"
+#include "inferior.h"
+#include "regcache.h"
+#include "symfile.h"
+#include "objfiles.h"
+#include "solib.h"
+#include "solist.h"
+
+#include "ppc-tdep.h"
+#include "ppc-linux-tdep.h"
+#include "spu-tdep.h"
+
+/* This module's target vector.  */
+static struct target_ops spu_ops;
+
+/* Number of SPE objects loaded into the current inferior.  */
+static int spu_nr_solib;
+
+/* Stand-alone SPE executable?  */
+#define spu_standalone_p() \
+  (symfile_objfile && symfile_objfile->obfd \
+   && bfd_get_arch (symfile_objfile->obfd) == bfd_arch_spu)
+
+/* PPU side system calls.  */
+#define INSTR_SC	0x44000002
+#define NR_spu_run	0x0116
+
+/* If the PPU thread is currently stopped on a spu_run system call,
+   return to FD and ADDR the file handle and NPC parameter address
+   used with the system call.  Return non-zero if successful.  */
+static int
+parse_spufs_run (ptid_t ptid, int *fd, CORE_ADDR *addr)
+{
+  enum bfd_endian byte_order = gdbarch_byte_order (target_gdbarch ());
+  struct gdbarch_tdep *tdep;
+  struct regcache *regcache;
+  gdb_byte buf[4];
+  ULONGEST regval;
+
+  /* If we're not on PPU, there's nothing to detect.  */
+  if (gdbarch_bfd_arch_info (target_gdbarch ())->arch != bfd_arch_powerpc)
+    return 0;
+
+  /* Get PPU-side registers.  */
+  regcache = get_thread_arch_regcache (ptid, target_gdbarch ());
+  tdep = gdbarch_tdep (target_gdbarch ());
+
+  /* Fetch instruction preceding current NIP.  */
+  if (target_read_memory (regcache_read_pc (regcache) - 4, buf, 4) != 0)
+    return 0;
+  /* It should be a "sc" instruction.  */
+  if (extract_unsigned_integer (buf, 4, byte_order) != INSTR_SC)
+    return 0;
+  /* System call number should be NR_spu_run.  */
+  regcache_cooked_read_unsigned (regcache, tdep->ppc_gp0_regnum, &regval);
+  if (regval != NR_spu_run)
+    return 0;
+
+  /* Register 3 contains fd, register 4 the NPC param pointer.  */
+  regcache_cooked_read_unsigned (regcache, PPC_ORIG_R3_REGNUM, &regval);
+  *fd = (int) regval;
+  regcache_cooked_read_unsigned (regcache, tdep->ppc_gp0_regnum + 4, &regval);
+  *addr = (CORE_ADDR) regval;
+  return 1;
+}
+
+/* Find gdbarch for SPU context SPUFS_FD.  */
+static struct gdbarch *
+spu_gdbarch (int spufs_fd)
+{
+  struct gdbarch_info info;
+  gdbarch_info_init (&info);
+  info.bfd_arch_info = bfd_lookup_arch (bfd_arch_spu, bfd_mach_spu);
+  info.byte_order = BFD_ENDIAN_BIG;
+  info.osabi = GDB_OSABI_LINUX;
+  info.tdep_info = (void *) &spufs_fd;
+  return gdbarch_find_by_info (info);
+}
+
+/* Override the to_thread_architecture routine.  */
+static struct gdbarch *
+spu_thread_architecture (struct target_ops *ops, ptid_t ptid)
+{
+  int spufs_fd;
+  CORE_ADDR spufs_addr;
+
+  if (parse_spufs_run (ptid, &spufs_fd, &spufs_addr))
+    return spu_gdbarch (spufs_fd);
+
+  return target_gdbarch ();
+}
+
+/* Override the to_region_ok_for_hw_watchpoint routine.  */
+static int
+spu_region_ok_for_hw_watchpoint (CORE_ADDR addr, int len)
+{
+  struct target_ops *ops_beneath = find_target_beneath (&spu_ops);
+  while (ops_beneath && !ops_beneath->to_region_ok_for_hw_watchpoint)
+    ops_beneath = find_target_beneath (ops_beneath);
+
+  /* We cannot watch SPU local store.  */
+  if (SPUADDR_SPU (addr) != -1)
+    return 0;
+
+  if (ops_beneath)
+    return ops_beneath->to_region_ok_for_hw_watchpoint (addr, len);
+
+  return 0;
+}
+
+/* Override the to_fetch_registers routine.  */
+static void
+spu_fetch_registers (struct target_ops *ops,
+		     struct regcache *regcache, int regno)
+{
+  struct gdbarch *gdbarch = get_regcache_arch (regcache);
+  enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
+  struct target_ops *ops_beneath = find_target_beneath (ops);
+  int spufs_fd;
+  CORE_ADDR spufs_addr;
+
+  /* This version applies only if we're currently in spu_run.  */
+  if (gdbarch_bfd_arch_info (gdbarch)->arch != bfd_arch_spu)
+    {
+      while (ops_beneath && !ops_beneath->to_fetch_registers)
+	ops_beneath = find_target_beneath (ops_beneath);
+
+      gdb_assert (ops_beneath);
+      ops_beneath->to_fetch_registers (ops_beneath, regcache, regno);
+      return;
+    }
+
+  /* We must be stopped on a spu_run system call.  */
+  if (!parse_spufs_run (inferior_ptid, &spufs_fd, &spufs_addr))
+    return;
+
+  /* The ID register holds the spufs file handle.  */
+  if (regno == -1 || regno == SPU_ID_REGNUM)
+    {
+      gdb_byte buf[4];
+      store_unsigned_integer (buf, 4, byte_order, spufs_fd);
+      regcache_raw_supply (regcache, SPU_ID_REGNUM, buf);
+    }
+
+  /* The NPC register is found in PPC memory at SPUFS_ADDR.  */
+  if (regno == -1 || regno == SPU_PC_REGNUM)
+    {
+      gdb_byte buf[4];
+
+      if (target_read (ops_beneath, TARGET_OBJECT_MEMORY, NULL,
+		       buf, spufs_addr, sizeof buf) == sizeof buf)
+	regcache_raw_supply (regcache, SPU_PC_REGNUM, buf);
+    }
+
+  /* The GPRs are found in the "regs" spufs file.  */
+  if (regno == -1 || (regno >= 0 && regno < SPU_NUM_GPRS))
+    {
+      gdb_byte buf[16 * SPU_NUM_GPRS];
+      char annex[32];
+      int i;
+
+      xsnprintf (annex, sizeof annex, "%d/regs", spufs_fd);
+      if (target_read (ops_beneath, TARGET_OBJECT_SPU, annex,
+		       buf, 0, sizeof buf) == sizeof buf)
+	for (i = 0; i < SPU_NUM_GPRS; i++)
+	  regcache_raw_supply (regcache, i, buf + i*16);
+    }
+}
+
+/* Override the to_store_registers routine.  */
+static void
+spu_store_registers (struct target_ops *ops,
+		     struct regcache *regcache, int regno)
+{
+  struct gdbarch *gdbarch = get_regcache_arch (regcache);
+  struct target_ops *ops_beneath = find_target_beneath (ops);
+  int spufs_fd;
+  CORE_ADDR spufs_addr;
+
+  /* This version applies only if we're currently in spu_run.  */
+  if (gdbarch_bfd_arch_info (gdbarch)->arch != bfd_arch_spu)
+    {
+      while (ops_beneath && !ops_beneath->to_fetch_registers)
+	ops_beneath = find_target_beneath (ops_beneath);
+
+      gdb_assert (ops_beneath);
+      ops_beneath->to_store_registers (ops_beneath, regcache, regno);
+      return;
+    }
+
+  /* We must be stopped on a spu_run system call.  */
+  if (!parse_spufs_run (inferior_ptid, &spufs_fd, &spufs_addr))
+    return;
+
+  /* The NPC register is found in PPC memory at SPUFS_ADDR.  */
+  if (regno == -1 || regno == SPU_PC_REGNUM)
+    {
+      gdb_byte buf[4];
+      regcache_raw_collect (regcache, SPU_PC_REGNUM, buf);
+
+      target_write (ops_beneath, TARGET_OBJECT_MEMORY, NULL,
+		    buf, spufs_addr, sizeof buf);
+    }
+
+  /* The GPRs are found in the "regs" spufs file.  */
+  if (regno == -1 || (regno >= 0 && regno < SPU_NUM_GPRS))
+    {
+      gdb_byte buf[16 * SPU_NUM_GPRS];
+      char annex[32];
+      int i;
+
+      for (i = 0; i < SPU_NUM_GPRS; i++)
+	regcache_raw_collect (regcache, i, buf + i*16);
+
+      xsnprintf (annex, sizeof annex, "%d/regs", spufs_fd);
+      target_write (ops_beneath, TARGET_OBJECT_SPU, annex,
+		    buf, 0, sizeof buf);
+    }
+}
+
+/* Override the to_xfer_partial routine.  */
+static LONGEST
+spu_xfer_partial (struct target_ops *ops, enum target_object object,
+		  const char *annex, gdb_byte *readbuf,
+		  const gdb_byte *writebuf, ULONGEST offset, LONGEST len)
+{
+  struct target_ops *ops_beneath = find_target_beneath (ops);
+  while (ops_beneath && !ops_beneath->to_xfer_partial)
+    ops_beneath = find_target_beneath (ops_beneath);
+  gdb_assert (ops_beneath);
+
+  /* Use the "mem" spufs file to access SPU local store.  */
+  if (object == TARGET_OBJECT_MEMORY)
+    {
+      int fd = SPUADDR_SPU (offset);
+      CORE_ADDR addr = SPUADDR_ADDR (offset);
+      char mem_annex[32], lslr_annex[32];
+      gdb_byte buf[32];
+      ULONGEST lslr;
+      LONGEST ret;
+
+      if (fd >= 0)
+	{
+	  xsnprintf (mem_annex, sizeof mem_annex, "%d/mem", fd);
+	  ret = ops_beneath->to_xfer_partial (ops_beneath, TARGET_OBJECT_SPU,
+					      mem_annex, readbuf, writebuf,
+					      addr, len);
+	  if (ret > 0)
+	    return ret;
+
+	  /* SPU local store access wraps the address around at the
+	     local store limit.  We emulate this here.  To avoid needing
+	     an extra access to retrieve the LSLR, we only do that after
+	     trying the original address first, and getting end-of-file.  */
+	  xsnprintf (lslr_annex, sizeof lslr_annex, "%d/lslr", fd);
+	  memset (buf, 0, sizeof buf);
+	  if (ops_beneath->to_xfer_partial (ops_beneath, TARGET_OBJECT_SPU,
+					    lslr_annex, buf, NULL,
+					    0, sizeof buf) <= 0)
+	    return ret;
+
+	  lslr = strtoulst ((char *) buf, NULL, 16);
+	  return ops_beneath->to_xfer_partial (ops_beneath, TARGET_OBJECT_SPU,
+					       mem_annex, readbuf, writebuf,
+					       addr & lslr, len);
+	}
+    }
+
+  return ops_beneath->to_xfer_partial (ops_beneath, object, annex,
+				       readbuf, writebuf, offset, len);
+}
+
+/* Override the to_search_memory routine.  */
+static int
+spu_search_memory (struct target_ops* ops,
+		   CORE_ADDR start_addr, ULONGEST search_space_len,
+		   const gdb_byte *pattern, ULONGEST pattern_len,
+		   CORE_ADDR *found_addrp)
+{
+  struct target_ops *ops_beneath = find_target_beneath (ops);
+  while (ops_beneath && !ops_beneath->to_search_memory)
+    ops_beneath = find_target_beneath (ops_beneath);
+
+  /* For SPU local store, always fall back to the simple method.  Likewise
+     if we do not have any target-specific special implementation.  */
+  if (!ops_beneath || SPUADDR_SPU (start_addr) >= 0)
+    return simple_search_memory (ops,
+				 start_addr, search_space_len,
+				 pattern, pattern_len, found_addrp);
+
+  return ops_beneath->to_search_memory (ops_beneath,
+					start_addr, search_space_len,
+					pattern, pattern_len, found_addrp);
+}
+
+
+/* Push and pop the SPU multi-architecture support target.  */
+
+static void
+spu_multiarch_activate (void)
+{
+  /* If GDB was configured without SPU architecture support,
+     we cannot install SPU multi-architecture support either.  */
+  if (spu_gdbarch (-1) == NULL)
+    return;
+
+  push_target (&spu_ops);
+
+  /* Make sure the thread architecture is re-evaluated.  */
+  registers_changed ();
+}
+
+static void
+spu_multiarch_deactivate (void)
+{
+  unpush_target (&spu_ops);
+
+  /* Make sure the thread architecture is re-evaluated.  */
+  registers_changed ();
+}
+
+static void
+spu_multiarch_inferior_created (struct target_ops *ops, int from_tty)
+{
+  if (spu_standalone_p ())
+    spu_multiarch_activate ();
+}
+
+static void
+spu_multiarch_solib_loaded (struct so_list *so)
+{
+  if (!spu_standalone_p ())
+    if (so->abfd && bfd_get_arch (so->abfd) == bfd_arch_spu)
+      if (spu_nr_solib++ == 0)
+	spu_multiarch_activate ();
+}
+
+static void
+spu_multiarch_solib_unloaded (struct so_list *so)
+{
+  if (!spu_standalone_p ())
+    if (so->abfd && bfd_get_arch (so->abfd) == bfd_arch_spu)
+      if (--spu_nr_solib == 0)
+	spu_multiarch_deactivate ();
+}
+
+static void
+spu_mourn_inferior (struct target_ops *ops)
+{
+  struct target_ops *ops_beneath = find_target_beneath (ops);
+  while (ops_beneath && !ops_beneath->to_mourn_inferior)
+    ops_beneath = find_target_beneath (ops_beneath);
+
+  gdb_assert (ops_beneath);
+  ops_beneath->to_mourn_inferior (ops_beneath);
+  spu_multiarch_deactivate ();
+}
+
+
+/* Initialize the SPU multi-architecture support target.  */
+
+static void
+init_spu_ops (void)
+{
+  spu_ops.to_shortname = "spu";
+  spu_ops.to_longname = "SPU multi-architecture support.";
+  spu_ops.to_doc = "SPU multi-architecture support.";
+  spu_ops.to_mourn_inferior = spu_mourn_inferior;
+  spu_ops.to_fetch_registers = spu_fetch_registers;
+  spu_ops.to_store_registers = spu_store_registers;
+  spu_ops.to_xfer_partial = spu_xfer_partial;
+  spu_ops.to_search_memory = spu_search_memory;
+  spu_ops.to_region_ok_for_hw_watchpoint = spu_region_ok_for_hw_watchpoint;
+  spu_ops.to_thread_architecture = spu_thread_architecture;
+  spu_ops.to_stratum = arch_stratum;
+  spu_ops.to_magic = OPS_MAGIC;
+}
+
+/* -Wmissing-prototypes */
+extern initialize_file_ftype _initialize_spu_multiarch;
+
+void
+_initialize_spu_multiarch (void)
+{
+  /* Install ourselves on the target stack.  */
+  init_spu_ops ();
+  complete_target_initialization (&spu_ops);
+
+  /* Install observers to watch for SPU objects.  */
+  observer_attach_inferior_created (spu_multiarch_inferior_created);
+  observer_attach_solib_loaded (spu_multiarch_solib_loaded);
+  observer_attach_solib_unloaded (spu_multiarch_solib_unloaded);
+}
+
+@
+
+
+1.12
+log
+@-Wpointer-sign: gdb_byte -> char.
+
+This is sort of the opposite of the previous patch.  Places that
+manipulate strings or interfaces that return strings are changed to
+use char* instead of gdb_byte*.
+
+gdb/
+2013-04-19  Pedro Alves  <palves@@redhat.com>
+
+	* avr-tdep.c (avr_io_reg_read_command): New local 'bufstr'.  Use
+	it to get a string view of the byte buffer.
+	* i386-cygwin-tdep.c (core_process_module_section): Change local 'buf'
+	type to gdb_byte *.  Adjust.
+	* linux-tdep.c (linux_info_proc, linux_find_memory_regions_full):
+	Change local to char *.
+	* solib-darwin.c (find_program_interpreter): Change return type to
+	char *.  Adjust.
+	(darwin_solib_get_all_image_info_addr_at_init): Adjust.
+	* solib-dsbt.c (enable_break2): Change local 'buf' to char *.
+	* solib-frv.c (enable_break2): Change local 'buf' to char *.
+	* solib-spu.c (spu_current_sos): Add gdb_byte * cast.
+	* solib-svr4.c (find_program_interpreter): Change return type to
+	char *.  Adjust.
+	(enable_break): Change local 'interp_name' to char *.
+	* spu-multiarch.c (spu_xfer_partial): Add cast to 'char *'.
+	* spu-tdep.c (spu_pseudo_register_read_spu): Add cast to 'char *'.
+	(spu_pseudo_register_write_spu): Use char for string buffer.
+	Adjust.
+	(info_spu_event_command, info_spu_signal_command): Add casts to
+	'char *'.
+@
+text
+@d413 1
+a413 1
+  add_target (&spu_ops);
+@
+
+
+1.11
+log
+@Use gdb_byte for bytes from the program being debugged.
+
+gdb_byte should be used for bytes from the program being debugged.  We
+have many places using char or unsigned char instead all over the
+existing ports, and more ends up added over time due to copy/paste as
+new code is based on old code.
+
+I've greped the tree for "char buf[", and fixed all I found.
+
+Tested by building with --enable-targets=all.
+
+2013-03-01  Pedro Alves  <palves@@redhat.com>
+
+	Use gdb_byte for bytes from the program being debugged.
+
+	* arm-tdep.c (arm_store_return_value, arm_get_longjmp_target):
+	Change type of local 'buf' to gdb_byte.
+	* avr-tdep.c (avr_frame_prev_register, avr_push_dummy_call): Likewise.
+	* bfin-tdep.c (bfin_push_dummy_call): Likewise.
+	* cris-tdep.c (cris_sigcontext_addr)
+	(cris_sigtramp_frame_unwind_cache): Likewise.
+	* frv-linux-tdep.c (frv_linux_pc_in_sigtramp)
+	(frv_linux_sigcontext_reg_addr, frv_linux_sigtramp_frame_cache):
+	Likewise.
+	* frv-tdep.c (frv_pseudo_register_write, frv_analyze_prologue): Likewise.
+	* hppa-hpux-tdep.c (hppa32_hpux_find_global_pointer)
+	(hppa32_hpux_search_dummy_call_sequence)
+	(hppa_hpux_supply_save_state): Likewise.
+	* hppa-linux-tdep.c (insns_match_pattern)
+	(hppa_linux_find_global_pointer): Likewise.
+	* hppa-tdep.c (hppa_in_function_epilogue_p)
+	(skip_prologue_hard_way, hppa_frame_cache): Likewise.
+	* i386-nto-tdep.c (i386nto_sigcontext_addr): Likewise.
+	* i386fbsd-tdep.c (i386fbsd_supply_uthread)
+	(i386fbsd_collect_uthread): Likewise.
+	* ia64-hpux-tdep.c (ia64_hpux_push_dummy_code): Likewise.
+	* ia64-linux-tdep.c (ia64_linux_sigcontext_register_address): Likewise.
+	* ia64-tdep.c (examine_prologue, ia64_frame_cache)
+	(ia64_frame_prev_register, ia64_sigtramp_frame_cache)
+	(ia64_sigtramp_frame_prev_register, ia64_access_reg)
+	(ia64_access_rse_reg, ia64_libunwind_frame_this_id)
+	(ia64_libunwind_frame_prev_register)
+	(ia64_libunwind_sigtramp_frame_this_id)
+	(ia64_find_global_pointer_from_dynamic_section)
+	(find_extant_func_descr, find_func_descr, ia64_dummy_id)
+	(ia64_unwind_pc): Likewise.
+	* iq2000-tdep.c (iq2000_store_return_value): Likewise.
+	* m68hc11-tdep.c (m68hc11_push_dummy_call)
+	(m68hc11_extract_return_value): Likewise.
+	* m68klinux-nat.c (fetch_register, store_register): Likewise.
+	* mep-tdep.c (mep_pseudo_cr32_read, mep_pseudo_cr32_write)
+	(mep_get_insn, mep_push_dummy_call): Likewise.
+	* mips-linux-tdep.c (mips_linux_get_longjmp_target)
+	(mips_linux_in_dynsym_stub): Likewise.
+	* mn10300-tdep.c (mep_pseudo_cr32_write): Likewise.
+	* ppc-linux-nat.c (fetch_register, store_register): Likewise.
+	* regcache.c (dump_endian_bytes): Change type of parameter 'buf'
+	to gdb_byte.
+	* remote-mips.c (mips_set_register): Likewise.
+	* remote-sim.c (gdbsim_fetch_register): Likewise.
+	* score-tdep.c (score7_fetch_inst): Change type of parameter
+	'memblock' and local 'buf' to gdb_byte.
+	(score7_malloc_and_get_memblock): Change return type to gdb_byte.
+	Change type of local 'buf' to gdb_byte.  Adjust.
+	(score7_adjust_memblock_ptr): Change type of parameter 'memblock'
+	to gdb_byte**.
+	(score7_analyze_prologue): Change type of 'memblock' and
+	'memblock_ptr' locals to gdb_byte*.
+	* sh64-tdep.c (sh64_extract_return_value)
+	(sh64_store_return_value): Change type of local 'buf' to gdb_byte.
+	* solib-darwin.c (darwin_current_sos, darwin_read_exec_load_addr):
+	* solib-pa64.c (pa64_solib_create_inferior_hook)
+	(pa64_open_symbol_file_object): Remove local 'buf'.
+	* solib-som.c (som_solib_create_inferior_hook, link_map_start)
+	(som_open_symbol_file_object): Likewise.
+	* solib-spu.c (spu_current_sos): Likewise.
+	* spu-linux-nat.c (spu_fetch_inferior_registers): Likewise.
+	* spu-multiarch.c (parse_spufs_run, spu_fetch_registers)
+	(spu_store_registers): Likewise.
+	* target.c (debug_print_register): Likewise.
+	* tic6x-tdep.c (tic6x_get_longjmp_target): Likewise.
+	* xstormy16-tdep.c (xstormy16_store_return_value)
+	(xstormy16_push_dummy_call, xstormy16_resolve_jmp_table_entry)
+	(xstormy16_find_jmp_table_entry): Likewise.
+@
+text
+@d288 1
+a288 1
+	  lslr = strtoulst (buf, NULL, 16);
+@
+
+
+1.10
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@d63 1
+a63 1
+  char buf[4];
+d166 1
+a166 1
+      char buf[4];
+d174 1
+a174 1
+      char buf[4];
+d184 2
+a185 1
+      char buf[16 * SPU_NUM_GPRS], annex[32];
+d224 1
+a224 1
+      char buf[4];
+d234 2
+a235 1
+      char buf[16 * SPU_NUM_GPRS], annex[32];
+@
+
+
+1.9
+log
+@	* gdbarch.sh (target_gdbarch): Remove macro.
+	(get_target_gdbarch): Rename to target_gdbarch.
+	* gdbarch.c, gdbarch.h: Rebuild.
+	* ada-tasks.c, aix-thread.c, amd64-linux-nat.c, arch-utils.c,
+	arm-tdep.c, auxv.c, breakpoint.c, bsd-uthread.c, corefile.c,
+	darwin-nat-info.c, dcache.c, dsrec.c, exec.c, fbsd-nat.c,
+	filesystem.c, gcore.c, gnu-nat.c, i386-darwin-nat.c, i386-nat.c,
+	ia64-vms-tdep.c, inf-ptrace.c, infcmd.c, jit.c, linux-nat.c,
+	linux-tdep.c, linux-thread-db.c, m32r-rom.c, memattr.c,
+	mep-tdep.c, microblaze-tdep.c, mips-linux-nat.c,
+	mips-linux-tdep.c, mips-tdep.c, monitor.c, moxie-tdep.c,
+	nto-procfs.c, nto-tdep.c, ppc-linux-nat.c, proc-service.c,
+	procfs.c, progspace.c, ravenscar-thread.c, record.c,
+	remote-m32r-sdi.c, remote-mips.c, remote-sim.c, remote.c,
+	rl78-tdep.c, rs6000-nat.c, rx-tdep.c, s390-nat.c, sol-thread.c,
+	solib-darwin.c, solib-dsbt.c, solib-frv.c, solib-ia64-hpux.c,
+	solib-irix.c, solib-pa64.c, solib-som.c, solib-spu.c,
+	solib-sunos.c, solib-svr4.c, solib.c, spu-linux-nat.c,
+	spu-multiarch.c, spu-tdep.c, symfile-mem.c, symfile.c, symtab.c,
+	target-descriptions.c, target.c, target.h, tracepoint.c,
+	windows-nat.c, windows-tdep.c, xcoffsolib.c, cli/cli-dump.c,
+	common/agent.c, mi/mi-interp.c, python/py-finishbreakpoint.c,
+	python/py-inferior.c, python/python.c: Update.
+@
+text
+@d2 1
+a2 1
+   Copyright (C) 2009-2012 Free Software Foundation, Inc.
+@
+
+
+1.8
+log
+@2012-05-18  Sergio Durigan Junior  <sergiodj@@redhat.com>
+
+	* ada-lang.c:
+	* ada-tasks.c:
+	* ada-varobj.c:
+	* amd64-darwin-tdep.c:
+	* arm-symbian-tdep.c:
+	* arm-tdep.c:
+	* avr-tdep.c:
+	* ax-gdb.c:
+	* bfin-linux-tdep.c:
+	* breakpoint.c:
+	* c-valprint.c:
+	* cli/cli-cmds.c:
+	* coffread.c:
+	* cp-support.c:
+	* cris-tdep.c:
+	* dwarf2-frame-tailcall.c:
+	* dwarf2-frame.c:
+	* dwarf2expr.c:
+	* dwarf2loc.c:
+	* dwarf2read.c:
+	* elfread.c:
+	* eval.c:
+	* expprint.c:
+	* f-valprint.c:
+	* frv-tdep.c:
+	* h8300-tdep.c:
+	* hppa-hpux-tdep.c:
+	* hppa-tdep.c:
+	* hppanbsd-tdep.c:
+	* i386-nto-tdep.c:
+	* i386-tdep.c:
+	* i387-tdep.c:
+	* ia64-tdep.c:
+	* jit.c:
+	* linespec.c:
+	* linux-tdep.c:
+	* lm32-tdep.c:
+	* m2-valprint.c:
+	* m32c-tdep.c:
+	* m32r-rom.c:
+	* m32r-tdep.c:
+	* m68k-tdep.c:
+	* m68klinux-tdep.c:
+	* mi/mi-main.c:
+	* microblaze-tdep.c:
+	* mips-linux-tdep.c:
+	* mips-tdep.c:
+	* mn10300-tdep.c:
+	* p-valprint.c:
+	* parse.c:
+	* ppc-linux-tdep.c:
+	* ppc-sysv-tdep.c:
+	* printcmd.c:
+	* python/py-finishbreakpoint.c:
+	* python/py-inferior.c:
+	* python/py-infthread.c:
+	* python/py-type.c:
+	* python/python.c:
+	* remote-fileio.c:
+	* remote-m32r-sdi.c:
+	* remote-mips.c:
+	* reverse.c:
+	* rl78-tdep.c:
+	* rs6000-aix-tdep.c:
+	* rs6000-tdep.c:
+	* s390-tdep.c:
+	* score-tdep.c:
+	* sh64-tdep.c:
+	* skip.c:
+	* solib-darwin.c:
+	* solib-dsbt.c:
+	* solib-frv.c:
+	* sparc-tdep.c:
+	* spu-multiarch.c:
+	* spu-tdep.c:
+	* stack.c:
+	* symfile.c:
+	* symtab.c:
+	* tic6x-tdep.c:
+	* tracepoint.c:
+	* v850-tdep.c:
+	* valarith.c:
+	* valprint.c:
+	* value.c:
+	* xcoffread.c:
+	* xtensa-tdep.c:
+	* ada-lang.c:
+	* ada-tasks.c:
+	* ada-varobj.c:
+	* amd64-darwin-tdep.c:
+	* arm-symbian-tdep.c:
+	* arm-tdep.c: Delete unused variables.
+@
+text
+@d60 1
+a60 1
+  enum bfd_endian byte_order = gdbarch_byte_order (target_gdbarch);
+d67 1
+a67 1
+  if (gdbarch_bfd_arch_info (target_gdbarch)->arch != bfd_arch_powerpc)
+d71 2
+a72 2
+  regcache = get_thread_arch_regcache (ptid, target_gdbarch);
+  tdep = gdbarch_tdep (target_gdbarch);
+d116 1
+a116 1
+  return target_gdbarch;
+@
+
+
+1.7
+log
+@gdb/
+	Fix -Wmissing-prototypes build.
+	* alpha-tdep.c (alpha_deal_with_atomic_sequence): Make it static.
+	* amd64-darwin-tdep.c (_initialize_amd64_darwin_tdep): New prototype.
+	* amd64-windows-tdep.c (_initialize_amd64_windows_tdep): Likewise.
+	* arm-symbian-tdep.c (arm_symbian_skip_trampoline_code): Make it static.
+	(_initialize_arm_symbian_tdep): New prototype.
+	* arm-wince-tdep.c (arm_wince_skip_main_prologue): Make it static.
+	* i386-darwin-tdep.c (_initialize_i386_darwin_tdep): New prototype.
+	* i386-linux-tdep.c (i386_linux_displaced_step_copy_insn): Make it
+	static.
+	* lm32-tdep.c (_initialize_lm32_tdep): New prototype.
+	* microblaze-linux-tdep.c (_initialize_microblaze_linux_tdep): New
+	prototype.
+	* microblaze-tdep.c (microblaze_debug, microblaze_fetch_instruction)
+	(microblaze_skip_prologue, microblaze_frame_cache): Make them static.
+	* mips-linux-tdep.c (mips_linux_regset_from_core_section): Make it
+	static.
+	* moxie-tdep.c (moxie_process_record): Likewise.
+	* remote-mips.c (mips_can_use_watchpoint, mips_insert_watchpoint)
+	(mips_remove_watchpoint, mips_stopped_by_watchpoint): Make them static.
+	* rl78-tdep.c (rl78_breakpoint_from_pc): Make it static.
+	(_initialize_rl78_tdep): New prototype.
+	* rx-tdep.c (rx_breakpoint_from_pc): Make it static.
+	(_initialize_rx_tdep): New prototype.
+	* solib-darwin.c (darwin_in_dynsym_resolve_code): Make it static.
+	(_initialize_darwin_solib): New prototype.
+	* solib-spu.c: Include solib-spu.h.
+	(_initialize_spu_solib): New prototype.
+	* spu-multiarch.c (_initialize_spu_multiarch): New prototype.
+	* tic6x-tdep.c (tic6x_analyze_prologue, tic6x_skip_prologue)
+	(tic6x_breakpoint_from_pc, tic6x_frame_unwind_cache)
+	(tic6x_software_single_step): Make it static.
+	(_initialize_tic6x_tdep): New prototype.
+@
+text
+@a63 1
+  CORE_ADDR pc;
+@
+
+
+1.6
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d404 3
+@
+
+
+1.5
+log
+@run copyright.sh for 2011.
+@
+text
+@d2 1
+a2 1
+   Copyright (C) 2009, 2010, 2011 Free Software Foundation, Inc.
+@
+
+
+1.5.4.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d2 1
+a2 1
+   Copyright (C) 2009-2012 Free Software Foundation, Inc.
+@
+
+
+1.4
+log
+@ChangeLog:
+
+	* spu-multiarch.c (spu_xfer_partial): Wrap around local store
+	limit on local store memory accesses.
+	* spu-linux-nat.c (spu_xfer_partial): Likewise.
+	* spu-tdep.c (spu_lslr): Remove.
+	(spu_pointer_to_address): Do not truncate addresses.
+	(spu_integer_to_address): Likewise.
+	(spu_overlay_new_objfile): Use SPU_OVERLAY_LMA.
+	* spu-tdep.h: Add comments.
+	(SPUADDR_SPU): Respect SPU_OVERLAY_LMA bit.
+	(SPU_OVERLAY_LMA): Define.
+
+gdbserver/ChangeLog:
+
+	* spu-low.c (spu_read_memory): Wrap around local store limit.
+	(spu_write_memory): Likewise.
+
+testsuite/ChangeLog:
+
+	* gdb.arch/spu-ls.exp: New file.
+	* gdb.arch/spu-ls.c: Likewise.
+@
+text
+@d2 1
+a2 1
+   Copyright (C) 2009, 2010 Free Software Foundation, Inc.
+@
+
+
+1.3
+log
+@Update copyright year in most headers.
+
+Automatic update by copyright.sh.
+@
+text
+@d262 4
+a265 1
+      char mem_annex[32];
+d267 1
+a267 1
+      if (fd >= 0 && addr < SPU_LS_SIZE)
+d270 18
+d290 1
+a290 1
+					       addr, len);
+@
+
+
+1.2
+log
+@        * darwin-nat-info.c, solib-spu.c, spu-multiarch.c,
+        regformats/regdat.sh, features/Makefile: Update copyright header.
+@
+text
+@d2 1
+a2 1
+   Copyright (C) 2009 Free Software Foundation, Inc.
+@
+
+
+1.1
+log
+@ChangeLog:
+
+	* target.h (enum strata): New value arch_stratum.
+	* target.c (target_require_runnable): Skip arch_stratum targets.
+
+	* configure.tgt (powerpc-*-linux* | powerpc64-*-linux*): Add
+	solib-spu.o and spu-multiarch.o to gdb_target_obs.
+	* Makefile.in (ALL_TARGET_OBS): Add solib-spu.o and spu-multiarch.o.
+	(ALLDEPFILES): Add solib-spu.c and spu-multiarch.c.
+
+	* solib-spu.c: New file.
+	* solib-spu.h: New file.
+	* spu-multiarch.c: New file.
+
+	* spu-tdep.h (SPUADDR, SPUADDR_SPU, SPUADDR_ADDR): New macros.
+
+	* spu-tdep.c (struct gdbarch_tdep): New member id.
+	(spu_gdbarch_id): New function.
+	(spu_lslr): New function.
+
+	(spu_address_to_pointer): New function.
+	(spu_pointer_to_address): Support SPU ID address encoding.  Use
+	spu_gdbarch_id and spu_lslr.
+	(spu_integer_to_address): Likewise.
+	(spu_frame_unwind_cache): Update for encoded addresses.
+	(spu_unwind_pc, spu_unwind_sp): Likewise.
+	(spu_read_pc, spu_write_pc): Likewise.
+	(spu_push_dummy_call): Likewise.
+	(spu_software_single_step): Likewise.
+	(spu_get_longjmp_target): Likewise.
+	(spu_overlay_update_osect): Likewise.
+
+	(spu_dis_asm_print_address): New function.
+	(gdb_print_insn_spu): Likewise.
+
+	(spu_gdbarch_init): Store SPU ID in tdep structure.
+	Install spu_address_to_pointer and gdb_print_insn_spu.
+
+	* ppc-linux-tdep.c: Include "observer.h", "auxv.h", "elf/common.h"
+	and "solib-spu.h".
+	(ppc_linux_entry_point_addr): New static variable.
+	(ppc_linux_inferior_created): New function.
+	(ppc_linux_displaced_step_location): Likewise.
+	(ppc_linux_init_abi): Enable Cell/B.E. support if supported
+	by the target.
+	(_initialize_ppc_linux_tdep): Attach to inferior_created observer.
+
+	* NEWS: Mention multi-architecture and Cell/B.E. debugging
+	capabilities.
+
+testsuite/ChangeLog:
+
+	* gdb.xml/tdesc-regs.exp: Skip for SPU targets.
+@
+text
+@d10 1
+a10 1
+   the Free Software Foundation; either version 2 of the License, or
+d19 1
+a19 3
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 59 Temple Place - Suite 330,
+   Boston, MA 02111-1307, USA.  */
+@
+

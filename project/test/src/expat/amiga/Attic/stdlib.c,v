@@ -1,0 +1,301 @@
+head	1.1;
+access;
+symbols
+	gdb-csl-symbian-6_4_50_20060226-12:1.1.4.1
+	gdb-csl-symbian-6_4_50_20060226-11:1.1.4.1
+	gdb-csl-sourcerygxx-4_1-17:1.1.4.1
+	gdb-csl-20060226-branch-local-2:1.1.4.1
+	gdb-csl-sourcerygxx-4_1-14:1.1.4.1
+	gdb-csl-sourcerygxx-4_1-13:1.1.4.1
+	gdb-csl-sourcerygxx-4_1-12:1.1.4.1
+	gdb-csl-sourcerygxx-3_4_4-21:1.1.4.1
+	gdb-csl-sourcerygxx-4_1-9:1.1.4.1
+	gdb-csl-sourcerygxx-4_1-8:1.1.4.1
+	gdb-csl-sourcerygxx-4_1-7:1.1.4.1
+	gdb-csl-arm-2006q1-6:1.1.4.1
+	gdb-csl-sourcerygxx-4_1-6:1.1.4.1
+	gdb-csl-symbian-6_4_50_20060226-10:1.1.4.1
+	gdb-csl-symbian-6_4_50_20060226-9:1.1.4.1
+	gdb-csl-symbian-6_4_50_20060226-8:1.1.4.1
+	gdb-csl-coldfire-4_1-11:1.1.4.1
+	gdb-csl-sourcerygxx-3_4_4-19:1.1.4.1
+	gdb-csl-coldfire-4_1-10:1.1.4.1
+	gdb-csl-sourcerygxx-4_1-5:1.1.4.1
+	gdb-csl-sourcerygxx-4_1-4:1.1.4.1
+	gdb-csl-sourcerygxx-3_4_4-17:1.1.4.1
+	gdb-csl-20060226-branch-merge-to-csl-symbian-1:1.1.4.1
+	gdb-csl-symbian-20060226-branch:1.1.4.1.0.2
+	gdb-csl-symbian-20060226-branchpoint:1.1.4.1
+	gdb-csl-20060226-branch-merge-to-csl-local-1:1.1.4.1
+	gdb-csl-20060226-branch:1.1.0.4
+	gdb-csl-available-20060303-branch:1.1.0.2;
+locks; strict;
+comment	@ * @;
+expand	@o@;
+
+
+1.1
+date	2006.03.03.20.17.11;	author drow;	state dead;
+branches
+	1.1.2.1
+	1.1.4.1;
+next	;
+
+1.1.2.1
+date	2006.03.03.20.17.11;	author drow;	state Exp;
+branches;
+next	;
+
+1.1.4.1
+date	2006.04.03.00.47.35;	author drow;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.1
+log
+@file stdlib.c was initially added on branch gdb-csl-available-20060303-branch.
+@
+text
+@@
+
+
+1.1.4.1
+log
+@Merge XML and VFP support to this branch.
+@
+text
+@a0 109
+/*
+** Copyright (c) 2001-2005 Expat maintainers.
+**
+** Permission is hereby granted, free of charge, to any person obtaining
+** a copy of this software and associated documentation files (the
+** "Software"), to deal in the Software without restriction, including
+** without limitation the rights to use, copy, modify, merge, publish,
+** distribute, sublicense, and/or sell copies of the Software, and to
+** permit persons to whom the Software is furnished to do so, subject to
+** the following conditions:
+** 
+** The above copyright notice and this permission notice shall be included
+** in all copies or substantial portions of the Software.
+** 
+** THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+** EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+** MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+** IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+** CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+** TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+** SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*/
+
+#include <stdlib.h>
+#include <exec/memory.h>
+#include <proto/exec.h>
+#include <proto/utility.h>
+
+void * malloc (size_t len)
+{
+	uint32 size = sizeof(uint32) + len;
+
+	uint32 *mem = AllocMem(size, MEMF_ANY);
+	if ( mem != 0 )  {
+		*mem = size;
+		++mem;
+	}
+
+	return mem;
+}
+
+
+void * realloc (void * mem, size_t len2)
+{
+	if ( mem == 0 )  {
+		return malloc(len2);
+	}
+
+	if ( len2 == 0 )  {
+		free(mem);
+		return 0;
+	}
+
+	void * new_mem = malloc(len2);
+	if ( new_mem == 0 )  {
+		return 0;
+	}
+
+	uint32 mem_size = *(((uint32*)mem) - 1);
+	CopyMem(mem, new_mem, mem_size);
+	free(mem);
+
+	return new_mem;
+}
+
+
+void free (void * mem)
+{
+	if ( mem != 0 )  {
+		uint32 size = *(((uint32*)mem) - 1);
+		FreeMem(mem, size);
+	}
+}
+
+
+int memcmp (const void * a, const void * b, size_t len)
+{
+	size_t i;
+	int diff;
+
+	for ( i = 0; i < len; ++i )  {
+		diff = *((uint8 *)a++) - *((uint8 *)b++);
+		if ( diff )  {
+			return diff;
+		}
+	}
+
+	return 0;
+}
+
+
+void * memcpy (void * t, const void * a, size_t len)
+{
+	CopyMem((APTR)a, t, len);
+	return t;
+}
+
+
+void * memmove (void * t1, const void * t2, size_t len)
+{
+	MoveMem((APTR)t2, t1, len);
+	return t1;
+}
+
+
+void * memset (void * t, int c, size_t len)
+{
+	return SetMem(t, c, len);
+}
+@
+
+
+1.1.2.1
+log
+@Import unmodified expat 2.0.0.
+@
+text
+@a0 109
+/*
+** Copyright (c) 2001-2005 Expat maintainers.
+**
+** Permission is hereby granted, free of charge, to any person obtaining
+** a copy of this software and associated documentation files (the
+** "Software"), to deal in the Software without restriction, including
+** without limitation the rights to use, copy, modify, merge, publish,
+** distribute, sublicense, and/or sell copies of the Software, and to
+** permit persons to whom the Software is furnished to do so, subject to
+** the following conditions:
+** 
+** The above copyright notice and this permission notice shall be included
+** in all copies or substantial portions of the Software.
+** 
+** THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+** EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+** MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+** IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+** CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+** TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+** SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*/
+
+#include <stdlib.h>
+#include <exec/memory.h>
+#include <proto/exec.h>
+#include <proto/utility.h>
+
+void * malloc (size_t len)
+{
+	uint32 size = sizeof(uint32) + len;
+
+	uint32 *mem = AllocMem(size, MEMF_ANY);
+	if ( mem != 0 )  {
+		*mem = size;
+		++mem;
+	}
+
+	return mem;
+}
+
+
+void * realloc (void * mem, size_t len2)
+{
+	if ( mem == 0 )  {
+		return malloc(len2);
+	}
+
+	if ( len2 == 0 )  {
+		free(mem);
+		return 0;
+	}
+
+	void * new_mem = malloc(len2);
+	if ( new_mem == 0 )  {
+		return 0;
+	}
+
+	uint32 mem_size = *(((uint32*)mem) - 1);
+	CopyMem(mem, new_mem, mem_size);
+	free(mem);
+
+	return new_mem;
+}
+
+
+void free (void * mem)
+{
+	if ( mem != 0 )  {
+		uint32 size = *(((uint32*)mem) - 1);
+		FreeMem(mem, size);
+	}
+}
+
+
+int memcmp (const void * a, const void * b, size_t len)
+{
+	size_t i;
+	int diff;
+
+	for ( i = 0; i < len; ++i )  {
+		diff = *((uint8 *)a++) - *((uint8 *)b++);
+		if ( diff )  {
+			return diff;
+		}
+	}
+
+	return 0;
+}
+
+
+void * memcpy (void * t, const void * a, size_t len)
+{
+	CopyMem((APTR)a, t, len);
+	return t;
+}
+
+
+void * memmove (void * t1, const void * t2, size_t len)
+{
+	MoveMem((APTR)t2, t1, len);
+	return t1;
+}
+
+
+void * memset (void * t, int c, size_t len)
+{
+	return SetMem(t, c, len);
+}
+@
+

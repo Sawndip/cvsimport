@@ -1,0 +1,656 @@
+head	1.7;
+access;
+symbols
+	cygwin-1_7_35-release:1.7
+	cygwin-1_7_34-release:1.7
+	cygwin-1_7_33-release:1.7
+	cygwin-1_7_32-release:1.7
+	cygwin-1_7_31-release:1.7
+	cygwin-1_7_30-release:1.7
+	cygwin-1_7_29-release:1.7
+	cygwin-1_7_29-release-branchpoint:1.7.0.2
+	cygwin-pre-user-db:1.7
+	cygwin-1_7_28-release:1.7
+	cygwin-1_7_27-release:1.7
+	cygwin-1_7_26-release:1.7
+	cygwin-1_7_25-release:1.7
+	cygwin-1_7_24-release:1.7
+	cygwin-1_7_23-release:1.7
+	cygwin-1_7_22-release:1.7
+	cygwin-1_7_21-release:1.7
+	cygwin-1_7_20-release:1.7
+	cygwin-1_7_19-release:1.7
+	cygwin-64bit-postmerge:1.7
+	cygwin-64bit-premerge-branch:1.6.0.4
+	cygwin-64bit-premerge:1.6
+	cygwin-1_7_18-release:1.6
+	post-ptmalloc3:1.6.2.3
+	pre-ptmalloc3:1.6.2.3
+	cygwin-1_7_17-release:1.6
+	cygwin-64bit-branch:1.6.0.2
+	cygwin-1_7_16-release:1.6
+	cygwin-1_7_15-release:1.6
+	cygwin-1_7_14_2-release:1.6
+	cygwin-1_7_14-release:1.6
+	cygwin-1_7_12-release:1.6
+	cygwin-1_7_11-release:1.6
+	cygwin-1_7_10-release:1.6;
+locks; strict;
+comment	@// @;
+
+
+1.7
+date	2013.04.23.09.44.34;	author corinna;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2011.12.21.17.19.48;	author corinna;	state Exp;
+branches
+	1.6.2.1;
+next	1.5;
+
+1.5
+date	2011.12.19.12.50.35;	author corinna;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2011.12.17.23.39.47;	author cgf;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2011.12.17.10.05.25;	author corinna;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2011.12.16.18.09.43;	author corinna;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2011.12.16.11.58.03;	author corinna;	state Exp;
+branches;
+next	;
+
+1.6.2.1
+date	2012.10.23.12.54.27;	author corinna;	state Exp;
+branches;
+next	1.6.2.2;
+
+1.6.2.2
+date	2012.11.12.17.26.24;	author corinna;	state Exp;
+branches;
+next	1.6.2.3;
+
+1.6.2.3
+date	2012.12.10.11.45.51;	author corinna;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.7
+log
+@	* Merge in cygwin-64bit-branch.
+@
+text
+@/* wow64.cc
+
+   Copyright 2011, 2012 Red Hat, Inc.
+
+This file is part of Cygwin.
+
+This software is a copyrighted work licensed under the terms of the
+Cygwin license.  Please consult the file "CYGWIN_LICENSE" for
+details. */
+
+#ifndef __x86_64__
+/* WOW64 only plays a role in the 32 bit version.  Don't use any of this
+   in the 64 bit version. */
+
+#include "winsup.h"
+#include "cygtls.h"
+#include "ntdll.h"
+#include <sys/param.h>
+
+#define PTR_ADD(p,o)	((PVOID)((PBYTE)(p)+(o)))
+
+bool NO_COPY wow64_needs_stack_adjustment = false;
+
+static void
+wow64_eval_expected_main_stack (PVOID &allocbase, PVOID &stackbase)
+{
+  PIMAGE_DOS_HEADER dosheader;
+  PIMAGE_NT_HEADERS32 ntheader;
+  DWORD size;
+
+  dosheader = (PIMAGE_DOS_HEADER) GetModuleHandle (NULL);
+  ntheader = (PIMAGE_NT_HEADERS32) ((PBYTE) dosheader + dosheader->e_lfanew);
+  /* The main thread stack is expected to be located at 0x30000, which is the
+     case for all observed NT systems up to Server 2003 R2, unless the
+     stacksize requested by the StackReserve field in the PE/COFF header is
+     so big that the stack doesn't fit in the area between 0x30000 and the
+     start of the image.  In case of a conflict, the OS allocates the stack
+     right after the image.
+     Sidenote: While post-2K3 32 bit systems continue to have the default
+     main thread stack address located at 0x30000, the default main thread
+     stack address on Vista/2008 64 bit is 0x80000 and on W7/2K8R2 64 bit
+     it is 0x90000.  However, this is no problem because the system sticks
+     to that address for all WOW64 processes, not only for the first one
+     started from a 64 bit parent. */
+  allocbase = (PVOID) 0x30000;
+  /* Stack size.  The OS always rounds the size up to allocation granularity
+     and it never allocates less than 256K. */
+  size = roundup2 (ntheader->OptionalHeader.SizeOfStackReserve,
+		   wincap.allocation_granularity ());
+  if (size < 256 * 1024)
+    size = 256 * 1024;
+  /* If the stack doesn't fit in the area before the image, it's allocated
+     right after the image, rounded up to allocation granularity boundary. */
+  if (PTR_ADD (allocbase, size) > (PVOID) ntheader->OptionalHeader.ImageBase)
+    allocbase = PTR_ADD (ntheader->OptionalHeader.ImageBase,
+			 ntheader->OptionalHeader.SizeOfImage);
+  allocbase = (PVOID) roundup2 ((uintptr_t) allocbase,
+				wincap.allocation_granularity ());
+  stackbase = PTR_ADD (allocbase, size);
+  debug_printf ("expected allocbase: %p, stackbase: %p", allocbase, stackbase);
+}
+
+bool
+wow64_test_for_64bit_parent ()
+{
+  /* On Windows XP 64 and 2003 64 there's a problem with processes running
+     under WOW64.  The first process started from a 64 bit process has its
+     main thread stack not where it should be.  Rather, it uses another
+     stack while the original stack is used for other purposes.
+     The problem is, the child has its stack in the usual spot again, thus
+     we have to "alloc_stack_hard_way".  However, this fails in almost all
+     cases because the stack slot of the parent process is taken by something
+     else in the child process.
+     What we do here is to check if the current stack is the excpected main
+     thread stack and if not, if we really have been started from a 64 bit
+     process here.  If so, we note this fact in wow64_needs_stack_adjustment
+     so we can workaround the stack problem in _dll_crt0.  See there for how
+     we go along. */
+  NTSTATUS ret;
+  PROCESS_BASIC_INFORMATION pbi;
+  HANDLE parent;
+  PVOID allocbase, stackbase;
+
+  ULONG_PTR wow64 = TRUE;   /* Opt on the safe side. */
+
+  /* First check if the current stack is where it belongs.  If so, we don't
+     have to do anything special.  This is the case on Vista and later. */
+  wow64_eval_expected_main_stack (allocbase, stackbase);
+  if (&wow64 >= (PULONG) allocbase && &wow64 < (PULONG) stackbase)
+    return false;
+
+  /* Check if the parent is a native 64 bit process.  Unfortunately there's
+     no simpler way to retrieve the parent process in NT, as far as I know.
+     Hints welcome. */
+  ret = NtQueryInformationProcess (NtCurrentProcess (),
+				   ProcessBasicInformation,
+				   &pbi, sizeof pbi, NULL);
+  if (NT_SUCCESS (ret)
+      && (parent = OpenProcess (PROCESS_QUERY_INFORMATION,
+				FALSE,
+				(DWORD) pbi.InheritedFromUniqueProcessId)))
+    {
+      NtQueryInformationProcess (parent, ProcessWow64Information,
+				 &wow64, sizeof wow64, NULL);
+      CloseHandle (parent);
+    }
+  return !wow64;
+}
+
+PVOID
+wow64_revert_to_original_stack (PVOID &allocationbase)
+{
+  /* Test if the original stack exists and has been set up as usual.  Even
+     though the stack of the WOW64 process is at an unusual address, it appears
+     that the "normal" stack has been created as usual.  It's partially in use
+     by the 32->64 bit transition layer of the OS to help along the WOW64
+     process, but it's otherwise mostly unused. */
+  MEMORY_BASIC_INFORMATION mbi;
+  PVOID stackbase;
+
+  wow64_eval_expected_main_stack (allocationbase, stackbase);
+
+  /* The stack is allocated in a single call, so the entire stack has the
+     same AllocationBase.  At the start we expect a reserved region big
+     enough still to host as the main stack. The OS apparently reserves
+     always at least 256K for the main thread stack.  We err on the side
+     of caution so we test here for a reserved region of at least 256K.
+     That should be enough (knock on wood). */
+  VirtualQuery (allocationbase, &mbi, sizeof mbi);
+  if (mbi.State != MEM_RESERVE || mbi.RegionSize < 256 * 1024)
+    return NULL;
+
+  /* Next we expect a guard page.  We fetch the size of the guard area to
+     see how big it is.  Apparently the guard area on 64 bit systems spans
+     2 pages, only for the main thread for some reason.  We better keep it
+     that way. */
+  PVOID addr = PTR_ADD (mbi.BaseAddress, mbi.RegionSize);
+  VirtualQuery (addr, &mbi, sizeof mbi);
+  if (mbi.AllocationBase != allocationbase
+      || mbi.State != MEM_COMMIT
+      || !(mbi.Protect & PAGE_GUARD))
+    return NULL;
+  PVOID guardaddr = mbi.BaseAddress;
+  SIZE_T guardsize = mbi.RegionSize;
+
+  /* Next we expect a committed R/W region, the in-use area of that stack.
+     This is just a sanity check. */
+  addr = PTR_ADD (mbi.BaseAddress, mbi.RegionSize);
+  VirtualQuery (addr, &mbi, sizeof mbi);
+  if (mbi.AllocationBase != allocationbase
+      || PTR_ADD (mbi.BaseAddress, mbi.RegionSize) != stackbase
+      || mbi.State != MEM_COMMIT
+      || mbi.Protect != PAGE_READWRITE)
+    return NULL;
+
+  /* The original stack is used by the OS.  Leave enough space for the OS
+     to be happy (another 64K) and constitute a second stack within the so
+     far reserved stack area. */
+  PVOID newbase = PTR_ADD (guardaddr, -wincap.allocation_granularity ());
+  PVOID newtop = PTR_ADD (newbase, -wincap.allocation_granularity ());
+  guardaddr = PTR_ADD (newtop, -guardsize);
+  if (!VirtualAlloc (newtop, wincap.allocation_granularity (),
+		     MEM_COMMIT, PAGE_READWRITE))
+    return NULL;
+  if (!VirtualAlloc (guardaddr, guardsize, MEM_COMMIT,
+		     PAGE_READWRITE | PAGE_GUARD))
+    return NULL;
+
+  /* We're going to reuse the original stack.  Yay, no more respawn!
+     Set the StackBase and StackLimit values in the TEB, set _main_tls
+     accordingly, and return the new, 16 byte aligned address for the
+     stack pointer.  The second half of the stack move is done by the
+     caller _dll_crt0. */
+  _tlsbase = (char *) newbase;
+  _tlstop = (char *) newtop;
+  _main_tls = &_my_tls;
+  return PTR_ADD (_tlsbase, -16);
+}
+
+/* Respawn WOW64 process. This is only called if we can't reuse the original
+   stack.  See comment in wow64_revert_to_original_stack for details.  See
+   _dll_crt0 for the call of this function.
+
+   Historical note:
+
+   Originally we just always respawned, right from dll_entry.  This stopped
+   working with Cygwin 1.7.10 on Windows 2003 R2 64.  Starting with Cygwin
+   1.7.10 we don't link against advapi32.dll anymore.  However, any process
+   linked against advapi32, directly or indirectly, failed to respawn when
+   trying respawning during DLL_PROCESS_ATTACH initialization.  In that
+   case CreateProcessW returns with ERROR_ACCESS_DENIED for some reason. */
+void
+wow64_respawn_process ()
+{
+  WCHAR path[PATH_MAX];
+  PROCESS_INFORMATION pi;
+  STARTUPINFOW si;
+  DWORD ret = 0;
+
+  GetModuleFileNameW (NULL, path, PATH_MAX);
+  GetStartupInfoW (&si);
+  if (!CreateProcessW (path, GetCommandLineW (), NULL, NULL, TRUE,
+		       CREATE_DEFAULT_ERROR_MODE
+		       | GetPriorityClass (GetCurrentProcess ()),
+		       NULL, NULL, &si, &pi))
+    api_fatal ("Failed to create process <%W> <%W>, %E",
+	       path, GetCommandLineW ());
+  CloseHandle (pi.hThread);
+  if (WaitForSingleObject (pi.hProcess, INFINITE) == WAIT_FAILED)
+    api_fatal ("Waiting for process %u failed, %E", pi.dwProcessId);
+  GetExitCodeProcess (pi.hProcess, &ret);
+  CloseHandle (pi.hProcess);
+  TerminateProcess (GetCurrentProcess (), ret);
+  ExitProcess (ret);
+}
+
+#endif /* !__x86_64__ */
+@
+
+
+1.6
+log
+@	* dcrt0.cc (_dll_crt0): Rephrase comments.  Set $ebp to NULL, as in
+	the pthread stack setup.
+	* wow64.cc (wow64_revert_to_original_stack): Rephrase some comments.
+	Return _tlsbase-16 rather than _main_tls-4 so as not to waste stack.
+@
+text
+@d3 1
+a3 1
+   Copyright 2011 Red Hat, Inc.
+d11 4
+d84 1
+a84 1
+  ULONG wow64 = TRUE;   /* Opt on the safe side. */
+d101 1
+a101 1
+				pbi.InheritedFromUniqueProcessId)))
+d210 1
+a210 1
+    api_fatal ("Waiting for process %d failed, %E", pi.dwProcessId);
+d216 2
+@
+
+
+1.6.2.1
+log
+@	* cygtls.h (__stack_t): Define as uintptr_t.
+	* dcrt0.cc (child_info_fork::alloc_stack): Conditionalize assembler
+	code on a per-CPU base.  Rename esp to stackp.
+	(get_cygwin_startup_info): Cast pointers to uintptr_t in
+	multiple_cygwin_problem call.  Minor formatting change.
+	(_dll_crt0): Conditionalize assembler code on a per-CPU base.
+	(multiple_cygwin_problem): Change parameters from unsigned to uintptr_t.
+	* winsup.h (multiple_cygwin_problem): Change declaration accordingly.
+	* pinfo.h (pinfo::reattach): Cast 2nd argument in proc_subproc call
+	to uintptr_t.
+	(pinfo::remember): Ditto.
+	* sigproc.cc (proc_subproc): Change 2nd parameter to uintptr_t to allow
+	pointer values.
+	* sigproc.h (proc_subproc): Change declaration accordingly.
+	* include/sys/cygwin.h (per_process_overwrite): Use offsetof to compute
+	value.
+@
+text
+@a10 4
+#ifndef __x86_64__
+/* WOW64 only plays a role in the 32 bit version.  Don't use any of this
+   in the 64 bit version. */
+
+a211 2
+
+#endif /* !__x86_64__ */
+@
+
+
+1.6.2.2
+log
+@	* dlfcn.cc (dlopen): Change cast to accommodate type change in ntdll.h
+	* fhandler_process.cc (thread_info::thread_info): Change type of local
+	variable size to ULONG to match NtQuerySystemInformation call.
+	Add cast to avoid compiler warnings.
+	(get_process_state): Add cast to avoid compiler warnings.  Accommodate
+	name change of NextEntryOffset member of PSYSTEM_PROCESS_INFORMATION
+	structure.
+	* mmap.cc: Add casts to avoid compiler warnings.
+	(mlock): Change type of local variables min and max to match
+	GetProcessWorkingSetSize call.
+	* nlsfuncs.cc (__collate_range_cmp): Add casts to avoid compiler
+	warnings.
+	* ntdll.h: Drop accommodations for Mingw32.  Fix a couple of formatting
+	glitches.  Add a comment to all structures explicitely tested on 64 bit.
+	(SYSTEM_INFORMATION_CLASS): Change SystemProcessesAndThreadsInformation
+	to SystemProcessInformation and SystemProcessorTimes to
+	SystemProcessorPerformanceInformation to match MSDN.
+	(SYSTEM_BASIC_INFORMATION): Fix member types to match 64 bit.
+	(SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION): Rename from
+	SYSTEM_PROCESSOR_TIMES to use official name from MSDN.  Accommodate
+	throughout.  Drop unneeded align attribute.
+	(VM_COUNTERS): Fix member types to match 64 bit.
+	(SYSTEM_PROCESS_INFORMATION): Rename from SYSTEM_PROCESSES to use
+	official name from MSDN.  Fix member types to match 64 bit.  Change
+	member names to match MSDN and Mingw64.  Accommodate throughout.
+	(IO_STATUS_BLOCK): Change to use MSDN definition.
+	(SYSTEM_TIMEOFDAY_INFORMATION): Rename from
+	SYSTEM_TIME_OF_DAY_INFORMATION to use official name from MSDN.
+	Accommodate throughout.  Add Reserved1 area per MSDN.
+	(LDR_DATA_TABLE_ENTRY): Add comment for future reference.  Change
+	type of LoadCount to USHORT.
+	(PEB_LDR_DATA): Change type of Initialized to BOOLEAN.  Add comment for
+	future reference.
+	(PEB): Fix member types to match 64 bit.
+	(GDI_TEB_BATCH): New type.
+	(TEB): Fix member types to match 64 bit.
+	(PROCESS_BASIC_INFORMATION): Ditto.
+	(MEMORY_WORKING_SET_LIST): Ditto.
+	(SharedUserData): Change comment to note the fact that the address
+	is valid on 32 and 64 bit.
+	* pinfo.cc (winpids::enum_processes): Add cast to avoid compiler
+	warnings.
+	* select.cc (pipe_data_available): Add braces in initalization of an
+	IO_STATUS_BLOCK to match new definition.
+	* wincap.h (class wincapc): Change type of wow64 to ULONG_PTR to match
+	MSDN description.
+	(wincapc::is_wow64): Convert return value explicitely to bool.
+	* wow64.cc (wow64_test_for_64bit_parent): Change type of wow64 to
+	ULONG_PTR to match MSDN description.  Add a cast to avoid compiler
+	warning.
+	* regex/engine.c: Avoid compiler warnings about unused and potentially
+	uninitialized variables.
+	* regex/regcomp.c: Ditto.  Drop unnecessary definition of LCID.
+@
+text
+@d3 1
+a3 1
+   Copyright 2011, 2012 Red Hat, Inc.
+d84 1
+a84 1
+  ULONG_PTR wow64 = TRUE;   /* Opt on the safe side. */
+d101 1
+a101 1
+				(DWORD) pbi.InheritedFromUniqueProcessId)))
+@
+
+
+1.6.2.3
+log
+@	* Throughout, fix format string of debug printf and api_fatal calls
+	to work in 32 and 64 bit environment, as well as to honor signedness.
+	Use %y instead of 0x%x.
+	* fhandler.h (class fhandler_dev_mem): Change type of mem_size from
+	DWORD to SIZE_T.
+	* fhandler_mem.cc: Throughout, cast mem_size in comparisons to make
+	GCC happy.
+	* fhandler_process.cc (format_process_maps): Change type of ret_len
+	to SIZE_T.
+	(get_mem_values): Ditto for n and length.
+	* mmap.cc (MapView): Ditto for commitsize and viewsize.
+	(class mmap_record): Ditto for len.  Use SIZE_T througout for memory
+	size in method args and return types.
+	* ntdll.h (NtLockVirtualMemory): Fix type of memory size parameters
+	to SIZE_T.
+	(NtMapViewOfSection): Ditto.
+	(NtQueryVirtualMemory): Ditto.
+	(NtUnlockVirtualMemory): Ditto.
+	(RtlFreeHeap): Change type of first parameter to HANDLE.
+	* shm.cc (shmat): Change type of viewsize to SIZE_T.
+	* timer.cc (timer_thread): Change type of sleep_ms to LONG.
+	(ualarm): Drop casts to unsigned int in timer value computation.
+@
+text
+@d210 1
+a210 1
+    api_fatal ("Waiting for process %u failed, %E", pi.dwProcessId);
+@
+
+
+1.5
+log
+@	* dcrt0.cc (dll_crt0_0): Check for wincap.wow64_has_secondary_stack
+	rather than for wincap.is_wow64.  Accommodate name change from
+	wow64_has_64bit_parent to wow64_needs_stack_adjustment.  Align comment.
+	(_dll_crt0): Ditto.
+	* wincap.h (wincaps::wow64_has_secondary_stack): New element.
+	* wincap.cc: Implement above element throughout.
+	(wincapc::init): Set wow64_has_secondary_stack to false on non-64 bit
+	systems.
+	* wow64.cc (wow64_needs_stack_adjustment): Rename (hopefully the last
+	time) from wow64_has_64bit_parent.
+	(wow64_eval_expected_main_stack): Fix comment to reflect real life.
+	(wow64_test_for_64bit_parent): Fix comment.
+	* wow64.h (wow64_needs_stack_adjustment): Accommodate new name.
+@
+text
+@d131 2
+a132 1
+     2 pages. */
+d167 3
+a169 2
+     accordingly, and return the new address for the stack pointer.
+     The second half of the stack move is done by the caller _dll_crt0. */
+d173 1
+a173 1
+  return PTR_ADD (_main_tls, -4);
+@
+
+
+1.4
+log
+@Clean up whitespace.
+@
+text
+@d18 1
+a18 1
+bool NO_COPY wow64_has_64bit_parent = false;
+d30 11
+a40 4
+     case for all observed NT systems to date, unless the stacksize requested
+     by the StackReserve field in the PE/COFF header is so big that the stack
+     doesn't fit in the area between 0x30000 and the start of the image.  In
+     case of a conflict, the OS allocates the stack right after the image. */
+d72 3
+a74 3
+     process here.  If so, we note this fact in wow64_has_64bit_parent so we
+     can workaround the stack problem in _dll_crt0.  See there for how we go
+     along. */
+@
+
+
+1.3
+log
+@	* wow64.cc (wow64_revert_to_original_stack): Fix comment.
+	* wow64.h (wow64_respawn_process): Declare noreturn.
+@
+text
+@d85 2
+a86 2
+                                   ProcessBasicInformation,
+                                   &pbi, sizeof pbi, NULL);
+d89 2
+a90 2
+                                FALSE,
+                                pbi.InheritedFromUniqueProcessId)))
+d93 1
+a93 1
+                                 &wow64, sizeof wow64, NULL);
+@
+
+
+1.2
+log
+@	* dcrt0.cc (child_info_fork::alloc_stack): Correctly check if the
+	parent stack fits into the child stack.  Align comment.
+	* wow64.cc (wow64_eval_expected_main_stack): New function to fetch
+	expected addresses of main thread stack from PE/COFF image header
+	values.
+	(wow64_test_for_64bit_parent): Fix comment.  Check current stack
+	against real expected main thread stack addresses.
+	(wow64_revert_to_original_stack): Fix and add comments. Check memory
+	against real expected main thread stack addresses.  Use orignal stack
+	if reserved area is >= 256K.
+@
+text
+@d122 3
+a124 3
+  /* Next we expect a guard page.  We fetch the size of the guard area since
+     to see how the OS is handling that.  Apparently the guard area on 64 bit
+     systems spans 2 pages. */
+@
+
+
+1.1
+log
+@	* Makefile.in (DLL_OFILES): Add wow64.o.
+	* dcrt0.cc (CYGWIN_GUARD): Drop execute permission for stack, it's
+	not used for stacks by the OS either.
+	(child_info_fork::alloc_stack_hard_way): Ditto.
+	(child_info_fork::alloc_stack): Don't alloc_stack_hard_way under WOW64
+	if forked from a 64 bit parent.  Set child's StackBase to parent's
+	StackBase.  Add comments to explain why.
+	(wow64_respawn): Move to wow64.cc.
+	(wow64_started_from_native64): Move to wow64.cc.
+	(respawn_wow64_process): Move to wow64.cc.
+	(dll_crt0_0): Drop wow64_test_stack_marker and move stack test into
+	wow64_test_for_64bit_parent function.  Don't return early if WOW64
+	process has been started from native 64 bit process.
+	(_dll_crt0): Implement moving stack for WOW64 processes started from
+	native 64 bit process.
+	* wow64.cc: New file.
+	(wow64_has_64bit_parent): Rename from wow64_respawn.
+	(wow64_test_for_64bit_parent): Rename from wow64_started_from_native64.
+	Change comment.
+	(wow64_revert_to_original_stack): New function.
+	(wow64_respawn_process): Rename from respawn_wow64_process for symmetry.
+	* wow64.h: New file.
+@
+text
+@d14 1
+d20 32
+d56 12
+a67 12
+     under WOW64.  The first process started from a 64 bit process has an
+     unusual stack address for the main thread.  That is, an address which
+     is in the usual space occupied by the process image, but below the auto
+     load address of DLLs.  If this process forks, the child has its stack
+     in the usual memory slot again, thus we have to "alloc_stack_hard_way".
+     However, this fails in almost all cases because the stack slot of the
+     parent process is taken by something else in the child process.
+
+     If we encounter this situation, check if we really have been started
+     from a 64 bit process here.  If so, we note this fact in
+     wow64_has_64bit_parent so we can workaround the stack problem in
+     _dll_crt0.  See there for how we go along. */
+d71 1
+d75 4
+a78 3
+  /* First check if the stack is where it belongs.  If so, we don't have to
+     do anything special.  This is the case on Vista and later. */
+  if (&wow64 < (PULONG) 0x400000)
+d80 1
+d106 1
+a106 7
+     process, but it's otherwise mostly unused.
+     The original stack is expected to be located at 0x30000, up to 0x230000.
+     The assumption here is that the default main thread stack size is 2 Megs,
+     but we expect lower stacksizes up to 1 Megs.  What we do here is to start
+     about in the middle, but below the 1 Megs stack size.  The stack is
+     allocated in a single call, so the entire stack has the same
+     AllocationBase. */
+d108 3
+a110 1
+  PVOID addr = (PVOID) 0x100000;
+d112 6
+a117 5
+  /* First fetch the AllocationBase. */
+  VirtualQuery (addr, &mbi, sizeof mbi);
+  allocationbase = mbi.AllocationBase;
+  /* At the start we expect a reserved region big enough still to host as
+     the main stack. 512K should be ok (knock on wood). */
+d119 1
+a119 1
+  if (mbi.State != MEM_RESERVE || mbi.RegionSize < 512 * 1024)
+d122 4
+a125 2
+  addr = PTR_ADD (mbi.BaseAddress, mbi.RegionSize);
+  /* Next we expect a guard page. */
+a130 1
+
+d133 3
+a136 1
+  /* Next we expect a committed R/W region, the in-use area of that stack. */
+d139 1
+@
+

@@ -1,0 +1,300 @@
+head	1.5;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.4
+	gdb_7_6-2013-04-26-release:1.4
+	gdb_7_6-branch:1.4.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.4
+	gdb_7_5_1-2012-11-29-release:1.2
+	gdb_7_5-2012-08-17-release:1.2
+	gdb_7_5-branch:1.2.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.2
+	gdb_7_4_1-2012-04-26-release:1.1.2.1
+	gdb_7_4-2012-01-24-release:1.1.2.1
+	gdb_7_4-branch:1.1.0.2
+	gdb_7_4-2011-12-13-branchpoint:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.5
+date	2013.03.13.18.38.12;	author palves;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2013.02.12.19.03.54;	author palves;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2013.01.01.06.32.42;	author brobecke;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2012.01.04.08.17.02;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2011.11.10.20.21.28;	author devans;	state Exp;
+branches
+	1.1.2.1;
+next	;
+
+1.1.2.1
+date	2012.01.06.04.43.14;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.5
+log
+@Fix completer.c FIXME, and invalid pointer to pointer conversion.
+
+As mentioned in the previous patch, I grepped for "\*\*) &" and found
+one hit in completer.c.
+
+I was about to post a patch that simply made
+current_demangling_style_string const, and cast away constness at the
+xfree site.  However, looking deeper, it seem to be there's a lot of
+dead code in the file.
+
+First, all external callers of set_demangling_style are found in the
+stabs reader, commented out for over 12 years:
+
+  http://sourceware.org/ml/gdb-patches/2000-12/msg00214.html
+
+I don't think it's likely we'll ever make the older mangling schemes
+work for stabs.  If we do, we can rediscuss the approach then.
+
+Then, set_demangling_command has special handling for unknown
+demangling styles, but "set demangle-style" is an enum command, and
+with those, the user can only specify a known enumeration value, by
+design:
+
+  (gdb) set demangle-style gangnam-style
+  Undefined item: "gangnam-style".
+
+
+This patch removes all that dead code, then makes
+current_demangling_style_string point to an element of
+demangling_style_names, as the FIXME suggests, and then makes
+current_demangling_style_string, removing the need for the 'const char
+**' cast.
+
+gdb/
+2013-03-13  Pedro Alves  <palves@@redhat.com>
+
+	* dbxread.c (read_ofile_symtab, process_one_symbol): Remove
+	commented out code.
+	* demangle.c (current_demangling_style_string): Make it const.
+	(set_demangling_command): Assert the demangling style is known.
+	Remove all handling of unknown styles.  Set
+	'current_demangling_style_string' to an element of the
+	demangling_style_names array.
+	(set_demangling_style): Delete.
+	(_initialize_demangler): Set current_demangling_style_string to the
+	element of the demangling_style_names array that corresponds to
+	the default demangling style.  Remove FIXME note.  Don't call
+	set_demangling_style.
+	* gdb-demangle.h (set_demangling_style): Remove declaration.
+@
+text
+@/* Basic C++ demangling support for GDB.
+   Copyright (C) 2011-2013 Free Software Foundation, Inc.
+
+   This file is part of GDB.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+#ifndef GDB_DEMANGLE_H
+#define GDB_DEMANGLE_H
+
+/* Nonzero means that encoded C++/ObjC names should be printed out in their
+   C++/ObjC form rather than raw.  */
+extern int demangle;
+
+/* Nonzero means that encoded C++/ObjC names should be printed out in their
+   C++/ObjC form even in assembler language displays.  If this is set, but
+   DEMANGLE is zero, names are printed raw, i.e. DEMANGLE controls.  */
+extern int asm_demangle;
+
+/* Check if a character is one of the commonly used C++ marker characters.  */
+extern int is_cplus_marker (int);
+
+#endif /* GDB_DEMANGLE_H */
+@
+
+
+1.4
+log
+@Consistent use of (C) after "Copyright".
+
+While writing the previous patch, I noticed that we're not consistent
+with the (C) in the copyright header.  The maintainers manual prefers
+having it, though also says it's optional.  We have over 10x more
+files with (C) than without in gdb's code, so I spent a few minutes
+grepping and fixing.  Funny enough, the testsuite has it backwards.
+I'll leave that for another time.
+
+gdb/
+2013-02-12  Pedro Alves  <palves@@redhat.com>
+
+	* amd64-darwin-tdep.c: Add (C) after Copyright.
+	* cli/cli-cmds.h: Ditto.
+	* cli/cli-decode.c: Ditto.
+	* cli/cli-decode.h: Ditto.
+	* cli/cli-dump.c: Ditto.
+	* cli/cli-dump.h: Ditto.
+	* cli/cli-interp.c: Ditto.
+	* cli/cli-logging.c: Ditto.
+	* cli/cli-script.c: Ditto.
+	* cli/cli-script.h: Ditto.
+	* cli/cli-setshow.c: Ditto.
+	* cli/cli-setshow.h: Ditto.
+	* cli/cli-utils.c: Ditto.
+	* cli/cli-utils.h: Ditto.
+	* config/alpha/nm-osf3.h: Ditto.
+	* config/djgpp/djconfig.sh: Ditto.
+	* config/i386/nm-fbsd.h: Ditto.
+	* config/i386/nm-i386gnu.h: Ditto.
+	* config/nm-linux.h: Ditto.
+	* config/nm-nto.h: Ditto.
+	* config/rs6000/nm-rs6000.h: Ditto.
+	* config/sparc/nm-sol2.h: Ditto.
+	* darwin-nat-info.c: Ditto.
+	* dfp.c: Ditto.
+	* dfp.h: Ditto.
+	* gdb-demangle.h: Ditto.
+	* i386-darwin-nat.c: Ditto.
+	* i386-darwin-tdep.c: Ditto.
+	* linux-fork.h: Ditto.
+	* m32c-tdep.c: Ditto.
+	* microblaze-linux-tdep.c: Ditto.
+	* microblaze-rom.c: Ditto.
+	* microblaze-tdep.c: Ditto.
+	* microblaze-tdep.h: Ditto.
+	* mips-linux-tdep.h: Ditto.
+	* ppc-ravenscar-thread.c: Ditto.
+	* ppc-ravenscar-thread.h: Ditto.
+	* prologue-value.c: Ditto.
+	* prologue-value.h: Ditto.
+	* ravenscar-thread.c: Ditto.
+	* ravenscar-thread.h: Ditto.
+	* sparc-ravenscar-thread.c: Ditto.
+	* sparc-ravenscar-thread.h: Ditto.
+	* tilegx-linux-tdep.c: Ditto.
+	* unwind_stop_reasons.def: Ditto.
+	* windows-nat.h: Ditto.
+	* xtensa-linux-tdep.c: Ditto.
+	* xtensa-xtregs.c: Ditto.
+	* regformats/regdat.sh: Ditto.
+	* regformats/regdef.h: Ditto.
+
+gdb/gdbserver/
+2013-02-12  Pedro Alves  <palves@@redhat.com>
+
+	* linux-xtensa-low.c: Ditto.
+	* xtensa-xtregs.c: Ditto.
+@
+text
+@a30 3
+/* Fake a "set demangle-style" command.  */
+extern void set_demangling_style (char *);
+
+@
+
+
+1.3
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@d2 1
+a2 1
+   Copyright (c) 2011-2013 Free Software Foundation, Inc.
+@
+
+
+1.2
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d2 1
+a2 1
+   Copyright (c) 2011-2012 Free Software Foundation, Inc.
+@
+
+
+1.1
+log
+@	* defs.h (is_cplus_marker, set_demangling_style): Moved to ...
+	* gdb-demangle.h: ... here.  New file.
+	* demangle.c: #include "gdb-demangle.h".
+	(_initialize_demangler): Use initialize_file_ftype for prototype.
+	Move "set demangle" and "set asm-demangle" parameters here from utils.c
+	(demangle, show_demangle, asm_demangle, show_asm_demangle): Move here
+	from utils.c
+	* utils.c: Update. #include "gdb-demangle.h".
+	* symtab.h (asm_demangle): Delete.
+	(demangle): Move declaration next to use.
+	* breakpoint.c: #include "gdb-demangle.h" instead of "demangle.h".
+	* dwarf2read.c: #include "gdb-demangle.h".
+	* gnu-v2-abi.c: Ditto.
+	* jv-typeprint.c: Ditto.
+	* mdebugread.c: Ditto.
+	* p-typeprint.c: Ditto.
+	* stabsread.c: Ditto.
+	* printcmd.c: Ditto.
+	(asm_demangle): Delete declaration.
+	* tui/tui-stack.c: #include "gdb-demangle.h".
+@
+text
+@d2 1
+a2 1
+   Copyright (c) 2011 Free Software Foundation, Inc.
+@
+
+
+1.1.2.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d2 1
+a2 1
+   Copyright (c) 2011-2012 Free Software Foundation, Inc.
+@
+
+

@@ -1,0 +1,524 @@
+head	1.3;
+access;
+symbols
+	binutils-2_24-branch:1.3.0.2
+	binutils-2_24-branchpoint:1.3
+	binutils-2_23_2:1.1
+	binutils-2_23_1:1.1
+	binutils-2_23:1.1
+	binutils-2_23-branch:1.1.0.2
+	binutils-2_23-branchpoint:1.1
+	binutils_latest_snapshot:1.3;
+locks; strict;
+comment	@ * @;
+
+
+1.3
+date	2013.07.29.18.29.12;	author sterling;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2012.09.10.19.16.33;	author sterling;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2012.03.21.19.02.21;	author ccoutant;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.3
+log
+@2013-07-22  Sterling Augustine  <saugustine@@google.com>
+
+	* dwarf_reader.cc (Dwarf_pubnames_table::read_section):
+	Convert parameter shndx to local variable. Add parameters symtab
+	and symtab_size.  Scan over section names.  Find relocation
+	section corresponding to current section.  Create and initialize
+	reloc_mapper_ and reloc_type_.
+	(Dwarf_pubnames_table::read_header):  Add assertion.  Change
+	unit_length to off_t.  Initialize member unit_length_.  Fill in field
+	cu_offset_.
+	* dwarf_reader.h (Dwarf_pubnames_table::Dwarf_pubnames_table):
+	Initialize new fields unit_length_ and cu_offset_.
+	(Dwarf_pubnames_table::read_section): Update prototype.
+	(Dwarf_pubnames_table::cu_offset): New member function.
+	(Dwarf_pubnames_table::subsection_size): Likewise.
+	(Dwarf_pubnames_table::cu_offset_, Dwarf_pubnames_table::unit_length):
+	New fields.
+	(Dwarf_info_reader::symtab, Dwarf_info_reader::symtab_size): Make
+	member functions public.
+	* gdb_index.cc (Gdb_index_info_reader::read_pubnames_and_pubtypes):
+	Update comment.  Rework logic.  Move repeated parts to...
+	(Gdb_index_info_reader::read_pubtable): ...here. New function.
+	(Gdb_index::Gdb_index): Initialize new fields, pubnames_table_,
+	pubtypes_table_, and stmt_list_offset.
+	(Gdb_index::map_pubtable_to_dies, Gdb_index::find_pubname_offset,
+	Gdb_index::find_pubtype_offset,
+	Gdb_index::map_pubnames_and_types_to_dies): Define new functions.
+	(Gdb_index::pubnames_read): Update prototype and rework logic.
+	* gdb_index.h (Gdb_index_info_reader, Dwarf_pubnames_table):
+	Forward declare.
+	(Gdb_index::map_pubtable_to_dies, Gdb_index::find_pubname_offset,
+	Gdb_index::find_pubtype_offset, Gdb_index::pubnames_table)
+	Gdb_index::pubtypes_table, Gdb_index::map_pubnames_and_types_to_dies,
+	Gdb_index::map_pubtable_to_dies):
+	Declare functions.
+	(Gdb_index::pubnames_read): Update declaration.
+	(Gdb_index::Pubname_offset_map): New type.
+	(Gdb_index::cu_pubname_map_, Gdb_index::cu_pubtype_map_,
+	Gdb_index::pubnames_table_, Gdb_index::pubtypes_table_,
+	Gdb_index::stmt_list_offset): Declare.
+	(Gdb_index::pubnames_shndx_, Gdb_index::pubnames_offet_,
+	Gdb_index::pubtypes_object_, Gdb_index::pubtypes_shndx_)
+	Gdb_index::pubtypes_offset_): Remove.
+@
+text
+@// gdb-index.h -- generate .gdb_index section for fast debug lookup  -*- C++ -*-
+
+// Copyright 2012 Free Software Foundation, Inc.
+// Written by Cary Coutant <ccoutant@@google.com>.
+
+// This file is part of gold.
+
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 3 of the License, or
+// (at your option) any later version.
+
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+// MA 02110-1301, USA.
+
+#include <sys/types.h>
+#include <vector>
+
+#include "gold.h"
+#include "output.h"
+#include "mapfile.h"
+#include "stringpool.h"
+
+#ifndef GOLD_GDB_INDEX_H
+#define GOLD_GDB_INDEX_H
+
+namespace gold
+{
+
+class Output_section;
+class Output_file;
+class Mapfile;
+template<int size, bool big_endian>
+class Sized_relobj;
+class Dwarf_range_list;
+template <typename T>
+class Gdb_hashtab;
+class Gdb_index_info_reader;
+class Dwarf_pubnames_table;
+
+// This class manages the .gdb_index section, which is a fast
+// lookup table for DWARF information used by the gdb debugger.
+// The format of this section is described in gdb/doc/gdb.texinfo.
+
+class Gdb_index : public Output_section_data
+{
+ public:
+  Gdb_index(Output_section* gdb_index_section);
+
+  ~Gdb_index();
+
+  // Scan a .debug_info or .debug_types input section.
+  void scan_debug_info(bool is_type_unit,
+		       Relobj* object,
+		       const unsigned char* symbols,
+		       off_t symbols_size,
+		       unsigned int shndx,
+		       unsigned int reloc_shndx,
+		       unsigned int reloc_type);
+
+  // Add a compilation unit.
+  int
+  add_comp_unit(off_t cu_offset, off_t cu_length)
+  {
+    this->comp_units_.push_back(Comp_unit(cu_offset, cu_length));
+    return this->comp_units_.size() - 1;
+  }
+
+  // Add a type unit.
+  int
+  add_type_unit(off_t tu_offset, off_t type_offset, uint64_t signature)
+  {
+    this->type_units_.push_back(Type_unit(tu_offset, type_offset, signature));
+    return this->type_units_.size() - 1;
+  }
+
+  // Add an address range.
+  void
+  add_address_range_list(Relobj* object, unsigned int cu_index,
+			 Dwarf_range_list* ranges)
+  {
+    this->ranges_.push_back(Per_cu_range_list(object, cu_index, ranges));
+  }
+
+  // Add a symbol.
+  void
+  add_symbol(int cu_index, const char* sym_name);
+
+  // Return the offset into the pubnames table for the cu at the given
+  // offset.
+  off_t
+  find_pubname_offset(off_t cu_offset);
+
+  // Return the offset into the pubtypes table for the cu at the
+  // given offset.
+  off_t
+  find_pubtype_offset(off_t cu_offset);
+
+  // Return TRUE if we have already processed the pubnames and types
+  // set for OBJECT of the CUs and TUS associated with the statement
+  // list at OFFSET.
+  bool
+  pubnames_read(const Relobj* object, off_t offset);
+
+  // Record that we have already read the pubnames associated with
+  // OBJECT and OFFSET.
+  void
+  set_pubnames_read(const Relobj* object, off_t offset);
+
+  // Return a pointer to the given table.
+  Dwarf_pubnames_table*
+  pubnames_table()
+  { return pubnames_table_; }
+
+  Dwarf_pubnames_table*
+  pubtypes_table()
+  { return pubtypes_table_; }
+
+  // Print usage statistics.
+  static void
+  print_stats();
+
+ protected:
+  // This is called to update the section size prior to assigning
+  // the address and file offset.
+  void
+  update_data_size()
+  { this->set_final_data_size(); }
+
+  // Set the final data size.
+  void
+  set_final_data_size();
+
+  // Write the data to the file.
+  void
+  do_write(Output_file*);
+
+  // Write to a map file.
+  void
+  do_print_to_mapfile(Mapfile* mapfile) const
+  { mapfile->print_output_data(this, _("** gdb_index")); }
+
+  // Create a map from dies to pubnames.
+  Dwarf_pubnames_table*
+  map_pubtable_to_dies(unsigned int attr,
+                       Gdb_index_info_reader* dwinfo,
+                       Relobj* object,
+                       const unsigned char* symbols,
+                       off_t symbols_size);
+
+  // Wrapper for map_pubtable_to_dies
+  void
+  map_pubnames_and_types_to_dies(Gdb_index_info_reader* dwinfo,
+                                 Relobj* object,
+                                 const unsigned char* symbols,
+                                 off_t symbols_size);
+
+ private:
+  // An entry in the compilation unit list.
+  struct Comp_unit
+  {
+    Comp_unit(off_t off, off_t len)
+      : cu_offset(off), cu_length(len)
+    { }
+    uint64_t cu_offset;
+    uint64_t cu_length;
+  };
+
+  // An entry in the type unit list.
+  struct Type_unit
+  {
+    Type_unit(off_t off, off_t toff, uint64_t sig)
+      : tu_offset(off), type_offset(toff), type_signature(sig)
+    { }
+    uint64_t tu_offset;
+    uint64_t type_offset;
+    uint64_t type_signature;
+  };
+
+  // An entry in the address range list.
+  struct Per_cu_range_list
+  {
+    Per_cu_range_list(Relobj* obj, uint32_t index, Dwarf_range_list* r)
+      : object(obj), cu_index(index), ranges(r)
+    { }
+    Relobj* object;
+    uint32_t cu_index;
+    Dwarf_range_list* ranges;
+  };
+
+  // A symbol table entry.
+  struct Gdb_symbol
+  {
+    Stringpool::Key name_key;
+    unsigned int hashval;
+    unsigned int cu_vector_index;
+
+    // Return the hash value.
+    unsigned int
+    hash()
+    { return this->hashval; }
+
+    // Return true if this symbol is the same as SYMBOL.
+    bool
+    equal(Gdb_symbol* symbol)
+    { return this->name_key == symbol->name_key; }
+  };
+
+  typedef std::vector<int> Cu_vector;
+
+  typedef Unordered_map<off_t, off_t> Pubname_offset_map;
+  Pubname_offset_map cu_pubname_map_;
+  Pubname_offset_map cu_pubtype_map_;
+
+  // Scan the given pubtable and build a map of the various dies it
+  // refers to, so we can process the entries when we encounter the
+  // die.
+  void
+  map_pubtable_to_dies(Dwarf_pubnames_table* table,
+                       Pubname_offset_map* map);
+
+  // Tables to store the pubnames section of the current object.
+  Dwarf_pubnames_table* pubnames_table_;
+  Dwarf_pubnames_table* pubtypes_table_;
+
+  // The .gdb_index section.
+  Output_section* gdb_index_section_;
+  // The list of DWARF compilation units.
+  std::vector<Comp_unit> comp_units_;
+  // The list of DWARF type units.
+  std::vector<Type_unit> type_units_;
+  // The list of address ranges.
+  std::vector<Per_cu_range_list> ranges_;
+  // The symbol table.
+  Gdb_hashtab<Gdb_symbol>* gdb_symtab_;
+  // The CU vector portion of the constant pool.
+  std::vector<Cu_vector*> cu_vector_list_;
+  // An array to map from a CU vector index to an offset to the constant pool.
+  off_t* cu_vector_offsets_;
+  // The string portion of the constant pool.
+  Stringpool stringpool_;
+  // Offsets of the various pieces of the .gdb_index section.
+  off_t tu_offset_;
+  off_t addr_offset_;
+  off_t symtab_offset_;
+  off_t cu_pool_offset_;
+  off_t stringpool_offset_;
+  // Object, stmt list offset of the CUs and TUs associated with the
+  // last read pubnames and pubtypes sections.
+  const Relobj* pubnames_object_;
+  off_t stmt_list_offset_;
+};
+
+} // End namespace gold.
+
+#endif // !defined(GOLD_GDB_INDEX_H)
+@
+
+
+1.2
+log
+@2012-09-10  Sterling Augustine  <saugustine@@google.com>
+
+	* gdb-index.cc (Gdb_index::pubnames_read): New parameter.
+	(Gdb_index::pubtypes_read): New parameter.
+	(Gdb_index_info_reader::read_pubnames_and_pubtypes): Add parameters
+	to calls.
+	* gdb-index.h (Gdb_index): New fields pubnames_object_ and
+	pubtypes_object_.
+@
+text
+@d45 2
+d96 13
+a108 2
+  // Return TRUE if we have already processed the pubnames set for
+  // OBJECT at OFFSET in section SHNDX
+d110 1
+a110 1
+  pubnames_read(const Relobj* object, unsigned int shndx, off_t offset);
+d112 13
+a124 4
+  // Return TRUE if we have already processed the pubtypes set for
+  // OBJECT at OFFSET in section SHNDX
+  bool
+  pubtypes_read(const Relobj* object,  unsigned int shndx, off_t offset);
+d150 15
+d218 15
+d255 2
+a256 1
+  // Object, section index and offset of last read pubnames section.
+d258 1
+a258 6
+  unsigned int pubnames_shndx_;
+  off_t pubnames_offset_;
+  // Object, section index and offset of last read pubtypes section.
+  const Relobj* pubtypes_object_;
+  unsigned int pubtypes_shndx_;
+  off_t pubtypes_offset_;
+@
+
+
+1.1
+log
+@2012-03-21  Cary Coutant  <ccoutant@@google.com>
+
+	* Makefile.am: Add gdb-index.cc, gdb-index.h.
+	* Makefile.in: Regenerate.
+	* dwarf_reader.cc (Sized_elf_reloc_mapper::do_initialize): New function.
+	(Sized_elf_reloc_mapper::symbol_section): New function.
+	(Sized_elf_reloc_mapper::do_get_reloc_target): New function.
+	(make_elf_reloc_mapper): New function.
+	(Dwarf_abbrev_table::clear_abbrev_codes): New function.
+	(Dwarf_abbrev_table::do_read_abbrevs): New function.
+	(Dwarf_abbrev_table::do_get_abbrev): New function.
+	(Dwarf_ranges_table::read_ranges_table): New function.
+	(Dwarf_ranges_table::read_range_list): New function.
+	(Dwarf_pubnames_table::read_section): New function.
+	(Dwarf_pubnames_table::read_header): New function.
+	(Dwarf_pubnames_table::next_name): New function.
+	(Dwarf_die::Dwarf_die): New function.
+	(Dwarf_die::read_attributes): New function.
+	(Dwarf_die::skip_attributes): New function.
+	(Dwarf_die::set_name): New function.
+	(Dwarf_die::set_linkage_name): New function.
+	(Dwarf_die::attribute): New function.
+	(Dwarf_die::string_attribute): New function.
+	(Dwarf_die::int_attribute): New function.
+	(Dwarf_die::uint_attribute): New function.
+	(Dwarf_die::ref_attribute): New function.
+	(Dwarf_die::child_offset): New function.
+	(Dwarf_die::sibling_offset): New function.
+	(Dwarf_info_reader::check_buffer): New function.
+	(Dwarf_info_reader::parse): New function.
+	(Dwarf_info_reader::do_parse): New function.
+	(Dwarf_info_reader::do_read_string_table): New function.
+	(Dwarf_info_reader::lookup_reloc): New function.
+	(Dwarf_info_reader::get_string): New function.
+	(Dwarf_info_reader::visit_compilation_unit): New function.
+	(Dwarf_info_reader::visit_type_unit): New function.
+	(Sized_dwarf_line_info::Sized_dwarf_line_info): Use
+	Sized_elf_reloc_mapper.
+	(Sized_dwarf_line_info::symbol_section): Remove function.
+	(Sized_dwarf_line_info::read_relocs): Use Sized_elf_reloc_mapper.
+	(Sized_dwarf_line_info::read_line_mappings): Remove object
+	parameter, adjust callers.
+	(Sized_dwarf_line_info::format_file_lineno): Fix type of cast.
+	* dwarf_reader.h: Include <sys/types.h>.
+	(class Track_relocs): Remove forward declaration.
+	(class Elf_reloc_mapper): New class.
+	(class Sized_elf_reloc_mapper): New class.
+	(class Dwarf_abbrev_table): New class.
+	(class Dwarf_range_list): New class.
+	(class Dwarf_ranges_table): New class.
+	(class Dwarf_pubnames_table): New class.
+	(class Dwarf_die): New class.
+	(class Dwarf_info_reader): New class.
+	(Sized_dwarf_line_info::read_line_mappings): Remove object parameter.
+	(Sized_dwarf_line_info::symbol_section): Remove member function.
+	* dynobj.h (Sized_dynobj::do_section_contents): Refactor code from
+	base class.
+	* gdb-index.cc: New source file.
+	* gdb-index.h: New source file.
+	* incremental.cc (Sized_relobj_incr::do_layout): Track .debug_info
+	and .debug_types sections, call Layout::add_to_gdb_index.
+	(Sized_relobj_incr::do_section_name): Implement.
+	(Sized_relobj_incr::do_section_contents): Adjust parameter list and
+	return type; Implement.
+	(Sized_incr_dynobj::do_section_contents): Adjust parameter list and
+	return type.
+	* incremental.h (Sized_relobj_incr::do_section_contents): Adjust
+	parameter list and return type.
+	(Sized_incr_dynobj::do_section_contents): Likewise.
+	* layout.cc: Include gdb-index.h.
+	(Layout::Layout): Initialize gdb_index_data_.
+	(Layout::init_fixed_output_section): Check for .gdb_index section.
+	(Layout::add_to_gdb_index): New function. Instantiate.
+	* layout.h: Add forward declaration for class Gdb_index.
+	(Layout::add_to_gdb_index): New member function.
+	(Layout::gdb_index_data_): New data member.
+	* main.cc: Include gdb-index.h.
+	(main): Print statistics for gdb index.
+	* object.cc (Object::section_contents): Move code into
+	do_section_contents.
+	(need_decompressed_section): Check for sections needed when building
+	gdb index.
+	(build_compressed_section_map): Likewise.
+	(Sized_relobj_file::do_read_symbols): Need local symbols when building
+	gdb index.
+	(Sized_relobj_file::do_layout): Track .debug_info and .debug_types
+	sections; call Layout::add_to_gdb_index.
+	(Sized_relobj_file::do_decompressed_section_contents): Call
+	do_section_contents directly.
+	* object.h (Object::do_section_contents): Adjust parameter list and
+	return type.
+	(Object::do_decompressed_section_contents): Call do_section_contents
+	directly.
+	(Sized_relobj_file::do_section_contents): Adjust parameter list and
+	return type.
+	* options.h (class General_options): Add --gdb-index option.
+	* plugin.cc (Sized_pluginobj::do_section_contents): Adjust parameter
+	list and return type.
+	* plugin.h (Sized_pluginobj::do_section_contents): Likewise.
+	* reloc.h (Track_relocs::checkpoint): New function.
+	(Track_relocs::reset): New function.
+
+	* testsuite/Makefile.am (gdb_index_test_1.sh, gdb_index_test_2.sh):
+	New test cases.
+	* testsuite/Makefile.in: Regenerate.
+	* testsuite/gdb_index_test.cc: New test source file.
+	* testsuite/gdb_index_test_1.sh: New test source file.
+	* testsuite/gdb_index_test_2.sh: New test source file.
+@
+text
+@d94 2
+a95 2
+  // Return TRUE if we have already processed the pubnames set at
+  // OFFSET in section SHNDX
+d97 1
+a97 1
+  pubnames_read(unsigned int shndx, off_t offset);
+d99 2
+a100 2
+  // Return TRUE if we have already processed the pubtypes set at
+  // OFFSET in section SHNDX
+d102 1
+a102 1
+  pubtypes_read(unsigned int shndx, off_t offset);
+d203 2
+a204 1
+  // Section index and offset of last read pubnames section.
+d207 2
+a208 1
+  // Section index and offset of last read pubtypes section.
+@
+

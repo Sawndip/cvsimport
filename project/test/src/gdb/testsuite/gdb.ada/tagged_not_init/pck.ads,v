@@ -1,0 +1,145 @@
+head	1.2;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.2
+	gdb_7_6-2013-04-26-release:1.2
+	gdb_7_6-branch:1.2.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.2
+	gdb_7_5_1-2012-11-29-release:1.1
+	gdb_7_5-2012-08-17-release:1.1
+	gdb_7_5-branch:1.1.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.1;
+locks; strict;
+comment	@-- @;
+
+
+1.2
+date	2013.01.01.06.33.21;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2012.02.29.19.46.48;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@--  Copyright 2012-2013 Free Software Foundation, Inc.
+--
+--  This program is free software; you can redistribute it and/or modify
+--  it under the terms of the GNU General Public License as published by
+--  the Free Software Foundation; either version 3 of the License, or
+--  (at your option) any later version.
+--
+--  This program is distributed in the hope that it will be useful,
+--  but WITHOUT ANY WARRANTY; without even the implied warranty of
+--  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+--  GNU General Public License for more details.
+--
+--  You should have received a copy of the GNU General Public License
+--  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+with System;
+
+package Pck is
+   type Base is tagged record
+      X : Integer := 42;
+   end record;
+
+   type Extension is new Base with
+      record
+         Y : Float := 42.0;
+      end record;
+
+   function Ident (I : Integer) return Integer;
+
+   procedure Do_Nothing (A : System.Address);
+end Pck;
+@
+
+
+1.1
+log
+@[Ada] avoid error message pollution with uninitialized tagged variable
+
+Consider the following function...
+
+  3 procedure Foo is
+  4    I : Integer := Ident (10);
+  5    Obj : Base;
+  6 begin
+  7    Obj.X := I;
+  8    Do_Nothing (Obj.X'Address);
+  9 end Foo;
+
+... where type "Base" is defined as a plain tagged record. If the user
+stops execution before "Obj" gets initialized (for example, by inserting
+a breakpoint "on" the function - or in other words, by inserting a
+breakpoint using the function name as the location), one might get
+the following of output if you try printing the value of obj:
+
+    (gdb) p obj
+    object size is larger than varsize-limit
+    object size is larger than varsize-limit
+    object size is larger than varsize-limit
+    $1 = object size is larger than varsize-limit
+    (x => 4204154)
+
+Same thing with "info locals":
+
+   (gdb) info locals
+    i = 0
+    obj = object size is larger than varsize-limit
+    (x => 4204154)
+
+We have also seen different error messages such as "Cannot read
+memory at 0x...".
+
+The error happens because we are trying to read the dispatch table
+of a tagged type variable before it gets initialized.  So the errors
+might legitimately occur, and are supposed to be be contained.
+However, the way things are written in ada-lang.c:ada_tag_name,
+although the exception is in fact contained, the error message still
+gets to be printed out.
+
+This patch prevents this from happening by eliminating the use of
+catch_errors, and using a TRY_CATCH block instead.  Doing this removed
+the need to use functions specifically fitted for catch_errors, and
+thus some other simplifications could me made.  In the end, the code
+got reorganized a bit to better show the logic behind it, as well as
+the common patterns.
+
+gdb/ChangeLog:
+
+        * ada-lang.c (struct tag_args): Delete.
+        (ada_get_tsd_type): Function body moved up in source file.
+        (ada_tag_name_1, ada_tag_name_2): Delete.
+        (ada_get_tsd_from_tag): New function.
+        (ada_tag_name_from_tsd): New function.
+        (ada_tag_name): Use a TRY_CATCH block instead of catch_errors
+        to determine the tag name.
+
+gdb/testsuite/ChangeLog:
+
+        * gdb.ada/tagged_not_init: New testcase.
+@
+text
+@d1 1
+a1 1
+--  Copyright 2012 Free Software Foundation, Inc.
+@
+

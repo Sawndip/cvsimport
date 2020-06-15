@@ -1,0 +1,751 @@
+head	1.12;
+access;
+symbols
+	binutils-2_24-branch:1.11.0.8
+	binutils-2_24-branchpoint:1.11
+	binutils-2_21_1:1.10.2.1
+	binutils-2_23_2:1.11
+	binutils-2_23_1:1.11
+	binutils-2_23:1.11
+	binutils-2_23-branch:1.11.0.6
+	binutils-2_23-branchpoint:1.11
+	binutils-2_22_branch:1.11.0.4
+	binutils-2_22:1.11
+	binutils-2_22-branch:1.11.0.2
+	binutils-2_22-branchpoint:1.11
+	binutils-2_21:1.10
+	binutils-2_21-branch:1.10.0.2
+	binutils-2_21-branchpoint:1.10
+	binutils-2_20_1:1.2
+	binutils-2_20:1.2
+	binutils-2_20-branch:1.2.0.2
+	binutils-2_20-branchpoint:1.2
+	binutils_latest_snapshot:1.12;
+locks; strict;
+comment	@ * @;
+
+
+1.12
+date	2013.10.11.21.11.49;	author roland;	state Exp;
+branches;
+next	1.11;
+
+1.11
+date	2011.02.02.21.55.29;	author tmsriram;	state Exp;
+branches
+	1.11.8.1;
+next	1.10;
+
+1.10
+date	2010.08.25.08.36.54;	author nickc;	state Exp;
+branches
+	1.10.2.1;
+next	1.9;
+
+1.9
+date	2010.07.29.18.57.28;	author tmsriram;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2010.06.25.00.37.40;	author dougkwan;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2010.03.04.01.33.22;	author tmsriram;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2010.02.21.00.57.59;	author tmsriram;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2010.02.13.02.04.20;	author tmsriram;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2010.01.20.17.29.52;	author dougkwan;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2010.01.04.19.08.39;	author tmsriram;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2009.08.12.19.03.16;	author tmsriram;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2009.08.05.20.51.56;	author tmsriram;	state Exp;
+branches;
+next	;
+
+1.11.8.1
+date	2013.10.11.21.23.43;	author roland;	state Exp;
+branches;
+next	;
+
+1.10.2.1
+date	2011.02.03.20.42.07;	author ian;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.12
+log
+@gold/
+	* i386.cc (Target_i386): Remove unused member dynbss_.
+	* arm.cc (Target_arm): Likewise.
+	* powerpc.cc (Target_powerpc): Likewise.
+	* sparc.cc (Target_sparc): Likewise.
+	* tilegx.cc (Target_tilegx): Likewise.
+	* x86_64.cc (Target_x86_64): Likewise.
+	* dwarf_reader.h (Dwarf_info_reader): Remove unused members
+	type_signature_, type_offset_.
+	* plugin.h (Plugin_hook): Remove unused member layout_.
+	* readsyms.h (Add_symbols): Remove unused members dirpath_, dirindex_,
+	mapfile_.
+	(Read_member): Remove unused members input_objects_, symtab_,
+	mapfile_, layout_.
+	(Check_library): Remove unused member symtab_.
+	* archive.h (Lib_group): Remove unused member lib_.
+	* archive.cc (Lib_group::Lib_group): Update initializer.
+	* incremental.h	(Incremental_binary): Remove unused member target_.
+	(Incremental_script_entry): Removed unused member script_.
+	* layout.h (Write_symbols_task): Remove unused member input_objects_.
+	* icf.h (Icf): Remove unused member num_tracked_relocs.
+@
+text
+@// icf.h --  Identical Code Folding
+
+// Copyright 2009, 2010, 2013 Free Software Foundation, Inc.
+// Written by Sriraman Tallam <tmsriram@@google.com>.
+
+// This file is part of gold.
+
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 3 of the License, or
+// (at your option) any later version.
+
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+// MA 02110-1301, USA.
+
+#ifndef GOLD_ICF_H
+#define GOLD_ICF_H
+
+#include <vector>
+
+#include "elfcpp.h"
+#include "symtab.h"
+#include "object.h"
+
+namespace gold
+{
+
+class Object;
+class Input_objects;
+class Symbol_table;
+
+class Icf
+{
+ public:
+  typedef std::vector<Section_id> Sections_reachable_info;
+  typedef std::vector<Symbol*> Symbol_info;
+  typedef std::vector<std::pair<long long, long long> > Addend_info;
+  typedef std::vector<uint64_t> Offset_info;
+  typedef std::vector<unsigned int> Reloc_addend_size_info;
+  typedef Unordered_map<Section_id,
+                        unsigned int,
+                        Section_id_hash> Uniq_secn_id_map;
+  typedef Unordered_set<Section_id, Section_id_hash> Secn_fptr_taken_set;
+
+  typedef struct
+  {
+    // This stores the section corresponding to the reloc.
+    Sections_reachable_info section_info;
+    // This stores the symbol corresponding to the reloc.
+    Symbol_info symbol_info;
+    // This stores the symbol value and the addend for a reloc.
+    Addend_info addend_info;
+    Offset_info offset_info;
+    Reloc_addend_size_info reloc_addend_size_info;
+  } Reloc_info;
+
+  typedef Unordered_map<Section_id, Reloc_info,
+                        Section_id_hash> Reloc_info_list;
+
+  Icf()
+  : id_section_(), section_id_(), kept_section_id_(),
+    fptr_section_id_(),
+    icf_ready_(false),
+    reloc_info_list_()
+  { }
+
+  // Returns the kept folded identical section corresponding to
+  // dup_obj and dup_shndx.
+  Section_id
+  get_folded_section(Object* dup_obj, unsigned int dup_shndx);
+
+  // Forms groups of identical sections where the first member
+  // of each group is the kept section during folding.
+  void
+  find_identical_sections(const Input_objects* input_objects,
+                          Symbol_table* symtab);
+
+  // This is set when ICF has been run and the groups of
+  // identical sections have been formed.
+  void
+  icf_ready()
+  { this->icf_ready_ = true; }
+
+  // Returns true if ICF has been run.
+  bool
+  is_icf_ready()
+  { return this->icf_ready_; }
+
+  // Unfolds the section denoted by OBJ and SHNDX if folded.
+  void
+  unfold_section(Object* obj, unsigned int shndx);
+
+  // Returns the kept section corresponding to the
+  // given section.
+  bool
+  is_section_folded(Object* obj, unsigned int shndx);
+
+  // Given an object and a section index, this returns true if the
+  // pointer of the function defined in this section is taken.
+  bool
+  section_has_function_pointers(Object* obj, unsigned int shndx)
+  {
+    return (this->fptr_section_id_.find(Section_id(obj, shndx))
+            != this->fptr_section_id_.end());
+  }
+
+  // Records that a pointer of the function defined in this section
+  // is taken.
+  void
+  set_section_has_function_pointers(Object* obj, unsigned int shndx)
+  {
+    this->fptr_section_id_.insert(Section_id(obj, shndx));
+  }
+
+  // Checks if the section_name should be searched for relocs
+  // corresponding to taken function pointers.  Ignores eh_frame
+  // and vtable sections.
+  inline bool
+  check_section_for_function_pointers(const std::string& section_name,
+                                      Target* target)
+  {
+    return (parameters->options().icf_safe_folding()
+	    && target->can_check_for_function_pointers()
+	    && target->section_may_have_icf_unsafe_pointers(
+	        section_name.c_str()));
+  }
+
+  // Returns a map of a section to info (Reloc_info) about its relocations.
+  Reloc_info_list&
+  reloc_info_list()
+  { return this->reloc_info_list_; }
+
+  // Returns a mapping of each section to a unique integer.
+  Uniq_secn_id_map&
+  section_to_int_map()
+  { return this->section_id_; }
+
+ private:
+
+  // Maps integers to sections.
+  std::vector<Section_id> id_section_;
+  // Does the reverse.
+  Uniq_secn_id_map section_id_;
+  // Given a section id, this maps it to the id of the kept
+  // section.  If the id's are the same then this section is
+  // not folded.
+  std::vector<unsigned int> kept_section_id_;
+  // Given a section id, this says if the pointer to this
+  // function is taken in which case it is dangerous to fold
+  // this function.
+  Secn_fptr_taken_set fptr_section_id_;
+  // Flag to indicate if ICF has been run.
+  bool icf_ready_;
+  // This list is populated by gc_process_relocs in gc.h.
+  Reloc_info_list reloc_info_list_;
+};
+
+// This function returns true if this section corresponds to a function that
+// should be considered by icf as a possible candidate for folding.  Some
+// earlier gcc versions, like 4.0.3, put constructors and destructors in
+// .gnu.linkonce.t sections and hence should be included too.
+inline bool
+is_section_foldable_candidate(const std::string& section_name)
+{
+  const char* section_name_cstr = section_name.c_str();
+  return (is_prefix_of(".text", section_name_cstr)
+          || is_prefix_of(".gnu.linkonce.t", section_name_cstr));
+}
+
+} // End of namespace gold.
+
+#endif
+@
+
+
+1.11
+log
+@2011-02-02  Sriraman Tallam  <tmsriram@@google.com>
+
+	* icf.h (is_section_foldable_candidate): Change type of parameter
+        to std::string.
+	* icf.cc (Icf::find_identical_sections): Change type of local variable
+        section_name to be std::string.
+	(is_function_ctor_or_dtor): Change type of parameter to std::string.
+@
+text
+@d3 1
+a3 1
+// Copyright 2009, 2010 Free Software Foundation, Inc.
+d70 1
+a70 1
+    num_tracked_relocs(NULL), icf_ready_(false),
+d100 1
+a100 1
+  // Returns the kept section corresponding to the 
+d139 1
+a139 1
+  
+a158 1
+  unsigned int* num_tracked_relocs;
+@
+
+
+1.11.8.1
+log
+@gold/
+	* i386.cc (Target_i386): Remove unused member dynbss_.
+	* arm.cc (Target_arm): Likewise.
+	* powerpc.cc (Target_powerpc): Likewise.
+	* sparc.cc (Target_sparc): Likewise.
+	* tilegx.cc (Target_tilegx): Likewise.
+	* x86_64.cc (Target_x86_64): Likewise.
+	* dwarf_reader.h (Dwarf_info_reader): Remove unused members
+	type_signature_, type_offset_.
+	* plugin.h (Plugin_hook): Remove unused member layout_.
+	* readsyms.h (Add_symbols): Remove unused members dirpath_, dirindex_,
+	mapfile_.
+	(Read_member): Remove unused members input_objects_, symtab_,
+	mapfile_, layout_.
+	(Check_library): Remove unused member symtab_.
+	* archive.h (Lib_group): Remove unused member lib_.
+	* archive.cc (Lib_group::Lib_group): Update initializer.
+	* incremental.h	(Incremental_binary): Remove unused member target_.
+	(Incremental_script_entry): Removed unused member script_.
+	* layout.h (Write_symbols_task): Remove unused member input_objects_.
+	* icf.h (Icf): Remove unused member num_tracked_relocs.
+@
+text
+@d3 1
+a3 1
+// Copyright 2009, 2010, 2013 Free Software Foundation, Inc.
+d70 1
+a70 1
+    icf_ready_(false),
+d100 1
+a100 1
+  // Returns the kept section corresponding to the
+d139 1
+a139 1
+
+d159 1
+@
+
+
+1.10
+log
+@        * archive.cc: Formatting fixes: Remove whitespace between
+        typename and following asterisk.  Remove whitespace between
+        function name and opening parenthesis.
+        * archive.h: Likewise.
+        * arm.cc: Likewise.
+        * attributes.cc: Likewise.
+        * attributes.h: Likewise.
+        * common.cc: Likewise.
+        * copy-relocs.cc: Likewise.
+        * dirsearch.h: Likewise.
+        * dynobj.cc: Likewise.
+        * ehframe.cc: Likewise.
+        * ehframe.h: Likewise.
+        * expression.cc: Likewise.
+        * fileread.cc: Likewise.
+        * fileread.h: Likewise.
+        * gc.h: Likewise.
+        * gold-threads.cc: Likewise.
+        * gold.cc: Likewise.
+        * i386.cc: Likewise.
+        * icf.h: Likewise.
+        * incremental-dump.cc: Likewise.
+        * incremental.cc: Likewise.
+        * layout.cc: Likewise.
+        * layout.h: Likewise.
+        * main.cc: Likewise.
+        * merge.cc: Likewise.
+        * merge.h: Likewise.
+        * object.cc: Likewise.
+        * object.h: Likewise.
+        * options.cc: Likewise.
+        * options.h: Likewise.
+        * output.cc: Likewise.
+        * output.h: Likewise.
+        * plugin.cc: Likewise.
+        * plugin.h: Likewise.
+        * powerpc.cc: Likewise.
+        * reloc.cc: Likewise.
+        * script-c.h: Likewise.
+        * script-sections.cc: Likewise.
+        * script.cc: Likewise.
+        * stringpool.cc: Likewise.
+        * symtab.cc: Likewise.
+        * symtab.h: Likewise.
+        * target.cc: Likewise.
+        * timer.cc: Likewise.
+        * timer.h: Likewise.
+        * version.cc: Likewise.
+        * x86_64.cc: Likewise.
+@
+text
+@d171 1
+a171 1
+is_section_foldable_candidate(const char* section_name)
+d173 3
+a175 2
+  return (is_prefix_of(".text", section_name)
+          || is_prefix_of(".gnu.linkonce.t", section_name));
+@
+
+
+1.10.2.1
+log
+@	* icf.h (is_section_foldable_candidate): Change type of parameter
+        to std::string.
+	* icf.cc (Icf::find_identical_sections): Change type of local variable
+        section_name to be std::string.
+	(is_function_ctor_or_dtor): Change type of parameter to std::string.
+@
+text
+@d171 1
+a171 1
+is_section_foldable_candidate(const std::string& section_name)
+d173 2
+a174 3
+  const char* section_name_cstr = section_name.c_str();
+  return (is_prefix_of(".text", section_name_cstr)
+          || is_prefix_of(".gnu.linkonce.t", section_name_cstr));
+@
+
+
+1.9
+log
+@	* arm.cc (Target_arm<big_endian>::gc_process_relocs): Add template
+	paramter to the call to gold::gc_process_relocs.
+	* i386.cc (Target_i386<big_endian>::gc_process_relocs): Add template
+	paramter to the call to gold::gc_process_relocs.
+	* x86_64.cc (Target_x86_64<big_endian>::gc_process_relocs): Add template
+	parameter to the call to gold::gc_process_relocs.
+	* powerpc.cc (Target_powerpc<big_endian>::gc_process_relocs): Add
+	template parameter to the call to gold::gc_process_relocs.
+	* sparc.cc (Target_sparc<big_endian>::gc_process_relocs): Add template
+	paramter to the call to gold::gc_process_relocs.
+	* gc.h (get_embedded_addend_size): New function.
+	(gc_process_relocs): Save the size of the reloc for use by ICF.
+	* icf.cc (get_section_contents): Get the addend from the text section
+	for SHT_REL relocation sections.
+	* icf.h (Icf::Reloc_addend_size_info): New typedef.
+	(Icf::Reloc_info): Add new member reloc_addend_size_info.
+	* int_encoding.h (read_from_pointer): New overloaded function.
+	* testsuite/Makefile.am (icf_sht_rel_addend_test): New test.
+	* testsuite/icf_sht_rel_addend_test.sh: New file.
+	* testsuite/icf_sht_rel_addend_test_1.cc: New file.
+	* testsuite/icf_sht_rel_addend_test_2.cc: New file.
+@
+text
+@d108 1
+a108 1
+  section_has_function_pointers(Object *obj, unsigned int shndx)
+d117 1
+a117 1
+  set_section_has_function_pointers(Object *obj, unsigned int shndx)
+@
+
+
+1.8
+log
+@2010-06-25  Doug Kwan  <dougkwan@@google.com>
+
+	* arm.cc (Target_arm::can_check_for_functions_pointers): Return true.
+	(Target_arm::section_may_have_icf_unsafe_pointers): New method
+	definition.
+	(Target_arm::Scan::local_reloc_may_be_function_pointer,
+	Target_arm::Scan::global_reloc_may_be_function_pointer): Implement
+	target hook to detect function points.
+	(Target_arm::Scan::possible_function_pointer_reloc): New method.
+	* icf.h (Icf::check_section_for_function_pointers): Change type of
+	parameter SECTION_NAME to const reference to std::string.  Use
+	target hook to determine if section may have unsafe pointers.
+	* target.h (Target::section_may_have_icf_unsafe_pointers): New
+	method definition.
+@
+text
+@d46 1
+d61 1
+@
+
+
+1.7
+log
+@	* i386.cc (Target_i386::can_check_for_function_pointers): New function.
+	(Scan::possible_function_pointer_reloc): New function.
+	(Scan::local_reloc_may_be_function_pointer): Change to call
+	possible_function_pointer_reloc.
+	(Scan::global_reloc_may_be_function_pointer): Ditto.
+	* icf.h (Icf::check_section_for_function_pointers): Change to reject
+	relocations in ".data.rel.ro._ZTV" section.
+	* testsuite/icf_safe_so_test.sh: Change to pass i386.
+	* testsuite/icf_safe_so_test.cc: Ditto.
+	* testsuite/icf_safe_test.cc: Ditto.
+	* testsuite/icf_safe_test.sh: Ditto.
+@
+text
+@d124 1
+a124 1
+  check_section_for_function_pointers(std::string section_name,
+d129 2
+a130 3
+            && !is_prefix_of(".rodata._ZTV", section_name.c_str())
+            && !is_prefix_of(".data.rel.ro._ZTV", section_name.c_str())
+            && !is_prefix_of(".eh_frame", section_name.c_str()));
+@
+
+
+1.6
+log
+@2010-02-20  Sriraman Tallam  <tmsriram@@google.com>
+
+	* gc.h (gc_process_relocs): Change vectors to point to the new list.
+	Add reloc offset information.
+	* icf.cc (get_section_contents): Change iterators to point to the new
+	vectors. Add reloc offset information to the contents.
+	* icf.h (Icf::Sections_reachable_info): New typedef.
+	(Icf::Sections_reachable_list): New typedef.
+	(Icf::Offset_info): New typedef.
+	(Icf::Reloc_info): New struct typedef.
+	(Icf::Reloc_info_list): New typedef.
+	(Icf::symbol_reloc_list): Delete method.
+	(Icf::addend_reloc_list): Delete method.
+	(Icf::section_reloc_list): Delete method.
+	(Icf::reloc_info_list): New method.
+	(Icf::reloc_info_list_): New member.
+@
+text
+@d130 1
+@
+
+
+1.5
+log
+@2010-02-12  Sriraman Tallam  <tmsriram@@google.com>
+
+	* arm.cc (Scan::local_reloc_may_be_function_pointer): New function.
+	(Scan::global_reloc_may_be_function_pointer): New function.
+	* sparc.cc (Scan::local_reloc_may_be_function_pointer): New function.
+	(Scan::global_reloc_may_be_function_pointer): New function.
+	* powerpc.cc (Scan::local_reloc_may_be_function_pointer): New function.
+	(Scan::global_reloc_may_be_function_pointer): New function.
+	* i386.cc (Scan::local_reloc_may_be_function_pointer): New function.
+	(Scan::global_reloc_may_be_function_pointer): New function.
+	* x86_64.cc (Scan::local_reloc_may_be_function_pointer): New function.
+	(Scan::global_reloc_may_be_function_pointer): New function.
+	(Scan::possible_function_pointer_reloc): New function.
+	(Target_x86_64::can_check_for_function_pointers): New function.
+	* gc.h (gc_process_relocs): Scan relocation types to determine if
+	function pointers were taken for targets that support it.
+	* icf.cc (Icf::find_identical_sections): Include functions for
+	folding in safe ICF whose pointer is not taken.
+	* icf.h (Secn_fptr_taken_set): New typedef.
+	(fptr_section_id_): New member.
+	(section_has_function_pointers): New function.
+	(set_section_has_function_pointers): New function.
+	(check_section_for_function_pointers): New function.
+	* options.h: Fix comment for safe ICF option.
+	* target.h (can_check_for_function_pointers): New function.
+	* testsuite/Makefile.am: Add icf_safe_so_test test case.
+	Modify icf_safe_test for X86-64.
+	* testsuite/Makefile.in: Regenerate.
+	* testsuite/icf_safe_so_test.cc: New file.
+	* testsuite/icf_safe_so_test.sh: New file.
+	* testsuite/icf_safe_test.cc (kept_func_3): New function.
+	(main): Change to take pointer to function kept_func_3.
+	* testsuite/icf_safe_test.sh (arch_specific_safe_fold): Check if safe
+	folding is done correctly for X86-64.
+@
+text
+@d42 1
+a42 1
+  typedef std::vector<Section_id> Sections_reachable_list;
+d45 1
+a45 5
+  typedef Unordered_map<Section_id,
+                        Sections_reachable_list,
+                        Section_id_hash> Section_list;
+  typedef Unordered_map<Section_id, Symbol_info, Section_id_hash> Symbol_list;
+  typedef Unordered_map<Section_id, Addend_info, Section_id_hash> Addend_list;
+d51 14
+d69 1
+a69 2
+    section_reloc_list_(), symbol_reloc_list_(),
+    addend_reloc_list_()
+d133 4
+a136 17
+  // Returns a map of a section to a list of all sections referenced
+  // by its relocations.
+  Section_list&
+  section_reloc_list()
+  { return this->section_reloc_list_; }
+
+  // Returns a map of  a section to a list of all symbols referenced
+  // by its relocations.
+  Symbol_list&
+  symbol_reloc_list()
+  { return this->symbol_reloc_list_; }
+
+  // Returns a maps of a section to a list of symbol values and addends
+  // of its relocations.
+  Addend_list&
+  addend_reloc_list()
+  { return this->addend_reloc_list_; }
+d160 2
+a161 5
+
+  // These lists are populated by gc_process_relocs in gc.h.
+  Section_list section_reloc_list_;
+  Symbol_list symbol_reloc_list_;
+  Addend_list addend_reloc_list_;
+@
+
+
+1.4
+log
+@2010-01-20  Doug Kwan  <dougkwan@@google.com>
+
+	* arm.cc (Target_arm::Arm_input_section_map): Change key type from
+	Input_section_specifier to Section_id.
+	(Target_arm::new_arm_input_section: Adjust code for change of key
+	type.
+	(Target_arm::find_arm_input_section): Ditto.
+	* gc.h (object.h): Include for Section_id nand Section_id_hash.
+	(Section_id): Remove.
+	(Garbage_collection::Section_id_hash): Remove.
+	* icf.h (object.h): Include for Section_id nand Section_id_hash.
+	(Section_id): Remove.
+	(Icf::Section_id_hash): Remove.
+	* object.h (Section_id, Const_section_id, Section_id_hash,
+	Const_section_id_hash): New type definitions.
+	* output.cc (Output_section::add_relaxed_input_section): Change to
+	use Const_section_id instead of Input_section_specifier as key type.
+	(Output_section::add_merge_input_section): Ditto.
+	(Output_section::build_relaxation_map): Change to use Section_id
+	instead of Input_section_specifier as key type.
+ 	(Output_section::convert_input_sections_in_list_to_relaxed_sections):
+	Ditto.
+	(Output_section::convert_input_sections_to_relaxed_sections): Change
+	to use Const_section_id instead of Input_section_specifier as key type.
+ 	(Output_section::find_merge_section): Ditto.
+	(Output_section::find_relaxed_input_section): Ditto.
+	* output.h (Input_section_specifier): Remove class.
+	(Output_section::Output_section_data_by_input_section_map): Change
+	key type to Const_section_id.
+	(Output_section::Output_relaxed_input_section_by_input_section_map):
+	Ditto.
+	(Output_section::Relaxation_map): Change key type to Section_id.
+@
+text
+@d53 1
+d57 1
+d93 31
+a123 1
+    
+d157 4
+@
+
+
+1.3
+log
+@	* gc.h (gc_process_relocs): Call is_section_foldable_candidate to
+	check for .text or .gnu.linkonce.t sections.
+	* icf.cc (Icf::find_identical_sections): Ditto.
+	Change the detection for mangled function name within the section
+	name.
+	* icf.h (is_section_foldable_candidate): New function.
+@
+text
+@d30 1
+a38 2
+typedef std::pair<Object*, unsigned int> Section_id;
+
+a41 6
+  struct Section_id_hash
+  {
+    size_t operator()(const Section_id& loc) const
+    { return reinterpret_cast<uintptr_t>(loc.first) ^ loc.second; }
+  };
+
+@
+
+
+1.2
+log
+@Sriraman Tallam  <tmsriram@@google.com>
+
+	* icf.cc (Icf::find_identical_sections): Unfold symbols that have
+	been maked as --keep-unique.
+	(Icf::unfold_section): New function.
+	* icf.h (Icf::unfold_section): New function.
+	* options.h (General_options::keep_unique): New option.
+	* testsuite/Makefile.am: Add commands to build icf_keep_unique_test.
+	* testsuite/Makefile.in: Regenerate.
+	* testsuite/icf_keep_unique_test.sh: New file.
+	* testsuite/icf_keep_unique_test.cc: New file.
+@
+text
+@d3 1
+a3 1
+// Copyright 2009 Free Software Foundation, Inc.
+d142 11
+@
+
+
+1.1
+log
+@*** empty log message ***
+@
+text
+@d90 4
+@
+

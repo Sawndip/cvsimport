@@ -1,0 +1,143 @@
+head	1.1;
+access;
+symbols
+	cygwin-1_7_35-release:1.1
+	cygwin-1_7_34-release:1.1
+	cygwin-1_7_33-release:1.1
+	cygwin-1_7_32-release:1.1
+	cygwin-1_7_31-release:1.1
+	cygwin-1_7_30-release:1.1
+	cygwin-1_7_29-release:1.1
+	cygwin-1_7_29-release-branchpoint:1.1.0.24
+	cygwin-1_7_28-release:1.1
+	cygwin-1_7_27-release:1.1
+	cygwin-1_7_26-release:1.1
+	cygwin-1_7_25-release:1.1
+	cygwin-1_7_24-release:1.1
+	cygwin-1_7_23-release:1.1
+	cygwin-1_7_22-release:1.1
+	cygwin-1_7_21-release:1.1
+	cygwin-1_7_20-release:1.1
+	cygwin-1_7_19-release:1.1
+	cygwin-64bit-postmerge:1.1
+	cygwin-64bit-premerge-branch:1.1.0.22
+	cygwin-64bit-premerge:1.1
+	cygwin-1_7_18-release:1.1
+	cygwin-1_7_17-release:1.1
+	cygwin-64bit-branch:1.1.0.20
+	cygwin-1_7_16-release:1.1
+	cygwin-1_7_15-release:1.1
+	cygwin-1_7_14_2-release:1.1
+	cygwin-1_7_14-release:1.1
+	cygwin-1_7_12-release:1.1
+	cygwin-1_7_11-release:1.1
+	cygwin-1_7_10-release:1.1
+	cygwin-1_7_9-release:1.1
+	cygwin-1_7_8-release:1.1
+	cygwin-1_7_7-release:1.1
+	cygwin-1_7_5-release:1.1
+	cygwin-1_7_4-release:1.1
+	cygwin-1_7_3-release:1.1
+	cygwin-1_7_2-release:1.1
+	cygwin-1_7_1-release:1.1
+	cv-branch-2:1.1.0.18
+	cr-0x5f1:1.1.0.16
+	cv-branch:1.1.0.14
+	cr-0x3b58:1.1.0.12
+	cr-0x9e:1.1.0.10
+	cr-0x9d:1.1.0.8
+	corinna-01:1.1
+	cr-0x9c:1.1.0.6
+	cr-0x9b:1.1.0.4
+	cr-0x99:1.1
+	Z-emcb-cygwin_daemon:1.1.0.2
+	w32api-2_2:1.1
+	mingw-runtime-2_4:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.1
+date	2003.01.09.20.51.55;	author tpfaff;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.1
+log
+@Add pthread_mutex tests
+@
+text
+@/* 
+ * mutex7r.c
+ *
+ * Tests PTHREAD_MUTEX_RECURSIVE mutex type.
+ * Thread locks mutex then trylocks mutex (recursive lock twice).
+ * Both locks and unlocks should succeed.
+ *
+ * Depends on API functions: 
+ *      pthread_create()
+ *      pthread_join()
+ *      pthread_mutexattr_init()
+ *      pthread_mutexattr_destroy()
+ *      pthread_mutexattr_settype()
+ *      pthread_mutexattr_gettype()
+ *      pthread_mutex_init()
+ *      pthread_mutex_destroy()
+ *	pthread_mutex_lock()
+ *	pthread_mutex_unlock()
+ */
+
+#include "test.h"
+
+static int lockCount = 0;
+
+static pthread_mutex_t mutex;
+static pthread_mutexattr_t mxAttr;
+
+void * locker(void * arg)
+{
+  assert(pthread_mutex_lock(&mutex) == 0);
+  lockCount++;
+  assert(pthread_mutex_trylock(&mutex) == 0);
+  lockCount++;
+  assert(pthread_mutex_unlock(&mutex) == 0);
+  assert(pthread_mutex_unlock(&mutex) == 0);
+
+  return (void *) 555;
+}
+ 
+int
+main()
+{
+  pthread_t t;
+  int result = 0;
+  int mxType = -1;
+
+  assert(pthread_mutexattr_init(&mxAttr) == 0);
+  assert(pthread_mutexattr_settype(&mxAttr, PTHREAD_MUTEX_RECURSIVE) == 0);
+  assert(pthread_mutexattr_gettype(&mxAttr, &mxType) == 0);
+  assert(mxType == PTHREAD_MUTEX_RECURSIVE);
+
+  assert(pthread_mutex_init(&mutex, &mxAttr) == 0);
+
+  assert(pthread_create(&t, NULL, locker, NULL) == 0);
+
+  assert(pthread_join(t, (void **) &result) == 0);
+  assert(result == 555);
+
+  assert(lockCount == 2);
+
+  assert(pthread_mutex_destroy(&mutex) == 0);
+  assert(pthread_mutexattr_destroy(&mxAttr) == 0);
+
+  exit(0);
+
+  /* Never reached */
+  return 0;
+}
+@

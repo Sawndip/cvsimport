@@ -1,0 +1,223 @@
+head	1.3;
+access;
+symbols
+	binutils-2_24-branch:1.3.0.10
+	binutils-2_24-branchpoint:1.3
+	binutils-2_21_1:1.3
+	binutils-2_23_2:1.3
+	binutils-2_23_1:1.3
+	binutils-2_23:1.3
+	binutils-2_23-branch:1.3.0.8
+	binutils-2_23-branchpoint:1.3
+	binutils-2_22_branch:1.3.0.6
+	binutils-2_22:1.3
+	binutils-2_22-branch:1.3.0.4
+	binutils-2_22-branchpoint:1.3
+	binutils-2_21:1.3
+	binutils-2_21-branch:1.3.0.2
+	binutils-2_21-branchpoint:1.3
+	binutils-2_20_1:1.1.2.1
+	binutils-2_20:1.1.2.1
+	binutils-2_20-branch:1.1.0.2
+	binutils_latest_snapshot:1.3;
+locks; strict;
+comment	@// @;
+
+
+1.3
+date	2010.03.04.01.33.22;	author tmsriram;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2010.02.13.02.04.21;	author tmsriram;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2009.10.13.21.17.43;	author tmsriram;	state Exp;
+branches
+	1.1.2.1;
+next	;
+
+1.1.2.1
+date	2009.10.16.05.51.18;	author ian;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.3
+log
+@	* i386.cc (Target_i386::can_check_for_function_pointers): New function.
+	(Scan::possible_function_pointer_reloc): New function.
+	(Scan::local_reloc_may_be_function_pointer): Change to call
+	possible_function_pointer_reloc.
+	(Scan::global_reloc_may_be_function_pointer): Ditto.
+	* icf.h (Icf::check_section_for_function_pointers): Change to reject
+	relocations in ".data.rel.ro._ZTV" section.
+	* testsuite/icf_safe_so_test.sh: Change to pass i386.
+	* testsuite/icf_safe_so_test.cc: Ditto.
+	* testsuite/icf_safe_test.cc: Ditto.
+	* testsuite/icf_safe_test.sh: Ditto.
+@
+text
+@// icf_safe_test.cc -- a test case for gold
+
+// Copyright 2009 Free Software Foundation, Inc.
+// Written by Sriraman Tallam <tmsriram@@google.com>.
+
+// This file is part of gold.
+
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 3 of the License, or
+// (at your option) any later version.
+
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+// MA 02110-1301, USA.
+
+// The goal of this program is to verify if identical code folding
+// in safe mode correctly folds only ctors and dtors. kept_func_1 must
+// not be folded into kept_func_2 other than for X86 (32 and 64 bit)
+// which can use relocation types to determine if function pointers are
+// taken.  kept_func_3 should never be folded as its pointer is taken.
+// The ctor and dtor of class A must be folded.
+
+class A
+{
+  public:
+    A()
+    {
+    }
+    ~A()
+    {
+    }
+};
+
+A a;
+
+int kept_func_1()
+{
+  return 1;
+}
+
+int kept_func_2()
+{
+  return 1;
+}
+
+int kept_func_3()
+{
+  return 1;
+}
+
+int main()
+{
+  int (*p)() = kept_func_3;
+  p();
+  return 0;
+}
+@
+
+
+1.2
+log
+@2010-02-12  Sriraman Tallam  <tmsriram@@google.com>
+
+	* arm.cc (Scan::local_reloc_may_be_function_pointer): New function.
+	(Scan::global_reloc_may_be_function_pointer): New function.
+	* sparc.cc (Scan::local_reloc_may_be_function_pointer): New function.
+	(Scan::global_reloc_may_be_function_pointer): New function.
+	* powerpc.cc (Scan::local_reloc_may_be_function_pointer): New function.
+	(Scan::global_reloc_may_be_function_pointer): New function.
+	* i386.cc (Scan::local_reloc_may_be_function_pointer): New function.
+	(Scan::global_reloc_may_be_function_pointer): New function.
+	* x86_64.cc (Scan::local_reloc_may_be_function_pointer): New function.
+	(Scan::global_reloc_may_be_function_pointer): New function.
+	(Scan::possible_function_pointer_reloc): New function.
+	(Target_x86_64::can_check_for_function_pointers): New function.
+	* gc.h (gc_process_relocs): Scan relocation types to determine if
+	function pointers were taken for targets that support it.
+	* icf.cc (Icf::find_identical_sections): Include functions for
+	folding in safe ICF whose pointer is not taken.
+	* icf.h (Secn_fptr_taken_set): New typedef.
+	(fptr_section_id_): New member.
+	(section_has_function_pointers): New function.
+	(set_section_has_function_pointers): New function.
+	(check_section_for_function_pointers): New function.
+	* options.h: Fix comment for safe ICF option.
+	* target.h (can_check_for_function_pointers): New function.
+	* testsuite/Makefile.am: Add icf_safe_so_test test case.
+	Modify icf_safe_test for X86-64.
+	* testsuite/Makefile.in: Regenerate.
+	* testsuite/icf_safe_so_test.cc: New file.
+	* testsuite/icf_safe_so_test.sh: New file.
+	* testsuite/icf_safe_test.cc (kept_func_3): New function.
+	(main): Change to take pointer to function kept_func_3.
+	* testsuite/icf_safe_test.sh (arch_specific_safe_fold): Check if safe
+	folding is done correctly for X86-64.
+@
+text
+@d25 4
+a28 4
+// not be folded into kept_func_2 other than for X86-64 which can
+// use relocation types to determine if function pointers are taken.
+// kept_func_3 should never be folded as its pointer is taken. The ctor
+// and dtor of class A must be folded.
+@
+
+
+1.1
+log
+@	* gc.h (gc_process_relocs): Check if icf is enabled using new
+	function.
+	* gold.cc (queue_initial_tasks): Likewise.
+	(queue_middle_tasks): Likewise.
+	* object.cc (do_layout): Likewise.
+	* symtab.cc (is_section_folded): Likewise.
+	* main.cc (main): Likewise.
+	* reloc.cc (Read_relocs::run): Likewise.
+	(Sized_relobj::do_scan_relocs): Likewise.
+	* icf.cc (is_function_ctor_or_dtor): New function.
+	(Icf::find_identical_sections): Check if function is ctor or dtor when
+	safe icf is chosen.
+	* options.h (General_options::icf): Change option to be an enum.
+	(Icf_status): New enum.
+	(icf_enabled): New method.
+	(icf_safe_folding): New method.
+	(set_icf_status): New method.
+	(icf_status_): New variable.
+	* (options.cc) (General_options::finalize): Set icf_status_.
+	* testsuite/Makefile.am: Add commands to build icf_safe_test. Modify
+	icf_test and icf_keep_unique_test to use the --icf enum flag.
+	* testsuite/icf_safe_test.sh: New file.
+	* testsuite/icf_safe_test.cc: New file.
+@
+text
+@d25 4
+a28 2
+// not be folded into kept_func_2.  The ctor and dtor of class A must
+// be folded.
+d53 5
+d60 2
+@
+
+
+1.1.2.1
+log
+@Merge elfcpp and gold from trunk.
+@
+text
+@@
+

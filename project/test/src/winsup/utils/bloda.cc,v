@@ -1,0 +1,1117 @@
+head	1.8;
+access;
+symbols
+	cygwin-1_7_35-release:1.8
+	cygwin-1_7_34-release:1.8
+	cygwin-1_7_33-release:1.8
+	cygwin-1_7_32-release:1.8
+	cygwin-1_7_31-release:1.8
+	cygwin-1_7_30-release:1.8
+	cygwin-1_7_29-release:1.8
+	cygwin-1_7_29-release-branchpoint:1.8.0.4
+	cygwin-1_7_28-release:1.8
+	cygwin-1_7_27-release:1.8
+	cygwin-1_7_26-release:1.8
+	cygwin-1_7_25-release:1.8
+	cygwin-1_7_24-release:1.8
+	cygwin-1_7_23-release:1.8
+	cygwin-1_7_22-release:1.8
+	cygwin-1_7_21-release:1.8
+	cygwin-1_7_20-release:1.8
+	cygwin-1_7_19-release:1.8
+	cygwin-64bit-postmerge:1.8
+	cygwin-64bit-premerge-branch:1.8.0.2
+	cygwin-64bit-premerge:1.8
+	cygwin-1_7_18-release:1.8
+	cygwin-1_7_17-release:1.6
+	cygwin-64bit-branch:1.6.0.2
+	cygwin-1_7_16-release:1.6
+	cygwin-1_7_15-release:1.5
+	cygwin-1_7_14_2-release:1.5
+	cygwin-1_7_14-release:1.5
+	cygwin-1_7_12-release:1.5
+	cygwin-1_7_11-release:1.5
+	cygwin-1_7_10-release:1.5
+	cygwin-1_7_9-release:1.4
+	cygwin-1_7_8-release:1.4
+	cygwin-1_7_7-release:1.4
+	cygwin-1_7_5-release:1.4
+	cygwin-1_7_4-release:1.4
+	cygwin-1_7_3-release:1.4
+	cygwin-1_7_2-release:1.4
+	cygwin-1_7_1-release:1.4
+	cv-branch-2:1.4.0.2
+	cr-0x5f1:1.1.0.2;
+locks; strict;
+comment	@// @;
+
+
+1.8
+date	2013.01.21.16.28.27;	author cgf;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2012.11.26.13.13.25;	author corinna;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2012.07.11.16.41.51;	author corinna;	state Exp;
+branches
+	1.6.2.1;
+next	1.5;
+
+1.5
+date	2011.12.17.23.39.47;	author cgf;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2008.07.22.14.40.05;	author corinna;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2007.12.29.19.26.56;	author davek;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2007.12.21.03.32.46;	author briand;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2007.08.03.19.41.48;	author davek;	state Exp;
+branches
+	1.1.2.1;
+next	;
+
+1.6.2.1
+date	2012.11.26.13.13.28;	author corinna;	state Exp;
+branches;
+next	1.6.2.2;
+
+1.6.2.2
+date	2013.01.29.21.54.42;	author corinna;	state Exp;
+branches;
+next	;
+
+1.1.2.1
+date	2007.11.12.15.31.45;	author corinna;	state Exp;
+branches;
+next	1.1.2.2;
+
+1.1.2.2
+date	2007.12.23.12.36.09;	author briand;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.8
+log
+@Update copyrights
+@
+text
+@/* bloda.cc
+
+   Copyright 2007, 2008, 2011, 2012 Red Hat, Inc.
+
+   This file is part of Cygwin.
+
+   This software is a copyrighted work licensed under the terms of the
+   Cygwin license.  Please consult the file "CYGWIN_LICENSE" for
+   details. */
+
+#define cygwin_internal cygwin_internal_dontuse
+#include <stdio.h>
+#include <assert.h>
+#define WIN32_NO_STATUS	/* Disable status codes in winnt.h since we include
+			   ntstatus.h for extended status codes below. */
+#include <windows.h>
+#undef WIN32_NO_STATUS
+#include <psapi.h>
+#include <winternl.h>
+#include <ntstatus.h>
+#undef cygwin_internal
+
+#undef DEBUGGING
+#ifdef DEBUGGING
+#define dbg_printf(ARGS) printf ARGS ; fflush (NULL)
+#else  /* !DEBUGGING */
+#define dbg_printf(ARGS) do { } while (0)
+#endif /* ?DEBUGGING */
+
+/*  This module detects applications from the Big List of Dodgy Apps,
+  a list of applications that have at some given time been shown to
+  interfere with the operation of cygwin.  It detects the presence of
+  applications on the system by looking for any of four traces an
+  installation might leave: 1) registry keys, 2) files on disk
+  3) running executables 4) loaded dlls or drivers.
+
+  At the time of writing, the BLODA amounts to:-
+
+    Sonic Solutions burning software containing DLA component
+    Norton/MacAffee/Symantec antivirus or antispyware
+    Logitech webcam software with "Logitech process monitor" service
+    Kerio, Agnitum or ZoneAlarm Personal Firewall
+    Iolo System Mechanic/AntiVirus/Firewall
+    LanDesk
+    Windows Defender
+    Embassy Trust Suite fingerprint reader software containing wxvault.dll
+    ByteMobile laptop optimization client
+
+  A live version is now being maintained in the Cygwin FAQ, at
+    http://cygwin.com/faq/faq.using.html#faq.using.bloda
+
+*/
+
+enum bad_app
+{
+  SONIC,    NORTON,  MACAFFEE,    SYMANTEC,
+  LOGITECH, KERIO,   AGNITUM,     ZONEALARM,
+  IOLO,     LANDESK, WINDEFENDER, EMBASSYTS,
+  BYTEMOBILE
+};
+
+struct bad_app_info
+{
+  enum bad_app app_id;
+  const char *details;
+  char found_it;
+};
+
+enum bad_app_det_method
+{
+  HKLMKEY, HKCUKEY, FILENAME, PROCESSNAME, HOOKDLLNAME
+};
+
+struct bad_app_det
+{
+  enum bad_app_det_method type;
+  const char *param;
+  enum bad_app app;
+};
+
+static const struct bad_app_det dodgy_app_detects[] =
+{
+  { PROCESSNAME, "dlactrlw.exe",                                                 SONIC      },
+  { HOOKDLLNAME, "wxvault.dll",                                                  EMBASSYTS  },
+  { HKLMKEY,     "SYSTEM\\CurrentControlSet\\Services\\vsdatant",                ZONEALARM  },
+  { FILENAME,    "%windir%\\System32\\vsdatant.sys",                             ZONEALARM  },
+  { HKLMKEY,     "SYSTEM\\CurrentControlSet\\Services\\lvprcsrv",                LOGITECH   },
+  { PROCESSNAME, "LVPrcSrv.exe",                                                 LOGITECH   },
+  { FILENAME,    "%programfiles%\\common files\\logitech\\lvmvfm\\LVPrcSrv.exe", LOGITECH   },
+  { FILENAME,    "%windir%\\System32\\bmnet.dll",                                BYTEMOBILE },
+};
+
+static const size_t num_of_detects = sizeof (dodgy_app_detects) / sizeof (dodgy_app_detects[0]);
+
+static struct bad_app_info big_list_of_dodgy_apps[] =
+{
+  { SONIC,       "Sonic Solutions burning software containing DLA component"              },
+  { NORTON,      "Norton antivirus or antispyware software"                               },
+  { MACAFFEE,    "Macaffee antivirus or antispyware software"                             },
+  { SYMANTEC,    "Symantec antivirus or antispyware software"                             },
+  { LOGITECH,    "Logitech Process Monitor service"                                       },
+  { KERIO,       "Kerio Personal Firewall"                                                },
+  { AGNITUM,     "Agnitum Personal Firewall"                                              },
+  { ZONEALARM,   "ZoneAlarm Personal Firewall"                                            },
+  { IOLO,        "Iolo System Mechanic/AntiVirus/Firewall software"                       },
+  { LANDESK,     "Landesk"                                                                },
+  { WINDEFENDER, "Windows Defender"                                                       },
+  { EMBASSYTS,   "Embassy Trust Suite fingerprint reader software containing wxvault.dll" },
+  { BYTEMOBILE,  "ByteMobile laptop optimization client"                                  },
+};
+
+static const size_t num_of_dodgy_apps = sizeof (big_list_of_dodgy_apps) / sizeof (big_list_of_dodgy_apps[0]);
+
+struct system_module_list
+{
+  LONG count;
+  PVOID *pid;
+  PCHAR *name;
+};
+
+static PSYSTEM_PROCESS_INFORMATION
+get_process_list (void)
+{
+  int n_procs = 0x100;
+  PSYSTEM_PROCESS_INFORMATION pslist = (PSYSTEM_PROCESS_INFORMATION) malloc (n_procs * sizeof *pslist);
+
+  while (NtQuerySystemInformation (SystemProcessInformation,
+    pslist, n_procs * sizeof *pslist, 0) == STATUS_INFO_LENGTH_MISMATCH)
+    {
+      n_procs *= 2;
+      free (pslist);
+      pslist = (PSYSTEM_PROCESS_INFORMATION) malloc (n_procs * sizeof *pslist);
+    }
+  return pslist;
+}
+
+static system_module_list *
+get_module_list (void)
+{
+  DWORD modsize = 0;
+  system_module_list *modlist = (system_module_list *)
+				calloc (1, sizeof (system_module_list));
+  while (!EnumDeviceDrivers (modlist->pid, modsize, &modsize))
+    {
+      free (modlist->pid);
+      free (modlist->name);
+      modlist->count = modsize / sizeof (PVOID);
+      modlist->pid = (PVOID *) calloc (modlist->count, sizeof (PVOID));
+      modlist->name = (PCHAR *) calloc (modlist->count, sizeof (PCHAR));
+    }
+  for (int i = 0; i < modlist->count; ++i)
+    {
+      modlist->name[0] = (PCHAR) calloc (256, sizeof (CHAR));
+      GetDeviceDriverBaseNameA (modlist->pid[i], modlist->name[i], 256);
+    }
+  return modlist;
+}
+
+static bool
+find_process_in_list (PSYSTEM_PROCESS_INFORMATION pslist, PUNICODE_STRING psname)
+{
+  while (1)
+    {
+      if (pslist->ImageName.Length && pslist->ImageName.Buffer)
+	{
+	  dbg_printf (("%S\n", pslist->ImageName.Buffer));
+	  if (!_wcsicmp (pslist->ImageName.Buffer, psname->Buffer))
+	    return true;
+	}
+      if (!pslist->NextEntryOffset)
+	break;
+      pslist = (PSYSTEM_PROCESS_INFORMATION)(pslist->NextEntryOffset + (char *)pslist);
+    };
+  return false;
+}
+
+static bool
+find_module_in_list (system_module_list * modlist, const char * const modname)
+{
+  for (int i = 0; i < modlist->count; ++i)
+    {
+      dbg_printf (("name '%s' ", modlist->name[i]));
+      if (!_stricmp (modlist->name[i], modname))
+	return true;
+    }
+  return false;
+}
+
+static bool
+expand_path (const char *path, char *outbuf)
+{
+  char *dst = outbuf;
+  const char *end, *envval;
+  char envvar[MAX_PATH];
+  size_t len;
+
+  while ((dst - outbuf) < MAX_PATH)
+    {
+      if (*path != '%')
+	{
+	  if ((*dst++ = *path++) != 0)
+	    continue;
+	  break;
+	}
+      /* Expand an environ var.  */
+      end = path + 1;
+      while (*end != '%')
+	{
+	  /* Watch out for unterminated %  */
+	  if (*end++ == 0)
+	    {
+	      end = NULL;
+	      break;
+	    }
+	}
+      /* If we didn't find the end, can't expand it.  */
+      if ((end == NULL) || (end == (path + 1)))
+	{
+	  /* Unterminated % so copy verbatim.  */
+	  *dst++ = *path++;
+	  continue;
+	}
+      /* Expand the environment var into the new path.  */
+      if ((end - (path + 1)) >= MAX_PATH)
+	return -1;
+      memcpy (envvar, path + 1, end - (path + 1));
+      envvar[end - (path + 1)] = 0;
+      envval = getenv (envvar);
+      /* If not found, copy env var name verbatim.  */
+      if (envval == NULL)
+	{
+	  *dst++ = *path++;
+	  continue;
+	}
+      /* Check enough room before copying.  */
+      len = strlen (envval);
+      if ((dst + len - outbuf) >= MAX_PATH)
+	return false;
+      memcpy (dst, envval, len);
+      dst += len;
+      /* And carry on past the end of env var name.  */
+      path = end + 1;
+    }
+  return (dst - outbuf) < MAX_PATH;
+}
+
+static bool
+detect_dodgy_app (const struct bad_app_det *det, PSYSTEM_PROCESS_INFORMATION pslist, system_module_list * modlist)
+{
+  HANDLE fh;
+  HKEY hk;
+  UNICODE_STRING unicodename;
+  ANSI_STRING ansiname;
+  NTSTATUS rv;
+  bool found;
+  char expandedname[MAX_PATH];
+
+  switch (det->type)
+    {
+    case HKLMKEY:
+      dbg_printf (("Detect reg key hklm '%s'... ", det->param));
+      if (RegOpenKeyEx (HKEY_LOCAL_MACHINE, det->param, 0, STANDARD_RIGHTS_READ, &hk) == ERROR_SUCCESS)
+	{
+	  RegCloseKey (hk);
+	  dbg_printf (("found!\n"));
+	  return true;
+	}
+      break;
+
+    case HKCUKEY:
+      dbg_printf (("Detect reg key hkcu '%s'... ", det->param));
+      if (RegOpenKeyEx (HKEY_CURRENT_USER, det->param, 0, STANDARD_RIGHTS_READ, &hk) == ERROR_SUCCESS)
+	{
+	  RegCloseKey (hk);
+	  dbg_printf (("found!\n"));
+	  return true;
+	}
+      break;
+
+    case FILENAME:
+      dbg_printf (("Detect filename '%s'... ", det->param));
+      if (!expand_path (det->param, expandedname))
+	{
+	  printf ("Expansion failure!\n");
+	  break;
+	}
+      dbg_printf (("('%s' after expansion)... ", expandedname));
+      fh = CreateFile (expandedname, 0, FILE_SHARE_READ | FILE_SHARE_WRITE
+	| FILE_SHARE_DELETE, NULL, OPEN_EXISTING, 0, NULL);
+      if (fh != INVALID_HANDLE_VALUE)
+	{
+	  CloseHandle (fh);
+	  dbg_printf (("found!\n"));
+	  return true;
+	}
+      break;
+
+    case PROCESSNAME:
+      dbg_printf (("Detect proc name '%s'... ", det->param));
+      /* Equivalent of RtlInitAnsiString.  */
+      ansiname.Length = ansiname.MaximumLength = strlen (det->param);
+      ansiname.Buffer = (CHAR *) det->param;
+      rv = RtlAnsiStringToUnicodeString (&unicodename, &ansiname, TRUE);
+      if (rv != STATUS_SUCCESS)
+	{
+	  printf ("Ansi to unicode conversion failure $%08x\n", (unsigned int) rv);
+	  break;
+	}
+      found = find_process_in_list (pslist, &unicodename);
+      RtlFreeUnicodeString (&unicodename);
+      if (found)
+	{
+	  dbg_printf (("found!\n"));
+	  return true;
+	}
+      break;
+
+    case HOOKDLLNAME:
+      dbg_printf (("Detect hookdll '%s'... ", det->param));
+      if (find_module_in_list (modlist, det->param))
+	{
+	  dbg_printf (("found!\n"));
+	  return true;
+	}
+      break;
+
+    }
+  dbg_printf (("not found.\n"));
+  return false;
+}
+
+static struct bad_app_info *
+find_dodgy_app_info (enum bad_app which_app)
+{
+  size_t i;
+  for (i = 0; i < num_of_dodgy_apps; i++)
+    {
+      if (big_list_of_dodgy_apps[i].app_id == which_app)
+	return &big_list_of_dodgy_apps[i];
+    }
+  return NULL;
+}
+
+/* External entrypoint called from cygcheck.cc/dump_sysinfo.  */
+void
+dump_dodgy_apps (int verbose)
+{
+  size_t i, n_det = 0;
+  PSYSTEM_PROCESS_INFORMATION pslist;
+  system_module_list * modlist;
+
+  /* Read system info for detect testing.  */
+  pslist = get_process_list ();
+  modlist = get_module_list ();
+
+  /* Go with builtin list for now; later may enhance to
+  read dodgy apps from a file or download from an URL.  */
+  for (i = 0; i < num_of_dodgy_apps; i++)
+    {
+      big_list_of_dodgy_apps[i].found_it = false;
+    }
+
+  for (i = 0; i < num_of_detects; i++)
+    {
+      const struct bad_app_det *det = &dodgy_app_detects[i];
+      struct bad_app_info *found = find_dodgy_app_info (det->app);
+      bool detected = detect_dodgy_app (det, pslist, modlist);
+
+      /* Not found would mean we coded the lists bad. */
+      assert (found);
+      if (detected)
+	{
+	  ++n_det;
+	  found->found_it |= (1 << det->type);
+	}
+    }
+  if (n_det)
+    {
+      printf ("\nPotential app conflicts:\n\n");
+      for (i = 0; i < num_of_dodgy_apps; i++)
+	{
+	  if (big_list_of_dodgy_apps[i].found_it)
+	    {
+	      printf ("%s%s", big_list_of_dodgy_apps[i].details,
+		verbose ? "\nDetected: " : ".\n");
+	      if (!verbose)
+		continue;
+	      const char *sep = "";
+	      if (big_list_of_dodgy_apps[i].found_it & (1 << HKLMKEY))
+		{
+		  printf ("HKLM Registry Key");
+		  sep = ", ";
+		}
+	      if (big_list_of_dodgy_apps[i].found_it & (1 << HKCUKEY))
+		{
+		  printf ("%sHKCU Registry Key", sep);
+		  sep = ", ";
+		}
+	      if (big_list_of_dodgy_apps[i].found_it & (1 << FILENAME))
+		{
+		  printf ("%sNamed file", sep);
+		  sep = ", ";
+		}
+	      if (big_list_of_dodgy_apps[i].found_it & (1 << PROCESSNAME))
+		{
+		  printf ("%sNamed process", sep);
+		  sep = ", ";
+		}
+	      if (big_list_of_dodgy_apps[i].found_it & (1 << HOOKDLLNAME))
+		{
+		  printf ("%sLoaded hook DLL", sep);
+		}
+	      printf (".\n\n");
+	    }
+	}
+    }
+  /* Tidy up allocations.  */
+  free (pslist);
+  for (int i = 0; i < modlist->count; ++i)
+    free (modlist->name[i]);
+  free (modlist->name);
+  free (modlist->pid);
+}
+
+@
+
+
+1.7
+log
+@	* bloda.cc: Drop Mingw.org considerations.
+	* dump_setup.cc: Ditto.
+	* strace.cc: Ditto.
+@
+text
+@d3 1
+a3 1
+   Copyright 2007, 2012 Red Hat, Inc.
+@
+
+
+1.6
+log
+@	* Makefile.in (cygcheck.exe): Link against psapi.dll.
+	* bloda.cc: Change include section to work with Mingw64 headers.
+	Include psapi.h.  Use SystemProcessInformation instead of
+	SystemProcessesAndThreadsInformation throughout and add define for
+	w32api headers.  Ditto for PSYSTEM_PROCESS_INFORMATION vs.
+	PSYSTEM_PROCESSES.
+	(system_module_list): New type to replace SYSTEM_MODULE_INFORMATION.
+	Change usage throughout accordingly.
+	(get_module_list): Fetch module list using PSAPI functions
+	EnumDeviceDrivers and GetDeviceDriverBaseNameA.
+	* cygcheck.cc (max): Define as __max if not defined already.
+	(alloca): Only define if not defined already.
+	(handle_unique_object_name): Use explicit sharing flags rather than
+	FILE_SHARE_VALID_FLAGS which officially is only available in DDK
+	headers.
+	(PRODUCT_ULTIMATE_E): Only define if not defined already.
+	* dump_setup.cc: Change include section to work with Mingw64 headers.
+	(NtQueryAttributesFile): Drop NTOSAPI aka DECLSPEC_IMPORT.
+	* strace.cc: Change include section to work with Mingw64 headers.
+	(alloca): Only define if not defined already.
+@
+text
+@d3 1
+a3 1
+   Copyright 2007 Red Hat, Inc.
+d19 2
+a20 12
+#ifndef __MINGW64_VERSION_MAJOR
+# include <ntdef.h>
+# include <ddk/ntstatus.h>
+# include <ddk/ntapi.h>
+# define SystemProcessInformation SystemProcessesAndThreadsInformation
+# define PSYSTEM_PROCESS_INFORMATION PSYSTEM_PROCESSES
+# define ImageName ProcessName
+# define NextEntryOffset NextEntryDelta
+#else
+# include <winternl.h>
+# include <ntstatus.h>
+#endif
+@
+
+
+1.6.2.1
+log
+@Pull in changes from HEAD
+@
+text
+@d3 1
+a3 1
+   Copyright 2007, 2012 Red Hat, Inc.
+d19 12
+a30 2
+#include <winternl.h>
+#include <ntstatus.h>
+@
+
+
+1.6.2.2
+log
+@Pull in changes from HEAD
+@
+text
+@d3 1
+a3 1
+   Copyright 2007, 2008, 2011, 2012 Red Hat, Inc.
+@
+
+
+1.5
+log
+@Clean up whitespace.
+@
+text
+@d14 2
+d17 14
+a30 3
+#include <ntdef.h>
+#include <ddk/ntstatus.h>
+#include <ddk/ntapi.h>
+d124 8
+a131 1
+static PSYSTEM_PROCESSES
+d135 1
+a135 1
+  PSYSTEM_PROCESSES pslist = (PSYSTEM_PROCESSES) malloc (n_procs * sizeof *pslist);
+d137 1
+a137 1
+  while (NtQuerySystemInformation (SystemProcessesAndThreadsInformation,
+d142 1
+a142 1
+      pslist = (PSYSTEM_PROCESSES) malloc (n_procs * sizeof *pslist);
+d147 1
+a147 1
+static PSYSTEM_MODULE_INFORMATION
+d150 12
+a161 5
+  int modsize = 0x1000;
+  PSYSTEM_MODULE_INFORMATION modlist = (PSYSTEM_MODULE_INFORMATION) malloc (modsize);
+
+  while (NtQuerySystemInformation (SystemModuleInformation,
+    modlist, modsize, NULL) == STATUS_INFO_LENGTH_MISMATCH)
+d163 2
+a164 3
+      modsize *= 2;
+      free (modlist);
+      modlist = (PSYSTEM_MODULE_INFORMATION) malloc (modsize);
+d170 1
+a170 1
+find_process_in_list (PSYSTEM_PROCESSES pslist, PUNICODE_STRING psname)
+d174 1
+a174 1
+      if (pslist->ProcessName.Length && pslist->ProcessName.Buffer)
+d176 2
+a177 2
+	  dbg_printf (("%S\n", pslist->ProcessName.Buffer));
+	  if (!_wcsicmp (pslist->ProcessName.Buffer, psname->Buffer))
+d180 1
+a180 1
+      if (!pslist->NextEntryDelta)
+d182 1
+a182 1
+      pslist = (PSYSTEM_PROCESSES)(pslist->NextEntryDelta + (char *)pslist);
+d188 1
+a188 1
+find_module_in_list (PSYSTEM_MODULE_INFORMATION modlist, const char * const modname)
+d190 4
+a193 7
+  PSYSTEM_MODULE_INFORMATION_ENTRY modptr = &modlist->Module[0];
+  DWORD count = modlist->Count;
+  while (count--)
+    {
+      dbg_printf (("name '%s' offset %d ", &modptr->ImageName[0], modptr->PathLength));
+      dbg_printf (("= '%s'\n", &modptr->ImageName[modptr->PathLength]));
+      if (!_stricmp (&modptr->ImageName[modptr->PathLength], modname))
+a194 1
+      modptr++;
+d258 1
+a258 1
+detect_dodgy_app (const struct bad_app_det *det, PSYSTEM_PROCESSES pslist, PSYSTEM_MODULE_INFORMATION modlist)
+d359 2
+a360 2
+  PSYSTEM_PROCESSES pslist;
+  PSYSTEM_MODULE_INFORMATION modlist;
+d429 4
+a432 1
+  free (modlist);
+@
+
+
+1.4
+log
+@	* Makefile.in (cygcheck.exe): Link against ntdll.
+	* bloda.cc: Use statically linked functions throughout.
+	* cygpath.cc: Drop 9x considerations.
+	* mkgroup.c: Revamp.  Redefine -l and -d options to take optional
+	machine and domain parameters.  Redefine -c to work always, using
+	token information.  Add -L, -D, -C to create unique groupnames in
+	domain\group syntax.  Add -S option to define domain\group separator
+	char.  Ignore -u and -s options.
+	* mkpasswd.c: Revamp.  Redefine -l and -d options to take optional
+	machine and domain parameters.  Redefine -c to work always, using
+	token information.  Add -L, -D, -C to create unique usernames in
+	domain\user syntax.  Add -S option to define domain\user separator
+	char.  Ignore -g and -s options.  Prefer to take homedir from $HOME
+	over $HOMEDRIVE/$HOMEPATH.
+	* path.cc (oopts): Add "acl", "noacl", "posix=0" and "posix=1" options.
+	(getmntent): Accomodate throughout.
+	* ps.cc: Fix copyright dates.
+	* utils.sgml: Fix text for mkgroup and mkpasswd.
+@
+text
+@d42 1
+a42 1
+    Windows Defender 
+d44 4
+a47 4
+    ByteMobile laptop optimization client
+
+  A live version is now being maintained in the Cygwin FAQ, at
+    http://cygwin.com/faq/faq.using.html#faq.using.bloda
+d88 1
+a88 1
+}; 
+d149 5
+a153 5
+        {
+          dbg_printf (("%S\n", pslist->ProcessName.Buffer));
+          if (!_wcsicmp (pslist->ProcessName.Buffer, psname->Buffer))
+            return true;
+        }
+d155 1
+a155 1
+        break;
+d171 1
+a171 1
+        return true;
+d188 5
+a192 5
+        {
+          if ((*dst++ = *path++) != 0)
+            continue;
+          break;
+        }
+d196 8
+a203 8
+        {
+          /* Watch out for unterminated %  */
+          if (*end++ == 0)
+            {
+              end = NULL;
+              break;
+            }
+        }
+d206 5
+a210 5
+        {
+          /* Unterminated % so copy verbatim.  */
+          *dst++ = *path++;
+          continue;
+        }
+d213 1
+a213 1
+        return -1;
+d219 4
+a222 4
+        {
+          *dst++ = *path++;
+          continue;
+        }
+d226 1
+a226 1
+        return false;
+d235 1
+a235 1
+static bool 
+d251 5
+a255 5
+        {
+          RegCloseKey (hk);
+          dbg_printf (("found!\n"));
+          return true;
+        }
+d261 5
+a265 5
+        {
+          RegCloseKey (hk);
+          dbg_printf (("found!\n"));
+          return true;
+        }
+d271 4
+a274 4
+        {
+          printf ("Expansion failure!\n");
+          break;
+        }
+d277 1
+a277 1
+        | FILE_SHARE_DELETE, NULL, OPEN_EXISTING, 0, NULL);
+d279 5
+a283 5
+        {
+          CloseHandle (fh);
+          dbg_printf (("found!\n"));
+          return true;
+        }
+d293 4
+a296 4
+        {
+          printf ("Ansi to unicode conversion failure $%08x\n", (unsigned int) rv);
+          break;
+        }
+d300 4
+a303 4
+        {
+          dbg_printf (("found!\n"));
+          return true;
+        }
+d309 4
+a312 4
+        {
+          dbg_printf (("found!\n"));
+          return true;
+        }
+d327 1
+a327 1
+        return &big_list_of_dodgy_apps[i];
+d360 4
+a363 4
+        {
+          ++n_det;
+          found->found_it |= (1 << det->type);
+        }
+d369 35
+a403 35
+        {
+          if (big_list_of_dodgy_apps[i].found_it)
+            {
+              printf ("%s%s", big_list_of_dodgy_apps[i].details, 
+                verbose ? "\nDetected: " : ".\n");
+              if (!verbose)
+                continue;
+              const char *sep = "";
+              if (big_list_of_dodgy_apps[i].found_it & (1 << HKLMKEY))
+                {
+                  printf ("HKLM Registry Key");
+                  sep = ", ";
+                }
+              if (big_list_of_dodgy_apps[i].found_it & (1 << HKCUKEY))
+                {
+                  printf ("%sHKCU Registry Key", sep);
+                  sep = ", ";
+                }
+              if (big_list_of_dodgy_apps[i].found_it & (1 << FILENAME))
+                {
+                  printf ("%sNamed file", sep);
+                  sep = ", ";
+                }
+              if (big_list_of_dodgy_apps[i].found_it & (1 << PROCESSNAME))
+                {
+                  printf ("%sNamed process", sep);
+                  sep = ", ";
+                }
+              if (big_list_of_dodgy_apps[i].found_it & (1 << HOOKDLLNAME))
+                {
+                  printf ("%sLoaded hook DLL", sep);
+                }
+              printf (".\n\n");
+            }
+        }
+@
+
+
+1.3
+log
+@	* bloda.cc (enum bad_app):  Add BYTEMOBILE.
+	(dodgy_app_detects[]):  Add FILENAME entry to detect bmnet.dll.
+	(big_list_of_dodgy_apps[]):  Add description for BYTEMOBILE.
+@
+text
+@a110 11
+/* This function is not in the ntdll export lib, so it has
+  to be looked up at runtime and called through a pointer.  */
+VOID NTAPI (*pRtlFreeUnicodeString)(PUNICODE_STRING) = NULL;
+
+NTSTATUS NTAPI (*pNtQuerySystemInformation) (SYSTEM_INFORMATION_CLASS,
+                                             PVOID, ULONG, PULONG) = NULL;
+
+NTSTATUS NTAPI (*pRtlAnsiStringToUnicodeString) (PUNICODE_STRING, PANSI_STRING,
+                                               BOOLEAN) = NULL;
+
+
+d117 1
+a117 1
+  while (pNtQuerySystemInformation (SystemProcessesAndThreadsInformation,
+d133 1
+a133 1
+  while (pNtQuerySystemInformation (SystemModuleInformation,
+d291 1
+a291 1
+      rv = pRtlAnsiStringToUnicodeString (&unicodename, &ansiname, TRUE);
+d298 1
+a298 1
+      pRtlFreeUnicodeString (&unicodename);
+a338 19
+  HMODULE ntdll;
+
+  if ((ntdll = LoadLibrary ("ntdll.dll")) == NULL)
+    {
+      puts ("Skipping dodgy app check on Win9x/ME.");
+      return;
+    }
+
+#define GPA(func,rv) \
+      if ((p##func = (rv) GetProcAddress (ntdll, #func)) == NULL) \
+        { \
+          puts ("Can't GetProcAddress() for " #func ", " \
+                "skipping dodgy app check."); \
+          return; \
+        }
+  GPA(NtQuerySystemInformation, NTSTATUS NTAPI (*) (SYSTEM_INFORMATION_CLASS,PVOID,ULONG,PULONG));
+  GPA(RtlFreeUnicodeString, VOID NTAPI (*)(PUNICODE_STRING));
+  GPA(RtlAnsiStringToUnicodeString, NTSTATUS NTAPI (*)(PUNICODE_STRING,PANSI_STRING,BOOLEAN));
+#undef GPA
+@
+
+
+1.2
+log
+@	* Makefile.in (cygcheck.exe): Don't link to ntdll.
+	* bloda.cc (pNtQuerySystemInformation): Add.
+	(pRtlAnsiStringToUnicodeString): Add.
+	(get_process_list): Use function pointers for NT functions.
+	(dump_dodgy_apps): Skip dodgy app check on non-NT platforms.
+	Use GetProcAddress for NT-specific functions.
+@
+text
+@d44 5
+d55 2
+a56 1
+  IOLO,     LANDESK, WINDEFENDER, EMBASSYTS
+d87 1
+d106 1
+@
+
+
+1.1
+log
+@	* Makefile.in (cygcheck.exe):  Add bloda.o as prerequisite, adjusting
+	dependency-filtering $(wordlist ...) call appropriately.  Link ntdll.
+	(bloda.o):  New rule to build bloda.o
+	* cygcheck.cc (dump_sysinfo):  Call bloda function dump_dodgy_apps().
+	* bloda.cc:  New file implements detection of applications from the
+	Big List Of Dodgy Apps.
+@
+text
+@d107 7
+d120 1
+a120 1
+  while (NtQuerySystemInformation (SystemProcessesAndThreadsInformation,
+d136 1
+a136 1
+  while (NtQuerySystemInformation (SystemModuleInformation,
+d294 1
+a294 1
+      rv = RtlAnsiStringToUnicodeString (&unicodename, &ansiname, TRUE);
+d301 1
+a301 6
+      if (!pRtlFreeUnicodeString)
+          pRtlFreeUnicodeString = (VOID NTAPI (*)(PUNICODE_STRING)) GetProcAddress (LoadLibrary ("ntdll.dll"), "RtlFreeUnicodeString");
+      if (pRtlFreeUnicodeString)
+        pRtlFreeUnicodeString (&unicodename);
+      else
+        printf ("leaking mem...oops\n");
+d342 19
+@
+
+
+1.1.2.1
+log
+@2007-08-31  Dave Korn  <dave.korn@@artimi.com>
+
+	* mkgroup.c (enum_groups):  Use MAX_PREFERRED_LENGTH in netgroupenum
+	call so that it will automatically size returned buffer sufficiently.
+
+2007-08-03  Dave Korn  <dave.korn@@artimi.com>
+
+	* Makefile.in (cygcheck.exe):  Add bloda.o as prerequisite, adjusting
+	dependency-filtering $(wordlist ...) call appropriately.  Link ntdll.
+	(bloda.o):  New rule to build bloda.o
+	* cygcheck.cc (dump_sysinfo):  Call bloda function dump_dodgy_apps().
+	* bloda.cc:  New file implements detection of applications from the
+	Big List Of Dodgy Apps.
+
+2007-07-24  Corinna Vinschen  <corinna@@vinschen.de>
+
+	* COPYING.dumper: New file.
+	* dumper.cc: Change license to plain GPLv2 + later.
+	* dumper.h: Ditto.
+	* parse_pe.cc: Ditto.
+
+2007-07-23  Christopher Faylor  <me+cygwin@@cgf.cx>
+
+	* strace.cc (create_child): Don't convert a path from cygwin format
+	unless it has a slash.
+
+2007-07-09  Christopher Faylor  <me+cygwin@@cgf.cx>
+
+	* strace.cc (usage): Add missing description for -q.
+
+2007-05-29  Pedro Alves  <pedro_alves@@portugalmail.pt>
+
+	* dumper.cc (dumper::prepare_core_dump): Record a phdr for each section.
+
+2007-03-30  Mark Mitchell  <mark@@codesourcery.com>
+
+	* utils/cygpath.cc (get_long_path_name_w32impl): Close handles returned
+	by FindFirstFile.
+
+2006-09-11  Eric Blake  <ebb9@@byu.net>
+
+	* cygcheck.cc (main): Restore POSIXLY_CORRECT before displaying user's
+	environment.
+
+2006-08-03  Corinna Vinschen  <corinna@@vinschen.de>
+
+	* path.cc (vconcat): Don't convert backslahes to slashes.
+	(cygpath): Return native path with all backslashes.
+
+2006-07-30  Ilya Bobir  <ilya@@po4ta.com>
+
+	* cygpath.cc (get_long_name): Fallback to get_long_path_name_w32impl.
+
+2006-07-27  Corinna Vinschen  <corinna@@vinschen.de>
+
+	* cygpath.c (get_long_name): Cover the case that GetLongPathName
+	doesn't return valid information for non-existant files.  Just return
+	incoming filename in that case.
+@
+text
+@@
+
+
+1.1.2.2
+log
+@	* Makefile.in (cygcheck.exe): Don't link to ntdll.
+	* bloda.cc (pNtQuerySystemInformation): Add.
+	(pRtlAnsiStringToUnicodeString): Add.
+	(get_process_list): Use function pointers for NT functions.
+	(dump_dodgy_apps): Skip dodgy app check on non-NT platforms.
+	Use GetProcAddress for NT-specific functions.
+@
+text
+@a106 7
+NTSTATUS NTAPI (*pNtQuerySystemInformation) (SYSTEM_INFORMATION_CLASS,
+                                             PVOID, ULONG, PULONG) = NULL;
+
+NTSTATUS NTAPI (*pRtlAnsiStringToUnicodeString) (PUNICODE_STRING, PANSI_STRING,
+                                               BOOLEAN) = NULL;
+
+
+d113 1
+a113 1
+  while (pNtQuerySystemInformation (SystemProcessesAndThreadsInformation,
+d129 1
+a129 1
+  while (pNtQuerySystemInformation (SystemModuleInformation,
+d287 1
+a287 1
+      rv = pRtlAnsiStringToUnicodeString (&unicodename, &ansiname, TRUE);
+d294 6
+a299 1
+      pRtlFreeUnicodeString (&unicodename);
+a339 19
+  HMODULE ntdll;
+
+  if ((ntdll = LoadLibrary ("ntdll.dll")) == NULL)
+    {
+      puts ("Skipping dodgy app check on Win9x/ME.");
+      return;
+    }
+
+#define GPA(func,rv) \
+      if ((p##func = (rv) GetProcAddress (ntdll, #func)) == NULL) \
+        { \
+          puts ("Can't GetProcAddress() for " #func ", " \
+                "skipping dodgy app check."); \
+          return; \
+        }
+  GPA(NtQuerySystemInformation, NTSTATUS NTAPI (*) (SYSTEM_INFORMATION_CLASS,PVOID,ULONG,PULONG));
+  GPA(RtlFreeUnicodeString, VOID NTAPI (*)(PUNICODE_STRING));
+  GPA(RtlAnsiStringToUnicodeString, NTSTATUS NTAPI (*)(PUNICODE_STRING,PANSI_STRING,BOOLEAN));
+#undef GPA
+@
+
+

@@ -1,0 +1,164 @@
+head	1.1;
+access;
+symbols
+	binutils-2_24-branch:1.1.0.2
+	binutils-2_24-branchpoint:1.1
+	binutils_latest_snapshot:1.1;
+locks; strict;
+comment	@# @;
+
+
+1.1
+date	2013.04.15.21.16.18;	author hjl;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.1
+log
+@Check regular reference without non-GOT reference
+
+non_got_ref may not be set when building shared library. We need to set
+non_got_ref if there are any non-PIC relocations.  But we only did this
+when there were no PLT/GOT relocations.  It failed when there is a PLT
+relocation.  This checkin moves the non_got_ref check out.
+
+bfd/
+
+2013-04-15  H.J. Lu  <hongjiu.lu@@intel.com>
+
+	PR ld/15371
+	* elf-ifunc.c (_bfd_elf_allocate_ifunc_dyn_relocs): Check
+	regular reference without non-GOT reference when building
+	shared library.
+
+ld/testsuite/
+
+2013-04-15  H.J. Lu  <hongjiu.lu@@intel.com>
+
+	PR ld/15371
+	* ld-ifunc/ifunc-20-i386.d: New file.
+	* ld-ifunc/ifunc-20-x86-64.d: Likewise.
+	* ld-ifunc/ifunc-20.s: Likewise.
+diff --git a/bfd/elf-ifunc.c b/bfd/elf-ifunc.c
+index e56427d..7e7ec36 100644
+--- a/bfd/elf-ifunc.c
++++ b/bfd/elf-ifunc.c
+@@@@ -187,23 +187,20 @@@@ _bfd_elf_allocate_ifunc_dyn_relocs (struct bfd_link_info *info,
+
+   htab = elf_hash_table (info);
+
++  /* When building shared library, we need to handle the case where it is
++     marked with regular reference, but not non-GOT reference since the
++     non-GOT reference bit may not be set here.  */
++  if (info->shared && !h->non_got_ref && h->ref_regular)
++    for (p = *head; p != NULL; p = p->next)
++      if (p->count)
++	{
++	  h->non_got_ref = 1;
++	  goto keep;
++	}
++
+   /* Support garbage collection against STT_GNU_IFUNC symbols.  */
+   if (h->plt.refcount <= 0 && h->got.refcount <= 0)
+     {
+-      /* When building shared library, we need to handle the case
+-         where it is marked with regular reference, but not non-GOT
+-	 reference.  It may happen if we didn't see STT_GNU_IFUNC
+-	 symbol at the time when checking relocations.  */
+-      if (info->shared
+-	  && !h->non_got_ref
+-	  && h->ref_regular)
+-	for (p = *head; p != NULL; p = p->next)
+-	  if (p->count)
+-	    {
+-	      h->non_got_ref = 1;
+-	      goto keep;
+-	    }
+-
+       h->got = htab->init_got_offset;
+       h->plt = htab->init_plt_offset;
+       *head = NULL;
+diff --git a/ld/testsuite/ld-ifunc/ifunc-20-i386.d b/ld/testsuite/ld-ifunc/ifunc-20-i386.d
+new file mode 100644
+index 0000000..9373fcf
+--- /dev/null
++++ b/ld/testsuite/ld-ifunc/ifunc-20-i386.d
+@@@@ -0,0 +1,13 @@@@
++#source: ifunc-20.s
++#ld: -shared -m elf_i386 -z nocombreloc
++#as: --32
++#readelf: -r --wide
++#target: x86_64-*-* i?86-*-*
++
++Relocation section '.rel.ifunc' at offset 0x[0-9a-f]+ contains 1 entries:
++[ ]+Offset[ ]+Info[ ]+Type[ ]+.*
++[0-9a-f]+[ ]+[0-9a-f]+[ ]+R_386_32[ ]+ifunc\(\)[ ]+ifunc
++
++Relocation section '.rel.plt' at offset 0x[0-9a-f]+ contains 1 entries:
++[ ]+Offset[ ]+Info[ ]+Type[ ]+.*
++[0-9a-f]+[ ]+[0-9a-f]+[ ]+R_386_JUMP_SLOT[ ]+ifunc\(\)[ ]+ifunc
+diff --git a/ld/testsuite/ld-ifunc/ifunc-20-x86-64.d b/ld/testsuite/ld-ifunc/ifunc-20-x86-64.d
+new file mode 100644
+index 0000000..39492d4
+--- /dev/null
++++ b/ld/testsuite/ld-ifunc/ifunc-20-x86-64.d
+@@@@ -0,0 +1,13 @@@@
++#source: ifunc-20.s
++#ld: -shared -m elf_x86_64 -z nocombreloc
++#as: --64
++#readelf: -r --wide
++#target: x86_64-*-*
++
++Relocation section '.rela.ifunc' at offset 0x[0-9a-f]+ contains 1 entries:
++[ ]+Offset[ ]+Info[ ]+Type[ ]+.*
++[0-9a-f]+[ ]+[0-9a-f]+[ ]+R_X86_64_64[ ]+ifunc\(\)[ ]+ifunc \+ 0
++
++Relocation section '.rela.plt' at offset 0x[0-9a-f]+ contains 1 entries:
++[ ]+Offset[ ]+Info[ ]+Type[ ]+.*
++[0-9a-f]+[ ]+[0-9a-f]+[ ]+R_X86_64_JUMP_SLOT[ ]+ifunc\(\)[ ]+ifunc \+ 0
+diff --git a/ld/testsuite/ld-ifunc/ifunc-20.s b/ld/testsuite/ld-ifunc/ifunc-20.s
+new file mode 100644
+index 0000000..9d45455
+--- /dev/null
++++ b/ld/testsuite/ld-ifunc/ifunc-20.s
+@@@@ -0,0 +1,16 @@@@
++	.section .data.rel,"aw",@@progbits
++	.globl ifunc_ptrt
++	.type	ifunc_ptr, @@object
++ifunc_ptr:
++	.dc.a ifunc
++	.text
++	.type ifunc, @@gnu_indirect_function
++	.globl ifunc
++ifunc:
++	ret
++	.size	ifunc, .-ifunc
++	.type bar, @@function
++	.globl bar
++bar:
++	call	ifunc@@PLT
++	.size	bar, .-bar
+@
+text
+@	.section .data.rel,"aw",@@progbits
+	.globl ifunc_ptrt
+	.type	ifunc_ptr, @@object
+ifunc_ptr:
+	.dc.a ifunc
+	.text
+	.type ifunc, @@gnu_indirect_function
+	.globl ifunc
+ifunc:
+	ret
+	.size	ifunc, .-ifunc
+	.type bar, @@function
+	.globl bar
+bar:
+	call	ifunc@@PLT
+	.size	bar, .-bar
+@

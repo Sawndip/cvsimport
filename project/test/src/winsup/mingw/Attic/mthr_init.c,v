@@ -1,0 +1,197 @@
+head	1.3;
+access;
+symbols
+	cygwin-1_7_17-release:1.2
+	cygwin-64bit-branch:1.2.0.24
+	cygwin-1_7_16-release:1.2
+	cygwin-1_7_15-release:1.2
+	cygwin-1_7_14_2-release:1.2
+	cygwin-1_7_14-release:1.2
+	cygwin-1_7_12-release:1.2
+	cygwin-1_7_11-release:1.2
+	cygwin-1_7_10-release:1.2
+	cygwin-1_7_9-release:1.2
+	cygwin-1_7_8-release:1.2
+	cygwin-1_7_7-release:1.2
+	cygwin-1_7_5-release:1.2
+	cygwin-1_7_4-release:1.2
+	cygwin-1_7_3-release:1.2
+	cygwin-1_7_2-release:1.2
+	cygwin-1_7_1-release:1.2
+	cv-branch-2:1.2.0.22
+	cr-0x5f1:1.2.0.20
+	cv-branch:1.2.0.18
+	cr-0x3b58:1.2.0.14
+	cr-0x9e:1.2.0.12
+	cr-0x9d:1.2.0.8
+	corinna-01:1.2
+	cr-0x9c:1.2.0.6
+	cr-0x9b:1.2.0.4
+	cr-0x99:1.2
+	Z-emcb-cygwin_daemon:1.2.0.2
+	w32api-2_2:1.2
+	mingw-runtime-2_4:1.2
+	mingw-std-ns-branch:1.2.0.16
+	mingw-runtime-2_0:1.2
+	mingwex:1.2.0.10
+	cygnus_cvs_20020108_pre:1.2
+	Z-cygwin_daemon_merge-new_HEAD:1.1.1.1
+	Z-cygwin_daemon_merge_HEAD:1.1.1.1
+	cygwin_daemon:1.1.1.1.0.10;
+locks; strict;
+comment	@ * @;
+expand	@o@;
+
+
+1.3
+date	2012.11.07.16.52.13;	author cgf;	state dead;
+branches;
+next	1.2;
+
+1.2
+date	2001.12.05.15.01.05;	author earnie;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2000.02.17.19.38.31;	author cgf;	state Exp;
+branches
+	1.1.1.1;
+next	;
+
+1.1.1.1
+date	2000.02.17.19.38.31;	author cgf;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.3
+log
+@* mingw: Delete obsolete directory.
+* w32api: Ditto.
+@
+text
+@/*
+ * mthr_init.c
+ *
+ * Do the thread-support DLL initialization.
+ *
+ * This file is used iff the following conditions are met:
+ *  - gcc uses -mthreads option 
+ *  - user code uses C++ exceptions
+ *
+ * The sole job of the Mingw thread support DLL (MingwThr) is to catch 
+ * all the dying threads and clean up the data allocated in the TLSs 
+ * for exception contexts during C++ EH. Posix threads have key dtors, 
+ * but win32 TLS keys do not, hence the magic. Without this, there's at 
+ * least `24 * sizeof (void*)' bytes leaks for each catch/throw in each
+ * thread.
+ * 
+ * See mthr.c for all the magic.
+ *  
+ * Created by Mumit Khan  <khan@@nanotech.wisc.edu>
+ *
+ */
+
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#undef WIN32_LEAN_AND_MEAN
+#include <stdio.h>
+
+BOOL APIENTRY DllMain (HANDLE hDllHandle, DWORD reason, 
+                       LPVOID reserved /* Not used. */ );
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * DllMain --
+ *
+ *	This routine is called by the Mingw32, Cygwin32 or VC++ C run 
+ *	time library init code, or the Borland DllEntryPoint routine. It 
+ *	is responsible for initializing various dynamically loaded 
+ *	libraries.
+ *
+ * Results:
+ *      TRUE on sucess, FALSE on failure.
+ *
+ * Side effects:
+ *
+ *----------------------------------------------------------------------
+ */
+BOOL APIENTRY
+DllMain (HANDLE hDllHandle /* Library instance handle. */,
+	 DWORD reason /* Reason this function is being called. */,
+	 LPVOID reserved /* Not used. */)
+{
+
+  extern CRITICAL_SECTION __mingwthr_cs;
+  extern void __mingwthr_run_key_dtors( void );
+
+#ifdef DEBUG
+  printf ("%s: reason %d\n", __FUNCTION__, reason );
+#endif
+
+  switch (reason)
+    {
+    case DLL_PROCESS_ATTACH:
+       InitializeCriticalSection (&__mingwthr_cs);
+       break;
+
+    case DLL_PROCESS_DETACH:
+      __mingwthr_run_key_dtors();
+       DeleteCriticalSection (&__mingwthr_cs);
+      break;
+
+    case DLL_THREAD_ATTACH:
+      break;
+
+    case DLL_THREAD_DETACH:
+      __mingwthr_run_key_dtors();
+      break;
+    }
+  return TRUE;
+}
+@
+
+
+1.2
+log
+@Merge MinGW CVS differences
+@
+text
+@@
+
+
+1.1
+log
+@Initial revision
+@
+text
+@d55 5
+a59 1
+  extern void __mingwthr_run_key_dtors (DWORD);
+d64 2
+a65 2
+      InitializeCriticalSection (&__mingwthr_cs);
+      break;
+d68 2
+a69 1
+      DeleteCriticalSection (&__mingwthr_cs);
+d76 1
+a76 1
+      __mingwthr_run_key_dtors (GetCurrentThreadId ());
+a80 1
+
+@
+
+
+1.1.1.1
+log
+@import winsup-2000-02-17 snapshot
+@
+text
+@@

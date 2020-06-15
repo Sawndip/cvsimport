@@ -1,0 +1,780 @@
+head	1.14;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.12
+	gdb_7_6-2013-04-26-release:1.12
+	gdb_7_6-branch:1.12.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.12
+	gdb_7_5_1-2012-11-29-release:1.9
+	gdb_7_5-2012-08-17-release:1.9
+	gdb_7_5-branch:1.9.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.9
+	gdb_7_4_1-2012-04-26-release:1.6.4.1
+	gdb_7_4-2012-01-24-release:1.6.4.1
+	gdb_7_4-branch:1.6.0.4
+	gdb_7_4-2011-12-13-branchpoint:1.6
+	gdb_7_3_1-2011-09-04-release:1.6
+	gdb_7_3-2011-07-26-release:1.6
+	gdb_7_3-branch:1.6.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.6;
+locks; strict;
+comment	@# @;
+
+
+1.14
+date	2013.10.21.12.34.25;	author jemarch;	state Exp;
+branches;
+next	1.13;
+
+1.13
+date	2013.06.27.18.50.30;	author tromey;	state Exp;
+branches;
+next	1.12;
+
+1.12
+date	2013.01.25.17.16.43;	author aburgess;	state Exp;
+branches;
+next	1.11;
+
+1.11
+date	2013.01.01.06.33.25;	author brobecke;	state Exp;
+branches;
+next	1.10;
+
+1.10
+date	2012.10.31.09.26.22;	author aburgess;	state Exp;
+branches;
+next	1.9;
+
+1.9
+date	2012.06.21.20.46.22;	author tromey;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2012.01.16.16.21.44;	author palves;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2012.01.04.08.17.45;	author brobecke;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2011.01.01.15.33.42;	author brobecke;	state Exp;
+branches
+	1.6.4.1;
+next	1.5;
+
+1.5
+date	2010.11.03.14.21.58;	author kwerner;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2010.11.03.14.06.27;	author kwerner;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2010.10.08.16.50.55;	author kwerner;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2010.10.06.08.44.15;	author kwerner;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2010.08.11.16.48.26;	author kwerner;	state Exp;
+branches;
+next	;
+
+1.6.4.1
+date	2012.01.06.04.44.00;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.14
+log
+@2013-10-21  Jose E. Marchesi  <jose.marchesi@@oracle.com>
+
+	* gdb.base/gnu_vector.exp: Care about endianness when casting
+	scalars to vectors.
+@
+text
+@# Copyright 2010-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+#
+# Contributed by Ken Werner <ken.werner@@de.ibm.com>.
+#
+# Tests GDBs support for GNU vectors.
+# http://gcc.gnu.org/onlinedocs/gcc/Vector-Extensions.html
+
+standard_testfile .c
+
+if [get_compiler_info] {
+    return -1
+}
+
+# Check if our compiler is a GCC that suppports the vector extension
+if { ![test_compiler_info gcc-4-*] } {
+    setup_xfail "*-*-*"
+    fail "This compiler can not handle GNU vectors"
+    return 0
+}
+
+if { [prepare_for_testing ${testfile}.exp ${testfile} ${srcfile} {debug}] } {
+    return -1
+}
+
+if { ![runto main] } {
+    fail "runto main"
+    return -1
+}
+
+# Get endianess for the scalar->vector casts
+gdb_test_multiple "show endian" "show endian" {
+    -re ".* (big|little) endian.*$gdb_prompt $" { 
+	set endian $expect_out(1,string) 
+	pass "endianness: $endian"
+    }
+}
+
+# Test printing of character vector types
+gdb_test "print c4" "\\\$$decimal = \\{1, 2, 3, 4\\}"
+gdb_test "print c4\[2\]" "\\\$$decimal = 3"
+
+# Test operators on integer vector types
+gdb_test "print i4a" "\\\$$decimal = \\{2, 4, 8, 16\\}"
+gdb_test "print i4b" "\\\$$decimal = \\{1, 2, 8, 4\\}"
+# Arithmetic operators
+gdb_test "print i4a + i4b" "\\\$$decimal = \\{3, 6, 16, 20\\}"
+gdb_test "print i4a - i4b" "\\\$$decimal = \\{1, 2, 0, 12\\}"
+gdb_test "print i4a * i4b" "\\\$$decimal = \\{2, 8, 64, 64\\}"
+gdb_test "print i4a / i4b" "\\\$$decimal = \\{2, 2, 1, 4\\}"
+gdb_test "print i4a % i4b" "\\\$$decimal = \\{0, 0, 0, 0\\}"
+gdb_test "print i4a++" "\\\$$decimal = \\{2, 4, 8, 16\\}"
+gdb_test "print ++i4a" "\\\$$decimal = \\{4, 6, 10, 18\\}"
+gdb_test "print i4a--" "\\\$$decimal = \\{4, 6, 10, 18\\}"
+gdb_test "print --i4a" "\\\$$decimal = \\{2, 4, 8, 16\\}"
+gdb_test "print +i4a" "\\\$$decimal = \\{2, 4, 8, 16\\}"
+gdb_test "print -i4a" "\\\$$decimal = \\{-2, -4, -8, -16\\}"
+
+# Bitwise operators
+gdb_test "print i4a & i4b" "\\\$$decimal = \\{0, 0, 8, 0\\}"
+gdb_test "print i4a | i4b" "\\\$$decimal = \\{3, 6, 8, 20\\}"
+gdb_test "print i4a ^ i4b" "\\\$$decimal = \\{3, 6, 0, 20\\}"
+gdb_test "print ~i4a" "\\\$$decimal = \\{-3, -5, -9, -17\\}"
+# Shift operators
+gdb_test "print i4a << i4b" "\\\$$decimal = \\{4, 16, 2048, 256\\}"
+gdb_test "print i4a >> i4b" "\\\$$decimal = \\{1, 1, 0, 1\\}"
+
+# Test operators on floating point vector types
+gdb_test "print f4a" "\\\$$decimal = \\{2, 4, 8, 16\\}"
+gdb_test "print f4b" "\\\$$decimal = \\{1, 2, 8, 4\\}"
+# Arithmetic operators
+gdb_test "print f4a + f4b" "\\\$$decimal = \\{3, 6, 16, 20\\}"
+gdb_test "print f4a - f4b" "\\\$$decimal = \\{1, 2, 0, 12\\}"
+gdb_test "print f4a * f4b" "\\\$$decimal = \\{2, 8, 64, 64\\}"
+gdb_test "print f4a / f4b" "\\\$$decimal = \\{2, 2, 1, 4\\}"
+gdb_test "print +f4a" "\\\$$decimal = \\{2, 4, 8, 16\\}"
+gdb_test "print -f4a" "\\\$$decimal = \\{-2, -4, -8, -16\\}"
+
+# When casting to vector the input type must have the same length as
+# the total length of the vector.
+gdb_test "print (char4) 0x01010101" "\\\$$decimal = \\{1, 1, 1, 1\\}"
+gdb_test "print (int2) lla" "\\\$$decimal = \\{1, 1\\}"
+
+if { ![string compare $endian big] } then {
+    gdb_test "print (char4) ia" "\\\$$decimal = \\{0, 0, 0, 2\\}"
+} else {
+    gdb_test "print (char4) ia" "\\\$$decimal = \\{2, 0, 0, 0\\}"
+}
+
+gdb_test "print (int2) 1" "can only cast scalar to vector of same size"
+gdb_test "print (longlong2) 2" "can only cast scalar to vector of same size"
+gdb_test "print (float2) 3" "can only cast scalar to vector of same size"
+gdb_test "print (double2) 4" "can only cast scalar to vector of same size"
+gdb_test "print (uint4) ia" "can only cast scalar to vector of same size"
+gdb_test "print (int4) -3" "can only cast scalar to vector of same size"
+gdb_test "print (float4) 4" "can only cast scalar to vector of same size"
+
+gdb_test "print i4b = ia" "can only cast scalar to vector of same size"
+gdb_test "print i4a = 3" "can only cast scalar to vector of same size"
+gdb_test "print f4a = fb" "can only cast scalar to vector of same size"
+gdb_test "print f4b = 2" "can only cast scalar to vector of same size"
+
+gdb_test "print c4 + lla" "conversion of scalar to vector involves truncation"
+gdb_test "print i4a + lla" "conversion of scalar to vector involves truncation"
+gdb_test "print lla + c4" "conversion of scalar to vector involves truncation"
+gdb_test "print lla + i4a" "conversion of scalar to vector involves truncation"
+
+gdb_test "print c4 + ib" "\\\$$decimal = \\{2, 3, 4, 5\\}"
+gdb_test "print i4a + ib" "\\\$$decimal = \\{3, 5, 9, 17\\}"
+gdb_test "print i4a + 1" "\\\$$decimal = \\{3, 5, 9, 17\\}"
+gdb_test "print 1 + i4a" "\\\$$decimal = \\{3, 5, 9, 17\\}"
+gdb_test "print fa - f4b" "\\\$$decimal = \\{1, 0, -6, -2\\}"
+gdb_test "print 2 - f4b" "\\\$$decimal = \\{1, 0, -6, -2\\}"
+gdb_test "print f4a * fb" "\\\$$decimal = \\{2, 4, 8, 16\\}"
+gdb_test "print f4a * 1" "\\\$$decimal = \\{2, 4, 8, 16\\}"
+gdb_test "print ia / i4b" "\\\$$decimal = \\{2, 1, 0, 0\\}"
+gdb_test "print 2 / i4b" "\\\$$decimal = \\{2, 1, 0, 0\\}"
+gdb_test "print i4a % ib" "\\\$$decimal = \\{0, 0, 0, 0\\}"
+gdb_test "print i4a % 1" "\\\$$decimal = \\{0, 0, 0, 0\\}"
+gdb_test "print ia & i4b" "\\\$$decimal = \\{0, 2, 0, 0\\}"
+gdb_test "print 2 & i4b" "\\\$$decimal = \\{0, 2, 0, 0\\}"
+gdb_test "print i4a | ib" "\\\$$decimal = \\{3, 5, 9, 17\\}"
+gdb_test "print i4a | 1" "\\\$$decimal = \\{3, 5, 9, 17\\}"
+gdb_test "print ia ^ i4b" "\\\$$decimal = \\{3, 0, 10, 6\\}"
+gdb_test "print 2 ^ i4b" "\\\$$decimal = \\{3, 0, 10, 6\\}"
+gdb_test "print i4a << ib" "\\\$$decimal = \\{4, 8, 16, 32\\}"
+gdb_test "print i4a << 1" "\\\$$decimal = \\{4, 8, 16, 32\\}"
+gdb_test "print i4a >> ib" "\\\$$decimal = \\{1, 2, 4, 8\\}"
+gdb_test "print i4a >> 1" "\\\$$decimal = \\{1, 2, 4, 8\\}"
+
+gdb_test "print i4a = \{2, 4, 8, 16\}" "\\\$$decimal = \\{2, 4, 8, 16\\}"
+gdb_test "print i4a <<= ib" "\\\$$decimal = \\{4, 8, 16, 32\\}"
+
+# Test some error scenarios
+gdb_test "print i4a + d2" "Cannot perform operation on vectors with different types"
+gdb_test "print d2 + i4a" "Cannot perform operation on vectors with different types"
+gdb_test "print f4a + ll2" "Cannot perform operation on vectors with different types"
+gdb_test "print ll2 + f4a" "Cannot perform operation on vectors with different types"
+gdb_test "print i2 + ll2" "Cannot perform operation on vectors with different types"
+gdb_test "print ll2 + i2" "Cannot perform operation on vectors with different types"
+gdb_test "print i4a + ll2" "Cannot perform operation on vectors with different types"
+gdb_test "print ll2 + i4a" "Cannot perform operation on vectors with different types"
+gdb_test "print f4a + d2" "Cannot perform operation on vectors with different types"
+gdb_test "print d2 + f4a" "Cannot perform operation on vectors with different types"
+gdb_test "print ui4 + i4a" "Cannot perform operation on vectors with different types"
+gdb_test "print i4a + ui4" "Cannot perform operation on vectors with different types"
+gdb_test "print i4a + i2" "Cannot perform operation on vectors with different types"
+gdb_test "print i2 + i4a" "Cannot perform operation on vectors with different types"
+gdb_test "print f4a + f2" "Cannot perform operation on vectors with different types"
+gdb_test "print f2 + f4a" "Cannot perform operation on vectors with different types"
+
+gdb_test "print (double2) f2" "Cannot convert between vector values of different sizes"
+gdb_test "print (int4) c4" "Cannot convert between vector values of different sizes"
+gdb_test "print (char4) i4a" "Cannot convert between vector values of different sizes"
+
+# Test ptype on vector types.
+gdb_test "ptype c4" "type = char __attribute__ \\(\\(vector_size\\(4\\)\\)\\)"
+gdb_test "ptype char4" "type = char __attribute__ \\(\\(vector_size\\(4\\)\\)\\)"
+gdb_test "ptype i4a" "type = int __attribute__ \\(\\(vector_size\\(4\\)\\)\\)"
+gdb_test "ptype int4" "type = int __attribute__ \\(\\(vector_size\\(4\\)\\)\\)"
+gdb_test "ptype f4b" "type = float __attribute__ \\(\\(vector_size\\(4\\)\\)\\)"
+gdb_test "ptype float4" "type = float __attribute__ \\(\\(vector_size\\(4\\)\\)\\)"
+
+gdb_test "ptype union_with_vector_1" "type = union {\r\n\[\t \]+int i;\r\n\[\t \]+char cv __attribute__ \\(\\(vector_size\\(4\\)\\)\\);\r\n}"
+gdb_test "ptype struct_with_vector_1" "type = struct {\r\n\[\t \]+int i;\r\n\[\t \]+char cv __attribute__ \\(\\(vector_size\\(4\\)\\)\\);\r\n\[\t \]+float4 f4;\r\n}"
+@
+
+
+1.13
+log
+@test suite update - gdb.base/[efg]
+
+Convert files gdb.base/[efg]*.exp to use standard_output_file et al.
+
+	* ena-dis-br.exp, enum_cond.exp, enumval.exp, environ.exp,
+	eu-strip-infcall.exp, eval-skip.exp, exe-lock.exp,
+	expand-psymtabs.exp, exprs.exp, fileio.exp, find.exp,
+	fixsection.exp, foll-exec.exp, foll-fork.exp,
+	fortran-sym-case.exp, frame-args.exp, freebpcmd.exp, fullname.exp,
+	funcargs.exp, gcore-buffer-overflow.exp, gcore.exp, gdb1090.exp,
+	gdb11530.exp, gdb11531.exp, gdb1250.exp, gdb1555.exp, gdb1821.exp,
+	gdbindex-stabs.exp, gdbvars.exp, gnu-ifunc.exp, gnu_vector.exp:
+	Use standard_testfile, standard_output_file, prepare_for_testing,
+	clean_restart.
+@
+text
+@d43 8
+a93 1
+gdb_test "print (char4) ia" "\\\$$decimal = \\{2, 0, 0, 0\\}"
+d96 6
+@
+
+
+1.12
+log
+@http://sourceware.org/ml/gdb-patches/2012-11/msg00312.html
+
+gdb/ChangeLog
+        * valarith.c (value_vector_widen): New function for replicating a
+        scalar into a vector.
+        (value_binop): Use value_vector_widen to widen scalar to vector
+        rather than casting, this better matches gcc C behaviour.
+        * valops.c (value_casst): Update logic for casting between vector
+        types, and for casting from scalar to vector, try to match gcc C
+        behaviour.
+        * value.h (value_vector_widen): Declare.
+        * opencl-lang.c (opencl_value_cast): New opencl specific casting
+        function, handle special case for casting scalar to vector.
+        (opencl_relop): Use opencl_value_cast.
+        (evaluate_subexp_opencl): Use opencl_value_cast instead of
+        value_cast, and handle BINOP_ASSIGN, UNOP_CAST, and UNOP_CAST_TYPE
+        in order to use opencl_value_cast.
+
+gdb/testsuite/ChangeLog
+        * gdb.base/gnu_vector.c: New variable for use in tests.
+        * gdb.base/gnu_vector.exp: Update and extend tests to reflect
+        changes in scalar to vector casting and widening.
+        * gdb.python/py-type.c: New variables for use in tests.
+        * gdb.python/py-type.exp: Update vector related tests to reflect
+        changes in scalar to vector casting and widening.
+@
+text
+@d21 1
+a21 3
+set testfile "gnu_vector"
+set srcfile ${testfile}.c
+set binfile ${objdir}/${subdir}/${testfile}
+@
+
+
+1.11
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@d85 23
+a107 9
+# Test scalar to vector widening
+gdb_test "print (int2) 1" "\\\$$decimal = \\{1, 1\\}"
+gdb_test "print (longlong2) 2" "\\\$$decimal = \\{2, 2\\}"
+gdb_test "print (float2) 3" "\\\$$decimal = \\{3, 3\\}"
+gdb_test "print (double2) 4" "\\\$$decimal = \\{4, 4\\}"
+gdb_test "print (char4) 12" "\\\$$decimal = \\{12, 12, 12, 12\\}"
+gdb_test "print (uint4) ia" "\\\$$decimal = \\{2, 2, 2, 2\\}"
+gdb_test "print (int4) -3" "\\\$$decimal = \\{-3, -3, -3, -3\\}"
+gdb_test "print (float4) 4" "\\\$$decimal = \\{4, 4, 4, 4\\}"
+d109 1
+d111 2
+d114 1
+d116 1
+d118 1
+d120 1
+a120 1
+
+d122 1
+d124 1
+d126 1
+d128 1
+d130 1
+a130 5
+
+gdb_test "print i4b = ia" "\\\$$decimal = \\{2, 2, 2, 2\\}"
+gdb_test "print i4a = 3" "\\\$$decimal = \\{3, 3, 3, 3\\}"
+gdb_test "print f4a = fb" "\\\$$decimal = \\{1, 1, 1, 1\\}"
+gdb_test "print f4b = 2" "\\\$$decimal = \\{2, 2, 2, 2\\}"
+d153 4
+@
+
+
+1.10
+log
+@http://sourceware.org/ml/gdb-patches/2012-10/msg00525.html
+
+gdb/ChangeLog
+
+        PR cli/14772
+        * c-typeprint.c (c_print_type): Don't print a space for vector
+        types, this is handled within the suffix.
+        (c_type_print_varspec_suffix): Add a space to vector suffix
+
+gdb/testsuite/ChangeLog
+
+        PR cli/14772
+        * gdb.base/gnu_vector.c (union_with_vector_1)
+        (struct_with_vector_1): Add new struct and union for testing
+        ptype.
+        * gdb.base/gnu_vector.exp: Add testing of ptype on vectors, and
+        structs / unions containing vectors.
+@
+text
+@d1 1
+a1 1
+# Copyright 2010-2012 Free Software Foundation, Inc.
+@
+
+
+1.9
+log
+@	* lib/gdb.exp (skip_altivec_tests, skip_vsx_tests)
+	(build_executable): Update.
+	(get_compiler_info): Remove 'binfile' argument.
+	* gdb.ada/arrayidx.exp: Update.
+	* gdb.ada/null_array.exp: Update.
+	* gdb.arch/altivec-abi.exp: Update.
+	* gdb.arch/altivec-regs.exp: Update.
+	* gdb.arch/amd64-byte.exp: Update.
+	* gdb.arch/amd64-dword.exp: Update.
+	* gdb.arch/amd64-word.exp: Update.
+	* gdb.arch/i386-avx.exp: Update.
+	* gdb.arch/i386-byte.exp: Update.
+	* gdb.arch/i386-sse.exp: Update.
+	* gdb.arch/i386-word.exp: Update.
+	* gdb.arch/ppc-dfp.exp: Update.
+	* gdb.arch/ppc-fp.exp: Update.
+	* gdb.arch/vsx-regs.exp: Update.
+	* gdb.base/all-bin.exp: Update.
+	* gdb.base/annota1.exp: Update.
+	* gdb.base/async.exp: Update.
+	* gdb.base/attach.exp: Update.
+	* gdb.base/break-interp.exp: Update.
+	* gdb.base/call-ar-st.exp: Update.
+	* gdb.base/call-rt-st.exp: Update.
+	* gdb.base/call-sc.exp: Update.
+	* gdb.base/callfuncs.exp: Update.
+	* gdb.base/catch-load.exp: Update.
+	* gdb.base/completion.exp: Update.
+	* gdb.base/complex.exp: Update.
+	* gdb.base/condbreak.exp: Update.
+	* gdb.base/consecutive.exp: Update.
+	* gdb.base/constvars.exp: Update.
+	* gdb.base/corefile.exp: Update.
+	* gdb.base/eval-skip.exp: Update.
+	* gdb.base/expand-psymtabs.exp: Update.
+	* gdb.base/exprs.exp: Update.
+	* gdb.base/fileio.exp: Update.
+	* gdb.base/fixsection.exp: Update.
+	* gdb.base/funcargs.exp: Update.
+	* gdb.base/gdb11530.exp: Update.
+	* gdb.base/gdb1555.exp: Update.
+	* gdb.base/gnu-ifunc.exp: Update.
+	* gdb.base/gnu_vector.exp: Update.
+	* gdb.base/info-macros.exp: Update.
+	* gdb.base/jit-simple.exp: Update.
+	* gdb.base/jit-so.exp: Update.
+	* gdb.base/jit.exp: Update.
+	* gdb.base/langs.exp: Update.
+	* gdb.base/list.exp: Update.
+	* gdb.base/logical.exp: Update.
+	* gdb.base/long_long.exp: Update.
+	* gdb.base/longjmp.exp: Update.
+	* gdb.base/macscp.exp: Update.
+	* gdb.base/mips_pro.exp: Update.
+	* gdb.base/miscexprs.exp: Update.
+	* gdb.base/morestack.exp: Update.
+	* gdb.base/nodebug.exp: Update.
+	* gdb.base/opaque.exp: Update.
+	* gdb.base/pc-fp.exp: Update.
+	* gdb.base/pending.exp: Update.
+	* gdb.base/permissions.exp: Update.
+	* gdb.base/pointers.exp: Update.
+	* gdb.base/prelink.exp: Update.
+	* gdb.base/printcmds.exp: Update.
+	* gdb.base/psymtab.exp: Update.
+	* gdb.base/ptype.exp: Update.
+	* gdb.base/relational.exp: Update.
+	* gdb.base/scope.exp: Update.
+	* gdb.base/setvar.exp: Update.
+	* gdb.base/shlib-call.exp: Update.
+	* gdb.base/shreloc.exp: Update.
+	* gdb.base/signals.exp: Update.
+	* gdb.base/sizeof.exp: Update.
+	* gdb.base/so-impl-ld.exp: Update.
+	* gdb.base/so-indr-cl.exp: Update.
+	* gdb.base/solib-disc.exp: Update.
+	* gdb.base/solib-display.exp: Update.
+	* gdb.base/solib-nodir.exp: Update.
+	* gdb.base/solib-overlap.exp: Update.
+	* gdb.base/solib-symbol.exp: Update.
+	* gdb.base/solib-weak.exp: Update.
+	* gdb.base/solib.exp: Update.
+	* gdb.base/store.exp: Update.
+	* gdb.base/structs.exp: Update.
+	* gdb.base/structs2.exp: Update.
+	* gdb.base/type-opaque.exp: Update.
+	* gdb.base/unload.exp: Update.
+	* gdb.base/varargs.exp: Update.
+	* gdb.base/volatile.exp: Update.
+	* gdb.base/watch_thread_num.exp: Update.
+	* gdb.base/watchpoint-solib.exp: Update.
+	* gdb.base/watchpoint.exp: Update.
+	* gdb.base/watchpoints.exp: Update.
+	* gdb.base/whatis.exp: Update.
+	* gdb.cell/arch.exp: Update.
+	* gdb.cell/break.exp: Update.
+	* gdb.cell/bt.exp: Update.
+	* gdb.cell/core.exp: Update.
+	* gdb.cell/data.exp: Update.
+	* gdb.cell/ea-cache.exp: Update.
+	* gdb.cell/f-regs.exp: Update.
+	* gdb.cell/fork.exp: Update.
+	* gdb.cell/gcore.exp: Update.
+	* gdb.cell/mem-access.exp: Update.
+	* gdb.cell/ptype.exp: Update.
+	* gdb.cell/registers.exp: Update.
+	* gdb.cell/sizeof.exp: Update.
+	* gdb.cell/solib-symbol.exp: Update.
+	* gdb.cell/solib.exp: Update.
+	* gdb.cp/ambiguous.exp: Update.
+	* gdb.cp/breakpoint.exp: Update.
+	* gdb.cp/bs15503.exp: Update.
+	* gdb.cp/casts.exp: Update.
+	* gdb.cp/class2.exp: Update.
+	* gdb.cp/cpexprs.exp: Update.
+	* gdb.cp/cplusfuncs.exp: Update.
+	* gdb.cp/ctti.exp: Update.
+	* gdb.cp/dispcxx.exp: Update.
+	* gdb.cp/gdb1355.exp: Update.
+	* gdb.cp/gdb2384.exp: Update.
+	* gdb.cp/gdb2495.exp: Update.
+	* gdb.cp/infcall-dlopen.exp: Update.
+	* gdb.cp/local.exp: Update.
+	* gdb.cp/m-data.exp: Update.
+	* gdb.cp/m-static.exp: Update.
+	* gdb.cp/mb-ctor.exp: Update.
+	* gdb.cp/mb-inline.exp: Update.
+	* gdb.cp/mb-templates.exp: Update.
+	* gdb.cp/member-ptr.exp: Update.
+	* gdb.cp/method.exp: Update.
+	* gdb.cp/namespace.exp: Update.
+	* gdb.cp/nextoverthrow.exp: Update.
+	* gdb.cp/nsdecl.exp: Update.
+	* gdb.cp/nsrecurs.exp: Update.
+	* gdb.cp/nsstress.exp: Update.
+	* gdb.cp/nsusing.exp: Update.
+	* gdb.cp/pr-1023.exp: Update.
+	* gdb.cp/pr-1210.exp: Update.
+	* gdb.cp/pr-574.exp: Update.
+	* gdb.cp/pr9631.exp: Update.
+	* gdb.cp/printmethod.exp: Update.
+	* gdb.cp/psmang.exp: Update.
+	* gdb.cp/re-set-overloaded.exp: Update.
+	* gdb.cp/rtti.exp: Update.
+	* gdb.cp/shadow.exp: Update.
+	* gdb.cp/templates.exp: Update.
+	* gdb.cp/try_catch.exp: Update.
+	* gdb.dwarf2/dw2-ranges.exp: Update.
+	* gdb.dwarf2/pr10770.exp: Update.
+	* gdb.fortran/library-module.exp: Update.
+	* gdb.hp/gdb.aCC/optimize.exp: Update.
+	* gdb.hp/gdb.aCC/watch-cmd.exp: Update.
+	* gdb.hp/gdb.base-hp/callfwmall.exp: Update.
+	* gdb.hp/gdb.base-hp/hwwatchbus.exp: Update.
+	* gdb.hp/gdb.base-hp/pxdb.exp: Update.
+	* gdb.hp/gdb.base-hp/sized-enum.exp: Update.
+	* gdb.hp/gdb.base-hp/so-thresh.exp: Update.
+	* gdb.hp/gdb.compat/xdb1.exp: Update.
+	* gdb.hp/gdb.compat/xdb2.exp: Update.
+	* gdb.hp/gdb.compat/xdb3.exp: Update.
+	* gdb.hp/gdb.defects/bs14602.exp: Update.
+	* gdb.hp/gdb.defects/solib-d.exp: Update.
+	* gdb.hp/gdb.objdbg/objdbg01.exp: Update.
+	* gdb.hp/gdb.objdbg/objdbg02.exp: Update.
+	* gdb.hp/gdb.objdbg/objdbg03.exp: Update.
+	* gdb.hp/gdb.objdbg/objdbg04.exp: Update.
+	* gdb.mi/gdb792.exp: Update.
+	* gdb.mi/mi-pending.exp: Update.
+	* gdb.mi/mi-solib.exp: Update.
+	* gdb.mi/mi-var-cp.exp: Update.
+	* gdb.opt/clobbered-registers-O2.exp: Update.
+	* gdb.opt/inline-bt.exp: Update.
+	* gdb.opt/inline-cmds.exp: Update.
+	* gdb.opt/inline-locals.exp: Update.
+	* gdb.python/py-events.exp: Update.
+	* gdb.python/py-finish-breakpoint.exp: Update.
+	* gdb.python/py-type.exp: Update.
+	* gdb.reverse/solib-precsave.exp: Update.
+	* gdb.reverse/solib-reverse.exp: Update.
+	* gdb.server/solib-list.exp: Update.
+	* gdb.stabs/weird.exp: Update.
+	* gdb.threads/attach-into-signal.exp: Update.
+	* gdb.threads/attach-stopped.exp: Update.
+	* gdb.threads/tls-shared.exp: Update.
+	* gdb.trace/change-loc.exp: Update.
+	* gdb.trace/strace.exp: Update.
+@
+text
+@d133 10
+@
+
+
+1.8
+log
+@2012-01-16  Pedro Alves  <palves@@redhat.com>
+
+	Remove all calls to strace.
+@
+text
+@d25 1
+a25 1
+if [get_compiler_info ${binfile}] {
+@
+
+
+1.7
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@a20 4
+if $tracelevel {
+    strace $tracelevel
+}
+
+@
+
+
+1.6
+log
+@run copyright.sh for 2011.
+@
+text
+@d1 1
+a1 1
+# Copyright 2010, 2011 Free Software Foundation, Inc.
+@
+
+
+1.6.4.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d1 1
+a1 1
+# Copyright 2010-2012 Free Software Foundation, Inc.
+@
+
+
+1.5
+log
+@gdb:
+	* dwarf2read.c (read_array_type): Read the DW_AT_byte_size from the
+	DIE and set the length of the type.
+	* gdbtypes.h (get_array_bounds): Move here from valprint.h.
+	* gdbtypes.c (get_array_bounds): Move here from valprint.c and
+	return 0 if the corresponding bounds of the type are undefined.
+	* valprint.h (get_array_bounds): Move declaration to gdbtypes.h.
+	* valprint.c (get_array_bounds): Move implementation to gdbtypes.c.
+	(val_print_array_elements): Use get_array_bounds to compute the number
+	of array elements instead of dividing the length of the array by the
+	length of the element types.
+	* valarith.c (vector_binop): Likewise.
+	* valops.c (value_cast): Likewise.
+	* c-valprint.c (c_val_print): Likewise.
+	* c-typeprint.c (c_type_print_varspec_suffix): Likewise.
+
+gdb/testsuite:
+	* gdb.base/gnu_vector.exp: Adjust expect messages.
+@
+text
+@d1 1
+a1 1
+# Copyright 2010 Free Software Foundation, Inc.
+@
+
+
+1.4
+log
+@gdb:
+	* valarith.c (value_pos, value_neg, value_complement): Handle
+	vector types.
+	* valops.c (value_one): Likewise.
+
+gdb/testsuite:
+	* gdb.base/gnu_vector.exp: Add unary operator tests.
+@
+text
+@d132 4
+a135 4
+gdb_test "print i4a + i2" "Cannot perform operation on vectors with different sizes"
+gdb_test "print i2 + i4a" "Cannot perform operation on vectors with different sizes"
+gdb_test "print f4a + f2" "Cannot perform operation on vectors with different sizes"
+gdb_test "print f2 + f4a" "Cannot perform operation on vectors with different sizes"
+@
+
+
+1.3
+log
+@gdb:
+	* valops.c (value_cast): Handle vector types.
+	* valarith.c (value_binop): Widen scalar to vector if appropriate.
+gdb/testsuite:
+	* gdb.base/gnu_vector.c (ia, ib, fa, fb): New variables.
+	* gdb.base/gnu_vector.exp: Add tests for scalar to vector widening.
+@
+text
+@d53 1
+a53 1
+# Test binary operators on integer vector types
+d62 7
+d73 1
+d78 1
+a78 1
+# Test binary operators on floating point vector types
+d86 2
+@
+
+
+1.2
+log
+@gdb:
+	* gdbtypes.h (struct main_type): Remove flag_nottext.
+	(enum type_flag_value): Remove TYPE_FLAG_NOTTEXT.
+	(enum type_instance_flag_value): Add TYPE_INSTANCE_FLAG_NOTTEXT.
+	(TYPE_NOTTEXT): Use TYPE_INSTANCE_FLAG_NOTTEXT instead of flag_nottext.
+	* gdbtypes.c (make_vector_type): Use TYPE_INSTANCE_FLAG_NOTTEXT instead
+	of TYPE_FLAG_NOTTEXT.
+	(init_type): Remove the initialization of the flag_nottext field.
+	(gdbtypes_post_init): Use TYPE_INSTANCE_FLAG_NOTTEXT instead of
+	TYPE_FLAG_NOTTEXT.
+	* c-valprint.c (c_val_print): Remove TYPE_VECTOR check.
+gdb/testsuite:
+	* gdb.base/gnu_vector.c: Add variable c4.
+	* gdb.base/gnu_vector.exp: Add tests for character vector printing.
+	* gdb.arch/altivec-abi.exp: Fix expect pattern of character vectors.
+@
+text
+@d79 31
+a109 3
+# Test error conditions
+gdb_test "print i4a + 1" "Vector operations are only supported among vectors"
+gdb_test "print 1 + f4a" "Vector operations are only supported among vectors"
+@
+
+
+1.1
+log
+@gdb/ChangeLog:* gdb/valarith.c (vector_binop): New function.(scalar_binop): Likewise.(value_binop): Call scalar_binop or vector_binop depending on the types.* gdb/eval.c (ptrmath_type_p): Return 0 in case of TYPE_VECTOR.(evaluate_subexp_with_coercion): Add vector check to not convert vectorsto pointers.* gdb/value.c (coerce_array): Add vector check to not coerce vectors.testsuite/ChangeLog:* gdb.base/Makefile.in (EXECUTABLES): Add gnu_vector.* gdb.base/gnu_vector.c: New File.* gdb.base/gnu_vector.exp: Likewise.
+@
+text
+@d49 4
+@
+

@@ -1,0 +1,177 @@
+head	1.2;
+access;
+symbols;
+locks; strict;
+comment	@# @;
+
+
+1.2
+date	2013.04.15.18.13.01;	author tromey;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2013.04.15.18.09.02;	author tromey;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@	PR c++/13588:
+	* NEWS: Update.
+	* break-catch-throw.c (struct exception_catchpoint)
+	<exception_rx, pattern>: New fields.
+	(fetch_probe_arguments, dtor_exception_catchpoint)
+	(check_status_exception_catchpoint)
+	(print_one_detail_exception_catchpoint): New functions.
+	(handle_gnu_v3_exceptions): Add "except_rx" argument.
+	Compile regular expression if needed.
+	(extract_exception_regexp): New function.
+	(catch_exception_command_1): Use extract_exception_regexp.
+	(compute_exception): Use fetch_probe_arguments.
+	(initialize_throw_catchpoint_ops): Set dtor, print_one_detail,
+	and check_status fields.
+	* cp-abi.c (cplus_typename_from_type_info): New function.
+	* cp-abi.h (cplus_typename_from_type_info): Declare.
+	(struct cp_abi_ops) <get_typename_from_type_info>: New field.
+	* gdb_regex.h (compile_rx_or_error): Declare.
+	* gnu-v3-abi.c (gnuv3_get_typename_from_type_info): Update
+	comment.
+	(init_gnuv3_ops): Set get_type_from_type_info field.
+	* probe.c (compile_rx_or_error): Move...
+	* utils.c (compile_rx_or_error): ... here.
+gdb/doc
+	* gdb.texinfo (Set Catchpoints): Document regexp syntax for
+	exception catchpoints.
+gdb/testsuite
+	* gdb.cp/exceptprint.exp: Add regexp catchpoint tests.
+@
+text
+@# Copyright 2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+standard_testfile .cc
+
+if {[skip_cplus_tests]} {
+    return -1
+}
+
+if {[prepare_for_testing $testfile.exp $testfile $srcfile {debug c++}]} {
+    return -1
+}
+
+if {![runto_main]} {
+    return -1
+}
+
+if {![skip_libstdcxx_probe_tests]} {
+    untested "could not find libstdc++ stap probe"
+    return -1
+}
+
+proc do_continue_to_catchpoint {name} {
+    global gdb_prompt
+
+    gdb_test_multiple "continue" $name {
+	-re "Continuing.*Catchpoint \[0-9\].*\r\n$gdb_prompt $" {
+	    pass $name
+	}
+    }
+}
+
+proc do_exceptprint_tests {prefix output} {
+    with_test_prefix $prefix {
+	do_continue_to_catchpoint "continue to throw"
+	gdb_test "print \$_exception" " = $output" \
+	    "print exception value at throw"
+
+	do_continue_to_catchpoint "continue to catch"
+	gdb_test "print \$_exception" " = $output" \
+	    "print exception value at catch"
+	
+	do_continue_to_catchpoint "continue to rethrow"
+	gdb_test "print \$_exception" " = $output" \
+	    "print exception value at rethrow"
+
+	do_continue_to_catchpoint "continue to final catch"
+    }
+}
+
+gdb_test "catch catch" "Catchpoint \[0-9\]+ \\(catch\\)" \
+    "catch catch"
+gdb_test "catch throw" "Catchpoint \[0-9\]+ \\(throw\\)" \
+    "catch throw"
+gdb_test "catch rethrow" "Catchpoint \[0-9\]+ \\(rethrow\\)" \
+    "catch rethrow"
+
+do_exceptprint_tests string "$hex \"hi bob\""
+do_exceptprint_tests int 23
+do_exceptprint_tests struct "{mv = 77}"
+do_exceptprint_tests "reference to struct" "{mv = 77}"
+
+
+delete_breakpoints
+
+if {![runto_main]} {
+    return -1
+}
+
+gdb_test "catch catch int if \$_exception == 23" \
+    "Catchpoint \[0-9\]+ \\(catch\\)" \
+    "catch catch"
+gdb_test "catch throw int if \$_exception == 23" \
+    "Catchpoint \[0-9\]+ \\(throw\\)" \
+    "catch throw"
+gdb_test "catch rethrow int if \$_exception == 23" \
+    "Catchpoint \[0-9\]+ \\(rethrow\\)" \
+    "catch rethrow"
+
+# This tests both the case where the regular expression does not
+# match, and the case where it does.
+do_exceptprint_tests int 23
+@
+
+
+1.1
+log
+@	PR c++/15176:
+	* NEWS: Update.
+	* break-catch-throw.c (compute_exception): New function.
+	(exception_funcs): New global.
+	(_initialize_break_catch_throw): Create $_exception.
+	* cp-abi.c (cplus_type_from_type_info): New function.
+	* cp-abi.h (cplus_type_from_type_info): Declare.
+	(struct cp_abi_ops) <get_type_from_type_info>: New field.
+	* gnu-v3-abi.c (gnuv3_get_typename_from_type_info)
+	(gnuv3_get_type_from_type_info): New functions.
+	(init_gnuv3_ops): Set get_type_from_type_info ABI field.
+gdb/doc
+	* gdb.texinfo (Set Catchpoints): Document $_exception.
+	(Convenience Vars): Mention $_exception.
+gdb/testsuite
+	* gdb.base/default.exp: Update for $_exception.
+	* gdb.cp/exceptprint.cc: New file.
+	* gdb.cp/exceptprint.exp: New file.
+	* lib/gdb.exp (skip_libstdcxx_probe_tests): New proc.
+@
+text
+@d74 21
+@
+

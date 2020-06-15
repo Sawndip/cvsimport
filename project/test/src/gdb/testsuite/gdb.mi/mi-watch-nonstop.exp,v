@@ -1,0 +1,355 @@
+head	1.4;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.4
+	gdb_7_6-2013-04-26-release:1.4
+	gdb_7_6-branch:1.4.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.4
+	gdb_7_5_1-2012-11-29-release:1.3
+	gdb_7_5-2012-08-17-release:1.3
+	gdb_7_5-branch:1.3.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.3;
+locks; strict;
+comment	@# @;
+
+
+1.4
+date	2013.01.01.06.41.24;	author brobecke;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2012.07.10.15.32.52;	author tromey;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2012.01.04.08.17.54;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2011.12.14.17.20.32;	author palves;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.4
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@#   Copyright 2011-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+if [target_info exists gdb,no_hardware_watchpoints] {
+    return -1
+}
+
+if { ![support_displaced_stepping] } { 
+    unsupported "displaced stepping"
+    return -1
+}
+
+load_lib mi-support.exp
+set MIFLAGS "-i=mi"
+
+gdb_exit
+if {[mi_gdb_start]} {
+    continue
+}
+
+proc mi_nonstop_resume { command test } {
+    if { [mi_send_resuming_command $command $test] != 0 } {
+	# If a resume fails, assume non-stop is broken or unsupported
+	# for this target.  We have logged a FAIL or UNSUPPORTED; skip
+	# the remaining tests to limit timeouts.
+	return -code continue
+    }
+}
+
+#
+# Start here
+#
+standard_testfile watch-nonstop.c
+
+if {[gdb_compile "$srcdir/$subdir/$srcfile" $binfile executable {debug}] != "" } {
+    return -1
+}
+
+mi_gdb_reinitialize_dir $srcdir/$subdir
+mi_gdb_load $binfile
+
+mi_gdb_test "-gdb-set non-stop 1" ".*"
+mi_gdb_test "-gdb-set target-async 1" ".*"
+mi_detect_async
+
+if { [mi_run_to_main] < 0 } {
+    continue
+}
+
+# Set a watchpoint.
+mi_gdb_test "111-break-watch global" \
+    "111\\^done,wpt=\{number=\"2\",exp=\"global\"\}" \
+    "break-watch operation"
+
+# Set the target running.
+mi_nonstop_resume "exec-continue" "resume 1"
+
+# Now try deleting the watchpoint.  This would fail with "Couldn't
+# write debug register: No such process."  on GNU/Linux, because we'd
+# try to poke at the debug registers of a running thread.
+mi_gdb_test "777-break-delete 2" \
+    "777\\^done" \
+    "delete watchpoint"
+@
+
+
+1.3
+log
+@	* gdb.mi/dw2-ref-missing-frame.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.mi/gdb2549.exp: Use standard_testfile.
+	* gdb.mi/gdb669.exp: Use standard_testfile.
+	* gdb.mi/gdb701.exp: Use standard_testfile.
+	* gdb.mi/gdb792.exp: Use standard_testfile.
+	* gdb.mi/mi-async.exp: Use standard_testfile.
+	* gdb.mi/mi-basics.exp: Use standard_testfile.
+	* gdb.mi/mi-break.exp: Use standard_testfile.
+	* gdb.mi/mi-cli.exp: Use standard_testfile.
+	* gdb.mi/mi-console.exp: Use standard_testfile.
+	* gdb.mi/mi-disassemble.exp: Use standard_testfile.
+	* gdb.mi/mi-eval.exp: Use standard_testfile.
+	* gdb.mi/mi-file-transfer.exp: Use standard_testfile.
+	* gdb.mi/mi-file.exp: Use standard_testfile.
+	* gdb.mi/mi-inheritance-syntax-error.exp: Use standard_testfile.
+	* gdb.mi/mi-logging.exp: Use standard_testfile.
+	* gdb.mi/mi-nonstop-exit.exp: Use standard_testfile.
+	* gdb.mi/mi-nonstop.exp: Use standard_testfile.
+	* gdb.mi/mi-ns-stale-regcache.exp: Use standard_testfile.
+	* gdb.mi/mi-nsintrall.exp: Use standard_testfile.
+	* gdb.mi/mi-nsmoribund.exp: Use standard_testfile.
+	* gdb.mi/mi-nsthrexec.exp: Use standard_testfile.
+	* gdb.mi/mi-pending.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.mi/mi-pthreads.exp: Use standard_testfile.
+	* gdb.mi/mi-read-memory.exp: Use standard_testfile.
+	* gdb.mi/mi-regs.exp: Use standard_testfile.
+	* gdb.mi/mi-return.exp: Use standard_testfile.
+	* gdb.mi/mi-reverse.exp: Use standard_testfile.
+	* gdb.mi/mi-simplerun.exp: Use standard_testfile.
+	* gdb.mi/mi-solib.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.mi/mi-stack.exp: Use standard_testfile.
+	* gdb.mi/mi-stepi.exp: Use standard_testfile.
+	* gdb.mi/mi-stepn.exp: Use standard_testfile.
+	* gdb.mi/mi-syn-frame.exp: Use standard_testfile.
+	* gdb.mi/mi-until.exp: Use standard_testfile.
+	* gdb.mi/mi-var-block.exp: Use standard_testfile.
+	* gdb.mi/mi-var-child-f.exp: Use standard_testfile.
+	* gdb.mi/mi-var-child.exp: Use standard_testfile.
+	* gdb.mi/mi-var-cmd.exp: Use standard_testfile.
+	* gdb.mi/mi-var-cp.exp: Use standard_testfile.
+	* gdb.mi/mi-var-display.exp: Use standard_testfile.
+	* gdb.mi/mi-var-invalidate.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.mi/mi-var-rtti.exp: Use standard_testfile.
+	* gdb.mi/mi-watch-nonstop.exp: Use standard_testfile.
+	* gdb.mi/mi-watch.exp: Use standard_testfile.
+	* gdb.mi/mi2-amd64-entry-value.exp: Use standard_testfile.
+	* gdb.mi/mi2-basics.exp: Use standard_testfile.
+	* gdb.mi/mi2-break.exp: Use standard_testfile.
+	* gdb.mi/mi2-cli.exp: Use standard_testfile.
+	* gdb.mi/mi2-console.exp: Use standard_testfile.
+	* gdb.mi/mi2-disassemble.exp: Use standard_testfile.
+	* gdb.mi/mi2-eval.exp: Use standard_testfile.
+	* gdb.mi/mi2-file.exp: Use standard_testfile.
+	* gdb.mi/mi2-pthreads.exp: Use standard_testfile.
+	* gdb.mi/mi2-read-memory.exp: Use standard_testfile.
+	* gdb.mi/mi2-regs.exp: Use standard_testfile.
+	* gdb.mi/mi2-return.exp: Use standard_testfile.
+	* gdb.mi/mi2-simplerun.exp: Use standard_testfile.
+	* gdb.mi/mi2-stack.exp: Use standard_testfile.
+	* gdb.mi/mi2-stepi.exp: Use standard_testfile.
+	* gdb.mi/mi2-syn-frame.exp: Use standard_testfile.
+	* gdb.mi/mi2-until.exp: Use standard_testfile.
+	* gdb.mi/mi2-var-block.exp: Use standard_testfile.
+	* gdb.mi/mi2-var-child.exp: Use standard_testfile.
+	* gdb.mi/mi2-var-cmd.exp: Use standard_testfile.
+	* gdb.mi/mi2-var-display.exp: Use standard_testfile.
+	* gdb.mi/mi2-watch.exp: Use standard_testfile.
+@
+text
+@d1 1
+a1 1
+#   Copyright 2011-2012 Free Software Foundation, Inc.
+@
+
+
+1.2
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d45 1
+a45 3
+set testfile "watch-nonstop"
+set srcfile "$testfile.c"
+set binfile "$objdir/$subdir/mi-$testfile"
+@
+
+
+1.1
+log
+@gdb/
+2011-12-14  Pedro Alves  <pedro@@codesourcery.com>
+
+	PR threads/10729
+
+	* linux-nat.c (linux_nat_new_thread): Change parameter to an lwp
+	pointer.
+	(linux_nat_prepare_to_resume): New global.
+	(lwp_free): New.
+	(purge_lwp_list): Use it.
+	(add_lwp): Call linux_nat_new_thread even on the first LWP.
+	Adjust to interface change.
+	(delete_lwp): Call lwp_free instead of xfree.
+	(detach_callback, linux_nat_detach, resume_lwp, linux_nat_resume)
+	(linux_handle_syscall_trap, linux_handle_extended_wait)
+	(linux_nat_filter_event, resume_stopped_resumed_lwps): Call
+	linux_nat_prepare_to_resume before resuming.
+	(linux_stop_lwp): New.
+	(linux_nat_set_new_thread): Adjust.
+	(linux_nat_set_prepare_to_resume): New.
+	* linux-nat.h (struct arch_lwp_info): Forward declare.
+	(struct lwp_info) <arch_private>: New field.
+	(linux_stop_lwp): Declare.
+	(linux_nat_set_new_thread): Adjust.
+	(linux_nat_set_prepare_to_resume): New.
+
+	* i386-nat.c (DR_NADDR, DR_STATUS, DR_CONTROL)
+	(struct i386_debug_reg_state): Move to i386-nat.h.
+	(dr_mirror): Comment.
+	(i386_debug_reg_state): New.
+	(i386_update_inferior_debug_regs): Simplify.
+	(i386_stopped_data_address): Use the debug register state from the
+	inferior, not from the local cache.
+	* i386-nat.h (struct i386_dr_low_type): Delete reset_addr and
+	unset_status fields.  New get_addr and get_control fields.
+	(DR_FIRSTADDR, DR_LASTADDR, DR_CONTROL): Moved from i386-nat.c.
+	(DR_NADDR, DR_STATUS): New.
+	(struct i386_debug_reg_state): Moved from i386-nat.c.
+
+	* amd64-linux-nat.c (struct arch_lwp_info): New.
+	(amd64_linux_dr): Delete global.
+	(amd64_linux_dr_get_addr): New.
+	(amd64_linux_dr_get_control): New.
+	(amd64_linux_dr_unset_status): Delete.
+	(amd64_linux_dr_set_addr): Reimplement.
+	(amd64_linux_dr_reset_addr): Delete.
+	(update_debug_registers_callback): New.
+	(amd64_linux_dr_set_control): Reimplement.
+	(amd64_linux_dr_set_addr): Reimplement.
+	(amd64_linux_prepare_to_resume): New.
+	(amd64_linux_new_thread): Change parameter to an lwp pointer.
+	Reimplement.
+	(_initialize_amd64_linux_nat): No longer install
+	i386_dr_low.reset_addr and i386_dr_low.unset_status.  Install
+	amd64_linux_dr_get_control as i386_dr_low.get_control.  Install
+	amd64_linux_dr_get_addr as i386_dr_low.get_addr.  Install
+	amd64_linux_prepare_to_resume.
+	* i386-linux-nat.c (DR_FIRSTADDR, DR_LASTADDR, DR_STATUS)
+	(DR_CONTROL): Delete.
+	(struct arch_lwp_info): New.
+	(i386_linux_dr): Delete global.
+	(i386_linux_dr_set_control): Reimplement.
+	(i386_linux_dr_get_addr): New.
+	(i386_linux_dr_set_addr): Reimplement.
+	(i386_linux_dr_get_control): New.
+	(update_debug_registers_callback): New.
+	(i386_linux_dr_unset_status): Delete.
+	(i386_linux_dr_set_addr): Reimplement.
+	(i386_linux_prepare_to_resume): New.
+	(i386_linux_new_thread): Change parameter to an lwp pointer.
+	Reimplement.
+	(_initialize_i386_linux_nat): No longer install
+	i386_dr_low.reset_addr and i386_dr_low.unset_status.  Install
+	i386_linux_dr_get_control as i386_dr_low.get_control.  Install
+	i386_linux_dr_get_addr as i386_dr_low.get_addr.  Install
+	i386_linux_prepare_to_resume.
+
+	* arm-linux-nat.c (arm_linux_new_thread): Change parameter to an
+	lwp pointer.  Adjust.
+	* ia64-linux-nat.c (ia64_linux_new_thread): Likewise.
+	* mips-linux-nat.c (mips_linux_new_thread): Likewise.
+	* ppc-linux-nat.c (ppc_linux_new_thread): Likewise.
+	* s390-nat.c (s390_fix_watch_points): Likewise.
+
+	* i386-darwin-nat.c (DR_FIRSTADDR, DR_LASTADDR, DR_STATUS)
+	(DR_CONTROL): Delete.
+	(i386_darwin_dr_reset_addr): Delete.
+	(i386_darwin_dr_get_addr): New.
+	(i386_darwin_dr_get_control): New.
+	* go32-nat.c
+	(go32_get_dr7, go32_get_dr): New.
+	(init_go32_ops): No longer install i386_dr_low.reset_addr.
+	Install go32_get_dr7 as i386_dr_low.get_control.  Install
+	go32_get_dr as i386_dr_low.get_addr.
+	* i386bsd-nat.c (i386bsd_dr_get): New.
+	(i386bsd_dr_reset_addr): Delete.
+	(i386bsd_dr_get_addr): New.
+	(i386bsd_dr_get_status): Use i386bsd_dr_get.
+	(i386bsd_dr_get_control): New.
+	* i386bsd-nat.h (i386bsd_dr_reset_addr): Delete.
+	(i386bsd_dr_get_addr): New.
+	(i386bsd_dr_get_control): New.
+	* i386fbsd-nat.c (_initialize_i386fbsd_nat): No longer install
+	i386_dr_low.reset_addr and i386_dr_low.unset_status.  Install
+	i386bsd_dr_get_control as i386_dr_low.get_control.  Install
+	i386bsd_dr_get_addr as i386_dr_low.get_addr.
+	* windows-nat.c (init_windows_ops): No longer install
+	i386_dr_low.reset_addr and i386_dr_low.unset_status.  Install
+	cygwin_get_dr7 as i386_dr_low.get_control.  Install cygwin_get_dr
+	as i386_dr_low.get_addr.
+	(cygwin_get_dr): New.
+	(cygwin_get_dr7): New.
+
+gdb/testsuite/
+2011-12-14  Pedro Alves  <pedro@@codesourcery.com>
+
+	PR threads/10729
+
+	* gdb.mi/watch-nonstop.c: New file.
+ 	* gdb.mi/mi-watch-nonstop.exp: New file.
+@
+text
+@d1 1
+a1 1
+#   Copyright 2011 Free Software Foundation, Inc.
+@
+

@@ -1,0 +1,311 @@
+head	1.5;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.5
+	gdb_7_6-2013-04-26-release:1.5
+	gdb_7_6-branch:1.5.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.5
+	gdb_7_5_1-2012-11-29-release:1.4
+	gdb_7_5-2012-08-17-release:1.4
+	gdb_7_5-branch:1.4.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.4
+	gdb_7_4_1-2012-04-26-release:1.2.2.1
+	gdb_7_4-2012-01-24-release:1.2.2.1
+	gdb_7_4-branch:1.2.0.2
+	gdb_7_4-2011-12-13-branchpoint:1.2;
+locks; strict;
+comment	@# @;
+
+
+1.5
+date	2013.01.01.06.41.27;	author brobecke;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2012.06.26.19.23.20;	author tromey;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2012.01.04.08.27.55;	author brobecke;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2011.10.28.19.24.45;	author jkratoch;	state Exp;
+branches
+	1.2.2.1;
+next	1.1;
+
+1.1
+date	2011.10.28.18.30.00;	author palves;	state Exp;
+branches;
+next	;
+
+1.2.2.1
+date	2012.01.06.04.54.29;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.5
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@# Copyright (C) 2007-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# Exit of a thread when there are other threads in the inferior should
+# not hang GDB.
+
+standard_testfile
+set executable ${testfile}
+
+if {[gdb_compile_pthreads "${srcdir}/${subdir}/${srcfile}" "${binfile}" executable {debug}] != "" } {
+    return -1
+}
+
+clean_restart ${executable}
+
+if ![runto_main] {
+    return -1
+}
+
+gdb_breakpoint $srcfile:[gdb_get_line_number "break-here"]
+gdb_continue_to_breakpoint "break-here" ".* break-here .*"
+
+# Resume only the second thread
+gdb_test_no_output "set scheduler-locking on" \
+    "enable scheduler-locking, for thread 2"
+
+# Continue.  Thread 2 exits, and the main thread was already stopped.
+gdb_test "continue" \
+    "No unwaited-for children left." \
+    "continue stops when thread 2 exits"
+
+gdb_test "info threads" \
+	 "\r\n\[ \t\]*Id\[ \t\]+Target\[ \t\]+Id\[ \t\]+Frame\[ \t\]*\r\n *1 *Thread \[^\r\n\]* \[^\r\n\]*.*The current thread <Thread ID 2> has terminated.*" \
+	 "only main thread left, thread 2 terminated"
+
+# Select the main thread, let the third thread start, and stop at the
+# main thread breakpoint.
+gdb_test "thread 1" "" "select main thread"
+gdb_test_no_output "set scheduler-locking off" \
+    "disable scheduler-locking, letting new thread start"
+
+gdb_breakpoint $srcfile:[gdb_get_line_number "break-here-2"]
+gdb_continue_to_breakpoint "break-here-2" ".* break-here-2 .*"
+
+# Let the main thread continue alone.
+gdb_test_no_output "set scheduler-locking on" \
+    "enable scheduler-locking, for main thread"
+# The main thread exits, and thread 3 was already stopped.
+gdb_test "continue" \
+    "No unwaited-for children left." \
+    "continue stops when the main thread exits"
+
+gdb_test "info threads" \
+	 "\r\n\[ \t\]*Id\[ \t\]+Target\[ \t\]+Id\[ \t\]+Frame\[ \t\]*\r\n *3 *Thread \[^\r\n\]* \[^\r\n\]*.*The current thread <Thread ID 1> has terminated.*" \
+	 "only thread 3 left, main thread terminated"
+@
+
+
+1.4
+log
+@	* gdb.threads/watchpoint-fork.exp (test): Use
+	standard_output_file.  Don't declare objdir.
+	* gdb.threads/attach-into-signal.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.threads/attach-stopped.exp: Use standard_testfile.
+	* gdb.threads/bp_in_thread.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/corethreads.exp: Use standard_testfile.
+	* gdb.threads/execl.exp: Use standard_testfile,
+	standard_output_file, clean_restart.
+	* gdb.threads/fork-child-threads.exp: Use standard_testfile,
+	clean_restart.
+	* gdb.threads/fork-thread-pending.exp: Use standard_testfile,
+	clean_restart.
+	* gdb.threads/gcore-thread.exp: Use standard_testfile.  Remove
+	incdir.
+	* gdb.threads/hand-call-in-threads.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/ia64-sigill.exp: Use standard_testfile.
+	* gdb.threads/interrupted-hand-call.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/killed.exp: Use standard_testfile, clean_restart.
+	Remove incdir.
+	* gdb.threads/leader-exit.exp: Use standard_testfile.
+	* gdb.threads/linux-dp.exp: Use standard_testfile, clean_restart.
+	* gdb.threads/local-watch-wrong-thread.exp: Use standard_testfile,
+	clean_restart.
+	* gdb.threads/manythreads.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/multi-create.exp: Use standard_testfile,
+	clean_restart.
+	* gdb.threads/no-unwaited-for-left.exp: Use standard_testfile.
+	* gdb.threads/non-ldr-exc-1.exp: Use standard_testfile.
+	* gdb.threads/non-ldr-exc-2.exp: Use standard_testfile.
+	* gdb.threads/non-ldr-exc-3.exp: Use standard_testfile.
+	* gdb.threads/non-ldr-exc-4.exp: Use standard_testfile.
+	* gdb.threads/pending-step.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/print-threads.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/pthread_cond_wait.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/pthreads.exp: Use standard_testfile, clean_restart.
+	Remove incdir.
+	* gdb.threads/schedlock.exp: Use standard_testfile.  Remove
+	incdir.
+	* gdb.threads/sigthread.exp: Use standard_testfile,
+	clean_restart.
+	* gdb.threads/staticthreads.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/switch-threads.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/thread-execl.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/thread-find.exp: Use standard_testfile,
+	clean_restart.
+	* gdb.threads/thread-specific.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/thread-unwindonsignal.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/thread_check.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/thread_events.exp: Use standard_testfile.  Remove
+	incdir.
+	* gdb.threads/threadapply.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/threxit-hop-specific.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/tls-nodebug.exp: Use standard_testfile,
+	clean_restart.
+	* gdb.threads/tls-shared.exp: Use standard_testfile,
+	clean_restart, standard_output_file.
+	* gdb.threads/tls-var.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.threads/tls.exp: Use standard_testfile, clean_restart.
+	Remove incdir.
+	* gdb.threads/watchthreads-reorder.exp: Use standard_testfile.
+	* gdb.threads/watchthreads.exp: Use standard_testfile.  Remove
+	incdir.
+	* gdb.threads/watchthreads2.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+@
+text
+@d1 1
+a1 1
+# Copyright (C) 2007, 2011-2012 Free Software Foundation, Inc.
+@
+
+
+1.3
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d19 1
+a19 2
+set testfile "no-unwaited-for-left"
+set srcfile ${testfile}.c
+a20 1
+set binfile ${objdir}/${subdir}/${executable}
+@
+
+
+1.2
+log
+@gdb/testsuite/
+	* gdb.threads/no-unwaited-for-left.exp: Specify $srcfile for
+	break-here-2.
+@
+text
+@d1 1
+a1 1
+# Copyright (C) 2007, 2011 Free Software Foundation, Inc.
+@
+
+
+1.2.2.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d1 1
+a1 1
+# Copyright (C) 2007, 2011-2012 Free Software Foundation, Inc.
+@
+
+
+1.1
+log
+@2011-10-28  Pedro Alves  <pedro@@codesourcery.com>
+
+	gdb/
+	* linux-nat.c (linux_nat_filter_event): Remove `options'
+	parameter, and dead code that used it.  If we're handling a
+	PTRACE_EVENT_EXEC event, and the thread group leader is no longer
+	in our lwp list, re-add it.
+	(check_zombie_leaders): New.
+	(linux_nat_wait_1): Remove `options' and `pid' locals.  Always
+	wait for children with WNOHANG, and always wait for all children.
+	Don't check for no resumed children upfront.  Simplify wait loop.
+	Check for zombie thread group leaders after handling all wait
+	statuses.  Return TARGET_WAITKIND_NO_RESUMED if there no
+	unwaited-for children left.
+	* infrun.c (fetch_inferior_event): Handle TARGET_WAITKIND_NO_RESUMED.
+	(handle_inferior_event): Handle TARGET_WAITKIND_NO_RESUMED.
+	(normal_stop): Handle TARGET_WAITKIND_NO_RESUMED.
+	* target.h (enum target_waitkind) <TARGET_WAITKIND_NO_RESUMED>: New.
+
+	gdb/testsuite/
+	* gdb.threads/no-unwaited-for-left.c: New.
+	* gdb.threads/no-unwaited-for-left.exp: New.
+	* gdb.threads/non-ldr-exc-1.c: New.
+	* gdb.threads/non-ldr-exc-1.exp: New.
+	* gdb.threads/non-ldr-exc-2.c: New.
+	* gdb.threads/non-ldr-exc-2.exp: New.
+	* gdb.threads/non-ldr-exc-3.c: New.
+	* gdb.threads/non-ldr-exc-3.exp: New.
+	* gdb.threads/non-ldr-exc-4.c: New.
+	* gdb.threads/non-ldr-exc-4.exp: New.
+@
+text
+@d56 1
+a56 1
+gdb_breakpoint [gdb_get_line_number "break-here-2"]
+@
+

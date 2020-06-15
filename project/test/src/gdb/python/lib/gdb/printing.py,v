@@ -1,0 +1,737 @@
+head	1.11;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.11
+	gdb_7_6-2013-04-26-release:1.11
+	gdb_7_6-branch:1.11.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.11
+	gdb_7_5_1-2012-11-29-release:1.9
+	gdb_7_5-2012-08-17-release:1.9
+	gdb_7_5-branch:1.9.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.9
+	gdb_7_4_1-2012-04-26-release:1.6.2.1
+	gdb_7_4-2012-01-24-release:1.6.2.1
+	gdb_7_4-branch:1.6.0.2
+	gdb_7_4-2011-12-13-branchpoint:1.6
+	gdb_7_3_1-2011-09-04-release:1.3
+	gdb_7_3-2011-07-26-release:1.3
+	gdb_7_3-branch:1.3.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.3;
+locks; strict;
+comment	@# @;
+
+
+1.11
+date	2013.01.01.06.33.01;	author brobecke;	state Exp;
+branches;
+next	1.10;
+
+1.10
+date	2012.12.12.16.47.30;	author pkoning;	state Exp;
+branches;
+next	1.9;
+
+1.9
+date	2012.04.18.06.46.46;	author jkratoch;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2012.01.16.19.44.15;	author tromey;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2012.01.04.08.17.24;	author brobecke;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2011.10.07.22.46.14;	author devans;	state Exp;
+branches
+	1.6.2.1;
+next	1.5;
+
+1.5
+date	2011.10.07.22.25.57;	author devans;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2011.05.23.17.38.06;	author devans;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2011.01.01.15.33.26;	author brobecke;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2010.11.29.23.20.57;	author devans;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2010.11.02.22.44.13;	author devans;	state Exp;
+branches;
+next	;
+
+1.6.2.1
+date	2012.01.06.04.43.40;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.11
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@# Pretty-printer utilities.
+# Copyright (C) 2010-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+"""Utilities for working with pretty-printers."""
+
+import gdb
+import gdb.types
+import re
+import sys
+
+if sys.version_info[0] > 2:
+    # Python 3 removed basestring and long
+    basestring = str
+    long = int
+
+class PrettyPrinter(object):
+    """A basic pretty-printer.
+
+    Attributes:
+        name: A unique string among all printers for the context in which
+            it is defined (objfile, progspace, or global(gdb)), and should
+            meaningfully describe what can be pretty-printed.
+            E.g., "StringPiece" or "protobufs".
+        subprinters: An iterable object with each element having a `name'
+            attribute, and, potentially, "enabled" attribute.
+            Or this is None if there are no subprinters.
+        enabled: A boolean indicating if the printer is enabled.
+
+    Subprinters are for situations where "one" pretty-printer is actually a
+    collection of several printers.  E.g., The libstdc++ pretty-printer has
+    a pretty-printer for each of several different types, based on regexps.
+    """
+
+    # While one might want to push subprinters into the subclass, it's
+    # present here to formalize such support to simplify
+    # commands/pretty_printers.py.
+
+    def __init__(self, name, subprinters=None):
+        self.name = name
+        self.subprinters = subprinters
+        self.enabled = True
+
+    def __call__(self, val):
+        # The subclass must define this.
+        raise NotImplementedError("PrettyPrinter __call__")
+
+
+class SubPrettyPrinter(object):
+    """Baseclass for sub-pretty-printers.
+
+    Sub-pretty-printers needn't use this, but it formalizes what's needed.
+
+    Attributes:
+        name: The name of the subprinter.
+        enabled: A boolean indicating if the subprinter is enabled.
+    """
+
+    def __init__(self, name):
+        self.name = name
+        self.enabled = True
+
+
+def register_pretty_printer(obj, printer, replace=False):
+    """Register pretty-printer PRINTER with OBJ.
+
+    The printer is added to the front of the search list, thus one can override
+    an existing printer if one needs to.  Use a different name when overriding
+    an existing printer, otherwise an exception will be raised; multiple
+    printers with the same name are disallowed.
+
+    Arguments:
+        obj: Either an objfile, progspace, or None (in which case the printer
+            is registered globally).
+        printer: Either a function of one argument (old way) or any object
+            which has attributes: name, enabled, __call__.
+        replace: If True replace any existing copy of the printer.
+            Otherwise if the printer already exists raise an exception.
+
+    Returns:
+        Nothing.
+
+    Raises:
+        TypeError: A problem with the type of the printer.
+        ValueError: The printer's name contains a semicolon ";".
+        RuntimeError: A printer with the same name is already registered.
+
+    If the caller wants the printer to be listable and disableable, it must
+    follow the PrettyPrinter API.  This applies to the old way (functions) too.
+    If printer is an object, __call__ is a method of two arguments:
+    self, and the value to be pretty-printed.  See PrettyPrinter.
+    """
+
+    # Watch for both __name__ and name.
+    # Functions get the former for free, but we don't want to use an
+    # attribute named __foo__ for pretty-printers-as-objects.
+    # If printer has both, we use `name'.
+    if not hasattr(printer, "__name__") and not hasattr(printer, "name"):
+        raise TypeError("printer missing attribute: name")
+    if hasattr(printer, "name") and not hasattr(printer, "enabled"):
+        raise TypeError("printer missing attribute: enabled") 
+    if not hasattr(printer, "__call__"):
+        raise TypeError("printer missing attribute: __call__")
+
+    if obj is None:
+        if gdb.parameter("verbose"):
+            gdb.write("Registering global %s pretty-printer ...\n" % name)
+        obj = gdb
+    else:
+        if gdb.parameter("verbose"):
+            gdb.write("Registering %s pretty-printer for %s ...\n" %
+                      (printer.name, obj.filename))
+
+    if hasattr(printer, "name"):
+        if not isinstance(printer.name, basestring):
+            raise TypeError("printer name is not a string")
+        # If printer provides a name, make sure it doesn't contain ";".
+        # Semicolon is used by the info/enable/disable pretty-printer commands
+        # to delimit subprinters.
+        if printer.name.find(";") >= 0:
+            raise ValueError("semicolon ';' in printer name")
+        # Also make sure the name is unique.
+        # Alas, we can't do the same for functions and __name__, they could
+        # all have a canonical name like "lookup_function".
+        # PERF: gdb records printers in a list, making this inefficient.
+        i = 0
+        for p in obj.pretty_printers:
+            if hasattr(p, "name") and p.name == printer.name:
+                if replace:
+                    del obj.pretty_printers[i]
+                    break
+                else:
+                  raise RuntimeError("pretty-printer already registered: %s" %
+                                     printer.name)
+            i = i + 1
+
+    obj.pretty_printers.insert(0, printer)
+
+
+class RegexpCollectionPrettyPrinter(PrettyPrinter):
+    """Class for implementing a collection of regular-expression based pretty-printers.
+
+    Intended usage:
+
+    pretty_printer = RegexpCollectionPrettyPrinter("my_library")
+    pretty_printer.add_printer("myclass1", "^myclass1$", MyClass1Printer)
+    ...
+    pretty_printer.add_printer("myclassN", "^myclassN$", MyClassNPrinter)
+    register_pretty_printer(obj, pretty_printer)
+    """
+
+    class RegexpSubprinter(SubPrettyPrinter):
+        def __init__(self, name, regexp, gen_printer):
+            super(RegexpCollectionPrettyPrinter.RegexpSubprinter, self).__init__(name)
+            self.regexp = regexp
+            self.gen_printer = gen_printer
+            self.compiled_re = re.compile(regexp)
+
+    def __init__(self, name):
+        super(RegexpCollectionPrettyPrinter, self).__init__(name, [])
+
+    def add_printer(self, name, regexp, gen_printer):
+        """Add a printer to the list.
+
+        The printer is added to the end of the list.
+
+        Arguments:
+            name: The name of the subprinter.
+            regexp: The regular expression, as a string.
+            gen_printer: A function/method that given a value returns an
+                object to pretty-print it.
+
+        Returns:
+            Nothing.
+        """
+
+        # NOTE: A previous version made the name of each printer the regexp.
+        # That makes it awkward to pass to the enable/disable commands (it's
+        # cumbersome to make a regexp of a regexp).  So now the name is a
+        # separate parameter.
+
+        self.subprinters.append(self.RegexpSubprinter(name, regexp,
+                                                      gen_printer))
+
+    def __call__(self, val):
+        """Lookup the pretty-printer for the provided value."""
+
+        # Get the type name.
+        typename = gdb.types.get_basic_type(val.type).tag
+        if not typename:
+            return None
+
+        # Iterate over table of type regexps to determine
+        # if a printer is registered for that type.
+        # Return an instantiation of the printer if found.
+        for printer in self.subprinters:
+            if printer.enabled and printer.compiled_re.search(typename):
+                return printer.gen_printer(val)
+
+        # Cannot find a pretty printer.  Return None.
+        return None
+
+# A helper class for printing enum types.  This class is instantiated
+# with a list of enumerators to print a particular Value.
+class _EnumInstance:
+    def __init__(self, enumerators, val):
+        self.enumerators = enumerators
+        self.val = val
+
+    def to_string(self):
+        flag_list = []
+        v = long(self.val)
+        any_found = False
+        for (e_name, e_value) in self.enumerators:
+            if v & e_value != 0:
+                flag_list.append(e_name)
+                v = v & ~e_value
+                any_found = True
+        if not any_found or v != 0:
+            # Leftover value.
+            flag_list.append('<unknown: 0x%x>' % v)
+        return "0x%x [%s]" % (self.val, " | ".join(flag_list))
+
+class FlagEnumerationPrinter(PrettyPrinter):
+    """A pretty-printer which can be used to print a flag-style enumeration.
+    A flag-style enumeration is one where the enumerators are or'd
+    together to create values.  The new printer will print these
+    symbolically using '|' notation.  The printer must be registered
+    manually.  This printer is most useful when an enum is flag-like,
+    but has some overlap.  GDB's built-in printing will not handle
+    this case, but this printer will attempt to."""
+
+    def __init__(self, enum_type):
+        super(FlagEnumerationPrinter, self).__init__(enum_type)
+        self.initialized = False
+
+    def __call__(self, val):
+        if not self.initialized:
+            self.initialized = True
+            flags = gdb.lookup_type(self.name)
+            self.enumerators = []
+            for field in flags.fields():
+                self.enumerators.append((field.name, field.enumval))
+            # Sorting the enumerators by value usually does the right
+            # thing.
+            self.enumerators.sort(key = lambda x: x.enumval)
+
+        if self.enabled:
+            return _EnumInstance(self.enumerators, val)
+        else:
+            return None
+@
+
+
+1.10
+log
+@Add support for Python 3.
+* NEWS: Mention Python 3 support.
+* varobj.c (value_get_print_value): Use
+python_string_to_target_string.
+* python/py-block.c: Use PyVarObject_HEAD_INIT in initialization
+of type objects.
+* python/py-breakpoint.c: Ditto.
+* python/py-cmd.c:  Ditto.
+* python/py-event.c: Ditto.
+* python/py-event.h: Ditto.
+* python/py-evtregistry.c: Ditto.
+* python/py-finishbreakpoint.c: Ditto.
+* python/py-frame.c: Ditto.
+* python/py-function.c: Ditto.
+* python/py-infthread.c: Ditto.
+* python/py-lazy-string.c: Ditto.
+* python/py-progspace.c: Ditto.
+* /python/py-symbol.c: Ditto.
+* python/py-evts.c:  (gdbpy_initialize_py_events): Add module
+initialization for Python 3.
+* python/py-inferior.c: Use PyVarObject_HEAD_INIT in initialization
+of type objects.
+(infpy_read_memory): Return memoryview object if Python 3.
+(infpy_write_memory): Use "s*" operand parsing code for Python 3.
+(infpy_search_memory): Ditto.
+(get_buffer): New function for Python 3.
+* python/py-objfile.c: Use PyVarObject_HEAD_INIT in initialization
+of type objects.
+(objfpy_dealloc): Use Py_TYPE to call tp_free.
+* python/py-param.c: Use PyVarObject_HEAD_INIT in initialization
+of type objects.
+(get_attr): Use PyUnicode_CompareWithASCIIString if Python 3.
+(set_attr): Ditto.
+* python/py-prettyprint.c (print_string_repr): use PyBytes methods
+instead of PyString methods if Python 3.
+(print_children): Skip push_dummy_python_frame call if Python 3.
+* python/py-symtab.c: Use PyVarObject_HEAD_INIT in initialization
+of type objects.
+(salpy_dealloc): Use Py_TYPE to call tp_free.
+* python/py-type.c: Use PyVarObject_HEAD_INIT in initialization
+of type objects.
+(field_dealloc): Use Py_TYPE to call tp_free.
+(typy_dealloc): Ditto.
+(type_object_as_number): Adjust struct initializations for
+differences in layout for Python 2 vs. Python 3.
+* python/py-utils.c (python_string_to_unicode): Omit non-Unicode
+string case for Python 3.
+(unicode_to_encoded_python_string): Shorten code (no functional
+change).
+(python_string_to_target_python_string): Comment that in Python 3
+returned value is a Python "bytes" type.
+(gdbpy_is_string): Omit non-Unicode string check in Python 3.
+(gdb_py_object_from_longest): Omit non-long integer case in Python
+3.
+(gdb_py_object_from_ulongest): Ditto.
+* python/py-value.c: Use PyVarObject_HEAD_INIT in initialization
+of type objects.
+(valpy_dealloc): Use Py_TYPE to call tp_free.
+(valpy_int): Omit function if Python 3.
+(convert_value_from_python): Use "%S" format (Python object as a
+string) if Python 3.
+(value_object_as_number): Adjust struct initializations for
+differences in layout for Python 2 vs. Python 3.
+* python/python-config.py: Adjust syntax for Python 3
+compatibility.
+Include "sys.abiflags" string as part of python library name, if
+that attribute exists (Python 3).
+* python/python-internal.h (IS_PY3): Define if Python 3.
+(Py_TPFLAGS_HAVE_ITER, Py_TPFLAGS_CHECKTYPES): Define with
+placeholder value if Python 3.
+(PyInt_Check, PyInt_FromLong, PyInt_AsLong, PyString_FromString,
+PyString_Decode, PyString_FromFormat, PyString_Check): Define as
+analogous Python 3 API function if Python 3.
+(PyVarObject_HEAD_INIT): Define if not already defined.
+(Py_TYPE): Ditto.
+* python/python.c (eval_python_command): Omit Py_FlushLine call if
+Python 3.
+Check return values of all Python API calls for error.
+Supply dummy "python" and "python-interactive" commands if Python
+initialization failed.
+(_initialize_python): Convert argc to wchar_t** if Python 3.
+Add module initialization for Python 3.
+(finish_python_initialization): Pass wchar_t * argument to
+PySys_SetPath if Python 3.
+* python/lib/gdb/__init__.py: Define "reload" if Python 3.
+(_GdbFile): New class for common output file behavior.
+(GdbOutFile): Subclass from _GdbFile.
+(GdbOutputErrorFile): Ditto.
+(auto_load_packages): Adjust syntax for Python 3 compatibility.
+* python/lib/gdb/printing.py: Define basestr and int if Python 3.
+* python/lib/gdb/prompt.py: Use sorted() function rather than
+sort() method.
+* python/lib/gdb/command/explore.py: Define raw_input if Python 3.
+Adjust syntax for Python 3 compatibility.
+* python/lib/gdb/command/pretty_printers.py: Use sorted() function
+rather than sort() method.
+Adjust syntax for Python 3 compatibility.
+* python/lib/gdb/command/type_printers.py: Ditto.
+* doc/gdb.texinfo (Inferior.read_memory): Mention that the return
+value is a memoryview object if Python 3.
+@
+text
+@d2 1
+a2 1
+# Copyright (C) 2010-2012 Free Software Foundation, Inc.
+@
+
+
+1.9
+log
+@gdb/
+	PR symtab/7259:
+	* ada-exp.y (convert_char_literal): Use TYPE_FIELD_ENUMVAL.
+	* ada-lang.c (ada_discrete_type_high_bound)
+	(ada_discrete_type_low_bound): Use TYPE_FIELD_ENUMVAL for
+	TYPE_CODE_ENUM.
+	(ada_identical_enum_types_p): Use TYPE_FIELD_ENUMVAL.
+	(pos_atr, value_val_atr): Use TYPE_FIELD_ENUMVAL for TYPE_CODE_ENUM.
+	* ada-typeprint.c (print_enum_type): Change variable lastval to LONGEST.
+	Use TYPE_FIELD_ENUMVAL.
+	* ada-valprint.c (print_optional_low_bound, ada_print_scalar)
+	(ada_val_print_1): Use TYPE_FIELD_ENUMVAL for TYPE_CODE_ENUM.
+	* c-typeprint.c (c_type_print_base): Move variable lastval to inner
+	block, change it to LONGEST.  Use TYPE_FIELD_ENUMVAL for
+	TYPE_CODE_ENUM.
+	* coffread.c (coff_read_enum_type): Use SET_FIELD_ENUMVAL.
+	* dwarf2read.c (process_enumeration_scope): Likewise.
+	* gdb-gdb.py (TypeFlagsPrinter): Use field.enumval instead of
+	field.bitpos.
+	(class StructMainTypePrettyPrinter): Support also
+	FIELD_LOC_KIND_ENUMVAL.
+	* gdbtypes.c (get_discrete_bounds): Use TYPE_FIELD_ENUMVAL for
+	TYPE_CODE_ENUM.
+	(recursive_dump_type): Use TYPE_FIELD_ENUMVAL for TYPE_CODE_ENUM.
+	(copy_type_recursive): Support also FIELD_LOC_KIND_ENUMVAL.
+	* gdbtypes.h (enum field_loc_kind): New FIELD_LOC_KIND_ENUMVAL.
+	(struct main_type.flds_bnds.fields.loc): Adjust bitpos comment.  New
+	field enumval.
+	(struct main_type.flds_bnds.bields): Adjust loc_kind and bitsize to
+	accommodate enumval.
+	(struct call_site): Adjust loc_kind to accommodate enumval.
+	(FIELD_ENUMVAL, FIELD_ENUMVAL_LVAL, SET_FIELD_ENUMVAL)
+	(TYPE_FIELD_ENUMVAL): New macros.
+	* m2-typeprint.c (m2_enum): Use TYPE_FIELD_ENUMVAL.
+	* mdebugread.c (parse_symbol): Use TYPE_FIELD_ENUMVAL for
+	TYPE_CODE_ENUM.
+	* p-typeprint.c (pascal_type_print_base): Likewise.
+	* python/lib/gdb/printing.py (class FlagEnumerationPrinter): Use
+	enumval.
+	* python/lib/gdb/types.py (make_enum_dict): Likewise.
+	* python/py-type.c (convert_field): New variable addrstring.  Use
+	TYPE_FIELD_ENUMVAL for TYPE_CODE_ENUM.
+	(check_types_equal): Support also FIELD_LOC_KIND_ENUMVAL.
+	* stabsread.c (read_enum_type): Use SET_FIELD_ENUMVAL.
+	* typepint.c (print_type_scalar): Use TYPE_FIELD_ENUMVAL for
+	TYPE_CODE_ENUM.
+	* valprint.c (generic_val_print): Likewise.
+
+gdb/testsuite/
+	PR symtab/7259:
+	* gdb.base/enumval.c: New test case.
+	* gdb.base/enumval.exp: New test case.
+	* gdb.python/py-type.exp (test_enums): Use field.enumval instead of
+	field.bitpos.
+@
+text
+@d22 1
+d24 4
+@
+
+
+1.8
+log
+@gdb
+	PR python/13281:
+	* gdbtypes.h (TYPE_FLAG_ENUM): New macro.
+	(struct main_type) <flag_flag_enum>: New field.
+	* dwarf2read.c (process_enumeration_scope): Detect "flag" enums.
+	* NEWS: Add entries.
+	* c-valprint.c (c_val_print) <TYPE_CODE_ENUM>: Handle "flag"
+	enums.
+	* python/lib/gdb/printing.py (_EnumInstance): New class.
+	(FlagEnumerationPrinter): Likewise.
+gdb/doc
+	* gdb.texinfo (gdb.printing): Document FlagEnumerationPrinter.
+gdb/testsuite
+	* gdb.base/printcmds.c (enum flag_enum): New.
+	(three): New global.
+	* gdb.base/printcmds.exp (test_print_enums): Add test for flag
+	enum printing.
+	* gdb.python/py-pp-maint.py (build_pretty_printer): Instantiate
+	FlagEnumerationPrinter.
+	* gdb.python/py-pp-maint.exp: Add tests for FlagEnumerationPrinter.
+	* gdb.python/py-pp-maint.c (enum flag_enum): New.
+	(fval): New global.
+@
+text
+@d250 1
+a250 1
+                self.enumerators.append((field.name, field.bitpos))
+d253 1
+a253 1
+            self.enumerators.sort(key = lambda x: x.bitpos)
+@
+
+
+1.7
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d209 50
+@
+
+
+1.6
+log
+@	* python/lib/gdb/printing.py (register_pretty_printer): New argument
+	`replace'.
+
+	testsuite/
+	* gdb.python/py-pp-maint.py: Add tests for `replace' arg.
+@
+text
+@d2 1
+a2 1
+# Copyright (C) 2010, 2011 Free Software Foundation, Inc.
+@
+
+
+1.6.2.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d2 1
+a2 1
+# Copyright (C) 2010-2012 Free Software Foundation, Inc.
+@
+
+
+1.5
+log
+@	* python/lib/gdb/printing.py: Whitespace cleanup.
+@
+text
+@d71 1
+a71 1
+def register_pretty_printer(obj, printer):
+d84 2
+d133 10
+a142 4
+        if (printer.name in
+              [p.name for p in obj.pretty_printers if hasattr(p, "name")]):
+            raise RuntimeError("pretty-printer already registered: %s" %
+                               printer.name)
+@
+
+
+1.4
+log
+@	* python/lib/gdb/printing.py (register_pretty_printer): Add missing
+	entry for RuntimeError to doc string.
+@
+text
+@d29 3
+a31 3
+              it is defined (objfile, progspace, or global(gdb)), and should
+              meaningfully describe what can be pretty-printed.
+              E.g., "StringPiece" or "protobufs".
+d33 2
+a34 2
+                     attribute, and, potentially, "enabled" attribute.
+                     Or this is None if there are no subprinters.
+d75 3
+a77 1
+    an existing printer if one needs to.
+d81 1
+a81 1
+             is registered globally).
+d83 1
+a83 1
+                 which has attributes: name, enabled, __call__.
+d170 1
+a170 1
+                         object to pretty-print it.
+@
+
+
+1.3
+log
+@run copyright.sh for 2011.
+@
+text
+@d89 1
+@
+
+
+1.2
+log
+@	* python/lib/gdb/printing.py (register_pretty_printer): Change
+	printer-name:subprinter-name to printer-name;subprinter-name.
+	* python/lib/gdb/command/pretty_printers.py (parse_printer_regexps):
+	Ditto.
+	(InfoPrettyPrinter, EnablePrettyPrinter, DisablePrettyPrinter): Ditto.
+
+	doc/
+	* gdb.texinfo (Pretty-Printer Introduction): Change
+	printer-name:subprinter-name to printer-name;subprinter-name.
+
+	testsuite/
+	* gdb.python/py-pp-maint.exp: Change printer-name:subprinter-name to
+	printer-name;subprinter-name.
+@
+text
+@d2 1
+a2 1
+# Copyright (C) 2010 Free Software Foundation, Inc.
+@
+
+
+1.1
+log
+@	New python module gdb.printing, and new commands info pretty-printer,
+	enable pretty-printer, disable pretty-printer.
+	* NEWS: Mention them.
+	* data-directory/Makefile.in (PYTHON_FILES): Add gdb/printing.py,
+	gdb/command/__init__.py, gdb/command/pretty_printers.py.
+	* python/lib/gdb/__init__.py: Install pretty-printer commands.
+	* python/lib/gdb/printing.py: New file.
+	* python/lib/gdb/command/__init__.py: New file.
+	* python/lib/gdb/command/pretty_printers.py: New file.
+
+	doc/
+	* gdb.texinfo (Pretty Printing): Expand into three sections,
+	introduction, example, and commands.
+	(Python API): Delete section Disabling Pretty-Printers, merge into
+	Selecting Pretty-Printers.
+	(Writing a Pretty-Printer): New section.  Move the pretty-printer
+	example here, and reformat to match python coding style.  Add a second
+	example using the gdb.printing module.
+	(Python modules): Add gdb.printing.
+
+	testsuite/
+	* gdb.python/py-pp-maint.c: New file.
+	* gdb.python/py-pp-maint.exp: New file.
+	* gdb.python/py-pp-maint.py: New file.
+@
+text
+@d88 1
+a88 1
+        ValueError: The printer's name contains a colon ":".
+d119 2
+a120 2
+        # If printer provides a name, make sure it doesn't contain ":".
+        # Colon is used by the info/enable/disable pretty-printer commands
+d122 2
+a123 2
+        if printer.name.find(":") >= 0:
+            raise ValueError("colon ':' in printer name")
+@
+

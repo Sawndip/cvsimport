@@ -1,0 +1,247 @@
+head	1.3;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.3
+	gdb_7_6-2013-04-26-release:1.3
+	gdb_7_6-branch:1.3.0.12
+	gdb_7_6-2013-03-12-branchpoint:1.3
+	gdb_7_5_1-2012-11-29-release:1.3
+	gdb_7_5-2012-08-17-release:1.3
+	gdb_7_5-branch:1.3.0.10
+	gdb_7_5-2012-07-18-branchpoint:1.3
+	gdb_7_4_1-2012-04-26-release:1.3
+	gdb_7_4-2012-01-24-release:1.3
+	gdb_7_4-branch:1.3.0.8
+	gdb_7_4-2011-12-13-branchpoint:1.3
+	gdb_7_3_1-2011-09-04-release:1.3
+	gdb_7_3-2011-07-26-release:1.3
+	gdb_7_3-branch:1.3.0.6
+	gdb_7_3-2011-04-01-branchpoint:1.3
+	gdb_7_2-2010-09-02-release:1.3
+	gdb_7_2-branch:1.3.0.4
+	gdb_7_2-2010-07-07-branchpoint:1.3
+	gdb_7_1-2010-03-18-release:1.3
+	gdb_7_1-branch:1.3.0.2
+	gdb_7_1-2010-02-18-branchpoint:1.3
+	gdb_7_0_1-2009-12-22-release:1.2
+	gdb_7_0-2009-10-06-release:1.2
+	gdb_7_0-branch:1.2.0.4
+	gdb_7_0-2009-09-16-branchpoint:1.2
+	msnyder-checkpoint-072509-branch:1.2.0.2
+	msnyder-checkpoint-072509-branchpoint:1.2;
+locks; strict;
+comment	@# @;
+
+
+1.3
+date	2009.10.28.04.24.44;	author devans;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2009.07.08.06.16.46;	author devans;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2009.05.18.13.25.35;	author jbeniston;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.3
+log
+@	* Makefile.in (stamp-arch): Update path to lm32.cpu.
+	(stamp-cpu): Ditto.
+@
+text
+@# Makefile for Lattice Mico32 simulator.
+# Contributed by Jon Beniston <jon@@beniston.com>
+
+## COMMON_PRE_CONFIG_FRAG
+
+# List of object files, less common parts.
+SIM_OBJS = \
+	$(SIM_NEW_COMMON_OBJS) \
+	sim-cpu.o \
+	sim-hload.o \
+	sim-hrw.o \
+	sim-model.o \
+	sim-reg.o \
+	sim-signal.o \
+        cgen-utils.o cgen-trace.o cgen-scache.o \
+        cgen-run.o sim-reason.o sim-engine.o sim-stop.o \
+        sim-if.o arch.o \
+        cpu.o decode.o sem.o model.o mloop.o \
+        lm32.o traps.o user.o 
+
+# List of extra dependencies.
+# Generally this consists of simulator specific files included by sim-main.h.
+SIM_EXTRA_DEPS = $(CGEN_INCLUDE_DEPS) $(srcdir)/../../opcodes/lm32-desc.h
+
+# List of flags to always pass to $(CC).
+#SIM_EXTRA_CFLAGS =
+
+# List of main object files for `run'.
+SIM_RUN_OBJS = nrun.o
+
+SIM_EXTRA_CLEAN = lm32-clean
+
+# This selects the lm32 newlib/libgloss syscall definitions.
+NL_TARGET = -DNL_TARGET_lm32
+
+## COMMON_POST_CONFIG_FRAG
+
+arch = lm32 
+
+arch.o: arch.c $(SIM_MAIN_DEPS)
+
+traps.o: traps.c targ-vals.h $(SIM_MAIN_DEPS)
+
+sim-if.o: sim-if.c $(SIM_MAIN_DEPS) $(srcdir)/../common/sim-core.h
+
+LM32BF_INCLUDE_DEPS = \
+	$(CGEN_MAIN_CPU_DEPS) \
+	cpu.h decode.h eng.h
+
+lm32.o: lm32.c $(LM32BF_INCLUDE_DEPS)
+
+# FIXME: Use of `mono' is wip.
+mloop.c eng.h: stamp-mloop
+stamp-mloop: $(srcdir)/../common/genmloop.sh mloop.in Makefile
+	$(SHELL) $(srccom)/genmloop.sh \
+		-mono -fast -pbb -switch sem-switch.c \
+		-cpu lm32bf -infile $(srcdir)/mloop.in
+	$(SHELL) $(srcroot)/move-if-change eng.hin eng.h
+	$(SHELL) $(srcroot)/move-if-change mloop.cin mloop.c
+	touch stamp-mloop
+mloop.o: mloop.c sem-switch.c 
+
+cpu.o: cpu.c $(LM32BF_INCLUDE_DEPS)
+decode.o: decode.c $(LM32BF_INCLUDE_DEPS)
+sem.o: sem.c $(LM32BF_INCLUDE_DEPS)
+model.o: model.c $(LM32BF_INCLUDE_DEPS)
+
+lm32-clean:
+	rm -f mloop.c eng.h stamp-mloop
+	rm -f stamp-arch stamp-cpu 
+	rm -f tmp-*
+
+# cgen support, enable with --enable-cgen-maint
+CGEN_MAINT = ; @@true
+# The following line is commented in or out depending upon --enable-cgen-maint.
+@@CGEN_MAINT@@CGEN_MAINT =
+
+stamp-arch: $(CGEN_READ_SCM) $(CGEN_ARCH_SCM) $(CPU_DIR)/lm32.cpu
+	$(MAKE) cgen-arch $(CGEN_FLAGS_TO_PASS) mach=all \
+	  archfile=$(CPU_DIR)/lm32.cpu \
+	  FLAGS="with-scache with-profile=fn"
+	touch stamp-arch
+arch.h arch.c cpuall.h: $(CGEN_MAINT) stamp-arch
+
+stamp-cpu: $(CGEN_READ_SCM) $(CGEN_CPU_SCM) $(CGEN_DECODE_SCM) $(CPU_DIR)/lm32.cpu
+	$(MAKE) cgen-cpu-decode $(CGEN_FLAGS_TO_PASS) \
+	  cpu=lm32bf mach=lm32 SUFFIX= \
+	  archfile=$(CPU_DIR)/lm32.cpu \
+	  FLAGS="with-scache with-profile=fn" \
+	  EXTRAFILES="$(CGEN_CPU_SEM) $(CGEN_CPU_SEMSW)"
+	touch stamp-cpu
+cpu.h sem.c sem-switch.c model.c decode.c decode.h: $(CGEN_MAINT) stamp-cpu
+@
+
+
+1.2
+log
+@	* Makefile.in (traps.o): Add dependency on targ-vals.h to fix
+	parallel makes.
+@
+text
+@d78 1
+a78 1
+stamp-arch: $(CGEN_READ_SCM) $(CGEN_ARCH_SCM) $(CGEN_CPU_DIR)/lm32.cpu
+d80 1
+a80 1
+	  archfile=$(CGEN_CPU_DIR)/lm32.cpu \
+d85 1
+a85 1
+stamp-cpu: $(CGEN_READ_SCM) $(CGEN_CPU_SCM) $(CGEN_DECODE_SCM) $(CGEN_CPU_DIR)/lm32.cpu
+d88 1
+a88 1
+	  archfile=$(CGEN_CPU_DIR)/lm32.cpu \
+@
+
+
+1.1
+log
+@gdb/
+2009-05-18  Jon Beniston <jon@@beniston.com>
+
+        * MAINTAINERS: Add lm32 target.
+        * Makefile.in: Add lm32 dependencies.
+        * NEWS: Indicate lm32 is a new target.
+        * configure.tgt: Add lm32 targets.
+        * lm32-tdep.c: New file.
+
+gdb/testsuite
+2009-05-18  Jon Beniston <jon@@beniston.com>
+
+        * gdb.asm/asm-source.exp: Add lm32 target.
+
+include/gdb/
+2009-05-18  Jon Beniston <jon@@beniston.com>
+
+        * sim-lm32.h: New file.
+
+sim/
+2009-05-18  Jon Beniston <jon@@beniston.com>
+
+        * MAINTAINERS: Add Jon Beniston as maintainer of lm32 sim.
+        * configure.ac: Add lm32 target.
+        * lm32: New directory.
+
+sim/common
+2009-05-18  Jon Beniston <jon@@beniston.com>
+
+        * gennltvals.sh: Add lm32 target.
+        * nltvals.def: Add lm32 syscall definitions.
+
+sim/lm32/
+2009-05-18  Jon Beniston <jon@@beniston.com>
+
+        * Makefile.in: New file.
+        * arch.c: New file.
+        * arch.h: New file.
+        * config.in: New file.
+        * configure: New file.
+        * configure.ac: New file.
+        * cpu.c: New file.
+        * cpu.h: New file.
+        * cpuall.h: New file.
+        * decode.c: New file.
+        * decode.h: New file.
+        * dv-lm32cpu.c: New file.
+        * dv-lm32timer.c: New file.
+        * dv-lm32uart.c: New file.
+        * lm32.c: New file.
+        * lm32-sim.h: New file.
+        * mloop.in: New file.
+        * model.c: New file.
+        * sem.c: New file.
+        * sem-switch.c: New file.
+        * sim-if.c: New file.
+        * sim-main.c: New file.
+        * tconfig.in: New file.
+        * traps.c: New file.
+        * user.c: New file.
+@
+text
+@d20 1
+a20 1
+        
+d42 2
+@
+

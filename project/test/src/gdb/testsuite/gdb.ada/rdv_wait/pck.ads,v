@@ -1,0 +1,120 @@
+head	1.2;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.2
+	gdb_7_6-2013-04-26-release:1.2
+	gdb_7_6-branch:1.2.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.2;
+locks; strict;
+comment	@-- @;
+
+
+1.2
+date	2013.01.01.06.33.19;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2012.08.16.15.45.46;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@--  Copyright 2012-2013 Free Software Foundation, Inc.
+--
+--  This program is free software; you can redistribute it and/or modify
+--  it under the terms of the GNU General Public License as published by
+--  the Free Software Foundation; either version 3 of the License, or
+--  (at your option) any later version.
+--
+--  This program is distributed in the hope that it will be useful,
+--  but WITHOUT ANY WARRANTY; without even the implied warranty of
+--  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+--  GNU General Public License for more details.
+--
+--  You should have received a copy of the GNU General Public License
+--  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+package Pck is
+
+   procedure Break_Me;
+   --  A procedure doing nothing, but which is a convenient anchor
+   --  for inserting breakpoints.
+
+end Pck;
+@
+
+
+1.1
+log
+@DWARF frame unwinder executes one too many rows
+
+The problem is trying to unwind from a function where %ebp is NOT
+used as the frame pointer, and the size of the frame changes over
+the lifetime of that function.
+
+For instance, trying to unwind past the GNAT runtime function
+called system.tasking.rendezvous.timed_selective_wait on x86-linux,
+one can get:
+
+    (gdb) bt
+    [...]
+    #3  0x0805364b in system.tasking.rendezvous.timed_selective_wait ()
+    #4  0xb7fe5068 in ?? ()
+    Backtrace stopped: previous frame inner to this frame (corrupt stack?)
+
+Looking at the CFI, we find the following initial instructions...
+
+>   DW_CFA_def_cfa: %esp+4 (r4 ofs 4)
+>   DW_CFA_offset: %eip at cfa-4  (r8 = %eip)
+
+... and the associated FDE:
+
+> 00001be4 00000054 00001be8 FDE cie=00000000 pc=08053310..08053951
+[...]
+>   DW_CFA_advance_loc: 8 to 080534ad
+>   DW_CFA_def_cfa_offset: 112
+>   DW_CFA_advance_loc2: 414 to 0805364b
+>   DW_CFA_def_cfa_offset: 108
+[...]
+
+The problem is that the DWARF frame unwinder executed the FDE until
+the row for PC == 0x0805364b. But in reality, our program hasn't
+executed the instruction at that address yet (it is the return address).
+So GDB executed a little too much of the FDE, giving us the wrong
+offset for the frame base, and thus the wrong address where %eip
+got saved.
+
+This patch fixes the problem by using a more correct PC as the bound
+for executing the FDE.
+
+gdb/ChangeLog:
+
+        * dwarf2-frame.c (dwarf2_frame_cache): Use
+        get_frame_address_in_block instead of get_frame_pc as
+        the bound for executing the frame's FDE.
+
+gdb/testsuite/ChangeLog:
+
+        * gdb.ada/rdv_wait: New testcase.
+@
+text
+@d1 1
+a1 1
+--  Copyright 2012 Free Software Foundation, Inc.
+@
+

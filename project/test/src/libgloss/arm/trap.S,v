@@ -1,0 +1,227 @@
+head	1.3;
+access;
+symbols
+	newlib-2_2_0:1.3.0.2
+	newlib-2_1_0:1.3
+	newlib-2_0_0:1.3
+	newlib-1_20_0:1.3
+	newlib-1_19_0:1.2
+	newlib-1_18_0:1.2
+	newlib-1_17_0-arc:1.2.0.8
+	binutils-arc-20080908-branch:1.2.0.6
+	binutils-arc-20080908-branchpoint:1.2
+	newlib-1_17_0:1.2
+	newlib-1_16_0:1.2
+	newlib-1_15_0:1.2
+	newlib-csl-coldfire-4_1-32:1.2
+	newlib-csl-sourcerygxx-4_1-32:1.2
+	newlib-csl-innovasic-fido-3_4_4-33:1.2
+	newlib-csl-coldfire-4_1-30:1.2
+	newlib-csl-sourcerygxx-4_1-30:1.2
+	newlib-csl-coldfire-4_1-28:1.2
+	newlib-csl-sourcerygxx-4_1-28:1.2
+	newlib-csl-arm-2006q3-27:1.2
+	newlib-csl-sourcerygxx-4_1-27:1.2
+	newlib-csl-arm-2006q3-26:1.2
+	newlib-csl-sourcerygxx-4_1-26:1.2
+	newlib-csl-sourcerygxx-4_1-24:1.2
+	newlib-csl-sourcerygxx-4_1-23:1.2
+	newlib-csl-sourcerygxx-4_1-21:1.2
+	newlib-csl-arm-2006q3-21:1.2
+	newlib-csl-arm-2006q3-19:1.2
+	newlib-csl-sourcerygxx-4_1-19:1.2
+	newlib-csl-sourcerygxx-4_1-18:1.2
+	newlib-csl-sourcerygxx-3_4_4-25:1.2
+	newlib-csl-sourcerygxx-4_1-17:1.2
+	newlib-csl-sourcerygxx-4_1-14:1.2
+	newlib-csl-sourcerygxx-4_1-13:1.2
+	newlib-csl-sourcerygxx-4_1-12:1.2
+	newlib-csl-sourcerygxx-4_1-9:1.2
+	newlib-csl-sourcerygxx-4_1-8:1.2
+	newlib-csl-sourcerygxx-4_1-7:1.2
+	newlib-csl-arm-2006q1-6:1.2
+	newlib-csl-sourcerygxx-4_1-6:1.2
+	newlib-csl-sourcerygxx-4_1-5:1.2
+	newlib-csl-sourcerygxx-4_1-4:1.2
+	newlib-autotools-branch:1.2.0.4
+	newlib-csl-20060320-branch:1.2.0.2
+	newlib-csl-20060320-branchpoint:1.2
+	newlib-1_14_0:1.1
+	newlib-csl-arm-2005-q1b:1.1
+	newlib-csl-arm-2005-q1a:1.1
+	newlib-1_13_0:1.1
+	csl-arm-2004-q3:1.1;
+locks; strict;
+comment	@# @;
+
+
+1.3
+date	2011.07.13.15.06.21;	author nickc;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2006.02.07.18.46.23;	author jjohnstn;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2004.06.09.19.06.50;	author jjohnstn;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.3
+log
+@	* arm/crt0.S: Support armv6-m processors in libgloss.
+	* arm/swi.h: Likewise.
+	* arm/trap.S: Likewise.
+	* arm/redboot-crt0.S: Likewise.
+	* arm/linux-crt0.c: Likewise.
+	* arm/arm.h: New.
+@
+text
+@#include "arm.h"
+        /* Run-time exception support */
+#ifndef THUMB_V7_V6M
+#include "swi.h"
+
+/* .text is used instead of .section .text so it works with arm-aout too.  */
+	.text
+        .align 0
+        .global __rt_stkovf_split_big
+        .global __rt_stkovf_split_small
+
+/* The following functions are provided for software stack checking.
+   If hardware stack-checking is being used then the code can be
+   compiled without the PCS entry checks, and simply rely on VM
+   management to extend the stack for a thread.
+
+   The stack extension event occurs when the PCS function entry code
+   would result in a stack-pointer beneath the stack-limit register
+   value.  The system relies on the following map:
+
+        +-----------------------------------+ <-- end of stack block
+        | ...                               |
+        | ...                               |
+        | active stack                      |
+        | ...                               | <-- sp (stack-pointer) somewhere in here
+        | ...                               |
+        +-----------------------------------+ <-- sl (stack-limit)
+        | stack-extension handler workspace |
+        +-----------------------------------+ <-- base of stack block
+
+   The "stack-extension handler workspace" is an amount of memory in
+   which the stack overflow support code must execute.  It must be
+   large enough to deal with the worst case path through the extension
+   code.  At the moment the compiler expects this to be AT LEAST
+   256bytes.  It uses this fact to code functions with small local
+   data usage within the overflow space.
+
+   In a true target environment We may need to increase the space
+   between sl and the true limit to allow for the stack extension
+   code, SWI handlers and for undefined instruction handlers of the
+   target environment.  */
+
+__rt_stkovf_split_small:
+        mov     ip,sp   @@ Ensure we can calculate the stack required
+        @@ and fall through to...
+__rt_stkovf_split_big:
+        @@ in:   sp = current stack-pointer (beneath stack-limit)
+        @@       sl = current stack-limit
+        @@       ip = low stack point we require for the current function
+        @@       lr = return address into the current function
+        @@       fp = frame-pointer
+        @@               original sp --> +----------------------------------+
+        @@                               | pc (12 ahead of PCS entry store) |
+        @@               current fp ---> +----------------------------------+
+        @@                               | lr (on entry) pc (on exit)       |
+        @@                               +----------------------------------+
+        @@                               | sp ("original sp" on entry)      |
+        @@                               +----------------------------------+
+        @@                               | fp (on entry to function)        |
+        @@                               +----------------------------------+
+        @@                               |                                  |
+        @@                               | ..argument and work registers..  |
+        @@                               |                                  |
+        @@               current sp ---> +----------------------------------+
+        @@
+        @@ The "current sl" is somewhere between "original sp" and "current sp"
+        @@ but above "true sl". The "current sl" should be at least 256bytes
+        @@ above the "true sl". The 256byte stack guard should be large enough
+        @@ to deal with the worst case function entry stacking (160bytes) plus
+        @@ the stack overflow handler stacking requirements, plus the stack
+        @@ required for the memory allocation routines.
+        @@
+        @@ Normal PCS entry (before stack overflow check) can stack 16
+        @@ standard registers (64bytes) and 8 floating point registers
+        @@ (96bytes). This gives a minimum stack guard of 160bytes (excluding
+        @@ the stack required for the code). (Actually only a maximum of
+        @@ 14standard registers are ever stacked on entry to a function).
+        @@
+        @@ NOTE: Structure returns are performed by the caller allocating a
+        @@       dummy space on the stack and passing in a "phantom" arg1 into
+        @@       the function. This means that we do not need to worry about
+        @@       preserving the stack under "sp" even on function return.
+        @@ 
+        @@        Code should never poke values beneath sp. The sp register
+        @@        should always be "dropped" first to cover the data. This
+        @@        protects the data against any events that may try and use
+        @@        the stack.
+
+        SUB     ip, sp, ip      @@ extra stack required for function
+        @@ Add stack extension code here.  If desired a new stack chunk
+        @@ can be allocated, and the register state updated suitably.
+
+        @@ We now know how much extra stack the function requires.
+        @@ Terminate the program for the moment:
+        swi     SWI_Exit
+#endif
+@
+
+
+1.2
+log
+@
+2006-02-07  Paul Brook  <paul@@codesourcery.com>
+
+        * arm/crt0.S: Add Thumb-2 startup code.
+        * arm/redboot-crt0.S: Ditto.
+        * arm/libcfunc.c (do_AngelSWI): Use AngelSWIInsn.
+        * arm/swi.h (AngelSWIInsn, AngelSWIAsm): Define.
+        * arm/trap.S: Disable for Thumb-2.
+@
+text
+@d1 1
+d3 1
+a3 1
+#if !defined(__thumb2__)
+@
+
+
+1.1
+log
+@
+2004-06-09  Toralf Lund  <toralf@@procaptura.com>
+
+        * arm/crt0.S: Copied from newlib and it now also sets up stacks for
+        FIQ and IRQ mode, plus calls hardware_init_hook() and
+        software_init_hook() if present.
+        * arm/libcfunc.c, arm/swi.h, arm/syscalls.c: Copied
+        from newlib.
+        * arm/Makefile.in: Build crt0.o, rdpmon-crt0.o, rdimon-crt0.o,
+        librdpmon.a, librdimon.a - support file for "bare" setup, as well
+        as "RDP" and "RDI" monitors.
+        * arm/coff-rdpmon.specs, arm/elf-rdpmon.specs,
+        arm/coff-rdimon.specs, arm/elf-rdimon.specs: gcc specs files to go
+        with above mentioned support libs and startfiles.
+@
+text
+@d2 1
+d95 1
+@
+

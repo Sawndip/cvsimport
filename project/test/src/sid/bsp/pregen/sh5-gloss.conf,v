@@ -1,0 +1,175 @@
+head	1.1;
+access;
+symbols
+	sid-snapshot-20180601:1.1
+	sid-snapshot-20180501:1.1
+	sid-snapshot-20180401:1.1
+	sid-snapshot-20180301:1.1
+	sid-snapshot-20180201:1.1
+	sid-snapshot-20180101:1.1
+	sid-snapshot-20171201:1.1
+	sid-snapshot-20171101:1.1
+	sid-snapshot-20171001:1.1
+	sid-snapshot-20170901:1.1
+	sid-snapshot-20170801:1.1
+	sid-snapshot-20170701:1.1
+	sid-snapshot-20170601:1.1
+	sid-snapshot-20170501:1.1
+	sid-snapshot-20170401:1.1
+	sid-snapshot-20170301:1.1
+	sid-snapshot-20170201:1.1
+	sid-snapshot-20170101:1.1
+	sid-snapshot-20161201:1.1
+	sid-snapshot-20161101:1.1
+	sid-snapshot-20160901:1.1
+	sid-snapshot-20160801:1.1
+	sid-snapshot-20160701:1.1
+	sid-snapshot-20160601:1.1
+	sid-snapshot-20160501:1.1
+	sid-snapshot-20160401:1.1
+	sid-snapshot-20160301:1.1
+	sid-snapshot-20160201:1.1
+	sid-snapshot-20160101:1.1
+	sid-snapshot-20151201:1.1
+	sid-snapshot-20151101:1.1
+	sid-snapshot-20151001:1.1
+	sid-snapshot-20150901:1.1
+	sid-snapshot-20150801:1.1
+	sid-snapshot-20150701:1.1
+	sid-snapshot-20150601:1.1
+	sid-snapshot-20150501:1.1
+	sid-snapshot-20150401:1.1
+	sid-snapshot-20150301:1.1
+	sid-snapshot-20150201:1.1
+	sid-snapshot-20150101:1.1
+	sid-snapshot-20141201:1.1
+	sid-snapshot-20141101:1.1
+	sid-snapshot-20141001:1.1
+	sid-snapshot-20140901:1.1
+	sid-snapshot-20140801:1.1
+	sid-snapshot-20140701:1.1
+	sid-snapshot-20140601:1.1
+	sid-snapshot-20140501:1.1
+	sid-snapshot-20140401:1.1
+	sid-snapshot-20140301:1.1
+	sid-snapshot-20140201:1.1
+	sid-snapshot-20140101:1.1
+	sid-snapshot-20131201:1.1
+	sid-snapshot-20131101:1.1
+	sid-snapshot-20131001:1.1;
+locks; strict;
+comment	@# @;
+
+
+1.1
+date	2013.09.23.03.26.02;	author amodra;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.1
+log
+@Pick up support for powerpc64le in top level libtool.m4 by deleting
+sid/config files duplicating the top level files and modifying
+AC_CONFIG_AUX_DIR and ACLOCAL_AMFLAGS appropriately.
+Regenerate with automake-1.11.1 and autoconf-2.64.
+@
+text
+@# sid configuration file
+# created by Id: configrun-sid.in,v 1.39 2006/10/18 18:30:52 brolley Exp 
+# run by alan @@ bubble (Linux) at Wed Sep 18 12:13:53 CST 2013
+# args: --cpu=sh5 --no-run a.out
+load libaudio.la audio_component_library
+load libcache.la cache_component_library
+load libcgencpu.la cgen_component_library
+load libconsoles.la console_component_library
+load libgdb.la gdb_component_library
+load libgloss.la gloss_component_library
+load libglue.la glue_component_library
+load libhd44780u.la hd44780u_component_library
+load libide.la ide_component_library
+load libinterrupt.la interrupt_component_library
+load libloader.la loader_component_library
+load libmapper.la mapper_component_library
+load libmemory.la mem_component_library
+load libmmu.la mmu_component_library
+load libparport.la parport_component_library
+load libprof.la prof_component_library
+load librtc.la rtc_component_library
+load libsched.la sched_component_library
+load libtimers.la timer_component_library
+load libuart.la uart_component_library
+load libx86.la x86_component_library
+# first section
+new hw-cpu-sh5 cpu
+new hw-mapper-basic cpu-mapper
+new hw-glue-sequence-8 init-sequence
+new hw-glue-sequence-1 hw-reset-net
+new hw-glue-sequence-8 deinit-sequence
+new hw-glue-sequence-1 yield-net
+new hw-glue-sequence-2 cache-flush-net
+new sid-sched-host-accurate host-sched
+new sid-sched-sim target-sched
+# gloss
+new sw-gloss-generic/libgloss gloss
+# gloss <-> stdio
+new sid-io-stdio stdio
+# cpu loader
+new sw-load-elf cpu-loader
+# memory region 1 (0x00000000,0x00800000)
+new hw-memory-ram/rom-basic mem1
+# second section
+# settings
+set cpu step-insn-count 10000
+set host-sched num-clients 10 # large enough?
+set target-sched num-clients 10 # large enough?
+# pin connections
+connect-pin main perform-activity -> host-sched advance
+connect-pin main perform-activity -> target-sched advance
+connect-pin main starting -> init-sequence input
+connect-pin main stopping -> deinit-sequence input
+connect-pin init-sequence output-0 -> hw-reset-net input
+connect-pin hw-reset-net output-0 -> cpu reset!
+set target-sched 0-name "CPU stepping"
+connect-pin target-sched 0-event -> cpu step!
+connect-pin target-sched 0-control <- cpu step-cycles
+connect-pin target-sched time-query <- cpu time-query
+connect-pin target-sched time-high -> cpu time-high
+connect-pin target-sched time-low -> cpu time-low
+connect-pin yield-net output-0 -> cpu yield
+connect-pin yield-net output-0 -> host-sched yield
+connect-bus cpu insn-memory cpu-mapper access-port
+connect-bus cpu data-memory cpu-mapper access-port
+# gloss
+relate gloss cpu cpu
+connect-pin init-sequence output-2 -> gloss reset
+connect-pin cpu trap <-> gloss trap
+connect-pin cpu trap-code -> gloss trap-code
+set gloss verbose? 0
+connect-bus gloss target-memory cpu-mapper access-port
+# gloss <-> stdio
+set host-sched 0-regular? 1
+set host-sched 0-time 150 # apprx. human perception limit
+connect-pin host-sched 0-event -> stdio poll
+connect-pin gloss debug-tx -> stdio stdout
+connect-pin gloss debug-rx <- stdio stdin
+# gloss w/o gdb
+connect-pin gloss process-signal -> main stop!
+connect-pin gloss process-signal -> yield-net input
+set cpu engine-type pbb
+# cpu loader
+set cpu-loader file "a.out" 
+connect-bus cpu-loader load-accessor-data cpu-mapper access-port
+connect-bus cpu-loader load-accessor-insn cpu-mapper access-port # don't trace loading
+connect-pin init-sequence output-1 -> cpu-loader load!
+connect-pin cpu-loader start-pc-set -> cpu start-pc-set!
+connect-pin cpu-loader endian-set -> cpu endian-set!
+connect-pin cpu-loader error -> main stop!
+# memory region 1 (0x00000000,0x00800000) configuration
+set mem1 size 8388608
+connect-bus cpu-mapper mem1:[0,8388607] mem1 read-write-port
+@

@@ -1,0 +1,760 @@
+head	1.9;
+access;
+symbols;
+locks; strict;
+comment	@ * @;
+
+
+1.9
+date	2013.10.09.16.00.54;	author jkratoch;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2013.09.14.06.26.35;	author muller;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2013.06.26.08.01.55;	author qiyao;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2013.05.23.18.37.00;	author palves;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2013.05.10.17.01.00;	author tromey;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2013.04.30.08.20.47;	author brobecke;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2013.04.30.08.20.04;	author brobecke;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2013.04.23.15.49.25;	author tromey;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2013.04.22.16.46.15;	author tromey;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.9
+log
+@Minor O_CLOEXEC optimization, "regression" fix
+
+gdb/
+2013-10-09  Jan Kratochvil  <jan.kratochvil@@redhat.com>
+
+	* common/filestuff.c (gdb_fopen_cloexec): Remove initialization of
+	result variable.  Rename variable fopen_e_ever_failed to
+	fopen_e_ever_failed_einval.  Retry fopen only for errno EINVAL.
+@
+text
+@/* Low-level file-handling.
+   Copyright (C) 2012, 2013 Free Software Foundation, Inc.
+
+   This file is part of GDB.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+#ifdef GDBSERVER
+#include "server.h"
+#else
+#include "defs.h"
+#include "gdb_string.h"
+#endif
+#include "filestuff.h"
+#include "gdb_vecs.h"
+
+#include <string.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include "gdb_stat.h"
+
+#ifdef USE_WIN32API
+#include <winsock2.h>
+#include <windows.h>
+#define HAVE_SOCKETS 1
+#elif defined HAVE_SYS_SOCKET_H
+#include <sys/socket.h>
+/* Define HAVE_F_GETFD if we plan to use F_GETFD.  */
+#define HAVE_F_GETFD F_GETFD
+#define HAVE_SOCKETS 1
+#endif
+
+#ifdef HAVE_SYS_RESOURCE_H
+#include <sys/resource.h>
+#endif /* HAVE_SYS_RESOURCE_H */
+
+#ifndef O_CLOEXEC
+#define O_CLOEXEC 0
+#endif
+
+#ifndef SOCK_CLOEXEC
+#define SOCK_CLOEXEC 0
+#endif
+
+
+
+#ifndef HAVE_FDWALK
+
+#include "gdb_dirent.h"
+
+/* Replacement for fdwalk, if the system doesn't define it.  Walks all
+   open file descriptors (though this implementation may walk closed
+   ones as well, depending on the host platform's capabilities) and
+   call FUNC with ARG.  If FUNC returns non-zero, stops immediately
+   and returns the same value.  Otherwise, returns zero when
+   finished.  */
+
+static int
+fdwalk (int (*func) (void *, int), void *arg)
+{
+  /* Checking __linux__ isn't great but it isn't clear what would be
+     better.  There doesn't seem to be a good way to check for this in
+     configure.  */
+#ifdef __linux__
+  DIR *dir;
+
+  dir = opendir ("/proc/self/fd");
+  if (dir != NULL)
+    {
+      struct dirent *entry;
+      int result = 0;
+
+      for (entry = readdir (dir); entry != NULL; entry = readdir (dir))
+	{
+	  long fd;
+	  char *tail;
+	  int result;
+
+	  errno = 0;
+	  fd = strtol (entry->d_name, &tail, 10);
+	  if (*tail != '\0' || errno != 0)
+	    continue;
+	  if ((int) fd != fd)
+	    {
+	      /* What can we do here really?  */
+	      continue;
+	    }
+
+	  if (fd == dirfd (dir))
+	    continue;
+
+	  result = func (arg, fd);
+	  if (result != 0)
+	    break;
+	}
+
+      closedir (dir);
+      return result;
+    }
+  /* We may fall through to the next case.  */
+#endif
+
+  {
+    int max, fd;
+
+#ifdef HAVE_GETRLIMIT
+    struct rlimit rlim;
+
+    if (getrlimit (RLIMIT_NOFILE, &rlim) == 0 && rlim.rlim_max != RLIM_INFINITY)
+      max = rlim.rlim_max;
+    else
+#endif
+      {
+#ifdef _SC_OPEN_MAX
+	max = sysconf (_SC_OPEN_MAX);
+#else
+	/* Whoops.  */
+	return 0;
+#endif /* _SC_OPEN_MAX */
+      }
+
+    for (fd = 0; fd < max; ++fd)
+      {
+	struct stat sb;
+	int result;
+
+	/* Only call FUNC for open fds.  */
+	if (fstat (fd, &sb) == -1)
+	  continue;
+
+	result = func (arg, fd);
+	if (result != 0)
+	  return result;
+      }
+
+    return 0;
+  }
+}
+
+#endif /* HAVE_FDWALK */
+
+
+
+/* A VEC holding all the fds open when notice_open_fds was called.  We
+   don't use a hashtab because libiberty isn't linked into gdbserver;
+   and anyway we don't expect there to be many open fds.  */
+
+static VEC (int) *open_fds;
+
+/* An fdwalk callback function used by notice_open_fds.  It puts the
+   given file descriptor into the vec.  */
+
+static int
+do_mark_open_fd (void *ignore, int fd)
+{
+  VEC_safe_push (int, open_fds, fd);
+  return 0;
+}
+
+/* See filestuff.h.  */
+
+void
+notice_open_fds (void)
+{
+  fdwalk (do_mark_open_fd, NULL);
+}
+
+/* See filestuff.h.  */
+
+void
+mark_fd_no_cloexec (int fd)
+{
+  do_mark_open_fd (NULL, fd);
+}
+
+/* See filestuff.h.  */
+
+void
+unmark_fd_no_cloexec (int fd)
+{
+  int i, val;
+
+  for (i = 0; VEC_iterate (int, open_fds, i, val); ++i)
+    {
+      if (fd == val)
+	{
+	  VEC_unordered_remove (int, open_fds, i);
+	  return;
+	}
+    }
+
+  gdb_assert_not_reached (_("fd not found in open_fds"));
+}
+
+/* Helper function for close_most_fds that closes the file descriptor
+   if appropriate.  */
+
+static int
+do_close (void *ignore, int fd)
+{
+  int i, val;
+
+  for (i = 0; VEC_iterate (int, open_fds, i, val); ++i)
+    {
+      if (fd == val)
+	{
+	  /* Keep this one open.  */
+	  return 0;
+	}
+    }
+
+  close (fd);
+  return 0;
+}
+
+/* See filestuff.h.  */
+
+void
+close_most_fds (void)
+{
+  fdwalk (do_close, NULL);
+}
+
+
+
+/* This is a tri-state flag.  When zero it means we haven't yet tried
+   O_CLOEXEC.  When positive it means that O_CLOEXEC works on this
+   host.  When negative, it means that O_CLOEXEC doesn't work.  We
+   track this state because, while gdb might have been compiled
+   against a libc that supplies O_CLOEXEC, there is no guarantee that
+   the kernel supports it.  */
+
+static int trust_o_cloexec;
+
+/* Mark FD as close-on-exec, ignoring errors.  Update
+   TRUST_O_CLOEXEC.  */
+
+static void
+mark_cloexec (int fd)
+{
+#ifdef HAVE_F_GETFD
+  int old = fcntl (fd, F_GETFD, 0);
+
+  if (old != -1)
+    {
+      fcntl (fd, F_SETFD, old | FD_CLOEXEC);
+
+      if (trust_o_cloexec == 0)
+	{
+	  if ((old & FD_CLOEXEC) != 0)
+	    trust_o_cloexec = 1;
+	  else
+	    trust_o_cloexec = -1;
+	}
+    }
+#endif /* HAVE_F_GETFD */
+}
+
+/* Depending on TRUST_O_CLOEXEC, mark FD as close-on-exec.  */
+
+static void
+maybe_mark_cloexec (int fd)
+{
+  if (trust_o_cloexec <= 0)
+    mark_cloexec (fd);
+}
+
+#ifdef HAVE_SOCKETS
+
+/* Like maybe_mark_cloexec, but for callers that use SOCK_CLOEXEC.  */
+
+static void
+socket_mark_cloexec (int fd)
+{
+  if (SOCK_CLOEXEC == 0 || trust_o_cloexec <= 0)
+    mark_cloexec (fd);
+}
+
+#endif
+
+
+
+/* See filestuff.h.  */
+
+int
+gdb_open_cloexec (const char *filename, int flags, unsigned long mode)
+{
+  int fd = open (filename, flags | O_CLOEXEC, mode);
+
+  if (fd >= 0)
+    maybe_mark_cloexec (fd);
+
+  return fd;
+}
+
+/* See filestuff.h.  */
+
+FILE *
+gdb_fopen_cloexec (const char *filename, const char *opentype)
+{
+  FILE *result;
+  /* Probe for "e" support once.  But, if we can tell the operating
+     system doesn't know about close on exec mode "e" without probing,
+     skip it.  E.g., the Windows runtime issues an "Invalid parameter
+     passed to C runtime function" OutputDebugString warning for
+     unknown modes.  Assume that if O_CLOEXEC is zero, then "e" isn't
+     supported.  */
+  static int fopen_e_ever_failed_einval = O_CLOEXEC == 0;
+
+  if (!fopen_e_ever_failed_einval)
+    {
+      char *copy;
+
+      copy = alloca (strlen (opentype) + 2);
+      strcpy (copy, opentype);
+      /* This is a glibc extension but we try it unconditionally on
+	 this path.  */
+      strcat (copy, "e");
+      result = fopen (filename, copy);
+
+      if (result == NULL && errno == EINVAL)
+	{
+	  result = fopen (filename, opentype);
+	  if (result != NULL)
+	    fopen_e_ever_failed_einval = 1;
+	}
+    }
+  else
+    result = fopen (filename, opentype);
+
+  if (result != NULL)
+    maybe_mark_cloexec (fileno (result));
+
+  return result;
+}
+
+#ifdef HAVE_SOCKETS
+/* See filestuff.h.  */
+
+int
+gdb_socketpair_cloexec (int namespace, int style, int protocol, int filedes[2])
+{
+#ifdef HAVE_SOCKETPAIR
+  int result = socketpair (namespace, style | SOCK_CLOEXEC, protocol, filedes);
+
+  if (result != -1)
+    {
+      socket_mark_cloexec (filedes[0]);
+      socket_mark_cloexec (filedes[1]);
+    }
+
+  return result;
+#else
+  gdb_assert_not_reached (_("socketpair not available on this host"));
+#endif
+}
+
+/* See filestuff.h.  */
+
+int
+gdb_socket_cloexec (int namespace, int style, int protocol)
+{
+  int result = socket (namespace, style | SOCK_CLOEXEC, protocol);
+
+  if (result != -1)
+    socket_mark_cloexec (result);
+
+  return result;
+}
+#endif
+
+/* See filestuff.h.  */
+
+int
+gdb_pipe_cloexec (int filedes[2])
+{
+  int result;
+
+#ifdef HAVE_PIPE2
+  result = pipe2 (filedes, O_CLOEXEC);
+  if (result != -1)
+    {
+      maybe_mark_cloexec (filedes[0]);
+      maybe_mark_cloexec (filedes[1]);
+    }
+#else
+#ifdef HAVE_PIPE
+  result = pipe (filedes);
+  if (result != -1)
+    {
+      mark_cloexec (filedes[0]);
+      mark_cloexec (filedes[1]);
+    }
+#else /* HAVE_PIPE */
+  gdb_assert_not_reached (_("pipe not available on this host"));
+#endif /* HAVE_PIPE */
+#endif /* HAVE_PIPE2 */
+
+  return result;
+}
+@
+
+
+1.8
+log
+@	* common/filestuff.c (gdb_fopen_cloexec): Do not try to use "e"
+	mode if operating system doesn't know O_CLOEXEC.
+@
+text
+@d313 1
+a313 1
+  FILE *result = NULL;
+d320 1
+a320 1
+  static int fopen_e_ever_failed = O_CLOEXEC == 0;
+d322 1
+a322 1
+  if (!fopen_e_ever_failed)
+a331 1
+    }
+d333 6
+a338 6
+  if (result == NULL)
+    {
+      /* Fallback.  */
+      result = fopen (filename, opentype);
+      if (result != NULL)
+	fopen_e_ever_failed = 1;
+d340 2
+@
+
+
+1.7
+log
+@gdb/
+
+2013-06-26  Pedro Alves  <pedro@@codesourcery.com>
+	    Yao Qi  <yao@@codesourcery.com>
+
+	* ctf.c (ctf_traceframe_info): Push trace state variables
+	present in the trace data into the traceframe info object.
+	* breakpoint.c (DEF_VEC_I): Remove.
+	* common/filestuff.c (DEF_VEC_I): Likewise.
+	* dwarf2loc.c (DEF_VEC_I): Likewise.
+	* mi/mi-main.c (DEF_VEC_I): Likewise.
+	* common/gdb_vecs.h (DEF_VEC_I): Define vector for int.
+	* features/traceframe-info.dtd: Add tvar element and its
+	attributes.
+	* tracepoint.c (free_traceframe_info): Free vector 'tvars'.
+	(build_traceframe_info): Push trace state variables present in the
+	trace data into the traceframe info object.
+	(traceframe_info_start_tvar): New function.
+	(tvar_attributes): New.
+	(traceframe_info_children): Add "tvar" element.
+	* tracepoint.h (struct traceframe_info) <tvars>: New field.
+
+	* NEWS: Mention the change in GDB and GDBserver.
+
+gdb/doc:
+
+2013-06-26  Pedro Alves  <pedro@@codesourcery.com>
+
+	* gdb.texinfo (Traceframe Info Format): Document tvar element and
+	its attributes.
+
+gdb/gdbserver:
+
+2013-06-26  Pedro Alves  <pedro@@codesourcery.com>
+
+	* tracepoint.c (build_traceframe_info_xml): Output trace state
+	variables present in the trace buffer.
+@
+text
+@d314 7
+a320 1
+  static int fopen_e_ever_failed;
+@
+
+
+1.6
+log
+@common/filestuff.c: No sockets on DJGPP.
+
+Building gdb with --host=i586-pc-msdosdjgpp ends up with:
+
+ i586-pc-msdosdjgpp-gcc -g -O2 -I../../src/gdb/config/djgpp  -I. -I../../src/gdb -I../../src/gdb/common -I../../src/gdb/config -DLOCALEDIR="\"/usr/local/share/locale\"" -DHAVE_CONFIG_H -I../../src/gdb/../include/opcode -I../../src/gdb/../opcodes/.. -I../../src/gdb/../readline/.. -I../bfd -I../../src/gdb/../bfd -I../../src/gdb/../include -I../libdecnumber -I../../src/gdb/../libdecnumber -I./../intl -I../../src/gdb/gnulib/import -Ibuild-gnulib/import    -Wall -Wdeclaration-after-statement -Wpointer-arith -Wformat-nonliteral -Wpointer-sign -Wno-unused -Wunused-value -Wunused-function -Wno-switch -Wno-char-subscripts -Wmissing-prototypes -Wdeclaration-after-statement -Wempty-body -Werror -c -o filestuff.o -MT filestuff.o -MMD -MP -MF .deps/filestuff.Tpo ../../src/gdb/common/filestuff.c
+ ../../src/gdb/common/filestuff.c:38:24: fatal error: sys/socket.h: No such file or directory
+
+There are no sockets on djgpp.  This #ifdef's out the bits in the file
+that use sockets, depending on whether winsock or sys/socket.h is
+available.
+
+As alternative approach, given ser-tcp.c, ser-pipe.c, etc. are split
+into separate files, and which to use is selected by configure.ac:
+
+ dnl Figure out which of the many generic ser-*.c files the _host_ supports.
+ SER_HARDWIRE="ser-base.o ser-unix.o ser-pipe.o ser-tcp.o"
+ case ${host} in
+  *go32* ) SER_HARDWIRE=ser-go32.o ;;
+  *djgpp* ) SER_HARDWIRE=ser-go32.o ;;
+  *mingw32*) SER_HARDWIRE="ser-base.o ser-tcp.o ser-mingw.o" ;;
+ esac
+ AC_SUBST(SER_HARDWIRE)
+
+... I considered splitting filestuff.c similarly.  But I quickly gave
+up on the idea, as it looked like a lot more complication over this
+approach, for no real gain.  Plus, there are uses of these functions
+outside the ser*.c framework.
+
+gdbserver's configure.ac is already checking for sys/socket.h.
+
+gdb/
+2013-05-23  Pedro Alves  <palves@@redhat.com>
+
+	* common/filestuff.c [USE_WIN32API]: Define HAVE_SOCKETS.
+	[HAVE_SYS_SOCKET_H]: Define HAVE_SOCKETS.
+	(socket_mark_cloexec, gdb_socketpair_cloexec, gdb_socket_cloexec):
+	Only define if HAVE_SOCKETS is defined.
+	* configure.ac: Check for sys/socket.h.
+	* config.in, configure: Regenerate.
+@
+text
+@a159 2
+DEF_VEC_I (int);
+
+@
+
+
+1.5
+log
+@2013-05-10  Joel Brobecker  <brobecker@@adacore.com>
+	    Tom Tromey  <tromey@@redhat.com>
+
+	* common/filestuff.c (mark_fd_no_cloexec, unmark_fd_no_cloexec):
+	New functions.
+	* common/filestuff.c (mark_fd_no_cloexec, unmark_fd_no_cloexec):
+	Declare.
+	* darwin-nat.c (darwin_pre_ptrace): Use mark_fd_no_cloexec.
+	(darwin_ptrace_him): Use unmark_fd_no_cloexec.
+	* inf-ttrace.c (do_cleanup_pfds): Use unmark_fd_no_cloexec.
+	(inf_ttrace_prepare): Use mark_fd_no_cloexec.
+@
+text
+@d37 2
+a38 1
+#else
+d42 1
+d282 2
+d293 2
+d344 1
+d377 1
+@
+
+
+1.4
+log
+@filestuff.c: Include "gdb_dirent.h" instead of <dirent.h>
+
+gdb/ChangeLog:
+
+        * common/filestuff.c: Replace #include <dirent.h> by
+        #include "gdb_dirent.h".
+@
+text
+@d180 27
+@
+
+
+1.3
+log
+@filestuff.c: Use gdb_stat.h instead of <sys/stat.h>
+
+gdb/ChangeLog:
+
+        * common/filestuff.c: Replace #include <sys/stat.h> by
+        #include "gdb_stat.h".
+@
+text
+@d59 1
+a59 1
+#include <dirent.h>
+@
+
+
+1.2
+log
+@	* common/filestuff.c: Check USE_WIN32API before including
+	sys/socket.h.
+	(HAVE_F_GETFD): New define.
+	(mark_cloexec): Check HAVE_F_GETFD.
+	(gdb_open_cloexec): Change 'mode' to unsigned long.
+	(gdb_socketpair_cloexec): Check HAVE_SOCKETPAIR.
+	(gdb_pipe_cloexec): Check HAVE_PIPE.
+	* common/filestuff.h (gdb_open_cloexec): Change 'mode' to unsigned
+	long.
+@
+text
+@d32 1
+a32 1
+#include <sys/stat.h>
+@
+
+
+1.1
+log
+@	PR gdb/7912:
+	* Makefile.in (SFILES): Add filestuff.c
+	(COMMON_OBS): Add filestuff.o.
+	(filestuff.o): New target.
+	* auto-load.c (auto_load_objfile_script_1): Use
+	gdb_fopen_cloexec.
+	* auxv.c (procfs_xfer_auxv): Use gdb_open_cloexec.
+	* cli/cli-cmds.c (shell_escape): Call close_most_fds.
+	* cli/cli-dump.c (fopen_with_cleanup): Use gdb_fopen_cloexec.
+	* common/agent.c (gdb_connect_sync_socket): Use
+	gdb_socket_cloexec.
+	* common/filestuff.c: New file.
+	* common/filestuff.h: New file.
+	* common/linux-osdata.c (linux_common_core_of_thread)
+	(command_from_pid, commandline_from_pid, print_source_lines)
+	(linux_xfer_osdata_shm, linux_xfer_osdata_sem)
+	(linux_xfer_osdata_msg, linux_xfer_osdata_modules): Use
+	gdb_fopen_cloexec.
+	* common/linux-procfs.c (linux_proc_get_int)
+	(linux_proc_pid_has_state): Use gdb_fopen_cloexec.
+	* config.in, configure: Rebuild.
+	* configure.ac: Don't check for sys/socket.h.  Check for
+	fdwalk, pipe2.
+	* corelow.c (core_open): Use gdb_open_cloexec.
+	* dwarf2read.c (write_psymtabs_to_index): Use gdb_fopen_cloexec.
+	* fork-child.c (fork_inferior): Call close_most_fds.
+	* gdb_bfd.c (gdb_bfd_open): Use gdb_open_cloexec.
+	* inf-child.c (inf_child_fileio_readlink): Use gdb_open_cloexec.
+	* linux-nat.c (linux_nat_thread_name, linux_proc_pending_signals):
+	Use gdb_fopen_cloexec.
+	(linux_proc_xfer_partial, linux_proc_xfer_spu): Use
+	gdb_open_cloexec.
+	(linux_async_pipe): Use gdb_pipe_cloexec.
+	* remote-fileio.c (remote_fileio_func_open): Use
+	gdb_open_cloexec.
+	* remote.c (remote_file_put, remote_file_get): Use
+	gdb_fopen_cloexec.
+	* ser-pipe.c (pipe_open): Use gdb_socketpair_cloexec,
+	close_most_fds.
+	* ser-tcp.c (net_open): Use gdb_socket_cloexec.
+	* ser-unix.c (hardwire_open): Use gdb_open_cloexec.
+	* solib.c (solib_find): Use gdb_open_cloexec.
+	* source.c (openp, find_and_open_source): Use gdb_open_cloexec.
+	* tracepoint.c (tfile_start): Use gdb_fopen_cloexec.
+	(tfile_open): Use gdb_open_cloexec.
+	* tui/tui-io.c (tui_initialize_io): Use gdb_pipe_cloexec.
+	* ui-file.c (gdb_fopen): Use gdb_fopen_cloexec.
+	* xml-support.c (xml_fetch_content_from_file): Use
+	gdb_fopen_cloexec.
+	* main.c (captured_main): Call notice_open_fds.
+gdbserver
+	* Makefile.in (SFILES): Add filestuff.c.
+	(OBS): Add filestuff.o.
+	(filestuff.o): New target.
+	* config.in, configure: Rebuild.
+	* configure.ac: Check for fdwalk, pipe2.
+@
+text
+@a30 1
+#include <sys/socket.h>
+d34 9
+d226 1
+d241 1
+d267 1
+a267 1
+gdb_open_cloexec (const char *filename, int flags, mode_t mode)
+d316 1
+d326 3
+d359 1
+d366 4
+a369 1
+#endif
+@
+

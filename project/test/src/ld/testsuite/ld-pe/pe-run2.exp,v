@@ -1,0 +1,231 @@
+head	1.2;
+access;
+symbols
+	binutils-2_24-branch:1.2.0.10
+	binutils-2_24-branchpoint:1.2
+	binutils-2_21_1:1.2
+	binutils-2_23_2:1.2
+	binutils-2_23_1:1.2
+	binutils-2_23:1.2
+	binutils-2_23-branch:1.2.0.8
+	binutils-2_23-branchpoint:1.2
+	binutils-2_22_branch:1.2.0.6
+	binutils-2_22:1.2
+	binutils-2_22-branch:1.2.0.4
+	binutils-2_22-branchpoint:1.2
+	binutils-2_21:1.2
+	binutils-2_21-branch:1.2.0.2
+	binutils-2_21-branchpoint:1.2
+	binutils_latest_snapshot:1.2;
+locks; strict;
+comment	@# @;
+
+
+1.2
+date	2010.10.16.20.11.40;	author ktietz;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2009.11.15.07.52.45;	author ktietz;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@2010-10-16  Kai Tietz  <kai.tietz@@onevision.com>
+
+        * ld-pe/pe-run2.exp: Prefix --enable-auto-import by -Wl.
+@
+text
+@# Expect script for complex PE tests that require a C compiler and the ability
+# to run target executables natively, in addition to the just-built binutils.
+#   Copyright 2006, 2007, 2009
+#   Free Software Foundation, Inc.
+#
+# This file is part of the GNU Binutils.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+# MA 02110-1301, USA.
+#
+# Based on the script pe-run.exp written by Pedro Alves.
+# Written by Kai Tietz <kai.tietz@@onevision.com>
+#
+ 
+# Note:
+# 
+# This test checks the "direct linking to a dll" functionality with stdcall
+# and fastcall fixup.
+# 
+# The test has 7 stages:
+# 
+# 1. compile and link a test dll with ".dll" extension.
+#
+# 2. compile and link a test dll with ".sl" (i.e. != ".dll") extension.
+#
+# 3. compile and link a client application linking directly to the ".dll" dll built in 1.
+#    This should produce no errors.
+#
+# 4. compile and link a client application linking directly to the ".sl" dll built in 2.
+#    This should produce no errors.
+#
+# 5. compile and link a client application linking directly to a symlink into 
+#    the ".dll" dll built in 1.
+#    This should produce no errors.
+#
+# 6. compile and link a client application linking directly to a symlink into 
+#    the ".sl" dll built in 1.
+#    This should produce no errors.
+#
+# 7. run the produced executables
+
+# This test can only be run on PE/COFF platforms.
+if {![is_pecoff_format]} {
+    return
+}
+
+# No compiler, no test.
+if { [which $CC] == 0 } {
+    untested "Direct linking to dll fastcall/stdcall test"
+    return
+}
+
+set tmpdir tmpdir
+
+proc test_direct2_link_dll {} {
+    global CC
+    global CFLAGS
+    global srcdir
+    global subdir
+    global tmpdir
+
+    # Compile the dll.
+    if ![ld_compile "$CC $CFLAGS" $srcdir/$subdir/direct2_dll.c $tmpdir/direct2_dll.o ] {
+	fail "compiling shared lib fastcall/stdcall"
+    } elseif ![ld_simple_link "$CC -shared -Wl,--enable-stdcall-fixup -Wl,--kill-at " $tmpdir/direct2_dll.dll "$tmpdir/direct2_dll.o" ] {
+	fail "linking shared lib (.dll) fastcall/stdcall"
+    } elseif ![ld_simple_link "$CC -shared -Wl,--enable-stdcall-fixup -Wl,--kill-at " $tmpdir/direct2_dll.sl "$tmpdir/direct2_dll.o" ] {
+	fail "linking shared lib (.sl) fastcall/stdcall"
+    } else {
+	# Compile and link the client program.
+	if ![ld_compile "$CC $CFLAGS" $srcdir/$subdir/direct2_client.c $tmpdir/direct2_client.o ] {
+	    fail "compiling client fastcall/stdcall"
+	} else {
+	    # Check linking directly to direct2_dll.dll.
+	    set msg "linking client (.dll) fastcall/stdcall"
+	    if [ld_simple_link "$CC -Wl,--enable-stdcall-fixup -Wl,--enable-auto-import" $tmpdir/direct2_client_dll.exe \
+	      "$tmpdir/direct2_client.o $tmpdir/direct2_dll.dll" ] {
+		pass $msg
+	    } else {
+		fail $msg 
+	    }
+
+	    # Check linking directly to direct2_dll.sl.
+	    set msg "linking client (.sl) fastcall/stdcall"
+	    if [ld_simple_link "$CC -Wl,--enable-stdcall-fixup -Wl,--enable-auto-import" $tmpdir/direct2_client_sl.exe \
+	      "$tmpdir/direct2_client.o $tmpdir/direct2_dll.sl" ] {
+		pass $msg
+	    } else {
+		fail $msg 
+	    }
+
+	    # Check dll direct linking through symlink to .dll.
+	    # Create symbolic link.
+	    catch "exec ln -fs direct2_dll.dll $tmpdir/libdirect2_dll.dll.a" ln_catch
+	    set msg "linking client (symlink -> .dll) fastcall/stdcall"
+	    if [ld_simple_link "$CC -Wl,--enable-stdcall-fixup -Wl,--enable-auto-import" $tmpdir/direct2_client_symlink_dll.exe \
+	      "$tmpdir/direct2_client.o $tmpdir/libdirect2_dll.dll.a" ] {
+	        pass $msg
+	    } else {
+		fail $msg
+	    }
+		
+	    # Check dll direct linking through symlink to .sl.
+	    # Create symbolic link.
+	    catch "exec ln -fs direct2_dll.sl $tmpdir/libdirect2_sl.dll.a" ln_catch
+	    set msg "linking client (symlink -> .sl) fastcall/stdcall"
+	    if [ld_simple_link "$CC -Wl,--enable-stdcall-fixup -Wl,--enable-auto-import" $tmpdir/direct2_client_symlink_sl.exe \
+	      "$tmpdir/direct2_client.o $tmpdir/libdirect2_sl.dll.a" ] {
+		pass $msg
+	    } else {
+		fail $msg 
+	    }
+	}
+    }
+}
+
+proc directdll_execute {exe msg} {
+    set expected ""
+    catch "exec $exe" prog_output
+    if [string match $expected $prog_output] then {
+        pass $msg
+    } else {
+        verbose $prog_output
+        fail $msg
+    }
+}
+
+test_direct2_link_dll
+
+# This is as far as we can go with a cross-compiler
+if ![isnative] then {
+    verbose "Not running natively, so cannot execute binaries"
+    return
+}
+
+directdll_execute "$tmpdir/direct2_client_dll.exe" "running direct linked dll (.dll) fastcall/stdcall"
+directdll_execute "$tmpdir/direct2_client_sl.exe" "running direct linked dll (.sl) fastcall/stdcall"
+directdll_execute "$tmpdir/direct2_client_symlink_sl.exe" "running direct linked dll (symlink -> .sl) fastcall/stdcall"
+directdll_execute "$tmpdir/direct2_client_symlink_dll.exe" "running direct linked dll (symlink -> .dll) fastcall/stdcall"
+@
+
+
+1.1
+log
+@2009-11-15  Kai Tietz  <kai.tietz@@onevision.com>
+
+	* pe-dll.c (pe_undef_alias_cdecl_match): New function.
+	(pe_find_cdecl_alias_match): New function.
+	(pe_process_import_defs): Add matching for import symbols
+	declared as cdecl for fastcall/stdcall.
+	* emultempl/pe.em (pe_undef_cdecl_match): Treat fastcall
+	symbols, too.
+	(pe_fixup_stdcalls): Likewise.
+	(gld_XXX_after_open): Redo scanning for imported
+	fastcall/stdcall symbols as cdecl one.
+	* emultempl/pep.em (pep_undef_cdecl_match): Treat fastcall
+	symbols, too.
+	(pep_fixup_stdcalls): Likewise.
+	(gld_XXX_after_open): Redo scanning for imported
+	fastcall/stdcall symbols as cdecl one.
+
+2009-11-15  Kai Tietz  <kai.tietz@@onevision.com>
+
+	* ld-pe/direct2_client.c: New file.
+	* ld-pe/direct2_dll.c: Likewise.
+	* ld-pe/direct2_dll.def: Likewise.
+	* ld-pe/pe-run2.exp: Likewise.
+@
+text
+@d88 1
+a88 1
+	    if [ld_simple_link "$CC -Wl,--enable-stdcall-fixup --enable-auto-import" $tmpdir/direct2_client_dll.exe \
+@
+

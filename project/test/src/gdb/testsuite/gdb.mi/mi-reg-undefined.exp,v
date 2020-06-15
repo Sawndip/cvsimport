@@ -1,0 +1,231 @@
+head	1.2;
+access;
+symbols;
+locks; strict;
+comment	@# @;
+
+
+1.2
+date	2013.10.02.16.15.46;	author palves;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2013.07.25.10.39.39;	author aburgess;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@Print registers not saved in the frame as "<not saved>" instead of "<optimized out>".
+
+Currently, in some scenarios, GDB prints <optimized out> when printing
+outer frame registers.  An <optimized out> register is a confusing
+concept.  What this really means is that the register is
+call-clobbered, or IOW, not saved by the callee.  This patch makes GDB
+say that instead.
+
+Before patch:
+
+ (gdb) p/x $rax $1 = <optimized out>
+ (gdb) info registers rax
+ rax            <optimized out>
+
+After patch:
+
+ (gdb) p/x $rax
+ $1 = <not saved>
+ (gdb) info registers rax
+ rax            <not saved>
+
+However, if for some reason the debug info describes a variable as
+being in such a register (**), we still want to print <optimized out>
+when printing the variable.  IOW, <not saved> is reserved for
+inspecting registers at the machine level.  The patch uses
+lval_register+optimized_out to encode the not saved registers, and
+makes it so that optimized out variables always end up in
+!lval_register values.
+
+** See <https://sourceware.org/ml/gdb-patches/2012-08/msg00787.html>.
+Current/recent enough GCC doesn't mark variables/arguments as being in
+call-clobbered registers in the ranges corresponding to function
+calls, while older GCCs did.  Newer GCCs will just not say where the
+variable is, so GDB will end up realizing the variable is optimized
+out.
+
+frame_unwind_got_optimized creates not_lval optimized out registers,
+so by default, in most cases, we'll see <optimized out>.
+
+value_of_register is the function eval.c uses for evaluating
+OP_REGISTER (again, $pc, etc.), and related bits.  It isn't used for
+anything else.  This function makes sure to return lval_register
+values.  The patch makes "info registers" and the MI equivalent use it
+too.  I think it just makes a lot of sense, as this makes it so that
+when printing machine registers ($pc, etc.), we go through a central
+function.
+
+We're likely to need a different encoding at some point, if/when we
+support partially saved registers.  Even then, I think
+value_of_register will still be the spot to tag the intention to print
+machine register values differently.
+
+value_from_register however may also return optimized out
+lval_register values, so at a couple places where we're computing a
+variable's location from a dwarf expression, we convert the resulting
+value away from lval_register to a regular optimized out value.
+
+Tested on x86_64 Fedora 17
+
+gdb/
+2013-10-02  Pedro Alves  <palves@@redhat.com>
+
+	* cp-valprint.c (cp_print_value_fields): Adjust calls to
+	val_print_optimized_out.
+	* jv-valprint.c (java_print_value_fields): Likewise.
+	* p-valprint.c (pascal_object_print_value_fields): Likewise.
+	* dwarf2loc.c (dwarf2_evaluate_loc_desc_full)
+	<DWARF_VALUE_REGISTER>: If the register was not saved, return a
+	new optimized out value.
+	* findvar.c (address_from_register): Likewise.
+	* frame.c (put_frame_register): Tweak error string to say the
+	register was not saved, rather than optimized out.
+	* infcmd.c (default_print_one_register_info): Adjust call to
+	val_print_optimized_out.  Use value_of_register instead of
+	get_frame_register_value.
+	* mi/mi-main.c (output_register): Use value_of_register instead of
+	get_frame_register_value.
+	* valprint.c (valprint_check_validity): Likewise.
+	(val_print_optimized_out): New value parameter.  If the value is
+	lval_register, print <not saved> instead.
+	(value_check_printable, val_print_scalar_formatted): Adjust calls
+	to val_print_optimized_out.
+	* valprint.h (val_print_optimized_out): New value parameter.
+	* value.c (struct value) <optimized_out>: Extend comment.
+	(error_value_optimized_out): New function.
+	(require_not_optimized_out): Use it.  Use a different string for
+	lval_register values.
+	* value.h (error_value_optimized_out): New declaration.
+	* NEWS: Mention <not saved>.
+
+gdb/testsuite/
+2013-10-02  Pedro Alves  <palves@@redhat.com>
+
+	* gdb.dwarf2/dw2-reg-undefined.exp <pattern_rax_rbx_rcx_print,
+	pattern_rax_rbx_rcx_info>: Set to "<not saved>".
+	* gdb.mi/mi-reg-undefined.exp (opt_out_pattern): Delete.
+	(not_saved_pattern): New.
+	Replace use of the former with the latter.
+
+gdb/doc/
+2013-10-02  Pedro Alves  <palves@@redhat.com>
+
+	* gdb.texinfo (Registers): Expand description of saved registers
+	in frames.  Explain <not saved>.
+@
+text
+@# Copyright 2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+load_lib dwarf.exp
+load_lib mi-support.exp
+set MIFLAGS "-i=mi"
+
+# This test can only be run on targets which support DWARF-2 and use gas.
+if {![dwarf2_support]} {
+    return 0
+}
+
+# This test can only be run on x86_64 targets.
+if {![istarget "x86_64-*-*"] || ![is_lp64_target]} {
+    return 0
+}
+
+gdb_exit
+if [mi_gdb_start] {
+    continue
+}
+
+standard_testfile .S
+
+if  { [gdb_compile "${srcdir}/${subdir}/${srcfile}" "${binfile}" executable {debug}] != "" } {
+     untested mi-reg-undefined.exp
+     return -1
+}
+
+mi_delete_breakpoints
+mi_gdb_reinitialize_dir $srcdir/$subdir
+mi_gdb_reinitialize_dir $srcdir/$subdir
+mi_gdb_load ${binfile}
+
+if ![mi_runto stop_frame] {
+    perror "Failed to stop in stop_frame"
+    return -1
+}
+
+mi_gdb_test "111-stack-list-frames" \
+    "111\\^done,stack=\\\[frame=\{level=\"0\",addr=\"$hex\",func=\"stop_frame\",.*\},frame=\{level=\"1\",addr=\"$hex\",func=\"first_frame\",.*\},frame=\{level=\"2\",addr=\"$hex\",func=\"main\",.*\}\\\]" \
+    "stack frame listing"
+
+set not_saved_pattern "<not saved>"
+
+for {set f 0} {$f < 3} {incr f} {
+    if {${f} == 0} {
+	set pattern_0_1_2 ${hex}
+    } else {
+	set pattern_0_1_2 ${not_saved_pattern}
+    }
+
+    mi_gdb_test "22${f}-data-list-register-values --thread 1 --frame ${f} x  0 1 2 8 9" \
+	"22${f}\\^done,register-values=\\\[\{number=\"0\",value=\"${pattern_0_1_2}\"\},\{number=\"1\",value=\"${pattern_0_1_2}\"\},\{number=\"2\",value=\"${pattern_0_1_2}\"\},\{number=\"8\",value=\"$hex\"\},\{number=\"9\",value=\"$hex\"\}\\\]" \
+	"register values, format x, frame ${f}"
+
+    mi_gdb_test "33${f}-data-list-register-values --thread 1 --frame ${f} r 0 1 2 8 9" \
+	"33${f}\\^done,register-values=\\\[\{number=\"0\",value=\"${pattern_0_1_2}\"\},\{number=\"1\",value=\"${pattern_0_1_2}\"\},\{number=\"2\",value=\"${pattern_0_1_2}\"\},\{number=\"8\",value=\"$hex\"\},\{number=\"9\",value=\"$hex\"\}\\\]" \
+	"register values, format r, frame ${f}"
+}
+@
+
+
+1.1
+log
+@Resue 'z' formatter from mi register display code.
+
+  http://sourceware.org/ml/gdb-patches/2013-07/msg00236.html
+
+gdb/ChangeLog
+
+        * mi/mi-main.c (output_register): Make MI 'r' format use standard
+        'z' format code.  Remove error for optimized out values, standard
+        code will handle these fine.
+
+gdb/testsuite/ChangeLog
+
+        * gdb.mi/mi-reg-undefined.exp: New file.
+        * gdb.mi/mi-reg-undefined.c: Likewise.
+        * gdb.mi/mi-reg-undefined.S: Likewise.
+@
+text
+@d55 1
+a55 1
+set opt_out_pattern "<optimized out>"
+d61 1
+a61 1
+	set pattern_0_1_2 ${opt_out_pattern}
+@
+

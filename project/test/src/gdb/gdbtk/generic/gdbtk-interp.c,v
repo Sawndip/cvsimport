@@ -1,0 +1,608 @@
+head	1.13;
+access;
+symbols
+	insight_7_6-2013-04-10-branchpoint:1.12
+	gdb_7_6-branch:1.12.0.6
+	gdb_7_5-branch:1.12.0.4
+	gdb_7_4-branch:1.12.0.2
+	gdb_7_3-branch:1.10.0.8
+	gdb_7_1-branch:1.10.0.6
+	gdb_7_0-branch:1.10.0.4
+	arc-sim-20090309:1.10.2.1
+	arc-insight_6_8-branch:1.10.2.1.0.4
+	arc-insight_6_8-branchpoint:1.10.2.1
+	insight_6_8-branch:1.10.2.1.0.2
+	insight_6_8-branchpoint:1.10.2.1
+	gdb_6_8-branch:1.10.0.2
+	insight_6_6-20070208-release:1.8
+	gdb_6_6-branch:1.8.0.4
+	gdb_6_6-2006-11-15-branchpoint:1.8
+	insight_6_5-20061003-release:1.8
+	gdb_6_5-branch:1.8.0.2
+	gdb_6_5-2006-05-14-branchpoint:1.8
+	gdb-csl-gxxpro-6_3-branch:1.7.0.4
+	gdb-csl-gxxpro-6_3-branchpoint:1.7
+	gdb_6_4-branch:1.7.0.2
+	gdb_6_4-2005-11-01-branchpoint:1.7
+	gdb_6_1-2004-04-05-release:1.3
+	gdb_6_1-branch:1.3.0.4
+	gdb_6_1-2004-03-01-gmt-branchpoint:1.3
+	gdb_6_0-2003-10-04-release:1.3
+	gdb_6_0-branch:1.3.0.2
+	gdb_6_0-2003-06-23-branchpoint:1.3;
+locks; strict;
+comment	@ * @;
+
+
+1.13
+date	2013.09.05.12.55.57;	author aburgess;	state Exp;
+branches;
+next	1.12;
+
+1.12
+date	2012.03.10.21.51.51;	author kseitz;	state Exp;
+branches;
+next	1.11;
+
+1.11
+date	2011.11.02.19.44.37;	author kseitz;	state Exp;
+branches;
+next	1.10;
+
+1.10
+date	2008.03.18.18.43.13;	author macro;	state Exp;
+branches
+	1.10.2.1;
+next	1.9;
+
+1.9
+date	2008.03.03.23.25.03;	author kseitz;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2005.12.23.18.23.16;	author eliz;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2005.06.01.15.23.17;	author kseitz;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2005.04.28.23.45.07;	author bje;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2005.01.18.00.14.39;	author kseitz;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2004.04.22.16.51.43;	author kseitz;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2003.03.06.21.58.41;	author hunt;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2003.02.21.17.26.29;	author tromey;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2003.02.18.23.33.05;	author kseitz;	state Exp;
+branches;
+next	;
+
+1.10.2.1
+date	2008.03.30.00.11.58;	author kseitz;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.13
+log
+@Remove use of deprecated_command_loop_hook.
+
+  https://sourceware.org/ml/insight/2013-q3/msg00029.html
+
+gdb/gdbtk/ChangeLog
+
+        * generic/gdbtk-interp.c (gdbtk_command_loop): Change signature to
+        take interpreter cookie (ignored), mention parameter in comment.
+        (gdb_interpreter_resume): Remove use of
+        deprecated_command_loop_hook.
+        (_initialize_gdbtk_interp): Fill in logging proc and command loop
+        proc pointers.
+@
+text
+@/* Insight Definitions for GDB, the GNU debugger.
+   Written by Keith Seitz <kseitz@@sources.redhat.com>
+
+   Copyright (C) 2003, 2004, 2008, 2011, 2012 Free Software Foundation, Inc.
+
+   This file is part of Insight.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 2 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 51 Franklin Street, Fifth Floor,
+   Boston, MA 02110-1301, USA.  */
+
+#include "defs.h"
+#include "interps.h"
+#include "ui-file.h"
+#include "ui-out.h"
+#include "cli-out.h"
+#include "gdb_string.h"
+#include "cli/cli-cmds.h"
+#include "cli/cli-decode.h"
+#include "exceptions.h"
+
+#include "tcl.h"
+#include "tk.h"
+#include "gdbtk.h"
+
+#ifdef __MINGW32__
+# define WIN32_LEAN_AND_MEAN
+# include <windows.h>
+#endif
+
+
+static void gdbtk_command_loop (void *);
+static void hack_disable_interpreter_exec (char *, int);
+void _initialize_gdbtk_interp (void);
+
+struct gdbtk_interp_data
+{
+  struct ui_file *_stdout;
+  struct ui_file *_stderr;
+  struct ui_file *_stdlog;
+  struct ui_file *_stdtarg;
+  struct ui_file *_stdtargin;
+  struct ui_out *uiout;
+};
+
+/* See note in gdbtk_interpreter_init */
+static void
+hack_disable_interpreter_exec (char *args, int from_tty)
+{
+  error ("interpreter-exec not available when running Insight");
+}
+
+static void *
+gdbtk_interpreter_init (struct interp *interp, int top_level)
+{
+  /* Disable interpreter-exec. It causes us big trouble right now. */
+  struct cmd_list_element *cmd = NULL;
+  struct cmd_list_element *alias = NULL;
+  struct cmd_list_element *prefix = NULL;
+  struct gdbtk_interp_data *data;
+
+  data = XZALLOC (struct gdbtk_interp_data);
+  data->_stdout = gdbtk_fileopen ();
+  data->_stderr = gdbtk_fileopen ();
+  data->_stdlog = gdbtk_fileopen ();
+  data->_stdtarg = gdbtk_fileopen ();
+  data->_stdtargin = gdbtk_fileopenin ();
+  data->uiout = cli_out_new (data->_stdout),
+
+  gdbtk_init ();
+
+  if (lookup_cmd_composition ("interpreter-exec", &alias, &prefix, &cmd))
+    {
+      set_cmd_cfunc (cmd, hack_disable_interpreter_exec);
+    }
+
+  return data;
+}
+
+static int
+gdbtk_interpreter_resume (void *data)
+{
+  static int started = 0;
+  struct gdbtk_interp_data *d = (struct gdbtk_interp_data *) data;
+  gdbtk_add_hooks ();
+
+  gdb_stdout = d->_stdout;
+  gdb_stderr = d->_stderr;
+  gdb_stdlog = d->_stdlog;
+  gdb_stdtarg = d->_stdtarg;
+  gdb_stdtargin = d->_stdtargin;
+
+  /* 2003-02-11 keiths: We cannot actually source our main Tcl file in
+     our interpreter's init function because any errors that may
+     get generated will go to the wrong gdb_stderr. Instead of hacking
+     our interpreter init function to force gdb_stderr to our ui_file,
+     we defer sourcing the startup file until now, when gdb is ready
+     to let our interpreter run. */
+  if (!started)
+    {
+      started = 1;
+      gdbtk_source_start_file ();
+    }
+
+  return 1;
+}
+
+static int
+gdbtk_interpreter_suspend (void *data)
+{
+  return 1;
+}
+
+static int
+gdbtk_interpreter_display_prompt_p (void *data)
+{
+  return 1;
+}
+
+static struct gdb_exception
+gdbtk_interpreter_exec (void *data, const char *command_str)
+{
+  return exception_none;
+}
+
+/* This function is called instead of gdb's internal command loop.  This is the
+   last chance to do anything before entering the main Tk event loop. 
+   At the end of the command, we enter the main loop.
+   DATA is the interpreter cookie, currently unused.  */
+
+static void
+gdbtk_command_loop (void *data)
+{
+  extern FILE *instream;
+
+  /* We no longer want to use stdin as the command input stream */
+  instream = NULL;
+
+  if (Tcl_Eval (gdbtk_interp, "gdbtk_tcl_preloop") != TCL_OK)
+    {
+      const char *msg;
+
+      /* Force errorInfo to be set up propertly.  */
+      Tcl_AddErrorInfo (gdbtk_interp, "");
+
+      msg = Tcl_GetVar (gdbtk_interp, "errorInfo", TCL_GLOBAL_ONLY);
+#ifdef _WIN32
+      MessageBox (NULL, msg, NULL, MB_OK | MB_ICONERROR | MB_TASKMODAL);
+#else
+      fputs_unfiltered (msg, gdb_stderr);
+#endif
+    }
+
+#ifdef _WIN32
+  close_bfds ();
+#endif
+
+  Tk_MainLoop ();
+}
+
+static struct ui_out *
+gdbtk_interpreter_ui_out (struct interp *interp)
+{
+  struct gdbtk_interp_data *data = interp_data (interp);
+
+  return data->uiout;
+}
+
+void
+_initialize_gdbtk_interp (void)
+{
+  static const struct interp_procs procs = {
+    gdbtk_interpreter_init,             /* init_proc */
+    gdbtk_interpreter_resume,           /* resume_proc */
+    gdbtk_interpreter_suspend,	        /* suspend_proc */
+    gdbtk_interpreter_exec,             /* exec_proc */
+    gdbtk_interpreter_display_prompt_p, /* prompt_proc_p */
+    gdbtk_interpreter_ui_out,		/* ui_out_proc */
+    NULL,                               /* set_logging_proc */
+    gdbtk_command_loop                  /* command_loop_proc */
+  };
+  interp_add (interp_new ("insight", &procs));
+}
+@
+
+
+1.12
+log
+@	* generic/gdbtk-interp.c (_initialize_gdbtk_interp): Add
+	missing prototype to appease -Wmissing-prototypes.
+@
+text
+@d43 1
+a43 1
+static void gdbtk_command_loop (void);
+a103 2
+  deprecated_command_loop_hook = gdbtk_command_loop;
+
+d139 2
+a140 1
+   At the end of the command, we enter the main loop. */
+d143 1
+a143 1
+gdbtk_command_loop (void)
+d189 3
+a191 1
+    gdbtk_interpreter_ui_out		/* ui_out_proc */
+@
+
+
+1.11
+log
+@	* generic/gdbtk-interp.c (struct gdbtk_interp_data)
+	<uiout>: New member.
+	(gdbtk_data): Remove global.
+	(gdbtk_interpreter_init): Update with GDB API changes.
+	Allocate private intepreter data.
+	(gdbtk_interpreter_ui_out): New function.
+	(_initialize_gdbtk_interp): Add gdbtk_interpreter_ui_out to
+	PROCS.
+	Remove gdbtk_data and related allocation/initialization.
+@
+text
+@d4 1
+a4 1
+   Copyright (C) 2003, 2004, 2008, 2011 Free Software Foundation, Inc.
+d45 1
+@
+
+
+1.10
+log
+@* generic/gdbtk-interp.c (gdbtk_interpreter_init): New parameter
+top_level.
+@
+text
+@d4 1
+a4 1
+   Copyright (C) 2003, 2004, 2008 Free Software Foundation, Inc.
+d53 1
+a55 2
+static struct gdbtk_interp_data *gdbtk_data;
+
+d64 1
+a64 1
+gdbtk_interpreter_init (int top_level)
+d70 9
+d87 1
+a87 1
+  return gdbtk_data;
+d172 8
+d188 2
+a189 1
+    gdbtk_interpreter_display_prompt_p  /* prompt_proc_p */
+d191 1
+a191 13
+  struct interp *gdbtk_interp;
+
+  gdbtk_data = 
+    (struct gdbtk_interp_data *) xmalloc (sizeof (struct gdbtk_interp_data));
+  memset (gdbtk_data, 0, sizeof (struct gdbtk_interp_data));
+  gdbtk_data->_stdout = gdbtk_fileopen ();
+  gdbtk_data->_stderr = gdbtk_fileopen ();
+  gdbtk_data->_stdlog = gdbtk_fileopen ();
+  gdbtk_data->_stdtarg = gdbtk_fileopen ();
+  gdbtk_data->_stdtargin = gdbtk_fileopenin ();
+  gdbtk_interp = interp_new ("insight", gdbtk_data, cli_out_new (gdbtk_data->_stdout),
+			     &procs);
+  interp_add (gdbtk_interp);
+@
+
+
+1.10.2.1
+log
+@Remove the 2008-03-18 gdbtk-interp.c change -- it is unneeded on 6.8 branch.
+@
+text
+@d65 1
+a65 1
+gdbtk_interpreter_init (void)
+@
+
+
+1.9
+log
+@        From Dave Murphy  <davem@@devkitpro.org>:
+        * gdbtk-cmds.c: Guard <sys/ioctl.h> with HAVE_SYS_IOCTL_H.
+        * gdbtk-hooks.c: Ditto.
+        * gdbtk.c: Ditto.
+        * gdbtk-interp.c: Include windows.h under mingw32.
+        (gdbtk_start_timer, gdbtk_stop_timer): Remove timer calls under mingw.
+        (gdbtk_init): Include windows-specific commands under mingw without
+        cygwin path commands.
+        * library/download.itb (Download::download_it): Only use ide_cygwin_path
+        on cygwin hosts.
+        * library/interface.tcl (_open_file): Ditto.
+        * library/prefs.tcl (pref_read): Ditto.
+        * library/targetselection.itb (TargetSelection::default_port): Default
+        to "/dev/com1" under cygwin and "COM1" under mingw.
+        (TargetSelection::port_list): Use "/dev/com" under cygwin and
+        "COM" under mingw.
+@
+text
+@d4 1
+a4 1
+   Copyright (C) 2003, 2004 Free Software Foundation, Inc.
+d65 1
+a65 1
+gdbtk_interpreter_init (void)
+@
+
+
+1.8
+log
+@	* generic/gdbtk.h:
+	* generic/gdbtk.c:
+	* generic/gdbtk-wrapper.h:
+	* generic/gdbtk-wrapper.c:
+	* generic/gdbtk-varobj.c:
+	* generic/gdbtk-stack.c:
+	* generic/gdbtk-register.c:
+	* generic/gdbtk-main.c:
+	* generic/gdbtk-interp.c:
+	* generic/gdbtk-hooks.c:
+	* generic/gdbtk-cmds.h:
+	* generic/gdbtk-cmds.c:
+	* generic/gdbtk-bp.c: Put (C) after Copyright.  Update the FSF
+	address.
+@
+text
+@d37 6
+@
+
+
+1.7
+log
+@        From James Lemke  <jim@@wasabisystems.com>:
+        * generic/gdbtk-hooks.c (gdbtk_fileopenin, gdbtk_read): New functions
+        for target to read stdin from console window.
+        * generic/gdbtk-interp.c (_stdtargin): Added.
+        * generic/gdbtk.h (gdbtk_fileopenin): Add declaration.
+@
+text
+@d4 1
+a4 1
+   Copyright 2003, 2004 Free Software Foundation, Inc.
+d20 2
+a21 2
+   Foundation, Inc., 59 Temple Place - Suite 330,
+   Boston, MA 02111-1307, USA.  */
+@
+
+
+1.6
+log
+@	* generic/gdbtk-interp.c (gdbtk_interpreter_exec): Return struct
+	gdb_exception due to the 2005-04-26 renaming of struct exception.
+	* generic/gdbtk.c (gdbtk_source_start_file): Likewise.
+@
+text
+@d46 1
+d87 1
+d177 1
+@
+
+
+1.5
+log
+@        * generic/gdbtk-varobj.c (variable_value): Remove all instances
+        of error_last_message. It's gone.
+
+        * generic/gdbtk-wrapper.c: Include exceptions.h
+        * generic/gdbtk-cmds.c: Likewise.
+        * generic/gdbtk-interp.c: Likewise.
+        (gdbtk_interpreter_exec): Change return type to struct
+        exception. Return exception_none.
+@
+text
+@d116 1
+a116 1
+static struct exception
+@
+
+
+1.4
+log
+@NOTE: This needs fixing. Shouldn't be difficult, but it will be tedious.
+        * generic/gdbtk-hooks.c (gdbtk_add_hooks): "Update" deprecated hooks.
+        "Houston... We have a problem."
+        * generic/gdbtk-interp.c (gdbtk_interpreter_resume): Likewise.
+        * generic/gdbtk.c (gdbtk_init_1): Likewise.
+@
+text
+@d31 1
+d116 1
+a116 1
+static int
+d119 1
+a119 1
+  return 1;
+@
+
+
+1.3
+log
+@2003-03-06  Martin M. Hunt  <hunt@@redhat.com>
+
+	* generic/gdbtk-interp.c (gdbtk_interpreter_init): Remove
+	unused variable.
+
+	* generic/gdbtk-cmds.c (gdb_update_mem): Remove unused variable.
+	(gdbtk_print_source): Deleted.
+	(gdbtk_print_asm): Deleted.
+@
+text
+@d2 1
+a2 1
+   Written by Keith Seitz <kseitz@@uglyboxes.com>
+d4 1
+a4 1
+   Copyright 2003 Free Software Foundation, Inc.
+d86 1
+a86 1
+  command_loop_hook = gdbtk_command_loop;
+@
+
+
+1.2
+log
+@	* generic/gdbtk-interp.c (gdbtk_interpreter_init): Declare locals
+	before code.
+@
+text
+@a62 1
+  struct cmd_list_element *c;
+@
+
+
+1.1
+log
+@        * generic/gdbtk-main.c (main): Change name of intepreter to "insight".
+        * generic/gdbtk.h: Add ifdef wrappers.
+        (gdbtk_init): Declare.
+        (gdbtk_source_start_file): Declare.
+        * generic/gdbtk.c (gdbtk_init): Export.
+        Reomve init_ui_hook stuff.
+        Do not add hooks here anymore (moved into interps).
+        Do not muck with gdbk_stdout et al (moved into interps).
+        (gdbtk_source_start_file): Code ripped out of gdbtk_init
+        which deals with sourcing the main startup file.
+        (gdbtk_init_1): Hack: New function.
+        (argv0): Hack: New static global.
+        (tk_init): Moved to gdbtk-interps.c.
+        (gdbtk_resume): Likewise.
+        (gdbtk_suspend): Likewise.
+        (gdbtk_prompt_p): Likewise.
+        (gdbtk_exec): Likewise.
+        (gdbtk_command_loop): Likewise.
+        (_initialize_gdbtk): Move interpreter stuff to gdbtk-interps.c.
+        Hack: Add new init_ui_hook.
+        * generic/gdbtk-interps.c: New file.
+@
+text
+@a58 2
+  gdbtk_init ();
+
+d64 2
+@
+

@@ -1,0 +1,190 @@
+head	1.1;
+access;
+symbols
+	cygwin-1_7_35-release:1.1
+	cygwin-1_7_34-release:1.1
+	newlib-2_2_0:1.1.0.10
+	cygwin-1_7_33-release:1.1
+	cygwin-1_7_32-release:1.1
+	cygwin-1_7_31-release:1.1
+	cygwin-1_7_30-release:1.1
+	cygwin-1_7_29-release:1.1
+	cygwin-1_7_28-release:1.1
+	newlib-2_1_0:1.1
+	cygwin-1_7_27-release:1.1
+	cygwin-1_7_26-release:1.1
+	cygwin-1_7_25-release:1.1
+	cygwin-1_7_24-release:1.1
+	cygwin-1_7_23-release:1.1
+	cygwin-1_7_22-release:1.1
+	cygwin-1_7_21-release:1.1
+	cygwin-1_7_20-release:1.1
+	cygwin-1_7_19-release:1.1
+	cygwin-64bit-postmerge:1.1
+	cygwin-64bit-premerge-branch:1.1.0.8
+	cygwin-64bit-premerge:1.1
+	cygwin-1_7_18-release:1.1
+	newlib-2_0_0:1.1
+	cygwin-1_7_17-release:1.1
+	cygwin-64bit-branch:1.1.0.6
+	cygwin-1_7_16-release:1.1
+	cygwin-1_7_15-release:1.1
+	cygwin-1_7_14_2-release:1.1
+	cygwin-1_7_14-release:1.1
+	cygwin-1_7_12-release:1.1
+	cygwin-1_7_11-release:1.1
+	cygwin-1_7_10-release:1.1
+	newlib-1_20_0:1.1
+	cygwin-1_7_9-release:1.1
+	cygwin-1_7_8-release:1.1
+	newlib-1_19_0:1.1
+	cygwin-1_7_7-release:1.1
+	cygwin-1_7_5-release:1.1
+	cygwin-1_7_4-release:1.1
+	cygwin-1_7_3-release:1.1
+	cygwin-1_7_2-release:1.1
+	newlib-1_18_0:1.1
+	cygwin-1_7_1-release:1.1
+	newlib-1_17_0-arc:1.1.0.4
+	binutils-arc-20080908-branch:1.1.0.2
+	binutils-arc-20080908-branchpoint:1.1
+	newlib-1_17_0:1.1
+	newlib-1_16_0:1.1
+	newlib-1_15_0:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.1
+date	2006.10.27.23.02.00;	author jjohnstn;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.1
+log
+@
+2006-10-27  Joel Schopp  <jschopp@@austin.ibm.com>
+
+        * libc/machine/spu/memcpy.c: Override generic function with vectorized
+        version optimized for the cell spu.
+        * libc/machine/spu/memmove.c: Ditto.
+        * libc/machine/spu/memset.c: Ditto.
+        * libc/machine/spu/strcat.c: Ditto.
+        * libc/machine/spu/strchr.c: Ditto.
+        * libc/machine/spu/strcmp.c: Ditto.
+        * libc/machine/spu/strcpy.c: Ditto.
+        * libc/machine/spu/strcspn.c: Ditto.
+        * libc/machine/spu/strlen.c: Ditto.
+        * libc/machine/spu/strncat.c: Ditto.
+        * libc/machine/spu/strncmp.c: Ditto.
+        * libc/machine/spu/strncpy.c: Ditto.
+        * libc/machine/spu/strpbrk.c: Ditto.
+        * libc/machine/spu/strrchr.c: Ditto.
+        * libc/machine/spu/strspn.c: Ditto.
+        * libc/machine/spu/strxfrm.c: Ditto.
+        * libc/machine/spu/vec_literal.h: Add abstraction of vector literals,
+        removing altivec style initializers.
+        * libc/machine/spu/Makefile.am: Add new files to list so they build
+        * libc/machine/spu/Makefile.in: Regenerate from new Makefile.am
+@
+text
+@/*
+  (C) Copyright 2001,2006,
+  International Business Machines Corporation,
+  Sony Computer Entertainment, Incorporated,
+  Toshiba Corporation,
+
+  All rights reserved.
+
+  Redistribution and use in source and binary forms, with or without
+  modification, are permitted provided that the following conditions are met:
+
+    * Redistributions of source code must retain the above copyright notice,
+  this list of conditions and the following disclaimer.
+    * Redistributions in binary form must reproduce the above copyright
+  notice, this list of conditions and the following disclaimer in the
+  documentation and/or other materials provided with the distribution.
+    * Neither the names of the copyright holders nor the names of their
+  contributors may be used to endorse or promote products derived from this
+  software without specific prior written permission.
+
+  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+  ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+  LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+  CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+  SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+  INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+  CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+  POSSIBILITY OF SUCH DAMAGE.
+*/
+#include <spu_intrinsics.h>
+#include "vec_literal.h"
+
+/* Compare the two strings s1 and s2. Return an integer less than, equal
+ * to, or greater than zero if  s1 is found, respectively, to be less than,
+ * to match, or be greater than s2.
+ */
+
+int strcmp(const char *s1, const char *s2)
+{
+  unsigned int offset1, offset2;
+  vec_uint4 gt_v, lt_v, mask_v;
+  vec_uint4 cnt1_v, cnt2_v;
+  vec_uint4 end1_v, end2_v, end_v, neq_v;
+  vec_uchar16 shuffle1, shuffle2;
+  vec_uchar16 data1A, data1B, data1, data2A, data2B, data2;
+  vec_uchar16 *ptr1, *ptr2;
+
+  ptr1 = (vec_uchar16 *)s1;
+  ptr2 = (vec_uchar16 *)s2;
+
+  offset1 = (unsigned int)(ptr1) & 15;
+  offset2 = (unsigned int)(ptr2) & 15;
+
+  shuffle1 = (vec_uchar16)spu_add((vec_uint4)spu_splats((unsigned char)offset1),
+				  VEC_LITERAL(vec_uint4, 0x00010203, 0x04050607, 0x08090A0B, 0x0C0D0E0F));
+  shuffle2 = (vec_uchar16)spu_add((vec_uint4)spu_splats((unsigned char)offset2),
+				  VEC_LITERAL(vec_uint4, 0x00010203, 0x04050607, 0x08090A0B, 0x0C0D0E0F));
+
+  data1A = *ptr1++;
+  data2A = *ptr2++;
+
+  do {
+    data1B = *ptr1++;
+    data2B = *ptr2++;
+
+    data1 = spu_shuffle(data1A, data1B, shuffle1);
+    data2 = spu_shuffle(data2A, data2B, shuffle2);
+
+    data1A = data1B;
+    data2A = data2B;
+
+    neq_v = spu_gather(spu_xor(spu_cmpeq(data1, data2), -1));
+
+    end1_v = spu_gather(spu_cmpeq(data1, 0));
+    end2_v = spu_gather(spu_cmpeq(data2, 0));
+    end_v  = spu_or(end1_v, end2_v), 0;
+  } while (spu_extract(spu_or(end_v, neq_v), 0) == 0);
+
+  cnt1_v = spu_cntlz(end1_v);
+  cnt2_v = spu_cntlz(end2_v);
+
+  gt_v = spu_gather(spu_cmpgt(data1, data2));
+  lt_v = spu_gather(spu_cmpgt(data2, data1));
+
+  mask_v = spu_and(spu_cmpeq(cnt1_v, cnt2_v),
+		   spu_cmpeq(spu_rlmask(neq_v, (vec_int4)spu_add((vec_uint4)cnt1_v, -32)), 0));
+
+  gt_v = spu_sub(-1, spu_sl(spu_cmpgt(gt_v, lt_v), 1));
+
+  return (spu_extract(spu_andc(gt_v, mask_v), 0));
+}
+@

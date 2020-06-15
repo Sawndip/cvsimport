@@ -1,0 +1,703 @@
+head	1.5;
+access;
+symbols
+	cygwin-1_7_35-release:1.5
+	cygwin-1_7_34-release:1.5
+	newlib-2_2_0:1.5.0.2
+	cygwin-1_7_33-release:1.5
+	cygwin-1_7_32-release:1.5
+	cygwin-1_7_31-release:1.5
+	cygwin-1_7_30-release:1.4
+	cygwin-1_7_29-release:1.4
+	cygwin-1_7_28-release:1.4
+	newlib-2_1_0:1.4
+	cygwin-1_7_27-release:1.2
+	cygwin-1_7_26-release:1.2;
+locks; strict;
+comment	@ * @;
+
+
+1.5
+date	2014.04.14.14.08.26;	author corinna;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2013.12.03.16.07.33;	author corinna;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2013.12.03.16.04.41;	author corinna;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2013.11.27.14.53.59;	author joel;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2013.11.19.19.11.24;	author joel;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.5
+log
+@	* libc/sys/rtems/sys/cpuset.h (CPU_SET_S): Add const qualifier.
+	(CPU_SET): Likewise.
+@
+text
+@/*
+ * Copyright (c) 2013 On-Line Applications Research Corporation.
+ * All rights reserved.
+ *
+ *  On-Line Applications Research Corporation
+ *  7047 Old Madison Pike Suite 320
+ *  Huntsville Alabama 35806
+ *  <info@@oarcorp.com>
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+ * SUCH DAMAGE.
+ */
+
+/*
+ *  This file implements an API compatible with static portion of
+ *  the GNU/Linux cpu_set_t macros but is independently implemented.
+ *  The GNU/Linux manual page and the FreeBSD cpuset_t implementation
+ *  were used as reference material.
+ *
+ *  Not implemented:
+ *    + Linux CPU_XXX_S
+ *    + FreeBSD CPU_SUBSET
+ *    + FreeBSD CPU_OVERLAP
+ */
+
+
+#ifndef _SYS_CPUSET_H_
+#define _SYS_CPUSET_H_
+
+#include <sys/cdefs.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif /* __cplusplus */
+
+/* RTEMS supports a maximum of 32 CPU cores */
+#ifndef CPU_SETSIZE
+#define CPU_SETSIZE 32
+#endif
+
+/* word in the cpu set */
+typedef __uint32_t cpu_set_word_t;
+
+/* Number of bits per cpu_set_t element */
+#define _NCPUBITS  (sizeof(cpu_set_word_t) * 8)
+
+/* Number of words in the cpu_set_t array */
+#define _NCPUWORDS   (((CPU_SETSIZE)+((_NCPUBITS)-1))/(_NCPUBITS))
+
+/* Define the cpu set structure */
+typedef struct _cpuset {
+  cpu_set_word_t __bits[_NCPUWORDS];
+} cpu_set_t;
+
+/* determine the mask for a particular cpu within the element */
+static __inline cpu_set_word_t  __cpuset_mask(int cpu)
+{
+  return (cpu_set_word_t)1 << ((size_t)cpu % _NCPUBITS);
+}
+
+/* determine the index for this cpu within the cpu set array */
+static __inline size_t __cpuset_index(int cpu)
+{
+  return (size_t)cpu / _NCPUBITS;
+}
+
+#define CPU_ALLOC_SIZE(_num_cpus) \
+  (sizeof(cpu_set_word_t) * (((_num_cpus) + _NCPUBITS - 1) / _NCPUBITS))
+
+cpu_set_t *__cpuset_alloc(int num_cpus);
+
+static __inline cpu_set_t *CPU_ALLOC(int num_cpus)
+{
+  return __cpuset_alloc(num_cpus);
+}
+
+void __cpuset_free(cpu_set_t *set);
+
+static __inline void CPU_FREE(cpu_set_t *set)
+{
+  __cpuset_free(set);
+}
+
+static __inline void CPU_ZERO_S(size_t setsize, cpu_set_t *set)
+{
+  cpu_set_word_t *w = &set->__bits[0];
+  size_t n = setsize / sizeof(*w);
+  size_t i;
+
+  for (i = 0; i < n; ++i)
+    w[i] = 0;
+}
+
+static __inline void CPU_ZERO(cpu_set_t *set)
+{
+  CPU_ZERO_S(sizeof(*set), set);
+}
+
+static __inline void CPU_FILL_S(size_t setsize, cpu_set_t *set)
+{
+  cpu_set_word_t *w = &set->__bits[0];
+  size_t n = setsize / sizeof(*w);
+  size_t i;
+
+  for (i = 0; i < n; ++i)
+    w[i] = ~(cpu_set_word_t)0;
+}
+
+static __inline void CPU_FILL(cpu_set_t *set)
+{
+  CPU_FILL_S(sizeof(*set), set);
+}
+
+static __inline void CPU_SET_S(int cpu, size_t setsize, cpu_set_t *set)
+{
+  cpu_set_word_t *w = &set->__bits[0];
+
+  w[__cpuset_index(cpu)] |= __cpuset_mask(cpu);
+}
+
+static __inline void CPU_SET(int cpu, cpu_set_t *set)
+{
+  CPU_SET_S(cpu, sizeof(*set), set);
+}
+
+static __inline void CPU_CLR_S(int cpu, size_t setsize, cpu_set_t *set)
+{
+  cpu_set_word_t *w = &set->__bits[0];
+
+  w[__cpuset_index(cpu)] &= ~__cpuset_mask(cpu);
+}
+
+static __inline void CPU_CLR(int cpu, cpu_set_t *set)
+{
+  CPU_CLR_S(cpu, sizeof(*set), set);
+}
+
+static __inline int CPU_ISSET_S(int cpu, size_t setsize, const cpu_set_t *set)
+{
+  const cpu_set_word_t *w = &set->__bits[0];
+
+  return ((w[__cpuset_index(cpu)] & __cpuset_mask(cpu)) != 0);
+}
+
+static __inline int CPU_ISSET(int cpu, const cpu_set_t *set)
+{
+  return CPU_ISSET_S(cpu, sizeof(*set), set);
+}
+
+/* copy src set to dest set */
+static __inline void CPU_COPY( cpu_set_t *dest, const cpu_set_t *src )
+{
+  *dest = *src;
+}
+
+static __inline void CPU_AND_S(size_t setsize, cpu_set_t *destset,
+  const cpu_set_t *srcset1, const cpu_set_t *srcset2)
+{
+  cpu_set_word_t *wdest = &destset->__bits[0];
+  const cpu_set_word_t *wsrc1 = &srcset1->__bits[0];
+  const cpu_set_word_t *wsrc2 = &srcset2->__bits[0];
+  size_t n = setsize / sizeof(*wdest);
+  size_t i;
+
+  for (i = 0; i < n; ++i)
+    wdest[i] = wsrc1[i] & wsrc2[i];
+}
+
+static __inline void CPU_AND(cpu_set_t *destset, const cpu_set_t *srcset1,
+  const cpu_set_t *srcset2)
+{
+  CPU_AND_S(sizeof(*destset), destset, srcset1, srcset2);
+}
+
+static __inline void CPU_OR_S(size_t setsize, cpu_set_t *destset,
+  const cpu_set_t *srcset1, const cpu_set_t *srcset2)
+{
+  cpu_set_word_t *wdest = &destset->__bits[0];
+  const cpu_set_word_t *wsrc1 = &srcset1->__bits[0];
+  const cpu_set_word_t *wsrc2 = &srcset2->__bits[0];
+  size_t n = setsize / sizeof(*wdest);
+  size_t i;
+
+  for (i = 0; i < n; ++i)
+    wdest[i] = wsrc1[i] | wsrc2[i];
+}
+
+static __inline void CPU_OR(cpu_set_t *destset, const cpu_set_t *srcset1,
+  const cpu_set_t *srcset2)
+{
+  CPU_OR_S(sizeof(*destset), destset, srcset1, srcset2);
+}
+
+static __inline void CPU_XOR_S(size_t setsize, cpu_set_t *destset,
+  const cpu_set_t *srcset1, const cpu_set_t *srcset2)
+{
+  cpu_set_word_t *wdest = &destset->__bits[0];
+  const cpu_set_word_t *wsrc1 = &srcset1->__bits[0];
+  const cpu_set_word_t *wsrc2 = &srcset2->__bits[0];
+  size_t n = setsize / sizeof(*wdest);
+  size_t i;
+
+  for (i = 0; i < n; ++i)
+    wdest[i] = wsrc1[i] ^ wsrc2[i];
+}
+
+static __inline void CPU_XOR(cpu_set_t *destset, const cpu_set_t *srcset1,
+  const cpu_set_t *srcset2)
+{
+  CPU_XOR_S(sizeof(*destset), destset, srcset1, srcset2);
+}
+
+static __inline void CPU_NAND_S(size_t setsize, cpu_set_t *destset,
+  const cpu_set_t *srcset1, const cpu_set_t *srcset2)
+{
+  cpu_set_word_t *wdest = &destset->__bits[0];
+  const cpu_set_word_t *wsrc1 = &srcset1->__bits[0];
+  const cpu_set_word_t *wsrc2 = &srcset2->__bits[0];
+  size_t n = setsize / sizeof(*wdest);
+  size_t i;
+
+  for (i = 0; i < n; ++i)
+    wdest[i] = ~(wsrc1[i] & wsrc2[i]);
+}
+
+static __inline void CPU_NAND(cpu_set_t *destset, const cpu_set_t *srcset1,
+  const cpu_set_t *srcset2)
+{
+  CPU_NAND_S(sizeof(*destset), destset, srcset1, srcset2);
+}
+
+static __inline int CPU_COUNT_S(size_t setsize, const cpu_set_t *set)
+{
+  int count = 0;
+  const cpu_set_word_t *w = &set->__bits[0];
+  size_t n = setsize / sizeof(*w);
+  size_t i;
+  int cpu;
+
+  for (i = 0; i < n; ++i)
+    for (cpu = 0; cpu < (int)_NCPUBITS; ++cpu)
+      count += (w[i] & __cpuset_mask(cpu)) != 0;
+
+  return count;
+}
+
+static __inline int CPU_COUNT(const cpu_set_t *set)
+{
+  return CPU_COUNT_S(sizeof(*set), set);
+}
+
+static __inline int CPU_EQUAL_S(size_t setsize, const cpu_set_t *set1,
+  const cpu_set_t *set2)
+{
+  const cpu_set_word_t *w1 = &set1->__bits[0];
+  const cpu_set_word_t *w2 = &set2->__bits[0];
+  size_t n = setsize / sizeof(*w1);
+  size_t i;
+
+  for (i = 0; i < n; ++i)
+    if (w1[i] != w2[i])
+      return 0;
+
+  return 1;
+}
+
+static __inline int CPU_EQUAL(const cpu_set_t *set1, const cpu_set_t *set2)
+{
+  return CPU_EQUAL_S(sizeof(*set1), set1, set2);
+}
+
+/* return 1 if the sets set1 and set2 are equal, otherwise return 0 */
+static __inline int CPU_CMP( const cpu_set_t *set1, const cpu_set_t *set2 )
+{
+  return CPU_EQUAL(set1, set2);
+}
+
+/* return 1 if the set is empty, otherwise return 0 */
+static __inline int CPU_EMPTY( const cpu_set_t *set )
+{
+  size_t i;
+
+  for (i=0; i < _NCPUWORDS; i++)
+    if (set->__bits[i] != 0 )
+      return 0;
+  return 1;
+}
+
+#ifdef __cplusplus
+}
+#endif /* __cplusplus */
+
+#endif
+@
+
+
+1.4
+log
+@	* libc/sys/rtems/sys/cpuset.h: Use __inline instead of inline.
+@
+text
+@d156 1
+a156 1
+static __inline int CPU_ISSET_S(int cpu, size_t setsize, cpu_set_t *set)
+d163 1
+a163 1
+static __inline int CPU_ISSET(int cpu, cpu_set_t *set)
+@
+
+
+1.3
+log
+@	* libc/include/machine/_default_types.h: Move extern "C" after
+	header includes.  Include <sys/features.h> for
+	__GNUC_PREREQ__().
+	(__u?int.*_t): Define via GCC provided __U?INT.*_TYPE__ if
+	available.
+	(__intptr_t): Define.
+	(__uintptr_t): Likewise.
+	* libc/include/stdint.h: Include <machine/_default_types.h>
+	instead of <_ansi.h>.
+	(u?int.*_t): Define via __u?int.*_t provided by
+	<machine/_default_types.h>.
+	(u?int_fast.*_t): Define via GCC provided
+	__U?INT_FAST.*_TYPE__ if available.
+	(U?INT.*(MIN|MAX)): Define via GCC provided __U?INT.*(MIN|MAX)__
+	if available.
+	(U?INT.*_C): Define via GCC provided __U?INT.*_C if available.
+	* libc/include/sys/cdefs.h: Use <machine/_default_types.h>
+	instead of <stdint.h>.
+	* libc/sys/rtems/sys/cpuset.h: Likewise.
+	* libc/sys/rtems/machine/_types.h: Include <stdint.h> for
+	FreeBSD compatibility.
+@
+text
+@d48 1
+a48 2
+#include <machine/_default_types.h>
+#include <stddef.h>
+d74 1
+a74 1
+static inline cpu_set_word_t  __cpuset_mask(int cpu)
+d80 1
+a80 1
+static inline size_t __cpuset_index(int cpu)
+d90 1
+a90 1
+static inline cpu_set_t *CPU_ALLOC(int num_cpus)
+d97 1
+a97 1
+static inline void CPU_FREE(cpu_set_t *set)
+d102 1
+a102 1
+static inline void CPU_ZERO_S(size_t setsize, cpu_set_t *set)
+d112 1
+a112 1
+static inline void CPU_ZERO(cpu_set_t *set)
+d117 1
+a117 1
+static inline void CPU_FILL_S(size_t setsize, cpu_set_t *set)
+d127 1
+a127 1
+static inline void CPU_FILL(cpu_set_t *set)
+d132 1
+a132 1
+static inline void CPU_SET_S(int cpu, size_t setsize, cpu_set_t *set)
+d139 1
+a139 1
+static inline void CPU_SET(int cpu, cpu_set_t *set)
+d144 1
+a144 1
+static inline void CPU_CLR_S(int cpu, size_t setsize, cpu_set_t *set)
+d151 1
+a151 1
+static inline void CPU_CLR(int cpu, cpu_set_t *set)
+d156 1
+a156 1
+static inline int CPU_ISSET_S(int cpu, size_t setsize, cpu_set_t *set)
+d163 1
+a163 1
+static inline int CPU_ISSET(int cpu, cpu_set_t *set)
+d169 1
+a169 1
+static inline void CPU_COPY( cpu_set_t *dest, const cpu_set_t *src )
+d174 1
+a174 1
+static inline void CPU_AND_S(size_t setsize, cpu_set_t *destset,
+d187 1
+a187 1
+static inline void CPU_AND(cpu_set_t *destset, const cpu_set_t *srcset1,
+d193 1
+a193 1
+static inline void CPU_OR_S(size_t setsize, cpu_set_t *destset,
+d206 1
+a206 1
+static inline void CPU_OR(cpu_set_t *destset, const cpu_set_t *srcset1,
+d212 1
+a212 1
+static inline void CPU_XOR_S(size_t setsize, cpu_set_t *destset,
+d225 1
+a225 1
+static inline void CPU_XOR(cpu_set_t *destset, const cpu_set_t *srcset1,
+d231 1
+a231 1
+static inline void CPU_NAND_S(size_t setsize, cpu_set_t *destset,
+d244 1
+a244 1
+static inline void CPU_NAND(cpu_set_t *destset, const cpu_set_t *srcset1,
+d250 1
+a250 1
+static inline int CPU_COUNT_S(size_t setsize, const cpu_set_t *set)
+d265 1
+a265 1
+static inline int CPU_COUNT(const cpu_set_t *set)
+d270 1
+a270 1
+static inline int CPU_EQUAL_S(size_t setsize, const cpu_set_t *set1,
+d285 1
+a285 1
+static inline int CPU_EQUAL(const cpu_set_t *set1, const cpu_set_t *set2)
+d291 1
+a291 1
+static inline int CPU_CMP( const cpu_set_t *set1, const cpu_set_t *set2 )
+d297 1
+a297 1
+static inline int CPU_EMPTY( const cpu_set_t *set )
+@
+
+
+1.2
+log
+@2013-11-27  Sebastian Huber  <sebastian.huber@@embedded-brains.de>
+
+	* libc/sys/rtems/cpusetalloc.c: New file.
+	* libc/sys/rtems/cpusetfree.c: Likewise.
+	* libc/sys/rtems/Makefile.am (lib_a_SOURCES): Add new files.
+	* libc/sys/rtems/Makefile.in: Regenerate.
+	* libc/sys/rtems/sys/cpuset.h: Delete #if 0 block.  Include
+	<stddef.h> for size_t.
+	(_NCPUBITS): Avoid NBBY and assume 8 bits per char.
+	(__cpuset_mask): Use int instead of size_t parameter for Linux
+	compatibility.
+	(__cpuset_index): Likewise.
+	(__cpuset_alloc): Declare.
+	(__cpuset_free): Likewise.
+	(CPU_ALLOC_SIZE): Likewise.
+	(CPU_ALLOC): Define.
+	(CPU_FREE): Likewise.
+	(CPU_ZERO_S): Likewise.
+	(CPU_FILL_S): Likewise.
+	(CPU_SET_S): Likewise.
+	(CPU_CLR_S): Likewise.
+	(CPU_ISSET_S): Likewise.
+	(CPU_COUNT_S): Likewise.
+	(CPU_AND_S): Likewise.
+	(CPU_OR_S): Likewise.
+	(CPU_XOR_S): Likewise.
+	(CPU_NAND_S): Likewise.
+	(CPU_EQUAL_S): Likewise.
+	(CPU_ZERO): Use CPU_ZERO_S().
+	(CPU_FILL): Use CPU_FILL_S().
+	(CPU_SET): Use CPU_SET_S().
+	(CPU_CLR): Use CPU_CLR_S().
+	(CPU_ISSET): Use CPU_ISSET_S().
+	(CPU_COUNT): Use CPU_COUNT_S().
+	(CPU_AND): Use CPU_AND_S().
+	(CPU_OR): Use CPU_OR_S().
+	(CPU_XOR): Use CPU_XOR_S().
+	(CPU_NAND): Use CPU_NAND_S().
+	(CPU_EQUAL): Use CPU_EQUAL_S().
+	(CPU_CMP): Delete superfluous const qualifier.
+	(CPU_EMPTY): Likewise.
+@
+text
+@d48 1
+a49 1
+#include <stdint.h>
+d61 1
+a61 1
+typedef uint32_t cpu_set_word_t;
+@
+
+
+1.1
+log
+@3013-11-19  Jennifer Averett <jennifer.averett@@oarcorp.com>
+
+        * libc/sys/rtems/sys/cpuset.h: New file.
+@
+text
+@d48 1
+a48 3
+#if 0
+#include <sys/types.h>
+#endif
+d51 4
+d64 1
+a64 1
+#define _NCPUBITS  (sizeof(cpu_set_word_t) * NBBY) /* bits per mask */
+a66 1
+/* NOTE: Can't use howmany() because of circular dependency */
+d75 1
+a75 1
+static inline cpu_set_word_t  __cpuset_mask( size_t cpu )
+d77 1
+a77 1
+  return ((cpu_set_word_t)1 << ((cpu) % _NCPUBITS));
+d81 18
+a98 1
+static inline size_t __cpuset_index( size_t cpu )
+d100 1
+a100 1
+  return ((cpu)/_NCPUBITS);
+d103 1
+a103 2
+/* zero out set */
+static inline void CPU_ZERO( cpu_set_t *set )
+d105 2
+d108 3
+a110 2
+  for (i = 0; i < _NCPUWORDS; i++)
+    set->__bits[i] = 0;
+d113 1
+a113 2
+/* fill set */
+static inline void CPU_FILL( cpu_set_t *set )
+d115 7
+d123 3
+a125 2
+  for (i = 0; i < _NCPUWORDS; i++)
+    set->__bits[i] = -1;
+d128 1
+a128 2
+/* set cpu within set */
+static inline void CPU_SET( size_t cpu, cpu_set_t *set )
+d130 1
+a130 1
+  set->__bits[__cpuset_index(cpu)] |= __cpuset_mask(cpu);
+d133 1
+a133 2
+/* clear cpu within set */
+static inline void CPU_CLR( size_t cpu, cpu_set_t *set )
+d135 27
+a161 1
+  set->__bits[__cpuset_index(cpu)] &= ~__cpuset_mask(cpu);
+d164 1
+a164 2
+/* Return 1 is cpu is set in set, 0 otherwise */
+static inline int const CPU_ISSET( size_t cpu, const cpu_set_t *set )
+d166 1
+a166 1
+  return ((set->__bits[__cpuset_index(cpu)] & __cpuset_mask(cpu)) != 0);
+d175 2
+a176 4
+/* logical and: dest set = src1 set and src2 set */
+static inline void CPU_AND(
+  cpu_set_t *dest, const cpu_set_t *src1, const cpu_set_t *src2
+)
+d178 4
+d183 9
+a191 2
+  for (i = 0; i < _NCPUWORDS; i++)
+    dest->__bits[i] = src1->__bits[i] & src2->__bits[i];
+d194 2
+a195 4
+/* logical or: dest set = src1 set or src2 set */
+static inline void CPU_OR(
+  cpu_set_t *dest, const cpu_set_t *src1, const cpu_set_t *src2
+)
+d197 4
+d202 28
+a229 2
+  for (i = 0; i < _NCPUWORDS; i++)
+     dest->__bits[i] = src1->__bits[i] | src2->__bits[i];
+d232 2
+a233 4
+/* logical xor: dest set = src1 set xor src2 set */
+static inline void CPU_XOR(
+  cpu_set_t *dest, const cpu_set_t *src1, const cpu_set_t *src2
+)
+d235 4
+d240 3
+a242 2
+  for (i = 0; i < _NCPUWORDS; i++)
+   dest->__bits[i] = src1->__bits[i] ^ src2->__bits[i];
+d245 2
+a246 4
+/* logical nand: dest set = src1 set nand src2 set */
+static inline void CPU_NAND(
+  cpu_set_t *dest, const cpu_set_t *src1, const cpu_set_t *src2
+)
+d248 1
+a248 3
+  size_t i; 
+  for (i = 0; i < _NCPUWORDS; i++)
+    dest->__bits[i] = ~(src1->__bits[i] & src2->__bits[i]);
+d251 1
+a251 2
+/* return the number of set cpus in set */
+static inline int const CPU_COUNT( const cpu_set_t *set )
+d253 3
+d257 5
+a261 1
+  int    count = 0;
+a262 3
+  for (i=0; i < _NCPUWORDS; i++)
+    if (CPU_ISSET(i, set) != 0)
+      count++;
+d266 7
+a272 4
+/* return 1 if the sets set1 and set2 are equal, otherwise return 0 */
+static inline int const CPU_EQUAL( 
+  const cpu_set_t *set1, const cpu_set_t *set2 
+)
+d274 3
+d279 2
+a280 2
+  for (i=0; i < _NCPUWORDS; i++)
+    if (set1->__bits[i] != set2->__bits[i] )
+d282 1
+d286 5
+d292 1
+a292 1
+static inline int const CPU_CMP( const cpu_set_t *set1, const cpu_set_t *set2 )
+d298 1
+a298 1
+static inline int const CPU_EMPTY( const cpu_set_t *set )
+d308 4
+@
+

@@ -1,0 +1,238 @@
+head	1.3;
+access;
+symbols
+	binutils-2_24-branch:1.3.0.2
+	binutils-2_24-branchpoint:1.3
+	binutils-2_23_2:1.1.2.2
+	binutils-2_23_1:1.1.2.1
+	binutils-2_23:1.1.2.1
+	binutils-2_23-branch:1.1.0.2
+	binutils_latest_snapshot:1.3;
+locks; strict;
+comment	@# @;
+
+
+1.3
+date	2013.01.17.16.09.43;	author yufeng;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2012.12.06.15.45.38;	author yufeng;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2012.08.13.14.52.46;	author nickc;	state Exp;
+branches
+	1.1.2.1;
+next	;
+
+1.1.2.1
+date	2012.08.16.09.21.47;	author nickc;	state Exp;
+branches;
+next	1.1.2.2;
+
+1.1.2.2
+date	2012.12.06.16.28.15;	author yufeng;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.3
+log
+@include/opcode/
+
+2013-01-17  Yufeng Zhang  <yufeng.zhang@@arm.com>
+
+	* aarch64.h (aarch64_op): Remove OP_V_MOVI_B.
+
+opcodes/
+
+2013-01-17  Yufeng Zhang  <yufeng.zhang@@arm.com>
+
+	* aarch64-asm.c (aarch64_ins_advsimd_imm_modified): Handle 8-bit MOVI.
+	* aarch64-dis.c (aarch64_ext_advsimd_imm_modified): Likewise.
+	* aarch64-opc.c (operand_general_constraint_met_p): For
+	AARCH64_MOD_LSL, move the range check on the shift amount before the
+	alignment check; change to call set_sft_amount_out_of_range_error
+	instead of set_imm_out_of_range_error.
+	* aarch64-tbl.h (QL_SIMD_IMM_B): Replace NIL with LSL.
+	(aarch64_opcode_table): Remove the OP enumerator from the asimdimm
+	8-bit MOVI entry; change the 2nd operand from SIMD_IMM to
+	SIMD_IMM_SFT.
+
+gas/
+
+2013-01-17  Yufeng Zhang  <yufeng.zhang@@arm.com>
+
+	* config/tc-aarch64.c (output_operand_error_record): Change to output
+	the out-of-range error message as value-expected message if there is
+	only one single value in the expected range.
+	(programmer_friendly_fixup): Remove the handling of 8-bit MOVI with
+	LSL #0 as a programmer-friendly feature.
+
+gas/testsuite/
+
+2013-01-17  Yufeng Zhang  <yufeng.zhang@@arm.com>
+
+	* gas/aarch64/diagnostic.l: Update.
+	* gas/aarch64/movi.s: Add tests.
+	* gas/aarch64/movi.d: Update.
+	* gas/aarch64/programmer-friendly.s: Add comment.
+@
+text
+@// programmer-friendly.s Test file for AArch64 instructions variants that are
+// not part of the architectural assembly syntax but are supported for the
+// ease of assembly level programming.
+
+.text
+	// The preferred architectural syntax does not accept the shifter
+	// LSL or any other shift operator, when the destination register
+	// has the shape of 16B or 8B.
+	movi	v0.16b, 97, lsl 0	// N.B.: this is now part of the architecture specification.
+
+	// LDR Wt, label | =value
+	// As a convenience assemblers will typically permit the notation
+	// "=value" in conjunction with the pc-relative literal load
+	// instructions to automatically place an immediate value or
+	// symbolic address in a nearby literal pool and generate a hidden
+	// label which references it.
+	ldrsw	x1, =0xdeadbeef
+	ldrsw	x7, u16_lable + 4
+
+	// CCMN Xn, Xm, #uimm4, cond
+	// As a convenience, GAS accepts a string representation for #uimm4,
+	// e.g. NzCv for #0xa (0b1010).
+	ccmp	x1, x2, NzCv, GE
+
+.data
+u16_lable:
+	.word	0xdeadbeef
+	.word	0xcafebabe
+
+.text
+	// UXT[BHW] Wd, Wn
+	// Unsigned Extend Byte|Halfword|Word: UXT[BH] is architectural alias
+	// for UBFM Wd,Wn,#0,#7|15, while UXTW is pseudo instruction which is
+	// encoded using ORR Wd, WZR, Wn (MOV Wd,Wn).
+	// A programmer-friendly assembler should accept a destination Xd in
+	// place of Wd, however that is not the preferred form for disassembly.
+	uxtb	x15, w21
+	uxth	x7, w27
+	uxtw	x8, wzr
+
+
+	// ADDS <Xd>, <Xn|SP>, <R><m>{, UXTB {#<amount>}}
+	// In the 64-bit form, the final register operand is written as Wm
+	// for all but the (possibly omitted) UXTX/LSL and SXTX
+	// operators.
+	// As a programmer-friendly assembler, we allow e.g.
+	// ADDS <Xd>, <Xn|SP>, <Xm>{, UXTB {#<amount>}} by changing it to
+	// ADDS <Xd>, <Xn|SP>, <Wm>{, UXTB {#<amount>}}.
+	adds	x0, sp, x0, uxtb #4
+	adds	x0, sp, x0, uxth #4
+	adds	x0, sp, x0, uxtw #4
+
+	adds	x0, sp, x0, sxtb #0
+	adds	x0, sp, x0, sxth #1
+	adds	x0, sp, x0, sxtw #2
+
+	// More tests on
+	// LDR Wt, label | =value
+	// Find more comment above.
+	ldr	q0, =0xdeadcafebeefbabe0123456789abcedf
+	ldr	d0, =0xfebeefbabe012345
+	ldr	x0, =0xfebeefbabe012345
+	ldr	s0, =0xdeadbeef
+	ldr	w0, =0xdeadbeef
+	ldr	x0, =u16_lable
+@
+
+
+1.2
+log
+@gas/
+
+2012-12-06  Yufeng Zhang  <yufeng.zhang@@arm.com>
+
+	* config/tc-aarch64.c (exp_has_bignum_p): Remove.
+	(my_get_expression): Not get rid of bignums.
+	(s_ltorg): Increase the range of 'align'.
+	(programmer_friendly_fixup): Allow bignum expression.
+
+gas/testsuite/
+
+2012-12-06  Yufeng Zhang  <yufeng.zhang@@arm.com>
+
+	* gas/aarch64/illegal.s: Add test for unaccepted LDR literal.
+	* gas/aarch64/illegal.l: Update.
+	* gas/aarch64/programmer-friendly.s: Add tests for LDR literal with
+	the auto-generation of literal in pool.
+	* gas/aarch64/programmer-friendly.d: Update.
+@
+text
+@d9 1
+a9 1
+	movi	v0.16b, 97, lsl 0
+@
+
+
+1.1
+log
+@Add support for 64-bit ARM architecture: AArch64
+@
+text
+@d52 1
+d56 10
+@
+
+
+1.1.2.1
+log
+@Add support for 64-bit ARM architecture: aarch64
+@
+text
+@@
+
+
+1.1.2.2
+log
+@gas/
+
+2012-12-06  Yufeng Zhang  <yufeng.zhang@@arm.com>
+
+	* config/tc-aarch64.c (exp_has_bignum_p): Remove.
+	(my_get_expression): Not get rid of bignums.
+	(s_ltorg): Increase the range of 'align'.
+	(programmer_friendly_fixup): Allow bignum expression.
+
+gas/testsuite/
+
+2012-12-06  Yufeng Zhang  <yufeng.zhang@@arm.com>
+
+	* gas/aarch64/programmer-friendly.s: Add tests for LDR literal with
+	the auto-generation of literal in pool.
+	* gas/aarch64/programmer-friendly.d: Update.
+@
+text
+@a51 1
+
+a54 10
+
+	// More tests on
+	// LDR Wt, label | =value
+	// Find more comment above.
+	ldr	q0, =0xdeadcafebeefbabe0123456789abcedf
+	ldr	d0, =0xfebeefbabe012345
+	ldr	x0, =0xfebeefbabe012345
+	ldr	s0, =0xdeadbeef
+	ldr	w0, =0xdeadbeef
+	ldr	x0, =u16_lable
+@
+
+

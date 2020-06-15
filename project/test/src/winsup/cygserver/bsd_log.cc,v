@@ -1,0 +1,362 @@
+head	1.5;
+access;
+symbols
+	cygwin-1_7_35-release:1.5
+	cygwin-1_7_34-release:1.5
+	cygwin-1_7_33-release:1.5
+	cygwin-1_7_32-release:1.5
+	cygwin-1_7_31-release:1.5
+	cygwin-1_7_30-release:1.5
+	cygwin-1_7_29-release:1.5
+	cygwin-1_7_29-release-branchpoint:1.5.0.2
+	cygwin-1_7_28-release:1.5
+	cygwin-1_7_27-release:1.5
+	cygwin-1_7_26-release:1.5
+	cygwin-1_7_25-release:1.5
+	cygwin-1_7_24-release:1.5
+	cygwin-1_7_23-release:1.5
+	cygwin-1_7_22-release:1.5
+	cygwin-1_7_21-release:1.5
+	cygwin-1_7_20-release:1.5
+	cygwin-1_7_19-release:1.5
+	cygwin-64bit-postmerge:1.5
+	cygwin-64bit-premerge-branch:1.4.0.6
+	cygwin-64bit-premerge:1.4
+	cygwin-1_7_18-release:1.4
+	cygwin-1_7_17-release:1.4
+	cygwin-64bit-branch:1.4.0.4
+	cygwin-1_7_16-release:1.4
+	cygwin-1_7_15-release:1.4
+	cygwin-1_7_14_2-release:1.4
+	cygwin-1_7_14-release:1.4
+	cygwin-1_7_12-release:1.4
+	cygwin-1_7_11-release:1.4
+	cygwin-1_7_10-release:1.4
+	cygwin-1_7_9-release:1.4
+	cygwin-1_7_8-release:1.4
+	cygwin-1_7_7-release:1.4
+	cygwin-1_7_5-release:1.4
+	cygwin-1_7_4-release:1.4
+	cygwin-1_7_3-release:1.4
+	cygwin-1_7_2-release:1.4
+	cygwin-1_7_1-release:1.4
+	cv-branch-2:1.4.0.2
+	cr-0x5f1:1.3.0.6
+	cv-branch:1.3.0.4
+	cr-0x3b58:1.3.0.2
+	cr-0x9e:1.1.0.4
+	cr-0x9d:1.1.0.2;
+locks; strict;
+comment	@// @;
+
+
+1.5
+date	2013.04.23.09.44.30;	author corinna;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2008.02.06.22.01.30;	author corinna;	state Exp;
+branches
+	1.4.4.1;
+next	1.3;
+
+1.3
+date	2005.11.10.10.50.46;	author corinna;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2004.09.15.10.17.52;	author corinna;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2003.11.19.18.49.40;	author corinna;	state Exp;
+branches;
+next	;
+
+1.4.4.1
+date	2012.12.04.17.25.21;	author corinna;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.5
+log
+@	* Merge in cygwin-64bit-branch.
+@
+text
+@/* bsd_log.cc
+
+   Copyright 2003, 2004, 2012 Red Hat Inc.
+
+This file is part of Cygwin.
+
+This software is a copyrighted work licensed under the terms of the
+Cygwin license.  Please consult the file "CYGWIN_LICENSE" for
+details. */
+#ifdef __OUTSIDE_CYGWIN__
+#include "woutsup.h"
+#define _KERNEL 1
+#define __BSD_VISIBLE 1
+#include <stdio.h>
+#include <stdlib.h>
+
+int32_t log_level = 8; /* Illegal value.  Don't change! */
+tun_bool_t log_debug = TUN_UNDEF;
+tun_bool_t log_syslog = TUN_UNDEF;
+tun_bool_t log_stderr = TUN_UNDEF;
+
+void
+loginit (tun_bool_t opt_stderr, tun_bool_t opt_syslog)
+{
+  if (log_debug == TUN_UNDEF)
+    TUNABLE_BOOL_FETCH ("kern.log.debug", &log_debug);
+  if (log_debug == TUN_UNDEF)
+    log_debug = TUN_FALSE;
+
+  if (opt_stderr != TUN_UNDEF)
+    log_stderr = opt_stderr;
+  else
+    TUNABLE_BOOL_FETCH ("kern.log.stderr", &log_stderr);
+  if (log_stderr == TUN_UNDEF)
+    log_stderr = TUN_FALSE;
+
+  if (opt_syslog != TUN_UNDEF)
+    log_syslog = opt_syslog;
+  else
+    TUNABLE_BOOL_FETCH ("kern.log.syslog", &log_syslog);
+  if (log_syslog == TUN_UNDEF)
+    log_syslog = TUN_FALSE;
+
+  if (log_level == 8)
+    TUNABLE_INT_FETCH ("kern.log.level", &log_level);
+  if (log_level == 8)
+    log_level = 6;
+}
+
+void
+_vlog (const char *file, int line, int level,
+	const char *fmt, va_list ap)
+{
+  char buf[16384];
+  char *pos;
+
+  if ((level == LOG_DEBUG && log_debug != TUN_TRUE)
+      || (level != LOG_DEBUG && level >= log_level))
+    return;
+  pos = stpcpy (buf, "cygserver: ");
+  if (file && log_debug == TUN_TRUE)
+    pos += snprintf (pos, 16384 - (pos - buf), "%s, line %d: ", file, line);
+  vsnprintf (pos, 16384 - (pos - buf), fmt, ap);
+  if (log_syslog == TUN_TRUE && level != LOG_DEBUG)
+    syslog (level, buf);
+  if (log_stderr == TUN_TRUE || level == LOG_DEBUG)
+    {
+      fputs (buf, stderr);
+      fputc ('\n', stderr);
+    }
+}
+
+void
+_log (const char *file, int line, int level, const char *fmt, ...)
+{
+  va_list ap;
+  va_start (ap, fmt);
+  _vlog (file, line, level, fmt, ap);
+}
+
+void
+_vpanic (const char *file, int line, const char *fmt, va_list ap)
+{
+  _vlog (file, line, LOG_CRIT, fmt, ap);
+  exit (1);
+}
+
+void
+_panic (const char *file, int line, const char *fmt, ...)
+{
+  va_list ap;
+  va_start (ap, fmt);
+  _vpanic (file, line, fmt, ap);
+}
+#endif /* __OUTSIDE_CYGWIN__ */
+@
+
+
+1.4
+log
+@	Remove dependency from Cygwin internal code.
+	* Makefile.in (CYGWIN_OBJS): Remove smallprint.o.
+	(cygserver.exe): Remove strfuncs.o
+	(strfuncs.o): Drop rule.
+	* bsd_log.cc (_vlog): Use snprintf/vsnprintf instead of
+	__small_sprintf/__small_vsprintf.
+	* sysv_sem.cc (seminit): Use sys_malloc instead of malloc.  Use
+	snprintf instead of __small_sprintf.
+	(semunload): Free the above allocated sema_mtx names here.
+@
+text
+@d3 1
+a3 1
+   Copyright 2003, 2004 Red Hat Inc.
+d17 1
+a17 1
+long log_level = 8; /* Illegal value.  Don't change! */
+@
+
+
+1.4.4.1
+log
+@	* bsd_helper.cc (tunable_int_fetch): Convert 2nd parameter to
+	int32_t.
+	* bsd_helper.h (tunable_int_fetch): Fix declaration accordingly.
+	* bsd_log.cc (log_level): Change type to int32_t.
+	* bsd_log.h (log_level): Fix declaration accordingly.
+	* bsd_mutex.cc (msgmni): Change type to int32_t.
+	(semmni): Ditto.
+	* cygserver.cc: Fix debug output to be target agnostic.  Use same
+	style throughout.
+	* msg.cc (client_request_msg::serve): Refuse to serve 64 bit processes
+	from 32 bit cygserver.
+	* sem.cc (client_request_sem::serve): Ditto.
+	* shm.cc (client_request_shm::serve): Ditto.
+	* sysv_shm.cc (shm_delete_mapping): Mark size as unused to make gcc
+	happy.
+	(kern_shmat): Ditto with flags.
+	* process.h (class process): Change type of _cleaning_up member to LONG.
+	* threaded_queue.h (class threaded_queue): Ditto for _workers_count.
+@
+text
+@d3 1
+a3 1
+   Copyright 2003, 2004, 2012 Red Hat Inc.
+d17 1
+a17 1
+int32_t log_level = 8; /* Illegal value.  Don't change! */
+@
+
+
+1.3
+log
+@	* bsd_log.cc (_vpanic): LOG_EMERG is overkill, use LOG_CRIT.
+@
+text
+@a13 1
+#include <sys/smallprint.h>
+d55 1
+d60 1
+a60 1
+  strcpy (buf, "cygserver: ");
+d62 2
+a63 2
+    __small_sprintf (strchr (buf, '\0'), "%s, line %d: ", file, line);
+  __small_vsprintf (strchr (buf, '\0'), fmt, ap);
+@
+
+
+1.2
+log
+@	Fix copyright throughout.
+	Eliminate use of _impure_ptr outside Cygwin.
+	* bsd_helper.cc: Include errno.h instead of cygerrno.h.
+	* bsd_mutex.cc : Ditto.
+	* client.cc: Ditto.
+	* cygserver.cc: Ditto.
+	* process.cc: Don't build functions inside Cygwin.  Don't include
+	cygerrno.h.  Don't set errno.
+	* transport_pipes.cc (SET_ERRNO): New define.  Use througout.
+	* transport_sockets.cc (SET_ERRNO): Ditto.
+	(GET_ERRNO): Ditto.
+@
+text
+@d84 1
+a84 1
+  _vlog (file, line, LOG_EMERG, fmt, ap);
+@
+
+
+1.1
+log
+@	Don't use safe_new but new throughout.  Fix copyright dates
+	throughout.
+	* Makefile.in: Accomodate all new files and name changes.
+	Add a *.d dependency.
+	(sbindir): Add.
+	(etcdir): Drop in favor of more appropriate sysconfdir definition.
+	(sysconfdir): Add.
+	(CXXFLAGS): Add -MMD flag. Add SYSCONFDIR definition.
+	(.SUFFIXES): Add.
+	(install): Add action items.
+	(libclean): New target.
+	(fullclean): Ditto.
+	* bsd_helper.cc: New file.
+	* bsd_helper.h: Ditto.
+	* bsd_log.cc: Ditto.
+	* bsd_log.h: Ditto.
+	* bsd_mutex.cc: Ditto.
+	* bsd_mutex.h: Ditto.
+	* client.cc: Rearrange to build as less as possible if
+	__INSIDE_CYGWIN__.
+	(client_request::handle_request): Add Message Queue and Semaphore
+	handling.
+	* cygserver.cc: Rearrange to build as less as possible if
+	__INSIDE_CYGWIN__. Use new debug/log/panic logging functions.
+	(DEF_CONFIG_FILE): New definition for configuration file.  Use
+	throughout.
+	(getfunc): Remove.
+	(__cygserver__printf): Remove.
+	(client_request_attach_tty::serve): Return error if impersonation
+	fails.
+	(print_usage): Pump up help message.
+	(print_version): Add output of default configuration file.
+	(main): Accommodate new options.  Allow overwrite of threading options
+	from config file.  Call several new initialization functions.  Drop
+	printing dots.  Don't define SIGHANDLE inline.
+	* cygserver.conf: New file.
+	* cygserver_process.h: Rename to process.h.
+	* cygserver_transport.h: Rename to transport.h.
+	* cygserver_transport_pipes.h: Rename to transport_pipes.h.
+	* cygserver_transport_sockets.h: Rename to transport_sockets.h.
+	* msg.cc: Rewrite.
+	* sem.cc: Rewrite.
+	* shm.cc: Rewrite.
+	* sysv_msg.cc: New file, derived from FreeBSD version 1.52.
+	* sysv_sem.cc: New file, derived from FreeBSD version 1.66.
+	* sysv_shm.cc: New file, derived from FreeBSD version 1.89.
+	* threaded_queue.cc: Rearrange to build as less as possible if
+	__INSIDE_CYGWIN__.
+	* transport.cc (transport_layer_base::impersonate_client): Define bool.
+	(transport_layer_base::revert_to_self): Ditto.
+	* transport.h (transport_layer_base::impersonate_client): Declare bool.
+	(transport_layer_base::revert_to_self): Ditto.
+	* transport_pipes.cc (transport_layer_pipes::transport_layer_pipes):
+	Don't call init_security.
+	(init_security): Remove.
+	(transport_layer_pipes::accept): Use global sec_all_nih.
+	(transport_layer_pipes::connect): Ditto.
+	(transport_layer_pipes::impersonate_client): Define bool.
+	(transport_layer_pipes::revert_to_self): Ditt.
+	* transport_pipes.h (transport_layer_pipes::impersonate_client): Declare
+	bool.
+	(transport_layer_pipes::revert_to_self): Ditto.
+	* woutsup.h: Include bsd compatibility headers.
+	(SIGHANDLE): Add definition.
+	(__cygserver__printf): Remove definition.
+	(__noop_printf): Ditto.
+	(debug_printf): Define using debug.
+	(syscall_printf): Define using log.
+	(system_printf): Ditto.
+	Drop all other _printf definitions.
+@
+text
+@d3 1
+a3 1
+   Copyright 2003 Red Hat Inc.
+@
+

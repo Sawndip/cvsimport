@@ -1,0 +1,80 @@
+head	1.1;
+access;
+symbols;
+locks; strict;
+comment	@# @;
+
+
+1.1
+date	2013.10.11.08.23.11;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.1
+log
+@warn if "source" fails to open the file when from_tty == 0
+
+Consider the following example:
+
+    % gdb -q -batch -ex 'source nonexistant-file'
+    [nothing]
+
+One would have at least expected the debugger to warn about
+not finding the file, similar to the error shown when using
+a more interactive mode. Eg:
+
+    (gdb) source nonexistant-file
+    nonexistant-file: No such file or directory.
+
+Not raising an error appears to be intentional, presumably in order
+to prevent this situation from stoping the execution of a GDB script.
+But the lack of at least a warning makes it harder for a user to
+diagnose any issue, if the file was expected to be there and readable.
+
+This patch adds a warning in that case:
+
+    % gdb -q -batch -ex 'source nonexistant-file'
+    warning: nonexistant-file: No such file or directory.
+
+gdb/ChangeLog:
+
+        * utils.h (perror_warning_with_name): Add declaration.
+        * utils.c (perror_warning_with_name): New function.
+        * cli/cli-cmds.c (source_script_with_search): Add call to
+        perror_warning_with_name if from_tty is nul.
+
+gdb/testsuite/ChangeLog:
+
+        * gdb.base/source-nofile.gdb: New file.
+        * gdb.base/source.exp: Add two tests verifying the behavior when
+        the "source" command is given a non-existant filename.
+@
+text
+@# This testcase is part of GDB, the GNU debugger.
+#
+# Copyright 2013 Free Software Foundation, Inc.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+source for-sure-nonexistant-file
+
+# Just print an message to confirm that failing to source the file
+# did not cause this script to abort.
+echo source error not fatal\n
+@

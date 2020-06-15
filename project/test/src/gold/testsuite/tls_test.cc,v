@@ -1,0 +1,511 @@
+head	1.8;
+access;
+symbols
+	binutils-2_24-branch:1.8.0.4
+	binutils-2_24-branchpoint:1.8
+	binutils-2_21_1:1.7
+	binutils-2_23_2:1.8
+	binutils-2_23_1:1.8
+	binutils-2_23:1.8
+	binutils-2_23-branch:1.8.0.2
+	binutils-2_23-branchpoint:1.8
+	binutils-2_22_branch:1.7.0.16
+	binutils-2_22:1.7
+	binutils-2_22-branch:1.7.0.14
+	binutils-2_22-branchpoint:1.7
+	binutils-2_21:1.7
+	binutils-2_21-branch:1.7.0.12
+	binutils-2_21-branchpoint:1.7
+	binutils-2_20_1:1.7
+	binutils-2_20:1.7
+	binutils-arc-20081103-branch:1.7.0.10
+	binutils-arc-20081103-branchpoint:1.7
+	binutils-2_20-branch:1.7.0.8
+	binutils-2_20-branchpoint:1.7
+	dje-cgen-play1-branch:1.7.0.6
+	dje-cgen-play1-branchpoint:1.7
+	arc-20081103-branch:1.7.0.4
+	arc-20081103-branchpoint:1.7
+	binutils-2_19_1:1.7
+	binutils-2_19:1.7
+	binutils-2_19-branch:1.7.0.2
+	binutils-2_19-branchpoint:1.7
+	binutils_latest_snapshot:1.8
+	added-to-binutils:1.5;
+locks; strict;
+comment	@// @;
+
+
+1.8
+date	2012.05.21.16.52.38;	author hjl;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2008.08.15.04.57.46;	author ccoutant;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2008.04.17.07.12.00;	author ian;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2008.03.19.21.41.38;	author iant;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2008.03.13.21.04.21;	author iant;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2007.10.14.03.23.38;	author iant;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2007.10.12.17.32.20;	author iant;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2007.10.07.17.10.10;	author iant;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.8
+log
+@Include "config.h" first
+
+	* testsuite/tls_test.cc: Include "config.h" first.
+	* testsuite/tls_test_c.c: Likewise.
+@
+text
+@// tls_test.cc -- test TLS variables for gold
+
+// Copyright 2006, 2007, 2008 Free Software Foundation, Inc.
+// Written by Ian Lance Taylor <iant@@google.com>.
+
+// This file is part of gold.
+
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 3 of the License, or
+// (at your option) any later version.
+
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+// MA 02110-1301, USA.
+
+// This provides a set of test functions for TLS variables.  The
+// functions are called by a main function in tls_test_main.cc.  This
+// lets us test TLS access from a shared library.  We currently don't
+// bother to test TLS access between two different files, on the
+// theory that that is no more complicated than ordinary variable
+// access between files.
+
+// We start two threads, and stop the second one.  Then we run the
+// first thread through the following cases.  Then we let the second
+// thread continue, and run it through the same set of cases.  All the
+// actual thread manipulation is in tls_test_main.cc.
+
+// 1  Access to an uninitialized global thread variable.
+// 2  Access to an uninitialized static thread variable.
+// 3  Access to an initialized global thread variable.
+// 4  Access to an initialized static thread variable.
+// 5  Taking the address of a global thread variable.
+// 6  Taking the address of a static thread variable.
+// 8  Like test 1, but with the thread variable defined in another file.
+// 9  Like test 3, but with the thread variable defined in another file.
+// 10 Like test 5, but with the thread variable defined in another file.
+// last  Verify that the above tests left the variables set correctly.
+
+
+#include "config.h"
+#include <cstdio>
+#include "tls_test.h"
+
+#define CHECK_EQ_OR_RETURN(var, expected)				\
+  do									\
+    {									\
+      if ((var) != (expected))						\
+	{								\
+	  printf(#var ": expected %d, found %d\n", expected, var);	\
+	  return false;							\
+	}								\
+    }									\
+  while (0)
+
+__thread int v1;
+static __thread int v2;
+
+// We don't use these pointers, but putting them in tests alignment on
+// a 64-bit target.
+__thread char* p1;
+char dummy;
+__thread char* p2 = &dummy;
+
+__thread int v3 = 3;
+static __thread int v4 = 4;
+__thread int v5;
+static __thread int v6;
+
+struct int128
+{
+  long long hi;
+  long long lo;
+};
+
+static __thread struct int128 v12 = { 115, 125 };
+
+bool
+t1()
+{
+  CHECK_EQ_OR_RETURN(v1, 0);
+  v1 = 10;
+  return true;
+}
+
+bool
+t2()
+{
+  CHECK_EQ_OR_RETURN(v2, 0);
+  v2 = 20;
+  return true;
+}
+
+bool
+t3()
+{
+  CHECK_EQ_OR_RETURN(v3, 3);
+  v3 = 30;
+  return true;
+}
+
+bool
+t4()
+{
+  CHECK_EQ_OR_RETURN(v4, 4);
+  v4 = 40;
+  return true;
+}
+
+// For test 5 the main function calls f5b(f5a()), then calls t5().
+
+int*
+f5a()
+{
+  return &v5;
+}
+
+void
+f5b(int* p)
+{
+  *p = 50;
+}
+
+bool
+t5()
+{
+  CHECK_EQ_OR_RETURN(v5, 50);
+  return true;
+}
+
+// For test 6 the main function calls f6b(f6a()), then calls t6().
+
+int*
+f6a()
+{
+  return &v6;
+}
+
+void
+f6b(int* p)
+{
+  *p = 60;
+}
+
+bool
+t6()
+{
+  CHECK_EQ_OR_RETURN(v6, 60);
+  return true;
+}
+
+// The slot for t7() is unused.
+
+bool
+t8()
+{
+  CHECK_EQ_OR_RETURN(o1, 0);
+  o1 = -10;
+  return true;
+}
+
+bool
+t9()
+{
+  CHECK_EQ_OR_RETURN(o2, -2);
+  o2 = -20;
+  return true;
+}
+
+// For test 10 the main function calls f10b(f10a()), then calls t10().
+
+int*
+f10a()
+{
+  return &o3;
+}
+
+void
+f10b(int* p)
+{
+  *p = -30;
+}
+
+bool
+t10()
+{
+  CHECK_EQ_OR_RETURN(o3, -30);
+  return true;
+}
+
+bool
+t12()
+{
+  struct int128 newval = { 335, 345 };
+  CHECK_EQ_OR_RETURN((int) v12.hi, 115);
+  CHECK_EQ_OR_RETURN((int) v12.lo, 125);
+  v12 = newval;
+  return true;
+}
+
+bool
+t_last()
+{
+  CHECK_EQ_OR_RETURN(v1, 10);
+  CHECK_EQ_OR_RETURN(v2, 20);
+  CHECK_EQ_OR_RETURN(v3, 30);
+  CHECK_EQ_OR_RETURN(v4, 40);
+  CHECK_EQ_OR_RETURN(v5, 50);
+  CHECK_EQ_OR_RETURN(v6, 60);
+  CHECK_EQ_OR_RETURN((int) v12.hi, 335);
+  CHECK_EQ_OR_RETURN((int) v12.lo, 345);
+  CHECK_EQ_OR_RETURN(o1, -10);
+  CHECK_EQ_OR_RETURN(o2, -20);
+  CHECK_EQ_OR_RETURN(o3, -30);
+  int check = t11_last();
+  CHECK_EQ_OR_RETURN(check, 1);
+  return true;
+}
+@
+
+
+1.7
+log
+@2008-08-14  Cary Coutant  <ccoutant@@google.com>
+
+	* x86_64.cc (Target_x86_64::Relocate::relocat_tls):
+	Use addend for DTPOFF32, DTPOFF64, and TPOFF32 relocs.
+	* testsuite/tls_test.cc (struct int128): 128-bit struct
+	for testing TLS relocs with non-zero addend.
+	(v12): New TLS variable.
+	(t12): New test.
+	(t_last): Add check for v12.
+	* testsuite/tls_test.h (t12): New function.
+	* testsuite/tls_test_main.cc (thread_routine): Call new test.
+@
+text
+@d47 1
+a48 1
+#include "config.h"
+@
+
+
+1.6
+log
+@	* common.cc (Symbol_table::allocate_commons): Remove options
+	parameter.  Change caller.
+	(Symbol_table::do_allocate_commons): Remove options parameter.
+	Change caller.  Just call do_allocate_commons_list twice.
+	(Symbol_table::do_allocate_commons_list): New function, broken out
+	of do_allocate_commons.
+	* common.h (class Allocate_commons_task): Remove options_ field.
+	Update constructor.
+	* symtab.cc (Symbol_table::Symbol_table): Initialize
+	tls_commons_.
+	(Symbol_table::add_from_object): Put TLS common symbols on
+	tls_commons_ list.
+	(Symbol_table::sized_finalize_symbol): Handle STT_TLS symbols
+	which are IN_OUTPUT_DATA.
+	* symtab.h (class Symbol_table): Add tls_commons_ field.  Update
+	allocate_commons and do_allocate_commons declarations.  Declare
+	do_allocate_commons_list.
+	* gold.cc (queue_middle_tasks): Update creation of
+	Allocate_commons_task to not pass options.
+	* testsuite/Makefile.am (INCLUDES): Add -I.. .
+	(TLS_TEST_C_FLAGS): New variable.
+	(tls_test_c_pic.o): New target.
+	(tls_test_shared.so): Link in tls_test_c_pic.o.
+	(tls_test_c_pic_ie.o): New target.
+	(tls_test_ie_shared.so): Link in tls_test_c_pic_ie.o.
+	(tls_test_DEPENDENCIES, tls_test_LDADD): Add tls_test_c.o.
+	(tls_test_c.o): New target.
+	(tls_pic_test_DEPENDENCIES): Add tls_test_c_pic.o.
+	(tls_pic_test_LDADD): Likewise.
+	(tls_shared_gd_to_ie_test_DEPENDENCIES): Add tls_test_c_pic.o.
+	(tls_shared_gd_to_ie_test_LDADD): Likewise.
+	(tls_test_c_gnu2.o): New target.
+	(tls_shared_gnu2_gd_to_ie_test_DEPENDENCIES): Add
+	tls_test_c_gnu2.o.
+	(tls_shared_gnu2_gd_to_ie_test_LDADD): Likewise.
+	(tls_test_gnu2_shared.so): Link in tls_test_c_gnu2.o.
+	(tls_test_shared_nonpic.so): Link in tls_test_c.o.
+	* testsuite/tls_test.cc: Include "config.h".
+	(t_last): Call t11_last.
+	* testsuite/tls_test.h (t11, t11_last): Declare.
+	* testsuite/tls_test_c.c: New file.
+	* testsuite/tls_test_main.cc (thread_routine): Call t11.
+	* configure.ac: Check for OpenMP support.
+	* configure, config.in, Makefile.in: Rebuild.
+	* testsuite/Makefile.in: Rebuild.
+@
+text
+@d76 8
+d198 10
+d216 2
+@
+
+
+1.5
+log
+@Make sure the start and size of the TLS segment are aligned.
+@
+text
+@d48 1
+d201 2
+@
+
+
+1.4
+log
+@Update copyright years.  Update language files.
+@
+text
+@d63 7
+@
+
+
+1.3
+log
+@From Craig Silverstein: TLS test cleanups.
+@
+text
+@d3 1
+a3 1
+// Copyright 2006, 2007 Free Software Foundation, Inc.
+@
+
+
+1.2
+log
+@From Craig Silverstein: expand the TLS test to a second file, to test
+IE to LE conversion.
+@
+text
+@d47 1
+d50 11
+a67 5
+// These variables are defined in tls_test_file2.cc
+extern __thread int o1;
+extern __thread int o2;
+extern __thread int o3;
+
+d71 1
+a71 2
+  if (v1 != 0)
+    return false;
+d79 1
+a79 2
+  if (v2 != 0)
+    return false;
+d87 1
+a87 2
+  if (v3 != 3)
+    return false;
+d95 1
+a95 2
+  if (v4 != 4)
+    return false;
+d117 2
+a118 1
+  return v5 == 50;
+d138 2
+a139 1
+  return v6 == 60;
+d147 2
+a148 3
+  if (o1 != 0)
+    return false;
+  o1 = 10;
+d155 2
+a156 3
+  if (o2 != 2)
+    return false;
+  o2 = 20;
+d171 1
+a171 1
+  *p = 30;
+d177 2
+a178 1
+  return o3 == 30;
+d184 10
+a193 9
+  return (v1 == 10
+	  && v2 == 20
+	  && v3 == 30
+	  && v4 == 40
+	  && v5 == 50
+	  && v6 == 60
+          && o1 == 10
+          && o2 == 20
+          && o3 == 30);
+@
+
+
+1.1
+log
+@Add a TLS test case.
+@
+text
+@d41 5
+a45 1
+// 7  Verify that the above tests left the variables set correctly.
+d56 5
+d117 1
+a117 1
+// For test 5 the main function calls f6b(f6a()), then calls t6().
+d137 40
+d178 1
+a178 1
+t7()
+d185 4
+a188 1
+	  && v6 == 60);
+@
+

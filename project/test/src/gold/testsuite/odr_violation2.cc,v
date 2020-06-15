@@ -1,0 +1,201 @@
+head	1.5;
+access;
+symbols
+	binutils-2_24-branch:1.5.0.8
+	binutils-2_24-branchpoint:1.5
+	binutils-2_21_1:1.2
+	binutils-2_23_2:1.5
+	binutils-2_23_1:1.5
+	binutils-2_23:1.5
+	binutils-2_23-branch:1.5.0.6
+	binutils-2_23-branchpoint:1.5
+	binutils-2_22_branch:1.5.0.4
+	binutils-2_22:1.5
+	binutils-2_22-branch:1.5.0.2
+	binutils-2_22-branchpoint:1.5
+	binutils-2_21:1.2
+	binutils-2_21-branch:1.2.0.2
+	binutils-2_21-branchpoint:1.2
+	binutils-2_20_1:1.1
+	binutils-2_20:1.1
+	binutils-arc-20081103-branch:1.1.0.10
+	binutils-arc-20081103-branchpoint:1.1
+	binutils-2_20-branch:1.1.0.8
+	binutils-2_20-branchpoint:1.1
+	dje-cgen-play1-branch:1.1.0.6
+	dje-cgen-play1-branchpoint:1.1
+	arc-20081103-branch:1.1.0.4
+	arc-20081103-branchpoint:1.1
+	binutils-2_19_1:1.1
+	binutils-2_19:1.1
+	binutils-2_19-branch:1.1.0.2
+	binutils-2_19-branchpoint:1.1
+	binutils_latest_snapshot:1.5
+	added-to-binutils:1.1;
+locks; strict;
+comment	@// @;
+
+
+1.5
+date	2011.07.09.05.09.52;	author ian;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2011.03.11.21.42.12;	author ian;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2011.03.10.01.31.33;	author ian;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2010.07.27.08.22.49;	author ian;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2007.11.14.01.03.01;	author iant;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.5
+log
+@	* testsuite/odr_violation2.cc (Ordering::operator()): Make
+	expression more complex.
+@
+text
+@#include <algorithm>
+#include "odr_header1.h"
+
+class Ordering {
+ public:
+  bool operator()(int a, int b) __attribute__((never_inline));
+};
+
+// This comment makes the line numbers in Ordering::operator() all have
+// two digits, which causes gold's output to be independent of which
+// instruction the compiler optimizes into the front of the function.
+bool Ordering::operator()(int a, int b) {
+  // Optimization makes this operator() a different size than the one
+  // in odr_violation1.cc.
+  return a + 12345 > b / 67;
+}
+
+void SortDescending(int array[], int size) {
+  std::sort(array, array + size, Ordering());
+}
+
+// This is weak in odr_violation1.cc.
+extern "C" int OverriddenCFunction(int i) {
+  return i * i;
+}
+// This is inline in debug_msg.cc, which makes it a weak symbol too.
+int SometimesInlineFunction(int i) {
+  return i * i;
+}
+
+// Instantiate the Derived vtable, with optimization (see Makefile.am).
+OdrBase* CreateOdrDerived2() {
+  return new OdrDerived;
+}
+@
+
+
+1.4
+log
+@	PR gold/12572
+	* testsuite/odr_violation2.cc: Add comment to make all error line
+	numbers double digits.
+	* testsuite/debug_msg.sh: Adjust expected errors.
+@
+text
+@d15 1
+a15 1
+  return a + 1 > b + 1;
+@
+
+
+1.3
+log
+@	* dwarf_reader.cc (Sized_dwarf_line_info): Include all lines,
+	but mark earlier ones as non-canonical
+	(offset_to_iterator): Update search target and example
+	(do_addr2line): Return extra lines in a vector*
+	(format_file_lineno): Extract from do_addr2line
+	(one_addr2line): Add vector* out-param
+	* dwarf_reader.h (Offset_to_lineno_entry): New field recording
+	when a lineno entry appeared last for its instruction
+	(Dwarf_line_info): Add vector* out-param
+	* object.cc (Relocate_info): Pass NULL for the vector* out-param
+	* symtab.cc (Odr_violation_compare): Include the lineno in the
+	comparison again.
+	(linenos_from_loc): New. Combine the canonical line for an
+	address with its other lines.
+	(True_if_intersect): New. Helper functor to make
+	std::set_intersection a query.
+	(detect_odr_violations): Compare sets of lines instead of just
+	one line for each function. This became less deterministic, but
+	has fewer false positives.
+	* symtab.h: Declarations.
+	* testsuite/Makefile.am (odr_violation2.o): Compile with -O2 to
+	mix an optimized and non-optimized object in the same binary
+	(odr_violation2.so): Same.
+	* testsuite/Makefile.in: Regenerate from Makefile.am.
+	* testsuite/debug_msg.cc (main): Make OdrDerived classes.
+	* testsuite/debug_msg.sh: Update line numbers and add
+	assertions.
+	* testsuite/odr_violation1.cc: Use OdrDerived, in a
+	non-optimized context.
+	* testsuite/odr_violation2.cc: Make sure Ordering::operator()
+	isn't inlined, and use OdrDerived in an optimized context.
+	* testsuite/odr_header1.h: Defines OdrDerived, where
+	optimization will change the
+	first-instruction-in-the-destructor's file and line number.
+	* testsuite/odr_header2.h: Defines OdrBase.
+@
+text
+@d9 3
+d15 2
+a16 2
+    return a + 1 > b + 1;
+  }
+@
+
+
+1.2
+log
+@	* testsuite/debug_msg.sh: Test mixed weak/strong symbol behavior.
+	* gold/testsuite/debug_msg.cc: Likewise.
+	* gold/testsuite/odr_violation1.cc
+	* gold/testsuite/odr_violation2.cc
+@
+text
+@d2 1
+d6 6
+a11 3
+  bool operator()(int a, int b) {
+    // We need the "+ 1" here to force this operator() to be a
+    // different size than the one in odr_violation1.cc.
+a13 1
+};
+d27 5
+@
+
+
+1.1
+log
+@From Craig Silverstein: Rework debug info code a bit, add option for
+ODR violations, add test case.
+@
+text
+@d15 9
+@
+

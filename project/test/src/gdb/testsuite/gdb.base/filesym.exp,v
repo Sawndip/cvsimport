@@ -1,0 +1,116 @@
+head	1.2;
+access;
+symbols;
+locks; strict;
+comment	@# @;
+
+
+1.2
+date	2013.05.21.19.11.50;	author kseitz;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2013.05.15.21.21.05;	author kseitz;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@	* gdb.base/filesym.exp: Use gdb_test_multiple instead of
+	gdb_expect.
+	Add test to flush the remaining input buffer so that this
+	file passes testsuite/12649.
+@
+text
+@# Copyright 2013 Free Software Foundation, Inc.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# This series of completion tests checks the completion output
+# on a name which is potentially both a symbol name and a file name.
+
+standard_testfile
+
+if {[prepare_for_testing $testfile.exp $testfile $srcfile debug]} {
+    return -1
+}
+
+# Test completion list for "filesy".  We expect the immediate result to
+# complete to "filesym"; completing again, we expect the symbol name and the
+# filename (in that order).
+
+set tst "complete on \"filesy\""
+send_gdb "break filesy\t"
+gdb_test_multiple "" $tst {
+    -re "break filesy\\\x07m\$" {
+	pass $tst
+
+	# Now ask for the completion list
+	set tst "completion list for \"filesym\""
+	send_gdb "\t\t"
+	gdb_test_multiple "" $tst {
+	    -re "\\\x07\r\nfilesym\[ \t\]+filesym.c\[ \t\]+\r\n$gdb_prompt " {
+		pass $tst
+
+		# Flush the rest of the output by creating the breakpoint.
+		# This ensures this file passes testsuite/12649.
+		send_gdb "\n"
+		gdb_test "" "Breakpoint 1.*" "set breakpoint at filesym"
+	    }
+	}
+    }
+}
+
+unset -nocomplain tst
+@
+
+
+1.1
+log
+@	* gdb.base/filesym.exp: New completer test.
+	* gdb.base/filesym.c: New file.
+@
+text
+@d29 1
+d31 3
+a33 3
+gdb_expect {
+     -re "m\$" {
+	pass "complete on \"filesy\""
+d36 1
+d38 3
+a40 4
+	gdb_expect {
+	    -re ".*filesym\[ \t\]+filesym.c.*$gdb_prompt break filesym\$" {
+		pass "completion list for \"filesym\""
+	    }
+d42 4
+a45 2
+	    default {
+		fail "completion list for \"filesym\""
+d49 1
+d51 1
+a51 4
+    default {
+	fail "complete on \"filesy\""
+    }
+}
+@
+

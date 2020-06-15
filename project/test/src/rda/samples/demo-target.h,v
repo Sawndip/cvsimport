@@ -1,0 +1,173 @@
+head	1.1;
+access;
+symbols
+	msnyder-fork-checkpoint-branch:1.1.0.6
+	msnyder-fork-checkpoint-branchpoint:1.1
+	msnyder-tracepoint-checkpoint-branch:1.1.0.4
+	msnyder-tracepoint-checkpoint-branchpoint:1.1
+	jimb-rda-nptl-branch:1.1.0.2
+	jimb-rda-nptl-branchpoint:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.1
+date	2002.08.28.01.22.28;	author kevinb;	state Exp;
+branches
+	1.1.4.1;
+next	;
+
+1.1.4.1
+date	2005.05.30.22.13.54;	author msnyder;	state Exp;
+branches;
+next	1.1.4.2;
+
+1.1.4.2
+date	2008.06.11.23.43.11;	author msnyder;	state Exp;
+branches;
+next	1.1.4.3;
+
+1.1.4.3
+date	2008.06.12.20.48.52;	author msnyder;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.1
+log
+@Added files comprising RDA.
+@
+text
+@/* demo-target.c
+
+   Copyright 2000, 2002 Red Hat, Inc.
+
+   This file is part of RDA, the Red Hat Debug Agent (and library).
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 2 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 59 Temple Place - Suite 330,
+   Boston, MA 02111-1307, USA.
+   
+   Alternative licenses for RDA may be arranged by contacting Red Hat,
+   Inc.  */
+
+#ifndef DEMO_TARGET_H
+#define DEMO_TARGET_H
+
+struct gdbserv;
+
+/* Signal a request to terminate main loop. */
+extern int demo_quit_p;
+
+/* Create a demo target vector.  Used by demo_attach but can also be
+   used by other demo targets that just need to tweek the target
+   interface. */
+
+struct gdbserv_target *demo_target (struct gdbserv *gdbserv, void *data);
+
+/* This function is called from gdbloop_poll when a new incoming
+   connection is attempted.  It may return NULL if the new connection
+   is to be refused, or a gdbserv_target vector if the connection is
+   accepted. */
+
+struct gdbserv_target *demo_attach (struct gdbserv* serv, void* data);
+
+#endif
+@
+
+
+1.1.4.1
+log
+@2005-05-30  Michael Snyder  <msnyder@@localhost.localdomain>
+
+	Add QTFrame message to support gdb 'tfind' command.
+	* demo-tfind.c: New file.
+	* Makefile.in: Add demo-tfind.c.
+	* demo-target.c (demo_process_set_gen): New function.
+	(demo_target): Set process_set_gen for general "set" requests.
+	(demo_process_get_regs): Call get_regs_hook if defined.
+	(demo_get_mem): Call get_mem_hook if defined.
+	* demo-target.h: Export demo_set_gen_hook, demo_get_regs_hook,
+	demo_get_mem_hook, and demo_tfind_open.
+	* main.c (usage): Document "-t" option to accept tracepoint file.
+	(main): Call demo_tfind_open to open tracepoint file.
+@
+text
+@a45 5
+extern void (*demo_set_gen_hook)  (struct gdbserv *);
+extern void (*demo_get_regs_hook) (struct gdbserv *);
+extern int  (*demo_get_mem_hook)  (unsigned long);
+
+extern void demo_tfind_open (char *);
+@
+
+
+1.1.4.2
+log
+@2008-06-11  Michael Snyder  <msnyder@@specifix.com>
+
+	* demo-tfind.c (tfind_singlestep_program): New function.
+	* demo-target.c (demo_singlestep_program): Call the above.
+	* demo-target.h: Export tfind_singlestep_program interface.
+@
+text
+@a50 1
+extern int tfind_singlestep_program (struct gdbserv *);
+@
+
+
+1.1.4.3
+log
+@2008-06-12  Michael Snyder  <msnyder@@specifix.com>
+
+	* demo-target.c: Implement hooks for software breakpoints.
+	(demo_remove_swbp): New function.
+	(demo_set_swbp): New function.
+	(demo_target): Set up method vectors for set/remove breakpoints.
+	* demo-target.h: Export interface for software breakpoints.
+	* demo-tfind.c: Implement software breakpoints.
+	(tfind_insert_breakpoint): New function.
+	(tfind_unlink_breakpoint): New function.
+	(tfind_set_swbp): New function.
+	(tfind_remove_swbp): New function.
+
+	* demo-target.c: Implement hooks for continue_thread.
+	(demo_continue_thread): call tfind_continue_thread.
+	* demo-target.h: Export interface for tfind_continue_thread.
+	* demo-tfind.c: Implement continue_thread with software breakpoints.
+	(tfind_continue_thread): New function.  Find a new frame
+	based on software breakpoints.
+@
+text
+@a51 13
+extern int tfind_continue_thread (struct gdbserv *, 
+				  struct gdbserv_thread *,
+				  const struct gdbserv_reg *);
+
+extern enum gdbserv_target_rc tfind_remove_swbp (struct gdbserv *,
+						 enum gdbserv_target_bp,
+						 struct gdbserv_reg *,
+						 struct gdbserv_reg *);
+extern enum gdbserv_target_rc tfind_set_swbp (struct gdbserv *,
+					      enum gdbserv_target_bp,
+					      struct gdbserv_reg *,
+					      struct gdbserv_reg *);
+
+@
+
+

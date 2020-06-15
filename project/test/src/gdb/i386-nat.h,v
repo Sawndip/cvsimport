@@ -1,0 +1,813 @@
+head	1.10;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.10
+	gdb_7_6-2013-04-26-release:1.10
+	gdb_7_6-branch:1.10.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.10
+	gdb_7_5_1-2012-11-29-release:1.7
+	gdb_7_5-2012-08-17-release:1.7
+	gdb_7_5-branch:1.7.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.7
+	gdb_7_4_1-2012-04-26-release:1.5.4.1
+	gdb_7_4-2012-01-24-release:1.5.4.1
+	gdb_7_4-branch:1.5.0.4
+	gdb_7_4-2011-12-13-branchpoint:1.5
+	gdb_7_3_1-2011-09-04-release:1.5
+	gdb_7_3-2011-07-26-release:1.5
+	gdb_7_3-branch:1.5.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.5
+	gdb_7_2-2010-09-02-release:1.3
+	gdb_7_2-branch:1.3.0.4
+	gdb_7_2-2010-07-07-branchpoint:1.3
+	gdb_7_1-2010-03-18-release:1.3
+	gdb_7_1-branch:1.3.0.2
+	gdb_7_1-2010-02-18-branchpoint:1.3
+	gdb_7_0_1-2009-12-22-release:1.1
+	gdb_7_0-2009-10-06-release:1.1
+	gdb_7_0-branch:1.1.0.4
+	gdb_7_0-2009-09-16-branchpoint:1.1
+	msnyder-checkpoint-072509-branch:1.1.0.2
+	msnyder-checkpoint-072509-branchpoint:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.10
+date	2013.02.13.14.59.49;	author palves;	state Exp;
+branches;
+next	1.9;
+
+1.9
+date	2013.01.01.06.32.45;	author brobecke;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2012.11.07.20.10.13;	author palves;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2012.01.04.08.17.04;	author brobecke;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2011.12.14.17.20.30;	author palves;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2011.01.09.03.08.56;	author msnyder;	state Exp;
+branches
+	1.5.4.1;
+next	1.4;
+
+1.4
+date	2011.01.01.15.33.07;	author brobecke;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2010.01.01.07.31.34;	author brobecke;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2009.11.20.19.57.28;	author jkratoch;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2009.05.14.09.37.00;	author muller;	state Exp;
+branches;
+next	;
+
+1.5.4.1
+date	2012.01.06.04.43.15;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.10
+log
+@[native x86 GNU/Linux] Access debug register mirror from the corresponding process.
+
+While reviewing the native AArch64 patch, I noticed a problem:
+
+On 02/06/2013 08:46 PM, Pedro Alves wrote:
+>
+>> > +static void
+>> > +aarch64_linux_prepare_to_resume (struct lwp_info *lwp)
+>> > +{
+>> > +  struct arch_lwp_info *info = lwp->arch_private;
+>> > +
+>> > +  /* NULL means this is the main thread still going through the shell,
+>> > +     or, no watchpoint has been set yet.  In that case, there's
+>> > +     nothing to do.  */
+>> > +  if (info == NULL)
+>> > +    return;
+>> > +
+>> > +  if (DR_HAS_CHANGED (info->dr_changed_bp)
+>> > +      || DR_HAS_CHANGED (info->dr_changed_wp))
+>> > +    {
+>> > +      int tid = GET_LWP (lwp->ptid);
+>> > +      struct aarch64_debug_reg_state *state = aarch64_get_debug_reg_state ();
+> Hmm.  This is always fetching the debug_reg_state of
+> the current inferior, but may not be the inferior of lwp.
+> I see the same bug on x86.  Sorry about that.  I'll fix it.
+
+A natural fix would be to make xxx_get_debug_reg_state take an
+inferior argument, but that doesn't work because of the case where we
+detach breakpoints/watchpoints from the child fork, at a time there's
+no inferior for the child fork at all.  We do a nasty hack in
+i386_inferior_data_get, but that relies on all callers pointing the
+current inferior to the correct inferior, which isn't actually being
+done by all callers, and I don't think we want to enforce that -- deep
+in the bowls of linux-nat.c, there are many cases we resume lwps
+behind the scenes, and it's be better to not have that code rely on
+global state (as it doesn't today).
+
+The fix is to decouple the watchpoints code from inferiors, making it
+track target processes instead.  This way, we can freely keep track of
+the watchpoint mirrors for these processes behind the core's back.
+Checkpoints also play dirty tricks with swapping the process behind
+the inferior, so they get special treatment too in the patch (which
+just amounts to calling a new hook).  Instead of the old hack in
+i386_inferior_data_get, where we returned a copy of the current
+inferior's debug registers mirror, as soon as we detect a fork in the
+target, we copy the debug register mirror from the parent to the child
+process.
+
+I don't have an old kernel handy to test, but I stepped through gdb doing
+the watchpoint removal in the fork child in the watchpoint-fork test
+seeing that the debug registers end up cleared in the child.
+
+I didn't find the need for linux_nat_iterate_watchpoint_lwps.  If
+we use plain iterate_over_lwps instead, what happens is that
+when removing watchpoints, that iterate_over_lwps doesn't actually
+iterate over anything, since the fork child is not added to the
+lwp list until later, at detach time, in linux_child_follow_fork.
+And if we don't iterate over that lwp, we don't mark its debug
+registers as needing update.  But linux_child_follow_fork takes
+care of doing that explicitly:
+
+	  child_lp = add_lwp (inferior_ptid);
+	  child_lp->stopped = 1;
+	  child_lp->last_resume_kind = resume_stop;
+	  make_cleanup (delete_lwp_cleanup, child_lp);
+
+	  /* CHILD_LP has new PID, therefore linux_nat_new_thread is not called for it.
+	     See i386_inferior_data_get for the Linux kernel specifics.
+	     Ensure linux_nat_prepare_to_resume will reset the hardware debug
+	     registers.  It is done by the linux_nat_new_thread call, which is
+	     being skipped in add_lwp above for the first lwp of a pid.  */
+	  gdb_assert (num_lwps (GET_PID (child_lp->ptid)) == 1);
+	  if (linux_nat_new_thread != NULL)
+	    linux_nat_new_thread (child_lp);
+
+	  if (linux_nat_prepare_to_resume != NULL)
+	    linux_nat_prepare_to_resume (child_lp);
+	  ptrace (PTRACE_DETACH, child_pid, 0, 0);
+
+so unless I'm missing something (quite possible) it ends up all
+the same.  But, the !detach-on-fork, and the "follow-fork child" paths
+should also call linux_nat_new_thread, and they don't presently.  It
+seems to me in those cases we're not clearing debug regs correctly
+when that's needed.  Instead of copying that bit that works around
+add_lwp bypassing the linux_nat_new_thread call, I thought it'd
+be better to add an add_initial_lwp call to be used in the case we
+really need to bypass linux_nat_new_thread, and make
+add_lwp always call linux_nat_new_thread.
+
+i386_cleanup_dregs is rewritten to forget about the current process
+debug mirrors, which takes cares of other i386 ports.  Only a couple
+of extra tweaks here and there were needed, as some targets wheren't
+actually calling i386_cleanup_dregs.
+
+Tested on Fedora 17 x86_64 -m64/-m32.
+
+GDBserver already fetches the i386_debug_reg_state from the right
+process, and, it doesn't handle forks at all, so no fix is needed over
+there.
+
+gdb/
+2013-02-13  Pedro Alves  <palves@@redhat.com>
+
+	* amd64-linux-nat.c (update_debug_registers_callback):
+	Update comment.
+	(amd64_linux_dr_set_control, amd64_linux_dr_set_addr): Use
+	iterate_over_lwps.
+	(amd64_linux_prepare_to_resume): Pass the lwp's pid to
+	i386_debug_reg_state.
+	(amd64_linux_new_fork): New function.
+	(_initialize_amd64_linux_nat): Install amd64_linux_new_fork as
+	linux_nat_new_fork hook, and i386_forget_process as
+	linux_nat_forget_process hook.
+	* i386-linux-nat.c (update_debug_registers_callback):
+	Update comment.
+	(amd64_linux_dr_set_control, amd64_linux_dr_set_addr): Use
+	iterate_over_lwps.
+	(i386_linux_prepare_to_resume): Pass the lwp's pid to
+	i386_debug_reg_state.
+	(i386_linux_new_fork): New function.
+	(_initialize_i386_linux_nat): Install i386_linux_new_fork as
+	linux_nat_new_fork hook, and i386_forget_process as
+	linux_nat_forget_process hook.
+	* i386-nat.c (i386_init_dregs): Delete.
+	(i386_inferior_data, struct i386_inferior_data):
+	Delete.
+	(struct i386_process_info): New.
+	(i386_process_list): New global.
+	(i386_find_process_pid, i386_add_process, i386_process_info_get):
+	New functions.
+	(i386_inferior_data_get): Delete.
+	(i386_process_info_get): New function.
+	(i386_debug_reg_state): New parameter 'pid'.  Reimplement.
+	(i386_forget_process): New function.
+	(i386_cleanup_dregs): Rewrite.
+	(i386_update_inferior_debug_regs, i386_insert_watchpoint)
+	(i386_remove_watchpoint, i386_region_ok_for_watchpoint)
+	(i386_stopped_data_address, i386_insert_hw_breakpoint)
+	(i386_remove_hw_breakpoint): Adjust to pass the current process id
+	to i386_debug_reg_state.
+	(i386_use_watchpoints): Don't register inferior data.
+	* i386-nat.h (i386_debug_reg_state): Add new 'pid' parameter, and
+	adjust comment.
+	(i386_forget_process): Declare.
+	* linux-fork.c (delete_fork): Call linux_nat_forget_process.
+	* linux-nat.c (linux_nat_new_fork, linux_nat_forget_process_hook):
+	New static globals.
+	(linux_child_follow_fork): Don't call linux_nat_new_thread here.
+	(add_initial_lwp): New, factored out from ...
+	(add_lwp): ... this.  Don't check the number of lwps before
+	calling linux_nat_new_thread.
+	(linux_nat_iterate_watchpoint_lwps): Delete.
+	(linux_nat_attach): Use add_initial_lwp instead of add_lwp.
+	(linux_handle_extended_wait): Call the linux_nat_new_fork hook on
+	forks and vforks.
+	(linux_nat_wait_1): Use add_initial_lwp instead of add_lwp for the
+	initial lwp.
+	(linux_nat_kill, linux_nat_mourn_inferior): Call
+	linux_nat_forget_process.
+	(linux_nat_set_new_fork, linux_nat_set_forget_process)
+	(linux_nat_forget_process): New functions.
+	* linux-nat.h (linux_nat_iterate_watchpoint_lwps_ftype): Delete
+	type.
+	(linux_nat_iterate_watchpoint_lwps): Delete declaration.
+	(linux_nat_new_fork_ftype, linux_nat_forget_process_ftype): New
+	types.
+	(linux_nat_set_new_fork, linux_nat_set_forget_process)
+	(linux_nat_forget_process): New declarations.
+
+	* amd64fbsd-nat.c (super_mourn_inferior): New global.
+	(amd64fbsd_mourn_inferior): New function.
+	(_initialize_amd64fbsd_nat): Override to_mourn_inferior.
+	* windows-nat.c (windows_detach): Call i386_cleanup_dregs.
+@
+text
+@/* Native-dependent code for the i386.
+
+   Low level functions to implement Oeprating System specific
+   code to manipulate I386 debug registers.
+
+   Copyright (C) 2009-2013 Free Software Foundation, Inc.
+
+   This file is part of GDB.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+#ifndef I386_NAT_H
+#define I386_NAT_H 1
+
+/* Hardware-assisted breakpoints and watchpoints.  */
+
+/* Add watchpoint methods to the provided target_ops.  
+   Targets using i386 family debug registers for watchpoints should call
+   this.  */
+struct target_ops;
+extern void i386_use_watchpoints (struct target_ops *);
+
+/* Support for hardware watchpoints and breakpoints using the i386
+   debug registers.
+
+   This provides several functions for inserting and removing
+   hardware-assisted breakpoints and watchpoints, testing if one or
+   more of the watchpoints triggered and at what address, checking
+   whether a given region can be watched, etc.
+
+   In addition, each target should provide several low-level functions
+   regrouped into i386_dr_low_type struct below.  These functions
+   that will be called to insert watchpoints and hardware breakpoints
+   into the inferior, remove them, and check their status.  These
+   functions are:
+
+      set_control              -- set the debug control (DR7)
+				  register to a given value for all LWPs
+
+      set_addr                 -- put an address into one debug
+				  register for all LWPs
+
+      get_addr                 -- return the address in a given debug
+				  register of the current LWP
+
+      get_status               -- return the value of the debug
+				  status (DR6) register for current LWP
+
+      get_control               -- return the value of the debug
+				  control (DR7) register for current LWP
+
+   Additionally, the native file should set the debug_register_length
+   field to 4 or 8 depending on the number of bytes used for
+   deubg registers.  */
+
+struct i386_dr_low_type
+  {
+    void (*set_control) (unsigned long);
+    void (*set_addr) (int, CORE_ADDR);
+    CORE_ADDR (*get_addr) (int);
+    unsigned long (*get_status) (void);
+    unsigned long (*get_control) (void);
+    int debug_register_length;
+  };
+
+extern struct i386_dr_low_type i386_dr_low;
+
+/* Debug registers' indices.  */
+#define DR_FIRSTADDR 0
+#define DR_LASTADDR  3
+#define DR_NADDR     4	/* The number of debug address registers.  */
+#define DR_STATUS    6	/* Index of debug status register (DR6).  */
+#define DR_CONTROL   7	/* Index of debug control register (DR7).  */
+
+/* Global state needed to track h/w watchpoints.  */
+
+struct i386_debug_reg_state
+{
+  /* Mirror the inferior's DRi registers.  We keep the status and
+     control registers separated because they don't hold addresses.
+     Note that since we can change these mirrors while threads are
+     running, we never trust them to explain a cause of a trap.
+     For that, we need to peek directly in the inferior registers.  */
+  CORE_ADDR dr_mirror[DR_NADDR];
+  unsigned dr_status_mirror, dr_control_mirror;
+
+  /* Reference counts for each debug register.  */
+  int dr_ref_count[DR_NADDR];
+};
+
+/* Use this function to set i386_dr_low debug_register_length field
+   rather than setting it directly to check that the length is only
+   set once.  It also enables the 'maint set/show show-debug-regs' 
+   command.  */
+
+extern void i386_set_debug_register_length (int len);
+
+/* Use this function to reset the i386-nat.c debug register state.  */
+
+extern void i386_cleanup_dregs (void);
+
+/* Return a pointer to the local mirror of the debug registers of
+   process PID.  */
+
+extern struct i386_debug_reg_state *i386_debug_reg_state (pid_t pid);
+
+/* Called whenever GDB is no longer debugging process PID.  It deletes
+   data structures that keep track of debug register state.  */
+
+extern void i386_forget_process (pid_t pid);
+
+#endif /* I386_NAT_H */
+@
+
+
+1.9
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@d113 2
+a114 2
+/* Return a pointer to the the local mirror of the inferior's debug
+   registers.  */
+d116 6
+a121 1
+extern struct i386_debug_reg_state *i386_debug_reg_state (void);
+@
+
+
+1.8
+log
+@2012-11-07  Pedro Alves  <palves@@redhat.com>
+
+	* arm-tdep.c: Make defs.h be the first include.
+	* coff-pe-read.c: Ditto.
+	* gnu-nat.c: Ditto.
+	* go32-nat.c: Ditto.
+	* i386-nat.c: Ditto.
+	* ppcnbsd-nat.c: Ditto.
+	* ada-varobj.h: Don't include defs.h.
+	* i386-darwin-tdep.h: Ditto.
+	* i386-nat.h: Ditto.
+@
+text
+@d6 1
+a6 1
+   Copyright (C) 2009-2012 Free Software Foundation, Inc.
+@
+
+
+1.7
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@a22 2
+#include "defs.h"
+
+@
+
+
+1.6
+log
+@gdb/
+2011-12-14  Pedro Alves  <pedro@@codesourcery.com>
+
+	PR threads/10729
+
+	* linux-nat.c (linux_nat_new_thread): Change parameter to an lwp
+	pointer.
+	(linux_nat_prepare_to_resume): New global.
+	(lwp_free): New.
+	(purge_lwp_list): Use it.
+	(add_lwp): Call linux_nat_new_thread even on the first LWP.
+	Adjust to interface change.
+	(delete_lwp): Call lwp_free instead of xfree.
+	(detach_callback, linux_nat_detach, resume_lwp, linux_nat_resume)
+	(linux_handle_syscall_trap, linux_handle_extended_wait)
+	(linux_nat_filter_event, resume_stopped_resumed_lwps): Call
+	linux_nat_prepare_to_resume before resuming.
+	(linux_stop_lwp): New.
+	(linux_nat_set_new_thread): Adjust.
+	(linux_nat_set_prepare_to_resume): New.
+	* linux-nat.h (struct arch_lwp_info): Forward declare.
+	(struct lwp_info) <arch_private>: New field.
+	(linux_stop_lwp): Declare.
+	(linux_nat_set_new_thread): Adjust.
+	(linux_nat_set_prepare_to_resume): New.
+
+	* i386-nat.c (DR_NADDR, DR_STATUS, DR_CONTROL)
+	(struct i386_debug_reg_state): Move to i386-nat.h.
+	(dr_mirror): Comment.
+	(i386_debug_reg_state): New.
+	(i386_update_inferior_debug_regs): Simplify.
+	(i386_stopped_data_address): Use the debug register state from the
+	inferior, not from the local cache.
+	* i386-nat.h (struct i386_dr_low_type): Delete reset_addr and
+	unset_status fields.  New get_addr and get_control fields.
+	(DR_FIRSTADDR, DR_LASTADDR, DR_CONTROL): Moved from i386-nat.c.
+	(DR_NADDR, DR_STATUS): New.
+	(struct i386_debug_reg_state): Moved from i386-nat.c.
+
+	* amd64-linux-nat.c (struct arch_lwp_info): New.
+	(amd64_linux_dr): Delete global.
+	(amd64_linux_dr_get_addr): New.
+	(amd64_linux_dr_get_control): New.
+	(amd64_linux_dr_unset_status): Delete.
+	(amd64_linux_dr_set_addr): Reimplement.
+	(amd64_linux_dr_reset_addr): Delete.
+	(update_debug_registers_callback): New.
+	(amd64_linux_dr_set_control): Reimplement.
+	(amd64_linux_dr_set_addr): Reimplement.
+	(amd64_linux_prepare_to_resume): New.
+	(amd64_linux_new_thread): Change parameter to an lwp pointer.
+	Reimplement.
+	(_initialize_amd64_linux_nat): No longer install
+	i386_dr_low.reset_addr and i386_dr_low.unset_status.  Install
+	amd64_linux_dr_get_control as i386_dr_low.get_control.  Install
+	amd64_linux_dr_get_addr as i386_dr_low.get_addr.  Install
+	amd64_linux_prepare_to_resume.
+	* i386-linux-nat.c (DR_FIRSTADDR, DR_LASTADDR, DR_STATUS)
+	(DR_CONTROL): Delete.
+	(struct arch_lwp_info): New.
+	(i386_linux_dr): Delete global.
+	(i386_linux_dr_set_control): Reimplement.
+	(i386_linux_dr_get_addr): New.
+	(i386_linux_dr_set_addr): Reimplement.
+	(i386_linux_dr_get_control): New.
+	(update_debug_registers_callback): New.
+	(i386_linux_dr_unset_status): Delete.
+	(i386_linux_dr_set_addr): Reimplement.
+	(i386_linux_prepare_to_resume): New.
+	(i386_linux_new_thread): Change parameter to an lwp pointer.
+	Reimplement.
+	(_initialize_i386_linux_nat): No longer install
+	i386_dr_low.reset_addr and i386_dr_low.unset_status.  Install
+	i386_linux_dr_get_control as i386_dr_low.get_control.  Install
+	i386_linux_dr_get_addr as i386_dr_low.get_addr.  Install
+	i386_linux_prepare_to_resume.
+
+	* arm-linux-nat.c (arm_linux_new_thread): Change parameter to an
+	lwp pointer.  Adjust.
+	* ia64-linux-nat.c (ia64_linux_new_thread): Likewise.
+	* mips-linux-nat.c (mips_linux_new_thread): Likewise.
+	* ppc-linux-nat.c (ppc_linux_new_thread): Likewise.
+	* s390-nat.c (s390_fix_watch_points): Likewise.
+
+	* i386-darwin-nat.c (DR_FIRSTADDR, DR_LASTADDR, DR_STATUS)
+	(DR_CONTROL): Delete.
+	(i386_darwin_dr_reset_addr): Delete.
+	(i386_darwin_dr_get_addr): New.
+	(i386_darwin_dr_get_control): New.
+	* go32-nat.c
+	(go32_get_dr7, go32_get_dr): New.
+	(init_go32_ops): No longer install i386_dr_low.reset_addr.
+	Install go32_get_dr7 as i386_dr_low.get_control.  Install
+	go32_get_dr as i386_dr_low.get_addr.
+	* i386bsd-nat.c (i386bsd_dr_get): New.
+	(i386bsd_dr_reset_addr): Delete.
+	(i386bsd_dr_get_addr): New.
+	(i386bsd_dr_get_status): Use i386bsd_dr_get.
+	(i386bsd_dr_get_control): New.
+	* i386bsd-nat.h (i386bsd_dr_reset_addr): Delete.
+	(i386bsd_dr_get_addr): New.
+	(i386bsd_dr_get_control): New.
+	* i386fbsd-nat.c (_initialize_i386fbsd_nat): No longer install
+	i386_dr_low.reset_addr and i386_dr_low.unset_status.  Install
+	i386bsd_dr_get_control as i386_dr_low.get_control.  Install
+	i386bsd_dr_get_addr as i386_dr_low.get_addr.
+	* windows-nat.c (init_windows_ops): No longer install
+	i386_dr_low.reset_addr and i386_dr_low.unset_status.  Install
+	cygwin_get_dr7 as i386_dr_low.get_control.  Install cygwin_get_dr
+	as i386_dr_low.get_addr.
+	(cygwin_get_dr): New.
+	(cygwin_get_dr7): New.
+
+gdb/testsuite/
+2011-12-14  Pedro Alves  <pedro@@codesourcery.com>
+
+	PR threads/10729
+
+	* gdb.mi/watch-nonstop.c: New file.
+ 	* gdb.mi/mi-watch-nonstop.exp: New file.
+@
+text
+@d6 1
+a6 1
+   Copyright (C) 2009, 2010, 2011 Free Software Foundation, Inc.
+@
+
+
+1.5
+log
+@2011-01-08  Michael Snyder  <msnyder@@vmware.com>
+
+	* h8300-tdep.c: Comment cleanup, mostly periods and spaces.
+	* hppa-hpux-tdep.c: Ditto.
+	* hppa-linux-nat.c: Ditto.
+	* hppa-linux-tdep.c: Ditto.
+	* hppanbsd-tdep.c: Ditto.
+	* hppa-tdep.c: Ditto.
+	* hppa-tdep.h: Ditto.
+	* hpux-thread.c: Ditto.
+	* i386-cygwin-tdep.c: Ditto.
+	* i386-darwin-nat.c: Ditto.
+	* i386gnu-nat.c: Ditto.
+	* i386-linux-nat.c: Ditto.
+	* i386-linux-tdep.c: Ditto.
+	* i386-nat.c: Ditto.
+	* i386-nat.h: Ditto.
+	* i386nbsd-tdep.c: Ditto.
+	* i386-sol2-nat.c: Ditto.
+	* i386-stub.c: Ditto.
+	* i386-tdep.c: Ditto.
+	* i386-tdep.h: Ditto.
+	* i387-tdep.c: Ditto.
+	* ia64-linux-nat.c: Ditto.
+	* ia64-linux-tdep.c: Ditto.
+	* ia64-tdep.c: Ditto.
+	* infcall.c: Ditto.
+	* infcall.h: Ditto.
+	* infcmd.c: Ditto.
+	* inferior.c: Ditto.
+	* inferior.h: Ditto.
+	* infloop.c: Ditto.
+	* inflow.c: Ditto.
+	* infrun.c: Ditto.
+	* interps.c: Ditto.
+	* interps.h: Ditto.
+	* iq2000-tdep.c: Ditto.
+	* irix5-nat.c: Ditto.
+	* jit.c: Ditto.
+	* jit.h: Ditto.
+	* jv-exp.y: Ditto.
+	* jv-lang.c: Ditto.
+	* jv-lang.h: Ditto.
+	* jv-typeprint.c: Ditto.
+	* jv-valprint.c: Ditto.
+	* language.c: Ditto.
+	* language.h: Ditto.
+	* linespec.c: Ditto.
+	* linux-fork.c: Ditto.
+	* linux-nat.c: Ditto.
+	* linux-thread-db.c: Ditto.
+	* lm32-tdep.c: Ditto.
+@
+text
+@d56 2
+a57 2
+      reset_addr               -- reset the address stored in
+				  one debug register for all LWPs
+d62 2
+a63 2
+      unset_status             -- unset the specified bits of the debug
+				  status (DR6) register for all LWPs
+d69 1
+a69 1
+struct i386_dr_low_type 
+d73 1
+a73 1
+    void (*reset_addr) (int);
+d75 1
+a75 1
+    void (*unset_status) (unsigned long);
+d81 23
+d115 5
+@
+
+
+1.5.4.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d6 1
+a6 1
+   Copyright (C) 2009-2012 Free Software Foundation, Inc.
+@
+
+
+1.4
+log
+@run copyright.sh for 2011.
+@
+text
+@d45 1
+a45 1
+   regrouped into i386_dr_low_type struct below. These functions
+@
+
+
+1.3
+log
+@Update copyright year in most headers.
+
+Automatic update by copyright.sh.
+@
+text
+@d6 1
+a6 1
+   Copyright (C) 2009, 2010 Free Software Foundation, Inc.
+@
+
+
+1.2
+log
+@gdb/
+	Fix repeated rwatch output.
+	* amd64-linux-nat.c (amd64_linux_dr_set, amd64_linux_dr_set_control)
+	(amd64_linux_dr_set_addr, amd64_linux_dr_reset_addr)
+	(amd64_linux_dr_get_status): New comments.
+	(amd64_linux_dr_unset_status): New function.
+	(_initialize_amd64_linux_nat): Install it.
+	* i386-linux-nat.c (i386_linux_dr_get, i386_linux_dr_set)
+	(i386_linux_dr_set_control, i386_linux_dr_set_addr)
+	(i386_linux_dr_reset_addr, i386_linux_dr_get_status): New comments.
+	(i386_linux_dr_unset_status): New function.
+	(_initialize_i386_linux_nat): Install it.
+	* i386-nat.c (I386_DR_WATCH_MASK): New macro.
+	(I386_DR_WATCH_HIT): Use I386_DR_WATCH_MASK.
+	(i386_insert_aligned_watchpoint): Call i386_dr_low.unset_status.
+	* i386-nat.h (struct i386_dr_low_type): Extend comments for
+	set_control, set_addr, reset_addr and get_status.  New unset_status.
+	* breakpoint.c (update_watchpoint): Extend the comment.
+
+gdb/testsuite/
+	* gdb.base/watchpoint-hw-hit-once.exp,
+	gdb.base/watchpoint-hw-hit-once.c: New.
+@
+text
+@d6 1
+a6 2
+   Copyright (C) 2009
+   Free Software Foundation, Inc.
+@
+
+
+1.1
+log
+@	Remove all i386 debug register low level macros in config nm files.
+	(I386_DR_LOW_SET_ADDR, I386_DR_LOW_RESET_ADDR): Remove.
+	(I386_DR_LOW_GET_STATUS, I386_DR_LOW_SET_CONTROL): Remove.
+	(I386_USE_GENERIC_WATCHPOIINTS): Remove.
+
+	* i386-nat.h: New file (adapted from config/i386/nm-i386.h).
+	(struct i386_dr_low_type): New type.
+	(i386_dr_low): New global variable.
+	* i386-nat.c (TARGET_HAS_DR_LEN_8): Update macro.
+	(i386_insert_aligned_watchpoint): Replace i386 dr low macros by
+	i386_dr_low struct variable fields.
+	(i386_remove_aligned_watchpoint): Likewise.
+	(i386_stopped_data_address): Likewise.
+	(i386_stopped_by_hwbp): Likewise.
+	(show_debug_regs_command_added): New static variable.
+	(add_show_debug_regs_command): New static function.
+	(i386_use_watchpoints): Call add_show_debug_regs_command if not done.
+	(i386_set_debug_register_length): New function.
+	(_initialize_i386_nat): Delete.
+
+	* amd64-linux-nat.c: Include "i386-nat.h".
+	(amd64_linux_dr_set_control):  Change to static.
+	(amd64_linux_dr_get_status): Change to static.
+	(amd64_linux_dr_set_addr,amd64_linux_dr_reset_addr): Likewise.
+	(_initialize_amd64_linux_nat): Set i386_dr_low variable fields.
+
+	* go32-nat.c: Include "i386-nat.h".
+	(go32_set_addr): Change to static.
+	(go32_set_dr7): Change to static. Change arg type to unisgned long.
+	(go32_get_dr6): Change to static. Change return type to unisnged long.
+	(init_go32_ops):  Set i386_dr_low variable fields.
+	* i386-linux-nat.c: Include "i386-nat.h".
+	(i386_linux_dr_set_control, i386_linux_dr_get_status): Change to static.
+	(i386_linux_dr_set_addr, i386_linux_dr_reset_addr): Idem.
+	(_initialize_i386_linux_nat):  Set i386_dr_low variable fields.
+	* i386bsd-nat.h: Declare functions used for
+	i386_dr_low fields in i386fbsd-nat.c.
+	* i386fbsd-nat.c: Include "i386-nat.h".
+	(_initialize_i386fbsd_nat): Set i386_dr_low variable fields.
+	* windows-nat.c: Include "i386-nat.h".
+	(cygwin_set_dr, cygwin_get_dr6, cygwin_set_dr7): Add prototypes.
+	Change to static.
+	(cygwin_get_dr6): Change return type to unisnged long.
+	(cygwin_set_dr7): Change arg type to unisgned long.
+	(init_windows_ops): Set i386_dr_low function fields.
+
+	* amd64-windows-nat.c (_initialize_amd64_windows_nat): Call
+	i386_set_debug_register_length.
+	* i386-windows-nat.c (_initialize_i386_windows_nat): Likewise.
+
+	* config/i386/nm-cygwin.h: Remove all I386_* macros.
+	* config/i386/nm-cygwin64.h: Likewise.
+	* config/i386/nm-fbsd.h: Likewise.
+	* config/i386/nm-linux.h: Likewise.
+	* config/i386/nm-i386.h: Remove completely.
+	* config/i386/nm-go32.h: Remove completely.
+	* config/i386/nm-linux64.h: Remove completely.
+	* config/i386/go32.mh (NAT_FILE): Remove entry.
+	* config/i386/linux64.h (NAT_FILE): Change to config/nm-linux.h.
+@
+text
+@d52 1
+a52 1
+				  register to a given value
+d55 1
+a55 1
+				  register
+d58 1
+a58 1
+				  one debug register
+d61 4
+a64 1
+				  status (DR6) register.
+d76 1
+@
+

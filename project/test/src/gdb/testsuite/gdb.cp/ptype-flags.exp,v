@@ -1,0 +1,174 @@
+head	1.2;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.2
+	gdb_7_6-2013-04-26-release:1.2
+	gdb_7_6-branch:1.2.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.2;
+locks; strict;
+comment	@# @;
+
+
+1.2
+date	2013.01.01.06.33.27;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2012.11.12.17.37.38;	author tromey;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@# Copyright 2012-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+set nl		"\[\r\n\]+"
+
+if { [skip_cplus_tests] } { continue }
+
+load_lib "cp-support.exp"
+
+standard_testfile .cc
+
+if {[prepare_for_testing $testfile.exp $testfile $srcfile {debug c++}]} {
+    return -1
+}
+
+if ![runto_main] then {
+    perror "couldn't run to breakpoint"
+    return
+}
+
+gdb_test_no_output "set language c++" ""
+gdb_test_no_output "set width 0" ""
+
+proc do_check {name {flags ""} {show_typedefs 1} {show_methods 1} {raw 0}} {
+    set contents {
+	{ base "public Base<T>" }
+	{ field public "Simple<T> t;" }
+	{ field public "Simple<T*> tstar;" }
+    }
+
+    if {$raw} {
+	lappend contents { field public "Holder<int>::Z z;" }
+    } else {
+	lappend contents { field public "Z z;" }
+    }
+
+    if {$show_typedefs} {
+	lappend contents { typedef public "typedef Simple<Simple<T> > Z;" }
+    }
+
+    if {$show_methods} {
+	lappend contents { method public "double method();" }
+    }
+
+    if {$raw} {
+	regsub -all -- "T" $contents "int" contents
+    }
+
+    cp_test_ptype_class value $name "class" "Holder<int>" $contents \
+	"" {} $flags
+}
+
+do_check "basic test"
+do_check "no methods" "/m" 1 0
+do_check "no typedefs" "/t" 0 1
+do_check "no methods or typedefs" "/mt" 0 0
+
+do_check "raw" "/r" 1 1 1
+do_check "raw no methods" "/rm" 1 0 1
+do_check "raw no typedefs" "/rt" 0 1 1
+do_check "raw no methods or typedefs" "/rmt" 0 0 1
+
+gdb_test_no_output "set print type methods off"
+do_check "basic test, default methods off" "" 1 0
+do_check "methods, default methods off" "/M" 1 1
+do_check "no typedefs, default methods off" "/t" 0 0
+do_check "methods, no typedefs, default methods off" "/Mt" 0 1
+
+gdb_test_no_output "set print type typedefs off"
+do_check "basic test, default methods+typedefs off" "" 0 0
+do_check "methods, default methods+typedefs off" "/M" 0 1
+do_check "typedefs, default methods+typedefs off" "/T" 1 0
+do_check "methods typedefs, default methods+typedefs off" "/MT" 1 1
+@
+
+
+1.1
+log
+@	* c-typeprint.c (find_typedef_for_canonicalize,
+	print_name_maybe_canonical): New functions.
+	(c_print_type): Look up type name.
+	(cp_type_print_derivation_info): Add flags argument.  Use
+	print_name_maybe_canonical.
+	(cp_type_print_method_args): Add wrapping.
+	(c_type_print_varspec_prefix): Use print_name_maybe_canonical.
+	(c_type_print_template_args): New function.
+	(c_type_print_base): Change wrapping.  Use
+	print_name_maybe_canonical.
+	<TYPE_CODE_STRUCT>: Possibly create a typedef hash, and do
+	type name lookups.
+	* gdbtypes.c (types_equal): No longer static.
+	* gdbtypes.h (types_equal): Declare.
+	* typeprint.c (type_print_raw_options, default_ptype_flags):
+	Update.
+	(struct typedef_hash_table): New.
+	(hash_typedef_field, eq_typedef_field,
+	recursively_update_typedef_hash, add_template_parameters,
+	create_typedef_hash, free_typedef_hash, do_free_typedef_hash,
+	make_cleanup_free_typedef_hash, copy_typedef_hash_element,
+	copy_typedef_hash, find_typedef_in_hash): New functions.
+	* typeprint.h (struct type_print_options) <local_typedefs>:
+	New field.
+	(recursively_update_typedef_hash, add_template_parameters,
+	create_typedef_hash, free_typedef_hash,
+	make_cleanup_free_typedef_hash, copy_typedef_hash,
+	find_typedef_in_hash): Declare.
+testsuite
+	* gdb.base/call-sc.exp: Use "ptype/r".
+	* gdb.base/volatile.exp: Don't expect "int".
+	* gdb.cp/ptype-flags.cc: New file.
+	* gdb.cp/ptype-flags.exp: New file.
+	* gdb.cp/templates.exp: Use ptype/r.
+	(test_ptype_of_templates, test_template_typedef): Likewise.
+	* lib/cp-support.exp (cp_test_ptype_class): Add in_ptype_arg
+	argument.  Handle template names and template parameters.
+	* gdb.mi/mi-var-cmd.exp: Accept "long".
+	* gdb.mi/mi-var-child.exp: Accept "long".
+	* gdb.mi/mi-var-display.exp: Accept "long".
+	* gdb.mi/mi2-var-child.exp: Accept "long".
+@
+text
+@d1 1
+a1 1
+# Copyright 2012 Free Software Foundation, Inc.
+@
+

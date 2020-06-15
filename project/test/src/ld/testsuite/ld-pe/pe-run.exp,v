@@ -1,0 +1,333 @@
+head	1.4;
+access;
+symbols
+	binutils-2_24-branch:1.4.0.12
+	binutils-2_24-branchpoint:1.4
+	binutils-2_21_1:1.4
+	binutils-2_23_2:1.4
+	binutils-2_23_1:1.4
+	binutils-2_23:1.4
+	binutils-2_23-branch:1.4.0.10
+	binutils-2_23-branchpoint:1.4
+	binutils-2_22_branch:1.4.0.8
+	binutils-2_22:1.4
+	binutils-2_22-branch:1.4.0.6
+	binutils-2_22-branchpoint:1.4
+	binutils-2_21:1.4
+	binutils-2_21-branch:1.4.0.4
+	binutils-2_21-branchpoint:1.4
+	binutils-2_20_1:1.4
+	binutils-2_20:1.4
+	binutils-2_20-branch:1.4.0.2
+	binutils-2_20-branchpoint:1.4
+	dje-cgen-play1-branch:1.3.0.2
+	dje-cgen-play1-branchpoint:1.3
+	binutils_latest_snapshot:1.4;
+locks; strict;
+comment	@# @;
+
+
+1.4
+date	2009.09.02.07.25.41;	author amodra;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2009.06.22.09.34.52;	author davek;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2009.06.18.02.47.51;	author davek;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2009.05.19.16.08.08;	author davek;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.4
+log
+@update copyright dates
+@
+text
+@# Expect script for complex PE tests that require a C compiler and the ability
+# to run target executables natively, in addition to the just-built binutils.
+#   Copyright 2006, 2007, 2009
+#   Free Software Foundation, Inc.
+#
+# This file is part of the GNU Binutils.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+# MA 02110-1301, USA.
+#
+# Written by Pedro Alves <pedro_alves@@portugalmail.pt>
+#
+ 
+# Note:
+# 
+# This test checks the "direct linking to a dll" functionality.
+# 
+# The test has 7 stages:
+# 
+# 1. compile and link a test dll with ".dll" extension.
+#
+# 2. compile and link a test dll with ".sl" (i.e. != ".dll") extension.
+#
+# 3. compile and link a client application linking directly to the ".dll" dll built in 1.
+#    This should produce no errors.
+#
+# 4. compile and link a client application linking directly to the ".sl" dll built in 2.
+#    This should produce no errors.
+#
+# 5. compile and link a client application linking directly to a symlink into 
+#    the ".dll" dll built in 1.
+#    This should produce no errors.
+#
+# 6. compile and link a client application linking directly to a symlink into 
+#    the ".sl" dll built in 1.
+#    This should produce no errors.
+#
+# 7. run the produced executables
+
+# This test can only be run on PE/COFF platforms.
+if {![is_pecoff_format]} {
+    return
+}
+
+# No compiler, no test.
+if { [which $CC] == 0 } {
+    untested "Direct linking to dll test"
+    return
+}
+
+set tmpdir tmpdir
+
+proc test_direct_link_dll {} {
+    global CC
+    global CFLAGS
+    global srcdir
+    global subdir
+    global tmpdir
+
+    # Compile the dll.
+    if ![ld_compile "$CC $CFLAGS" $srcdir/$subdir/direct_dll.c $tmpdir/direct_dll.o ] {
+	fail "compiling shared lib"
+    } elseif ![ld_simple_link "$CC -shared" $tmpdir/direct_dll.dll "$tmpdir/direct_dll.o" ] {
+	fail "linking shared lib (.dll)"
+    } elseif ![ld_simple_link "$CC -shared" $tmpdir/direct_dll.sl "$tmpdir/direct_dll.o" ] {
+	fail "linking shared lib (.sl)"
+    } else {
+	# Compile and link the client program.
+	if ![ld_compile "$CC $CFLAGS" $srcdir/$subdir/direct_client.c $tmpdir/direct_client.o ] {
+	    fail "compiling client"
+	} else {
+	    # Check linking directly to direct_dll.dll.
+	    set msg "linking client (.dll)"
+	    if [ld_simple_link "$CC -Wl,--enable-auto-import" $tmpdir/direct_client_dll.exe \
+	      "$tmpdir/direct_client.o $tmpdir/direct_dll.dll" ] {
+		pass $msg
+	    } else {
+		fail $msg 
+	    }
+
+	    # Check linking directly to direct_dll.sl.
+	    set msg "linking client (.sl)"
+	    if [ld_simple_link "$CC -Wl,--enable-auto-import" $tmpdir/direct_client_sl.exe \
+	      "$tmpdir/direct_client.o $tmpdir/direct_dll.sl" ] {
+		pass $msg
+	    } else {
+		fail $msg 
+	    }
+
+	    # Check dll direct linking through symlink to .dll.
+	    # Create symbolic link.
+	    catch "exec ln -fs direct_dll.dll $tmpdir/libdirect_dll.dll.a" ln_catch
+	    set msg "linking client (symlink -> .dll)"
+	    if [ld_simple_link "$CC -Wl,--enable-auto-import" $tmpdir/direct_client_symlink_dll.exe \
+	      "$tmpdir/direct_client.o $tmpdir/libdirect_dll.dll.a" ] {
+	        pass $msg
+	    } else {
+		fail $msg
+	    }
+		
+	    # Check dll direct linking through symlink to .sl.
+	    # Create symbolic link.
+	    catch "exec ln -fs direct_dll.sl $tmpdir/libdirect_sl.dll.a" ln_catch
+	    set msg "linking client (symlink -> .sl)"
+	    if [ld_simple_link "$CC -Wl,--enable-auto-import" $tmpdir/direct_client_symlink_sl.exe \
+	      "$tmpdir/direct_client.o $tmpdir/libdirect_sl.dll.a" ] {
+		pass $msg
+	    } else {
+		fail $msg 
+	    }
+	}
+    }
+}
+
+proc directdll_execute {exe msg} {
+    set expected ""
+    catch "exec $exe" prog_output
+    if [string match $expected $prog_output] then {
+        pass $msg
+    } else {
+        verbose $prog_output
+        fail $msg
+    }
+}
+
+test_direct_link_dll
+
+# This is as far as we can go with a cross-compiler
+if ![isnative] then {
+    verbose "Not running natively, so cannot execute binaries"
+    return
+}
+
+directdll_execute "$tmpdir/direct_client_dll.exe" "running direct linked dll (.dll)"
+directdll_execute "$tmpdir/direct_client_sl.exe" "running direct linked dll (.sl)"
+directdll_execute "$tmpdir/direct_client_symlink_sl.exe" "running direct linked dll (symlink -> .sl)"
+directdll_execute "$tmpdir/direct_client_symlink_dll.exe" "running direct linked dll (symlink -> .dll)"
+@
+
+
+1.3
+log
+@	* ld-pe/pe-run.exp (proc test_direct_link_dll):  Fix incorrect
+	line-wrapping.
+@
+text
+@d3 1
+a3 1
+#   Copyright 2006, 2007
+@
+
+
+1.2
+log
+@	* ld-pe/pe-run.exp (proc test_direct_link_dll):  Always pass
+	--enable-auto-import to the linker.
+	* ld-pe/vers-script-1.d:  Replace '\$' by '_' in all symbol names.
+	* ld-pe/vers-script-3.d:  Likewise.
+	* ld-pe/vers-script-4.d:  Likewise.
+	* ld-pe/vers-script-dll.c:  Likewise.
+	* lib/ld-lib.exp (proc is_pecoff_format):  Also return true for
+	"*-*-cegcc*" targets.
+@
+text
+@d86 1
+a86 1
+	    if [ld_simple_link "$CC -Wl,--enable-auto-import" $tmpdir/direct_client_dll.exe
+d95 1
+a95 1
+	    if [ld_simple_link "$CC -Wl,--enable-auto-import" $tmpdir/direct_client_sl.exe
+d106 1
+a106 1
+	    if [ld_simple_link "$CC -Wl,--enable-auto-import" $tmpdir/direct_client_symlink_dll.exe
+d117 1
+a117 1
+	    if [ld_simple_link "$CC -Wl,--enable-auto-import" $tmpdir/direct_client_symlink_sl.exe
+@
+
+
+1.1
+log
+@==> bfd/ChangeLog <==
+2009-05-19  Dave Korn  <dave.korn.cygwin@@gmail.com>
+
+	* cofflink.c (process_embedded_commands):  Ignore "-aligncomm".
+
+==> gas/ChangeLog <==
+2009-05-19  Dave Korn  <dave.korn.cygwin@@gmail.com>
+
+	* NEWS:  Mention new feature.
+	* config/obj-coff.c (obj_coff_common_parse):  New function.
+	(obj_coff_comm):  Likewise.
+	(coff_pseudo_table):  Override default ".comm" definition on PE.
+	* doc/as.texinfo:  Document new feature.
+
+==> gas/testsuite/ChangeLog <==
+2009-05-19  Dave Korn  <dave.korn.cygwin@@gmail.com>
+
+	* gas/pe/:  New directory for PE format-specific tests.
+	* gas/pe/aligncomm-a.d:  New test pattern file.
+	* gas/pe/aligncomm-a.s:  New test source file.
+	* gas/pe/aligncomm-b.d:  New test pattern file.
+	* gas/pe/aligncomm-b.s:  New test source file.
+	* gas/pe/aligncomm-c.d:  New test pattern file.
+	* gas/pe/aligncomm-c.s:  New test source file.
+	* gas/pe/aligncomm-d.d:  New test pattern file.
+	* gas/pe/aligncomm-d.s:  New test source file.
+	* gas/pe/pe.exp:  New test control script.
+	* lib/gas-defs.exp (is_pecoff_format):  New function.
+
+==> ld/ChangeLog <==
+2009-05-19  Dave Korn  <dave.korn.cygwin@@gmail.com>
+
+	* NEWS:  Mention new feature.
+	* deffile.h (def_file_aligncomm):  Add new struct definition.
+	(def_file):  Add new def_file_aligncomm member.
+	* deffilep.y (%token):  Add new ALIGNCOMM token.
+	(command):  Add production rule for ALIGNCOMM.
+	(def_file_free):  Free any chained def_file_aligncomm structs.
+	(diropts[]):  Add entry for '-aligncomm' .drectve command.
+	(def_aligncomm):  New grammar function.
+	* ld.texinfo:  Document new feature.
+	* pe-dll.c (process_def_file):  Rename from this ...
+	(process_def_file_and_drectve):  ... to this, updating all callers,
+	and process any aligncomms chained to the def file after scanning
+	all .drectve sections.
+	(generate_edata):  Updated to match.
+	(pe_dll_build_sections):  Likewise.
+
+==> ld/testsuite/ChangeLog <==
+2009-05-19  Dave Korn  <dave.korn.cygwin@@gmail.com>
+
+	* ld-pe/aligncomm-1.c:  New test source file.
+	* ld-pe/aligncomm-2.c:  Likewise.
+	* ld-pe/aligncomm-3.c:  Likewise.
+	* ld-pe/aligncomm-4.c:  Likewise.
+	* ld-pe/aligncomm.d:  New test pattern file.
+
+	* ld-pe/direct.exp:  Deleted, and content moved into ...
+	* ld-pe/pe-run.exp:  ... New common file for all PE run tests.
+
+	* ld-pe/vers-script.exp:  Deleted, and content merged into ...
+	* ld-pe/pe-compile.exp:  ... New common file for PE tests needing
+	a compiler, adding aligned common tests.
+
+	* ld-pe/pe.exp:  Update header comment.
+@
+text
+@d86 2
+a87 1
+	    if [ld_simple_link $CC $tmpdir/direct_client_dll.exe "$tmpdir/direct_client.o $tmpdir/direct_dll.dll" ] {
+d95 2
+a96 1
+	    if [ld_simple_link $CC $tmpdir/direct_client_sl.exe "$tmpdir/direct_client.o $tmpdir/direct_dll.sl" ] {
+d106 2
+a107 1
+	    if [ld_simple_link $CC $tmpdir/direct_client_symlink_dll.exe "$tmpdir/direct_client.o $tmpdir/libdirect_dll.dll.a" ] {
+d117 2
+a118 1
+	    if [ld_simple_link $CC $tmpdir/direct_client_symlink_sl.exe "$tmpdir/direct_client.o $tmpdir/libdirect_sl.dll.a" ] {
+@
+

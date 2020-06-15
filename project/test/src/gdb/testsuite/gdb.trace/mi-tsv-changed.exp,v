@@ -1,0 +1,790 @@
+head	1.5;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.3
+	gdb_7_6-2013-04-26-release:1.3
+	gdb_7_6-branch:1.3.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.3;
+locks; strict;
+comment	@# @;
+
+
+1.5
+date	2013.03.15.01.41.29;	author qiyao;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2013.03.14.13.34.06;	author qiyao;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2013.02.06.14.45.20;	author qiyao;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2013.01.01.06.41.28;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2012.09.18.12.09.28;	author qiyao;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.5
+log
+@gdb/testsuite/
+	* gdb.threads/non-ldr-exc-1.exp (do_test): Fix the indent of
+	using with_test_prefix.
+	* gdb.threads/non-ldr-exc-2.exp (do_test): Likewise.
+	* gdb.threads/non-ldr-exc-3.exp (do_test): Likewise.
+	* gdb.threads/non-ldr-exc-4.exp (do_test): Likewise.
+	* gdb.threads/watchpoint-fork.exp (test): Likewise.
+	* gdb.base/break-interp.exp (test_core): Likewise.
+	(test_attach_gdb): Likewise.
+	* gdb.base/catch-load.exp (one_catch_load_test): Likewise.
+	* gdb.base/disp-step-syscall.exp (disp_step_cross_syscall):
+	Likewise.
+	* gdb.base/jit-so.exp (one_jit_test): Likewise.
+	* gdb.base/jit.exp (one_jit_test): Likewise.
+	* gdb.base/sepdebug.exp (test_different_dir): Likewise.
+	* gdb.dwarf2/dw2-dir-file-name.exp (test): Likewise.
+	* gdb.dwarf2/dw2-noloc.exp (file_symbols): Likewise.
+	* gdb.mi/mi-breakpoint-changed.exp (test_pending_resolved):
+	Likewise.
+	* gdb.mi/mi-cmd-param-changed.exp (test_command_param_changed):
+	Likewise.
+	* gdb.mi/mi-watch.exp test_watchpoint_all): Likewise.
+	* gdb.mi/pr11022.exp (test_memory_changed_observer): Likewise.
+	* gdb.trace/change-loc.exp (tracepoint_change_loc_1): Likewise.
+	(tracepoint_change_loc_2): Likewise.
+	* gdb.trace/disconnected-tracing.exp (disconnected_tracing):
+	Likewise.
+	(disconnected_tfind): Likewise.
+	* gdb.trace/mi-traceframe-changed.exp (test_tfind_tfile):
+	Likewise.
+	(test_tfind_remote): Likewise.
+	* gdb.trace/mi-tracepoint-changed.exp (test_reconnect):
+	Likewise.
+	(test_pending_resolved): Likewise.
+	* gdb.trace/mi-tsv-changed.exp (test_create_delete_modify_tsv):
+	Likewise.
+	(test_upload_tsv): Likewise.
+	* gdb.trace/pending.exp (pending_tracepoint_resolved):
+	Likewise.
+	(pending_tracepoint_works): Likewise.
+	* gdb.trace/report.exp (use_collected_data): Likewise.
+	* gdb.trace/status-stop.exp (test_tstart_tstop_tstart):
+	Likewise.
+	(test_tstart_tstart, test_buffer_full_tstart): Likewise.
+	* gdb.trace/strace.exp (strace_info_marker): Likewise.
+	(strace_trace_on_same_addr): Likewise.
+	(strace_trace_on_diff_addr): Likewise.
+	* gdb.trace/unavailable.exp (gdb_collect_args_test): Likewise.
+	(gdb_collect_locals_test): Likewise.
+	(gdb_unavailable_registers_test): Likewise.
+	(gdb_collect_globals_test): Likewise.
+@
+text
+@# Copyright 2012-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+load_lib trace-support.exp
+load_lib mi-support.exp
+
+standard_testfile actions.c
+if { [gdb_compile "$srcdir/$subdir/$srcfile" $binfile \
+	  executable {debug nowarnings}] != "" } {
+    untested mi-tsv-changed.exp
+    return -1
+}
+
+# Test notifications on creating, deleting and modifying TSV.
+
+proc test_create_delete_modify_tsv { } {
+    with_test_prefix "create delete modify" {
+	global binfile
+	global decimal
+	global testfile
+	global srcdir subdir
+	global mi_gdb_prompt
+
+	if [mi_gdb_start] {
+	    return
+	}
+	mi_gdb_load ${binfile}
+
+	mi_gdb_test "tvariable \$tvar1" \
+	    ".*=tsv-created,name=\"tvar1\",initial=\"0\"\\\\n.*\\^done" \
+	    "tvariable \$tvar1"
+	mi_gdb_test "tvariable \$tvar1 = 1" \
+	    ".*=tsv-modified,name=\"tvar1\",initial=\"1\".*\\^done" \
+	    "tvariable \$tvar1 modified"
+	# No "=tsv-modified" notification is emitted, because the initial
+	# value is not changed.
+	mi_gdb_test "tvariable \$tvar1 = 1" \
+	    ".*\\\$tvar1 = 1\\\\n\"\r\n~\"Trace state .*\\\\n.*\\^done" \
+	    "tvariable \$tvar1 modified without notification"
+	mi_gdb_test "tvariable \$tvar2 = 45" \
+	    ".*=tsv-created,name=\"tvar2\",initial=\"45\"\\\\n.*\\^done" \
+	    "tvariable \$tvar2"
+
+	mi_gdb_test "delete tvariable \$tvar2" \
+	    ".*=tsv-deleted,name=\"tvar2\"\\\\n.*\\^done" \
+	    "delete tvariable \$tvar2"
+
+	mi_gdb_test "delete tvariable" \
+	    ".*=tsv-deleted\\\\n.*\\^done" \
+	    "delete all tvariables"
+
+	# Test target supports tracepoints or not.
+	clean_restart $testfile
+
+	if ![runto_main] {
+	    fail "Can't run to main to check for trace support"
+	    return -1
+	}
+
+	if ![gdb_target_supports_trace] {
+	    unsupported "Current target does not support trace"
+	    return -1
+	}
+	gdb_exit
+	if [mi_gdb_start] {
+	    continue
+	}
+
+	mi_gdb_reinitialize_dir $srcdir/$subdir
+	mi_gdb_load ${binfile}
+
+	mi_gdb_test "tvariable \$tvar3 = 3" \
+	    ".*=tsv-created,name=\"tvar3\",initial=\"3\".*\\^done" \
+	    "tvariable \$tvar3 modified"
+	mi_gdb_test "-break-insert -a gdb_c_test" \
+	    {.*\^done,bkpt=.*} \
+	    "insert tracepoint on gdb_c_test"
+	# Define an action that increases $tvar3
+	send_gdb "actions\n"
+	gdb_expect {
+	    -re "End with" {
+	    }
+	}
+	send_gdb "collect \$tvar3 += 3\nend\n"
+	set test "define actions"
+	gdb_expect {
+	    -re ".*${mi_gdb_prompt}$" {
+		pass $test
+	    }
+	    timeout {
+		fail "$test (timeout)"
+	    }
+	}
+
+	mi_gdb_test "-break-insert begin" \
+	    {.*\^done,bkpt=.*} \
+	    "insert tracepoint on begin"
+	mi_gdb_test "-break-insert end" \
+	    {.*\^done,bkpt=.*} \
+	    "insert tracepoint on end"
+	mi_run_cmd
+
+	mi_expect_stop "breakpoint-hit" "begin" ""\
+	    ".*" ".*" {"" "disp=\"keep\""} \
+	    "continue to begin breakpoint"
+	mi_gdb_test "-trace-start" {.*\^done} "trace start"
+	mi_send_resuming_command "exec-continue" "continuing to end"
+	mi_gdb_test "-trace-stop" {.*} "trace stop"
+	# Force GDB to get the current value of trace state variable.
+	mi_gdb_test "-trace-list-variables" ".*" "list trace variables"
+	mi_gdb_test "tvariable \$tvar3 = 2" \
+	    ".*=tsv-modified,name=\"tvar3\",initial=\"2\",current=\"6\".*\\^done" \
+	    "tvariable \$tvar3 modified"
+
+    }
+}
+
+
+# Test when GDB connects to a disconnected stub, existing TSVs in
+# remote stub can be uploaded to GDB, and GDB emits MI notification
+# for new uploaded TSVs.
+
+proc test_upload_tsv { } {
+    with_test_prefix "upload" {
+
+	global gdbserver_reconnect_p
+	global gdb_prompt
+	global testfile
+	global decimal
+
+	set gdbserver_reconnect_p 1
+	if { [info proc gdb_reconnect] == "" } {
+	    return 0
+	}
+
+	clean_restart $testfile
+	if ![runto_main] then {
+	    fail "Can't run to main"
+	    return 0
+	}
+
+	gdb_test "tvariable \$tvar1" \
+	    "Trace state variable \\\$tvar1 created, with initial value 0." \
+	    "Create a trace state variable"
+
+	gdb_test "tvariable \$tvar2 = 45" \
+	    "Trace state variable \\\$tvar2 created, with initial value 45." \
+	    "Create a trace state variable with initial value"
+	# Define a tracepoint otherwise tracing cannot be started.
+	gdb_test "trace main" "Tracepoint $decimal at .*"
+	gdb_test_no_output "tstart" "start trace experiment"
+
+	set test "disconnect"
+	gdb_test_multiple "disconnect" $test {
+	    -re "Trace is running but will stop on detach; detach anyway\\? \\(y or n\\) $" {
+		pass $test
+
+		set test "disconnected"
+		gdb_test_multiple "y" $test {
+		    -re "$gdb_prompt $" {
+			pass "$test"
+		    }
+		}
+	    }
+	}
+
+	gdb_exit
+
+	if [mi_gdb_start] {
+	    return
+	}
+
+	global srcdir
+	global subdir
+	global binfile
+
+	mi_gdb_reinitialize_dir $srcdir/$subdir
+	mi_gdb_load ${binfile}
+
+	global gdbserver_protocol
+	global gdbserver_gdbport
+
+	send_gdb "47-target-select $gdbserver_protocol $gdbserver_gdbport\n"
+
+	global mi_gdb_prompt
+	set tsv1_created 0
+	set tsv2_created 0
+	gdb_expect {
+	    -re "=tsv-created,name=\"tvar1\",initial=\"0\"" {
+		set tsv1_created 1
+		exp_continue
+	    }
+	    -re "=tsv-created,name=\"tvar2\",initial=\"45\"" {
+		set tsv2_created 1
+		exp_continue
+	    }
+	    -re ".*${mi_gdb_prompt}" {
+
+	    }
+	}
+
+	if $tsv1_created {
+	    pass "tsv1 created"
+	} else {
+	    fail "tsv1 created"
+	}
+	if $tsv2_created {
+	    pass "tsv2 created"
+	} else {
+	    fail "tsv2 created"
+	}
+
+	set gdbserver_reconnect_p 0
+    }
+}
+
+ test_create_delete_modify_tsv
+
+# Test target supports tracepoints or not.
+
+clean_restart $testfile
+
+if ![runto_main] {
+    fail "Can't run to main to check for trace support"
+    return -1
+}
+
+if ![gdb_target_supports_trace] {
+    unsupported "Current target does not support trace"
+    return -1
+}
+
+gdb_exit
+
+test_upload_tsv
+
+return 0
+@
+
+
+1.4
+log
+@gdb/testsuite/
+
+	* config/monitor.exp (gdb_target_cmd): Remove semicolon after
+	'return'.
+	(gdb_target_monitor, gdb_load): Likewise.
+	* config/sid.exp (gdb_load): Likewise.
+	* config/slite.exp (gdb_load): Likewise.
+	* config/vx.exp (gdb_start, spawn_vxgdb): Likewise.
+	* gdb.ada/arrayidx.exp, gdb.ada/null_array.exp: Likewise.
+	* gdb.arch/mips-octeon-bbit.exp (single_step): Likewise.
+	(single_step_until): Likewise.
+	* gdb.arch/powerpc-d128-regs.exp: Likewise.
+	* gdb.arch/system-gcore.exp: Likewise.
+	* gdb.base/bigcore.exp (extract_heap): Likewise.
+	* gdb.base/break-on-linker-gcd-function.exp: Likewise.
+	* gdb.base/call-ar-st.exp: Likewise.
+	* gdb.base/call-rt-st.exp: Likewise.
+	* gdb.base/call-sc.exp, gdb.base/call-strs.exp: Likewise.
+	* gdb.base/callfuncs.exp, gdb.base/completion.exp: Likewise.
+	* gdb.base/condbreak.exp, gdb.base/constvars.exp: Likewise.
+	* gdb.base/corefile.exp: Likewise.
+	* gdb.base/dbx.exp (gdb_file_cmd): Likewise.
+	* gdb.base/exprs.exp, gdb.base/fileio.exp: Likewise.
+	* gdb.base/fixsection.exp: Likewise.
+	* gdb.base/funcargs.exp: Likewise.
+	* gdb.base/gcore-buffer-overflow.exp: Likewise.
+	* gdb.base/gcore-relro.exp: Likewise.
+	* gdb.base/gcore.exp, gdb.base/gdb11530.exp: Likewise.
+	* gdb.base/gdb11531.exp, gdb.base/gnu-ifunc.exp: Likewise.
+	* gdb.base/info-os.exp, gdb.base/info-proc.exp: Likewise.
+	* gdb.base/interp.exp, gdb.base/langs.exp:: Likewise.
+	* gdb.base/list.exp: Likewise.
+	(set_listsize): Likewise.
+	* gdb.base/logical.exp, gdb.base/mips_pro.exp: Likewise.
+	* gdb.base/miscexprs.exp, gdb.base/nodebug.exp: Likewise.
+	* gdb.base/opaque.exp, gdb.base/pointers.exp: Likewise.
+	* gdb.base/psymtab.exp, gdb.base/ptype.exp: Likewise.
+	* gdb.base/relational.exp, gdb.base/scope.exp: Likewise.
+	* gdb.base/setvar.exp: Likewise.
+	(test_set): Likewise.
+	* gdb.base/signals.exp, gdb.base/sizeof.exp: Likewise.
+	* gdb.base/solib-overlap.exp: Likewise.
+	* gdb.base/store.exp, gdb.base/structs.exp: Likewise.
+	* gdb.base/structs2.exp, gdb.base/volatile.exp: Likewise.
+	* gdb.base/watchpoint.exp (initialize): Likewise.
+	(test_simple_watchpoint): Likewise.
+	(test_disabling_watchpoints): Likewise.
+	(test_watchpoint_triggered_in_syscall): Likewise.
+	* gdb.base/whatis.exp, gdb.cp/ambiguous.exp: Likewise.
+	* gdb.cp/casts.exp, gdb.cp/ctti.exp: Likewise.
+	* gdb.cp/namespace.exp, gdb.cp/nsdecl.exp: Likewise.
+	* gdb.cp/psmang.exp, gdb.dwarf2/dw2-ranges.exp: Likewise.
+	* gdb.hp/gdb.aCC/optimize.exp: Likewise.
+	* gdb.hp/gdb.aCC/watch-cmd.exp: Likewise.
+	* gdb.hp/gdb.base-hp/callfwmall.exp: Likewise.
+	* gdb.hp/gdb.base-hp/pxdb.exp: Likewise.
+	* gdb.hp/gdb.compat/xdb1.exp: Likewise.
+	* gdb.hp/gdb.compat/xdb2.exp: Likewise.
+	* gdb.hp/gdb.compat/xdb3.exp: Likewise.
+	* gdb.hp/gdb.defects/bs14602.exp: Likewise.
+	* gdb.hp/gdb.defects/solib-d.exp: Likewise.
+	* gdb.mi/gdb792.exp: Likewise.
+	* gdb.mi/mi-inheritance-syntax-error.exp: Likewise.
+	* gdb.mi/mi-logging.exp, gdb.mi/mi-var-cp.exp : Likewise.
+	* gdb.mi/mi-var-rtti.exp, gdb.python/py-type.exp: Likewise.
+	* gdb.threads/gcore-thread.exp: Likewise.
+	(load_core): Likewise.
+	* gdb.threads/pthreads.exp (all_threads_running): Likewise.
+	(test_startup, check_control_c): Likewise.
+	* gdb.threads/sigstep-threads.exp: Likewise.
+	* gdb.threads/thread_check.exp: Likewise.
+	* gdb.trace/backtrace.exp, gdb.trace/change-loc.exp: Likewise.
+	* gdb.trace/circ.exp (run_trace_experiment): Likewise.
+	(set_a_tracepoint, trace_buffer_normal): Likewise.
+	(gdb_trace_circular_tests): Likewise.
+	* gdb.trace/collection.exp: Likewise.
+	* gdb.trace/disconnected-tracing.exp: Likewise.
+	* gdb.trace/infotrace.exp: Likewise.
+	* gdb.trace/mi-traceframe-changed.exp: Likewise.
+	* gdb.trace/mi-tracepoint-changed.exp: Likewise.
+	* gdb.trace/mi-tsv-changed.exp (test_create_delete_modify_tsv): Likewise.
+	* gdb.trace/packetlen.exp, gdb.trace/passc-dyn.exp: Likewise.
+	* gdb.trace/pending.exp, gdb.trace/report.exp: Likewise.
+	* gdb.trace/stap-trace.exp: Likewise.
+	* gdb.trace/status-stop.exp,gdb.trace/strace.exp: Likewise.
+	* gdb.trace/tfind.exp, gdb.trace/trace-break.exp: Likewise.
+	* gdb.trace/trace-buffer-size.exp: Likewise.
+	* gdb.trace/tspeed.exp, gdb.trace/tsv.exp: Likewise.
+	* gdb.trace/unavailable.exp: Likewise.
+	* gdb.trace/while-dyn.exp: Likewise.
+	* lib/fortran.exp (set_lang_fortran): Likewise.
+	* lib/gdb.exp (default_gdb_version, gdb_start_cmd): Likewise.
+	(gdb_breakpoint, gdb_reinitialize_dir): Likewise.
+	(default_gdb_start, get_compiler_info): Likewise.
+	(gdb_compile, gdb_compile_objc, gdb_reload, gdb_init): Likewise.
+	(get_debug_format, setup_xfail_format): Likewise.
+	(rerun_to_main, gdb_skip_float_test): Likewise.
+	(build_id_debug_filename_get, get_remotetimeout): Likewise.
+	* lib/java.exp (set_lang_java): Likewise.
+	* lib/mi-support.exp (default_mi_gdb_start): Likewise.
+	(mi_gdb_reinitialize_dir, mi_gdb_target_cmd): Likewise.
+	(mi_gdb_file_cmd, mi_gdb_test): Likewise.
+	(mi_run_cmd_full, mi_expect_interrupt): Likewise.
+	* lib/objc.exp (set_lang_objc): Likewise.
+	* lib/pascal.exp (set_lang_pascal): Likewise.
+	* lib/prompt.exp (default_prompt_gdb_start): Likewise.
+	* lib/trace-support.exp (gdb_trace_setactions, gdb_tfind_test): Likewise.
+	(gdb_readexpr, gdb_gettpnum, gdb_find_recursion_test_baseline): Likewise.
+@
+text
+@d28 67
+a94 65
+proc test_create_delete_modify_tsv { } {with_test_prefix "create delete modify" {
+    global binfile
+    global decimal
+    global testfile
+    global srcdir subdir
+    global mi_gdb_prompt
+
+    if [mi_gdb_start] {
+	return
+    }
+    mi_gdb_load ${binfile}
+
+    mi_gdb_test "tvariable \$tvar1" \
+	".*=tsv-created,name=\"tvar1\",initial=\"0\"\\\\n.*\\^done" \
+	"tvariable \$tvar1"
+    mi_gdb_test "tvariable \$tvar1 = 1" \
+	".*=tsv-modified,name=\"tvar1\",initial=\"1\".*\\^done" \
+	"tvariable \$tvar1 modified"
+    # No "=tsv-modified" notification is emitted, because the initial
+    # value is not changed.
+    mi_gdb_test "tvariable \$tvar1 = 1" \
+	".*\\\$tvar1 = 1\\\\n\"\r\n~\"Trace state .*\\\\n.*\\^done" \
+	"tvariable \$tvar1 modified without notification"
+    mi_gdb_test "tvariable \$tvar2 = 45" \
+	".*=tsv-created,name=\"tvar2\",initial=\"45\"\\\\n.*\\^done" \
+	"tvariable \$tvar2"
+
+    mi_gdb_test "delete tvariable \$tvar2" \
+	".*=tsv-deleted,name=\"tvar2\"\\\\n.*\\^done" \
+	"delete tvariable \$tvar2"
+
+    mi_gdb_test "delete tvariable" \
+	".*=tsv-deleted\\\\n.*\\^done" \
+	"delete all tvariables"
+
+    # Test target supports tracepoints or not.
+    clean_restart $testfile
+
+    if ![runto_main] {
+	fail "Can't run to main to check for trace support"
+	return -1
+    }
+
+    if ![gdb_target_supports_trace] {
+	unsupported "Current target does not support trace"
+	return -1
+    }
+    gdb_exit
+    if [mi_gdb_start] {
+	continue
+    }
+
+    mi_gdb_reinitialize_dir $srcdir/$subdir
+    mi_gdb_load ${binfile}
+
+    mi_gdb_test "tvariable \$tvar3 = 3" \
+	".*=tsv-created,name=\"tvar3\",initial=\"3\".*\\^done" \
+	"tvariable \$tvar3 modified"
+    mi_gdb_test "-break-insert -a gdb_c_test" \
+	{.*\^done,bkpt=.*} \
+	"insert tracepoint on gdb_c_test"
+    # Define an action that increases $tvar3
+    send_gdb "actions\n"
+    gdb_expect {
+	-re "End with" {
+d96 9
+a104 9
+    }
+    send_gdb "collect \$tvar3 += 3\nend\n"
+    set test "define actions"
+    gdb_expect {
+	-re ".*${mi_gdb_prompt}$" {
+	    pass $test
+	}
+	timeout {
+	    fail "$test (timeout)"
+a105 1
+    }
+d107 19
+a125 19
+    mi_gdb_test "-break-insert begin" \
+	{.*\^done,bkpt=.*} \
+	"insert tracepoint on begin"
+    mi_gdb_test "-break-insert end" \
+	{.*\^done,bkpt=.*} \
+	"insert tracepoint on end"
+    mi_run_cmd
+
+    mi_expect_stop "breakpoint-hit" "begin" ""\
+	".*" ".*" {"" "disp=\"keep\""} \
+	"continue to begin breakpoint"
+    mi_gdb_test "-trace-start" {.*\^done} "trace start"
+    mi_send_resuming_command "exec-continue" "continuing to end"
+    mi_gdb_test "-trace-stop" {.*} "trace stop"
+    # Force GDB to get the current value of trace state variable.
+    mi_gdb_test "-trace-list-variables" ".*" "list trace variables"
+    mi_gdb_test "tvariable \$tvar3 = 2" \
+	".*=tsv-modified,name=\"tvar3\",initial=\"2\",current=\"6\".*\\^done" \
+	"tvariable \$tvar3 modified"
+d127 2
+a128 1
+}}
+d135 2
+a136 1
+proc test_upload_tsv { } { with_test_prefix "upload" {
+d138 40
+a177 9
+    global gdbserver_reconnect_p
+    global gdb_prompt
+    global testfile
+    global decimal
+
+    set gdbserver_reconnect_p 1
+    if { [info proc gdb_reconnect] == "" } {
+	return 0
+    }
+d179 1
+a179 5
+    clean_restart $testfile
+    if ![runto_main] then {
+	fail "Can't run to main"
+	return 0
+    }
+d181 2
+a182 22
+    gdb_test "tvariable \$tvar1" \
+	"Trace state variable \\\$tvar1 created, with initial value 0." \
+	"Create a trace state variable"
+
+    gdb_test "tvariable \$tvar2 = 45" \
+	"Trace state variable \\\$tvar2 created, with initial value 45." \
+	"Create a trace state variable with initial value"
+    # Define a tracepoint otherwise tracing cannot be started.
+    gdb_test "trace main" "Tracepoint $decimal at .*"
+    gdb_test_no_output "tstart" "start trace experiment"
+
+    set test "disconnect"
+    gdb_test_multiple "disconnect" $test {
+	-re "Trace is running but will stop on detach; detach anyway\\? \\(y or n\\) $" {
+	    pass $test
+
+	    set test "disconnected"
+	    gdb_test_multiple "y" $test {
+		-re "$gdb_prompt $" {
+		    pass "$test"
+		}
+	    }
+a183 1
+    }
+d185 11
+a195 1
+    gdb_exit
+d197 13
+a209 3
+    if [mi_gdb_start] {
+	return
+    }
+d211 1
+a211 23
+    global srcdir
+    global subdir
+    global binfile
+
+    mi_gdb_reinitialize_dir $srcdir/$subdir
+    mi_gdb_load ${binfile}
+
+    global gdbserver_protocol
+    global gdbserver_gdbport
+
+    send_gdb "47-target-select $gdbserver_protocol $gdbserver_gdbport\n"
+
+    global mi_gdb_prompt
+    set tsv1_created 0
+    set tsv2_created 0
+    gdb_expect {
+	-re "=tsv-created,name=\"tvar1\",initial=\"0\"" {
+	    set tsv1_created 1
+	    exp_continue
+	}
+	-re "=tsv-created,name=\"tvar2\",initial=\"45\"" {
+	    set tsv2_created 1
+	    exp_continue
+a212 1
+	-re ".*${mi_gdb_prompt}" {
+d214 9
+a223 1
+    }
+d225 1
+a225 4
+    if $tsv1_created {
+	pass "tsv1 created"
+    } else {
+	fail "tsv1 created"
+d227 1
+a227 8
+    if $tsv2_created {
+	pass "tsv2 created"
+    } else {
+	fail "tsv2 created"
+    }
+
+    set gdbserver_reconnect_p 0
+}}
+@
+
+
+1.3
+log
+@gdb/doc:
+
+2013-02-06  Yao Qi  <yao@@codesourcery.com>
+
+	* gdb.texinfo (GDB/MI Async Records): Document new MI
+	notification "=tsv-modified".  Update the document of MI
+	notification "=tsv-created".
+	* observer.texi (GDB Observers): New observer tsv_modified.
+	Update observer tsv_created and tsv_deleted.
+
+gdb:
+
+2013-02-06  Yao Qi  <yao@@codesourcery.com>
+
+	* mi/mi-interp.c: Include "tracepoint.h".
+	(mi_tsv_modified): Declare.
+	(mi_tsv_created, mi_tsv_deleted): Update declaration.
+	(mi_interpreter_init): Call observer_attach_tsv_modified.
+	(mi_tsv_modified): New.
+	(mi_tsv_created, mi_tsv_deleted): Update.
+	* tracepoint.c (trace_variable_command): Call
+	observer_notify_tsv_modified if the initial value of tsv is
+	changed.
+	(delete_trace_state_variable): Call
+	observer_notify_tsv_deleted earlier.
+	(trace_variable_command): Caller update.
+	(create_tsv_from_upload): Likewise.
+	* observer.sh: Declare "struct trace_state_variable".
+
+	* NEWS: Mention the new MI notification "=tsv-modified".
+
+gdb/testsuite:
+
+2013-02-06  Yao Qi  <yao@@codesourcery.com>
+
+	* gdb.trace/mi-tsv-changed.exp (test_create_delete_tsv): Rename
+	to ...
+	(test_create_delete_modify_tsv): ... here.  New test on modifying
+	the initial value of a tsv.
+@
+text
+@d73 1
+a73 1
+	return -1;
+d238 1
+a238 1
+    return -1;
+@
+
+
+1.2
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@d26 1
+a26 1
+# Test notifications on creating and deleting TSV.
+d28 1
+a28 1
+proc test_create_delete_tsv { } {with_test_prefix "create delete" {
+d31 3
+d41 1
+a41 1
+	".*=tsv-created,name=\"tvar1\",value=\"0\"\\\\n.*\\^done" \
+d43 8
+d52 1
+a52 1
+	".*=tsv-created,name=\"tvar2\",value=\"45\"\\\\n.*\\^done" \
+d63 63
+d198 1
+a198 1
+	-re "=tsv-created,name=\"tvar1\",value=\"0\"" {
+d202 1
+a202 1
+	-re "=tsv-created,name=\"tvar2\",value=\"45\"" {
+d225 1
+a225 1
+ test_create_delete_tsv
+@
+
+
+1.1
+log
+@gdb/doc:
+
+	* gdb.texinfo (GDB/MI Async Records): Document new MI
+	notifications '=tsv-created' and '=tsv-deleted'.
+	* observer.texi (GDB Observers): New observer tsv_created and
+	tsv_deleted.
+
+gdb:
+
+	* mi/mi-interp.c: Declare mi_tsv_created and mi_tsv_deleted.
+	(mi_interpreter_init): Call observer_attach_tsv_created and
+	observer_attach_tsv_deleted.
+	(mi_tsv_created, mi_tsv_deleted): New.
+	* tracepoint.c (delete_trace_state_variable): Call
+	observer_notify_tsv_deleted.
+	(trace_variable_command): Call observer_notify_tsv_created.
+	(delete_trace_variable_command): Call
+	observer_notify_tsv_deleted.
+	(create_tsv_from_upload): Call observer_notify_tsv_created.
+	* NEWS: Mention it.
+
+gdb/testsuite:
+
+	gdb.trace/mi-tsv-changed.exp: New.
+@
+text
+@d1 1
+a1 1
+# Copyright 2012 Free Software Foundation, Inc.
+@
+

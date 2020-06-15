@@ -1,0 +1,140 @@
+head	1.1;
+access;
+symbols
+	newlib-csl-sourcerygxx-4_1-23:1.1.2.1
+	newlib-csl-sourcerygxx-4_1-21:1.1.2.1
+	newlib-csl-arm-2006q3-21:1.1.2.1
+	newlib-csl-20060320-branch:1.1.0.2;
+locks; strict;
+comment	@ * @;
+
+
+1.1
+date	2006.09.15.13.24.03;	author nathan;	state dead;
+branches
+	1.1.2.1;
+next	;
+
+1.1.2.1
+date	2006.09.15.13.24.03;	author nathan;	state Exp;
+branches;
+next	1.1.2.2;
+
+1.1.2.2
+date	2006.10.07.20.08.48;	author nathan;	state dead;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.1
+log
+@file bdm-sbrk.c was initially added on branch newlib-csl-20060320-branch.
+@
+text
+@@
+
+
+1.1.2.1
+log
+@	libgloss/
+	* m68k/Makefile.in (BDM_OTHER_OBJS): Remove sbrk.o.
+	(BDM_SYSOBJS): Add bdm-sbrk.o.
+	* m68k/bdm-sbrk.c: New.
+@
+text
+@a0 49
+/*
+ * bdm-open.c -- 
+ *
+ * Copyright (c) 2006 CodeSourcery Inc
+ *
+ * The authors hereby grant permission to use, copy, modify, distribute,
+ * and license this software and its documentation for any purpose, provided
+ * that existing copyright notices are retained in all copies and that this
+ * notice is included verbatim in any distributions. No written agreement,
+ * license, or royalty fee is required for any of the authorized uses.
+ * Modifications to this software may be copyrighted by their authors
+ * and need not follow the licensing terms described here, provided that
+ * the new terms are clearly indicated on the first page of each file where
+ * they apply.
+ */
+
+#include <errno.h>
+/*
+ * sbrk -- changes heap size size. Get nbytes more
+ *         RAM. We just increment a pointer in what's
+ *         left of memory on the board.
+ */
+
+extern char __end[] __attribute__ ((aligned (4)));
+/* Optional explicit end of heap.  */
+extern char __heap_end[] __attribute__ ((aligned (4), weak));
+
+void *
+sbrk (int nbytes)
+{
+  static char *heap = __end;
+  char *end = __heap_end;
+  char *base = heap;
+  char *new_heap = heap + nbytes;
+  
+  if (!end)
+    {
+      /* Use sp - 256 as the heap limit.  */
+      __asm__ __volatile__ ("move.l %/sp,%0" : "=r"(end));
+      end -= 256;
+    }
+  if (nbytes < 0 || (long)(end - new_heap) < 0)
+    {
+      errno = ENOMEM;
+      return (void *)-1;
+    }
+  heap = new_heap;
+  return base;
+}
+@
+
+
+1.1.2.2
+log
+@	libgloss/
+	* m68k/Makefile.in: Adjust Coldfire rules.
+	(BDM_CRT0, BDM_BSP, BDM_OBJS, BDM_ISRS): Rename	to ...
+	(CF_CRT0, CF_BSP, CF_OBJS, CF_ISRS): ... here.  Adjust.
+	(BDM_OTHER_OBJS): Remove.
+	(BDM_SYSOBJS): Rename to ...
+	(UNHOSTED_OBJS): ... here.  Adjust.
+	(UNHOSTED_BSP, HOSTED_OBJS, HOSTED_BSP): New.
+	(CF_HOSTED_SCRIPTS): New.
+	(CF_SCRIPTS, CF_SOURCES): Adjust.
+	* m68k/cf.sc: Add IO library variable.
+	* m68k/bdm-crt0.S, m68k/bdm-crt1.c, m68k/bdm-isrs.c,
+	m68k/bdm-sbrk.c, m68k/bdm-semihost.S: Rename to ...
+	* m68k/cf-crt0.S, m68k/cf-crt1.c, m68k/cf-isrs.c, m68k/cf-sbrk.c,
+	m68k/cf-hosted.S: ... here.
+	* m68k/cf-exit.c: New.
+	* m68k/bdm-gdb.h, m68k/bdm-semihost.h: Merge into ...
+	* m68k/io.h: ... here.  Add unhosted support.  Adjust conversion
+	function names.
+	* m68k/bdm-gdb.c: Rename to ...
+	* m68k/io-gdb.c: ... here.  Adjust names of conversion functions.
+	* m68k/bdm-close.c, m68k/bdm-exit.c, m68k/bdm-fstat.c,
+	m68k/bdm-gettimeofday.c, m68k/bdm-isatty.c, m68k/bdm-lseek.c,
+	m68k/bdm-open.c, m68k/bdm-read.c, m68k/bdm-rename.c,
+	m68k/bdm-stat.c, m68k/bdm-system.c, m68k/bdm-time.c,
+	m68k/bdm-unlink.c, m68k/bdm-write.c: Rename to ...
+	* m68k/io-close.c, m68k/io-exit.c, m68k/io-fstat.c,
+	m68k/io-gettimeofday.c, m68k/io-isatty.c, m68k/io-lseek.c,
+	m68k/io-open.c, m68k/io-read.c, m68k/io-rename.c, m68k/io-stat.c,
+	m68k/io-system.c, m68k/io-time.c, m68k/io-unlink.c,
+	m68k/io-write.c: ... here.  Include io.h. Adjust for hosted &
+	unhosted libraries.  Adjust names of gdb conversion functions.
+@
+text
+@@
+
+

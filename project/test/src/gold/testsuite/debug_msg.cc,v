@@ -1,0 +1,250 @@
+head	1.5;
+access;
+symbols
+	binutils-2_24-branch:1.5.0.8
+	binutils-2_24-branchpoint:1.5
+	binutils-2_21_1:1.4
+	binutils-2_23_2:1.5
+	binutils-2_23_1:1.5
+	binutils-2_23:1.5
+	binutils-2_23-branch:1.5.0.6
+	binutils-2_23-branchpoint:1.5
+	binutils-2_22_branch:1.5.0.4
+	binutils-2_22:1.5
+	binutils-2_22-branch:1.5.0.2
+	binutils-2_22-branchpoint:1.5
+	binutils-2_21:1.4
+	binutils-2_21-branch:1.4.0.2
+	binutils-2_21-branchpoint:1.4
+	binutils-2_20_1:1.3
+	binutils-2_20:1.3
+	binutils-arc-20081103-branch:1.3.0.10
+	binutils-arc-20081103-branchpoint:1.3
+	binutils-2_20-branch:1.3.0.8
+	binutils-2_20-branchpoint:1.3
+	dje-cgen-play1-branch:1.3.0.6
+	dje-cgen-play1-branchpoint:1.3
+	arc-20081103-branch:1.3.0.4
+	arc-20081103-branchpoint:1.3
+	binutils-2_19_1:1.3
+	binutils-2_19:1.3
+	binutils-2_19-branch:1.3.0.2
+	binutils-2_19-branchpoint:1.3
+	binutils_latest_snapshot:1.5
+	added-to-binutils:1.3;
+locks; strict;
+comment	@// @;
+
+
+1.5
+date	2011.03.10.01.31.33;	author ian;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2010.07.27.08.22.49;	author ian;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2008.03.13.21.04.21;	author iant;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2007.11.14.01.03.01;	author iant;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2007.11.09.23.19.11;	author iant;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.5
+log
+@	* dwarf_reader.cc (Sized_dwarf_line_info): Include all lines,
+	but mark earlier ones as non-canonical
+	(offset_to_iterator): Update search target and example
+	(do_addr2line): Return extra lines in a vector*
+	(format_file_lineno): Extract from do_addr2line
+	(one_addr2line): Add vector* out-param
+	* dwarf_reader.h (Offset_to_lineno_entry): New field recording
+	when a lineno entry appeared last for its instruction
+	(Dwarf_line_info): Add vector* out-param
+	* object.cc (Relocate_info): Pass NULL for the vector* out-param
+	* symtab.cc (Odr_violation_compare): Include the lineno in the
+	comparison again.
+	(linenos_from_loc): New. Combine the canonical line for an
+	address with its other lines.
+	(True_if_intersect): New. Helper functor to make
+	std::set_intersection a query.
+	(detect_odr_violations): Compare sets of lines instead of just
+	one line for each function. This became less deterministic, but
+	has fewer false positives.
+	* symtab.h: Declarations.
+	* testsuite/Makefile.am (odr_violation2.o): Compile with -O2 to
+	mix an optimized and non-optimized object in the same binary
+	(odr_violation2.so): Same.
+	* testsuite/Makefile.in: Regenerate from Makefile.am.
+	* testsuite/debug_msg.cc (main): Make OdrDerived classes.
+	* testsuite/debug_msg.sh: Update line numbers and add
+	assertions.
+	* testsuite/odr_violation1.cc: Use OdrDerived, in a
+	non-optimized context.
+	* testsuite/odr_violation2.cc: Make sure Ordering::operator()
+	isn't inlined, and use OdrDerived in an optimized context.
+	* testsuite/odr_header1.h: Defines OdrDerived, where
+	optimization will change the
+	first-instruction-in-the-destructor's file and line number.
+	* testsuite/odr_header2.h: Defines OdrBase.
+@
+text
+@// debug_msg.cc -- a test case for printing debug info for missing symbols.
+
+// Copyright 2006, 2007, 2008 Free Software Foundation, Inc.
+// Written by Ian Lance Taylor <iant@@google.com>.
+
+// This file is part of gold.
+
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 3 of the License, or
+// (at your option) any later version.
+
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+// MA 02110-1301, USA.
+
+// This file is constructed to have undefined references.  In
+// debug_msg.sh, we will try to link this file, and analyze the
+// error messages that are produced.
+
+extern int undef_int;
+extern float undef_float;
+extern void undef_fn1();
+extern void undef_fn2();
+
+int* badref1 = &undef_int;
+static float* badref2 = &undef_float;
+void (*fn_array[])() =
+{
+  undef_fn1,
+  undef_fn2
+};
+
+template<class Foo>
+int testfn(Foo x)
+{
+  undef_fn1();
+  undef_fn2();
+  return undef_int;
+}
+
+class Base
+{
+  virtual void virtfn() { undef_fn1(); }
+};
+
+class Derived : public Base
+{
+  virtual void virtfn() { undef_fn2(); }
+};
+
+// This tests One Definition Rule (ODR) violations.
+void SortAscending(int array[], int size);   // in odr_violation1.cc
+void SortDescending(int array[], int size);  // in odr_violation2.cc
+// This tests One Definition Rule (ODR) non-violations.
+#include "odr_header2.h"
+OdrBase* CreateOdrDerived1();  // in odr_violation1.cc
+OdrBase* CreateOdrDerived2();  // in odr_violation2.cc
+
+extern "C" int OverriddenCFunction(int i);  // in odr_violation*.cc
+
+inline int SometimesInlineFunction(int i) {  // strong in odr_violation2.cc.
+  return i;
+}
+
+
+int main()
+{
+  testfn(5);
+  testfn(4.0);
+
+  Base b;
+  Derived d;
+
+  int kInput1[] = {1, 6, 9, 7, 3, 4, 2, 10, 5, 8};
+  int kSize1 = sizeof(kInput1) / sizeof(int);
+  SortAscending(kInput1, kSize1);
+
+  int kInput2[] = {1, 6, 9, 7, 3, 4, 2, 10, 5, 8};
+  int kSize2 = sizeof(kInput2) / sizeof(int);
+  SortDescending(kInput2, kSize2);
+
+  OverriddenCFunction(3);
+  SometimesInlineFunction(3);
+
+  delete CreateOdrDerived1();
+  delete CreateOdrDerived2();
+
+  return 0;
+}
+@
+
+
+1.4
+log
+@	* testsuite/debug_msg.sh: Test mixed weak/strong symbol behavior.
+	* gold/testsuite/debug_msg.cc: Likewise.
+	* gold/testsuite/odr_violation1.cc
+	* gold/testsuite/odr_violation2.cc
+@
+text
+@d61 4
+d92 3
+@
+
+
+1.3
+log
+@Update copyright years.  Update language files.
+@
+text
+@d62 7
+d85 3
+@
+
+
+1.2
+log
+@From Craig Silverstein: Rework debug info code a bit, add option for
+ODR violations, add test case.
+@
+text
+@d3 1
+a3 1
+// Copyright 2006, 2007 Free Software Foundation, Inc.
+@
+
+
+1.1
+log
+@From Craig Silverstein: Add test for debug messages.
+@
+text
+@d58 4
+d69 8
+@
+

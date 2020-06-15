@@ -1,0 +1,180 @@
+head	1.2;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.2
+	gdb_7_6-2013-04-26-release:1.2
+	gdb_7_6-branch:1.2.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.2
+	gdb_7_5_1-2012-11-29-release:1.1
+	gdb_7_5-2012-08-17-release:1.1
+	gdb_7_5-branch:1.1.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.1;
+locks; strict;
+comment	@# @;
+
+
+1.2
+date	2013.01.01.06.41.27;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2012.06.28.16.34.04;	author palves;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@# Copyright 2010-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+standard_testfile
+set executable ${testfile}
+
+if {[gdb_compile_pthreads "${srcdir}/${subdir}/${srcfile}" \
+	 ${binfile} \
+	 executable \
+	 [list debug additional_flags=-lrt]] != "" } {
+    return -1
+}
+
+clean_restart $testfile
+
+if ![runto_main] {
+    return -1
+}
+
+# `nostop noprint pass' could in some cases report false PASS due to
+# the (preempt 'handle') code path in linux-nat.c.
+
+gdb_test "handle SIGUSR1 stop print pass" \
+    "Signal\[ \t\]+Stop\[ \t\]+Print\[ \t\]+Pass to program\[ \t\]+Description\r\nSIGUSR1\[ \t\]+Yes\[ \t\]+Yes\[ \t\]+Yes\[ \t\].*"
+gdb_test "handle SIGUSR2 stop print pass" \
+    "Signal\[ \t\]+Stop\[ \t\]+Print\[ \t\]+Pass to program\[ \t\]+Description\r\nSIGUSR2\[ \t\]+Yes\[ \t\]+Yes\[ \t\]+Yes\[ \t\].*"
+
+gdb_breakpoint [gdb_get_line_number "break-at-exit"]
+
+set test "get pid"
+gdb_test_multiple "p getpid ()" $test {
+    -re " = (\[0-9\]+)\r\n$gdb_prompt $" {
+	set pid $expect_out(1,string)
+	pass $test
+    }
+}
+
+for {set sigcount 0} {$sigcount < 4} {incr sigcount} {
+    set test "catch signal $sigcount"
+    set sigusr ""
+    gdb_test_multiple "continue" $test {
+	-re "Program received signal SIGUSR(\[12\]), User defined signal \[12\]\\.\r\n.*\r\n$gdb_prompt $" {
+	    set sigusr $expect_out(1,string)
+	    pass $test
+	}
+    }
+    if {$sigusr == ""} {
+	return -1
+    }
+
+    set test "signal $sigcount si_signo"
+    if {$sigusr == 1} {
+	set signo 10
+    } else {
+	set signo 12
+    }
+    gdb_test_multiple {p $_siginfo.si_signo} $test {
+	-re " = $signo\r\n$gdb_prompt $" {
+	    pass $test
+	}
+	-re "Attempt to extract a component of a value that is not a structure\\.\r\n$gdb_prompt $" {
+	    unsupported $test
+	}
+    }
+
+    set test "signal $sigcount si_code is SI_TKILL"
+    gdb_test_multiple {p $_siginfo.si_code} $test {
+	-re " = -6\r\n$gdb_prompt $" {
+	    pass $test
+	}
+	-re "Attempt to extract a component of a value that is not a structure\\.\r\n$gdb_prompt $" {
+	    unsupported $test
+	}
+    }
+
+    set test "signal $sigcount si_pid"
+    gdb_test_multiple {p $_siginfo._sifields._kill.si_pid} $test {
+	-re " = $pid\r\n$gdb_prompt $" {
+	    pass $test
+	}
+	-re "Attempt to extract a component of a value that is not a structure\\.\r\n$gdb_prompt $" {
+	    unsupported $test
+	}
+    }
+}
+
+gdb_continue_to_breakpoint break-at-exit ".*break-at-exit.*"
+@
+
+
+1.1
+log
+@gdb/
+2012-06-28  Jan Kratochvil  <jan.kratochvil@@redhat.com>
+	    Pedro Alves  <palves@@redhat.com>
+
+	* gdbthread.h (ALL_THREADS): New macro.
+	(thread_list): Declare.
+	* infrun.c (handle_inferior_event) <spurious signal>: Don't keep
+	going, but instead fall through to the stepping handling.
+	* linux-nat.c (resume_lwp): New parameter 'signo'.  Resume with
+	the passed in signal.  Adjust debug output.
+	(resume_callback): Rename to ...
+	(linux_nat_resume_callback): ... this.  Pass the thread's last
+	stop signal, if in "pass" state.
+	(linux_nat_resume): Adjust to rename.
+	(stop_wait_callback): New assertion.  Don't respawn signals;
+	instead let the LWP remain with SIGNALLED set.
+	(linux_nat_wait_1): Remove flushing of pending SIGSTOPs.
+	* remote.c (append_pending_thread_resumptions): New.
+	(remote_vcont_resume): Call it.
+	* target.h (target_resume): Extend comment.
+
+gdb/testsuite/
+2012-06-28  Jan Kratochvil  <jan.kratochvil@@redhat.com>
+	    Pedro Alves  <palves@@redhat.com>
+
+	* gdb.threads/siginfo-threads.exp: New file.
+	* gdb.threads/siginfo-threads.c: New file.
+	* gdb.threads/sigstep-threads.exp: New file.
+	* gdb.threads/sigstep-threads.c: New file.
+@
+text
+@d1 1
+a1 1
+# Copyright 2010-2012 Free Software Foundation, Inc.
+@
+

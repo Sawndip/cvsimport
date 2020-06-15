@@ -1,0 +1,153 @@
+head	1.2;
+access;
+symbols
+	binutils-2_24-branch:1.2.0.2
+	binutils-2_24-branchpoint:1.2
+	binutils_latest_snapshot:1.2;
+locks; strict;
+comment	@# @;
+
+
+1.2
+date	2013.01.24.18.49.55;	author tmsriram;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2012.12.19.02.55.15;	author tmsriram;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@Default text reordering fix with a flag to turn it off.
+
+2013-01-24  Sriraman Tallam  <tmsriram@@google.com>
+
+	* layout.cc (Layout::layout): Check for option text_reorder.
+	(Layout::make_output_section): Ditto.
+	* options.h (text_reorder): New option.
+	* output.cc (Input_section_sort_compare): Remove special ordering
+	of section names.
+	(Output_section::
+	 Input_section_sort_section_name_special_ordering_compare::
+	 operator()): New function.
+	(Output_section::sort_attached_input_sections): Use new sort function
+	for .text.
+	* output.h (Input_section_sort_section_name_special_ordering_compare):
+	New struct.
+	* testsuite/Makefile.am (text_section_grouping): Test option
+	--no-text-reorder
+	* testsuite/Makefile.in: Regenerate.
+	* testsuite/text_section_grouping.sh: Check order of functions without
+	default text reordering.
+@
+text
+@#!/bin/sh
+
+# text_section_grouping.sh -- test
+
+# Copyright 2012 Free Software Foundation, Inc.
+# Written by Sriraman Tallam <tmsriram@@google.com>.
+
+# This file is part of gold.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+# MA 02110-1301, USA.
+
+# The goal of this program is to verify if .text sections are grouped
+# according to prefix.  .text.unlikely, .text.startup and .text.hot should
+# be grouped and placed together.
+
+# Also check if the functions do not get grouped with option --no-text-reorder.
+
+set -e
+
+check()
+{
+    awk "
+BEGIN { saw1 = 0; saw2 = 0; err = 0; }
+/.*$2\$/ { saw1 = 1; }
+/.*$3\$/ {
+     saw2 = 1;
+     if (!saw1)
+       {
+	  printf \"layout of $2 and $3 is not right\\n\";
+	  err = 1;
+	  exit 1;
+       }
+    }
+END {
+      if (!saw1 && !err)
+        {
+	  printf \"did not see $2\\n\";
+	  exit 1;
+	}
+      if (!saw2 && !err)
+	{
+	  printf \"did not see $3\\n\";
+	  exit 1;
+	}
+    }" $1
+}
+
+# addr (unlikely_*) < addr (startup_*) < addr (hot_*)
+check text_section_grouping.stdout "unlikely_foo" "startup_foo"
+check text_section_grouping.stdout "startup_foo" "hot_foo"
+check text_section_grouping.stdout "unlikely_bar" "startup_bar"
+check text_section_grouping.stdout "startup_bar" "hot_bar"
+check text_section_grouping.stdout "unlikely_foo" "startup_bar"
+check text_section_grouping.stdout "startup_foo" "hot_bar"
+
+check text_section_no_grouping.stdout "hot_foo" "startup_foo"
+check text_section_no_grouping.stdout "startup_foo" "unlikely_foo"
+check text_section_no_grouping.stdout "unlikely_foo" "hot_bar"
+check text_section_no_grouping.stdout "hot_bar" "startup_bar"
+check text_section_no_grouping.stdout "startup_bar" "unlikely_bar"
+@
+
+
+1.1
+log
+@Group text sections with prefixes .text.unlikely,.text.hot and .text.startup
+by default.
+
+
+2012-12-18  Sriraman Tallam  <tmsriram@@google.com>
+
+	* layout.cc (Layout::is_section_name_prefix_grouped): New function.
+	* layout.h (Layout::is_section_name_prefix_grouped): New function.
+	* output.cc (Output_section::add_input_section): Check if section
+	name contains special prefix.  Keep input sections to sort such
+	sections.
+	(Output_section::Input_section_sort_section_order_index_compare
+	 ::operator()): Group sections according to prefixes.
+	* (Output_section::sort_attached_input_sections): Add condition
+	to Input_section_entry constructor call.
+	* testsuite/Makefile.am (text_section_grouping): New test.
+	* testsuite/Makefile.in: Regenerate.
+	* testsuite/text_section_grouping.cc: New file.
+	* testsuite/text_section_grouping.sh: New file.
+@
+text
+@d29 2
+d68 6
+@
+

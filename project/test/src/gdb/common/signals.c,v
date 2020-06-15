@@ -1,0 +1,1738 @@
+head	1.12;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.12
+	gdb_7_6-2013-04-26-release:1.12
+	gdb_7_6-branch:1.12.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.12
+	gdb_7_5_1-2012-11-29-release:1.11
+	gdb_7_5-2012-08-17-release:1.11
+	gdb_7_5-branch:1.11.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.11
+	gdb_7_4_1-2012-04-26-release:1.7.4.1
+	gdb_7_4-2012-01-24-release:1.7.4.1
+	gdb_7_4-branch:1.7.0.4
+	gdb_7_4-2011-12-13-branchpoint:1.7
+	gdb_7_3_1-2011-09-04-release:1.7
+	gdb_7_3-2011-07-26-release:1.7
+	gdb_7_3-branch:1.7.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.7
+	gdb_7_2-2010-09-02-release:1.2
+	gdb_7_2-branch:1.2.0.4
+	gdb_7_2-2010-07-07-branchpoint:1.2
+	gdb_7_1-2010-03-18-release:1.2
+	gdb_7_1-branch:1.2.0.2
+	gdb_7_1-2010-02-18-branchpoint:1.2
+	gdb_7_0_1-2009-12-22-release:1.1
+	gdb_7_0-2009-10-06-release:1.1
+	gdb_7_0-branch:1.1.0.4
+	gdb_7_0-2009-09-16-branchpoint:1.1
+	msnyder-checkpoint-072509-branch:1.1.0.2
+	msnyder-checkpoint-072509-branchpoint:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.12
+date	2013.01.01.06.32.54;	author brobecke;	state Exp;
+branches;
+next	1.11;
+
+1.11
+date	2012.05.24.16.51.37;	author palves;	state Exp;
+branches;
+next	1.10;
+
+1.10
+date	2012.05.24.16.39.12;	author palves;	state Exp;
+branches;
+next	1.9;
+
+1.9
+date	2012.03.01.21.11.23;	author palves;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2012.01.04.08.17.18;	author brobecke;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2011.03.18.13.03.30;	author muller;	state Exp;
+branches
+	1.7.4.1;
+next	1.6;
+
+1.6
+date	2011.01.06.00.57.02;	author msnyder;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2011.01.01.15.33.20;	author brobecke;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2010.09.06.13.34.02;	author jkratoch;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2010.07.31.04.17.42;	author jkratoch;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2010.01.01.07.31.47;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2009.03.02.00.45.13;	author devans;	state Exp;
+branches;
+next	;
+
+1.7.4.1
+date	2012.01.06.04.43.33;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.12
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@/* Target signal translation functions for GDB.
+   Copyright (C) 1990-2013 Free Software Foundation, Inc.
+   Contributed by Cygnus Support.
+
+   This file is part of GDB.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+#ifdef GDBSERVER
+#include "server.h"
+#else
+#include "defs.h"
+#include "gdb_string.h"
+#endif
+
+#ifdef HAVE_SIGNAL_H
+#include <signal.h>
+#endif
+
+#include "gdb_signals.h"
+
+struct gdbarch;
+
+/* Always use __SIGRTMIN if it's available.  SIGRTMIN is the lowest
+   _available_ realtime signal, not the lowest supported; glibc takes
+   several for its own use.  */
+
+#ifndef REALTIME_LO
+# if defined(__SIGRTMIN)
+#  define REALTIME_LO __SIGRTMIN
+#  define REALTIME_HI (__SIGRTMAX + 1)
+# elif defined(SIGRTMIN)
+#  define REALTIME_LO SIGRTMIN
+#  define REALTIME_HI (SIGRTMAX + 1)
+# endif
+#endif
+
+/* This table must match in order and size the signals in enum
+   gdb_signal.  */
+
+static const struct {
+  const char *name;
+  const char *string;
+  } signals [] =
+{
+#define SET(symbol, constant, name, string) { name, string },
+#include "gdb/signals.def"
+#undef SET
+};
+
+
+/* Return the string for a signal.  */
+const char *
+gdb_signal_to_string (enum gdb_signal sig)
+{
+  if ((int) sig >= GDB_SIGNAL_FIRST && (int) sig <= GDB_SIGNAL_LAST)
+    return signals[sig].string;
+  else
+    return signals[GDB_SIGNAL_UNKNOWN].string;
+}
+
+/* Return the name for a signal.  */
+const char *
+gdb_signal_to_name (enum gdb_signal sig)
+{
+  if ((int) sig >= GDB_SIGNAL_FIRST && (int) sig <= GDB_SIGNAL_LAST
+      && signals[sig].name != NULL)
+    return signals[sig].name;
+  else
+    /* I think the code which prints this will always print it along
+       with the string, so no need to be verbose (very old comment).  */
+    return "?";
+}
+
+/* Given a name, return its signal.  */
+enum gdb_signal
+gdb_signal_from_name (const char *name)
+{
+  enum gdb_signal sig;
+
+  /* It's possible we also should allow "SIGCLD" as well as "SIGCHLD"
+     for GDB_SIGNAL_SIGCHLD.  SIGIOT, on the other hand, is more
+     questionable; seems like by now people should call it SIGABRT
+     instead.  */
+
+  /* This ugly cast brought to you by the native VAX compiler.  */
+  for (sig = GDB_SIGNAL_HUP;
+       sig < GDB_SIGNAL_LAST;
+       sig = (enum gdb_signal) ((int) sig + 1))
+    if (signals[sig].name != NULL
+	&& strcmp (name, signals[sig].name) == 0)
+      return sig;
+  return GDB_SIGNAL_UNKNOWN;
+}
+
+/* The following functions are to help certain targets deal
+   with the signal/waitstatus stuff.  They could just as well be in
+   a file called native-utils.c or unixwaitstatus-utils.c or whatever.  */
+
+/* Convert host signal to our signals.  */
+enum gdb_signal
+gdb_signal_from_host (int hostsig)
+{
+  /* A switch statement would make sense but would require special kludges
+     to deal with the cases where more than one signal has the same number.  */
+
+  if (hostsig == 0)
+    return GDB_SIGNAL_0;
+
+#if defined (SIGHUP)
+  if (hostsig == SIGHUP)
+    return GDB_SIGNAL_HUP;
+#endif
+#if defined (SIGINT)
+  if (hostsig == SIGINT)
+    return GDB_SIGNAL_INT;
+#endif
+#if defined (SIGQUIT)
+  if (hostsig == SIGQUIT)
+    return GDB_SIGNAL_QUIT;
+#endif
+#if defined (SIGILL)
+  if (hostsig == SIGILL)
+    return GDB_SIGNAL_ILL;
+#endif
+#if defined (SIGTRAP)
+  if (hostsig == SIGTRAP)
+    return GDB_SIGNAL_TRAP;
+#endif
+#if defined (SIGABRT)
+  if (hostsig == SIGABRT)
+    return GDB_SIGNAL_ABRT;
+#endif
+#if defined (SIGEMT)
+  if (hostsig == SIGEMT)
+    return GDB_SIGNAL_EMT;
+#endif
+#if defined (SIGFPE)
+  if (hostsig == SIGFPE)
+    return GDB_SIGNAL_FPE;
+#endif
+#if defined (SIGKILL)
+  if (hostsig == SIGKILL)
+    return GDB_SIGNAL_KILL;
+#endif
+#if defined (SIGBUS)
+  if (hostsig == SIGBUS)
+    return GDB_SIGNAL_BUS;
+#endif
+#if defined (SIGSEGV)
+  if (hostsig == SIGSEGV)
+    return GDB_SIGNAL_SEGV;
+#endif
+#if defined (SIGSYS)
+  if (hostsig == SIGSYS)
+    return GDB_SIGNAL_SYS;
+#endif
+#if defined (SIGPIPE)
+  if (hostsig == SIGPIPE)
+    return GDB_SIGNAL_PIPE;
+#endif
+#if defined (SIGALRM)
+  if (hostsig == SIGALRM)
+    return GDB_SIGNAL_ALRM;
+#endif
+#if defined (SIGTERM)
+  if (hostsig == SIGTERM)
+    return GDB_SIGNAL_TERM;
+#endif
+#if defined (SIGUSR1)
+  if (hostsig == SIGUSR1)
+    return GDB_SIGNAL_USR1;
+#endif
+#if defined (SIGUSR2)
+  if (hostsig == SIGUSR2)
+    return GDB_SIGNAL_USR2;
+#endif
+#if defined (SIGCLD)
+  if (hostsig == SIGCLD)
+    return GDB_SIGNAL_CHLD;
+#endif
+#if defined (SIGCHLD)
+  if (hostsig == SIGCHLD)
+    return GDB_SIGNAL_CHLD;
+#endif
+#if defined (SIGPWR)
+  if (hostsig == SIGPWR)
+    return GDB_SIGNAL_PWR;
+#endif
+#if defined (SIGWINCH)
+  if (hostsig == SIGWINCH)
+    return GDB_SIGNAL_WINCH;
+#endif
+#if defined (SIGURG)
+  if (hostsig == SIGURG)
+    return GDB_SIGNAL_URG;
+#endif
+#if defined (SIGIO)
+  if (hostsig == SIGIO)
+    return GDB_SIGNAL_IO;
+#endif
+#if defined (SIGPOLL)
+  if (hostsig == SIGPOLL)
+    return GDB_SIGNAL_POLL;
+#endif
+#if defined (SIGSTOP)
+  if (hostsig == SIGSTOP)
+    return GDB_SIGNAL_STOP;
+#endif
+#if defined (SIGTSTP)
+  if (hostsig == SIGTSTP)
+    return GDB_SIGNAL_TSTP;
+#endif
+#if defined (SIGCONT)
+  if (hostsig == SIGCONT)
+    return GDB_SIGNAL_CONT;
+#endif
+#if defined (SIGTTIN)
+  if (hostsig == SIGTTIN)
+    return GDB_SIGNAL_TTIN;
+#endif
+#if defined (SIGTTOU)
+  if (hostsig == SIGTTOU)
+    return GDB_SIGNAL_TTOU;
+#endif
+#if defined (SIGVTALRM)
+  if (hostsig == SIGVTALRM)
+    return GDB_SIGNAL_VTALRM;
+#endif
+#if defined (SIGPROF)
+  if (hostsig == SIGPROF)
+    return GDB_SIGNAL_PROF;
+#endif
+#if defined (SIGXCPU)
+  if (hostsig == SIGXCPU)
+    return GDB_SIGNAL_XCPU;
+#endif
+#if defined (SIGXFSZ)
+  if (hostsig == SIGXFSZ)
+    return GDB_SIGNAL_XFSZ;
+#endif
+#if defined (SIGWIND)
+  if (hostsig == SIGWIND)
+    return GDB_SIGNAL_WIND;
+#endif
+#if defined (SIGPHONE)
+  if (hostsig == SIGPHONE)
+    return GDB_SIGNAL_PHONE;
+#endif
+#if defined (SIGLOST)
+  if (hostsig == SIGLOST)
+    return GDB_SIGNAL_LOST;
+#endif
+#if defined (SIGWAITING)
+  if (hostsig == SIGWAITING)
+    return GDB_SIGNAL_WAITING;
+#endif
+#if defined (SIGCANCEL)
+  if (hostsig == SIGCANCEL)
+    return GDB_SIGNAL_CANCEL;
+#endif
+#if defined (SIGLWP)
+  if (hostsig == SIGLWP)
+    return GDB_SIGNAL_LWP;
+#endif
+#if defined (SIGDANGER)
+  if (hostsig == SIGDANGER)
+    return GDB_SIGNAL_DANGER;
+#endif
+#if defined (SIGGRANT)
+  if (hostsig == SIGGRANT)
+    return GDB_SIGNAL_GRANT;
+#endif
+#if defined (SIGRETRACT)
+  if (hostsig == SIGRETRACT)
+    return GDB_SIGNAL_RETRACT;
+#endif
+#if defined (SIGMSG)
+  if (hostsig == SIGMSG)
+    return GDB_SIGNAL_MSG;
+#endif
+#if defined (SIGSOUND)
+  if (hostsig == SIGSOUND)
+    return GDB_SIGNAL_SOUND;
+#endif
+#if defined (SIGSAK)
+  if (hostsig == SIGSAK)
+    return GDB_SIGNAL_SAK;
+#endif
+#if defined (SIGPRIO)
+  if (hostsig == SIGPRIO)
+    return GDB_SIGNAL_PRIO;
+#endif
+
+  /* Mach exceptions.  Assumes that the values for EXC_ are positive! */
+#if defined (EXC_BAD_ACCESS) && defined (_NSIG)
+  if (hostsig == _NSIG + EXC_BAD_ACCESS)
+    return TARGET_EXC_BAD_ACCESS;
+#endif
+#if defined (EXC_BAD_INSTRUCTION) && defined (_NSIG)
+  if (hostsig == _NSIG + EXC_BAD_INSTRUCTION)
+    return TARGET_EXC_BAD_INSTRUCTION;
+#endif
+#if defined (EXC_ARITHMETIC) && defined (_NSIG)
+  if (hostsig == _NSIG + EXC_ARITHMETIC)
+    return TARGET_EXC_ARITHMETIC;
+#endif
+#if defined (EXC_EMULATION) && defined (_NSIG)
+  if (hostsig == _NSIG + EXC_EMULATION)
+    return TARGET_EXC_EMULATION;
+#endif
+#if defined (EXC_SOFTWARE) && defined (_NSIG)
+  if (hostsig == _NSIG + EXC_SOFTWARE)
+    return TARGET_EXC_SOFTWARE;
+#endif
+#if defined (EXC_BREAKPOINT) && defined (_NSIG)
+  if (hostsig == _NSIG + EXC_BREAKPOINT)
+    return TARGET_EXC_BREAKPOINT;
+#endif
+
+#if defined (SIGINFO)
+  if (hostsig == SIGINFO)
+    return GDB_SIGNAL_INFO;
+#endif
+
+#if defined (REALTIME_LO)
+  if (hostsig >= REALTIME_LO && hostsig < REALTIME_HI)
+    {
+      /* This block of GDB_SIGNAL_REALTIME value is in order.  */
+      if (33 <= hostsig && hostsig <= 63)
+	return (enum gdb_signal)
+	  (hostsig - 33 + (int) GDB_SIGNAL_REALTIME_33);
+      else if (hostsig == 32)
+	return GDB_SIGNAL_REALTIME_32;
+      else if (64 <= hostsig && hostsig <= 127)
+	return (enum gdb_signal)
+	  (hostsig - 64 + (int) GDB_SIGNAL_REALTIME_64);
+      else
+	error (_("GDB bug: target.c (gdb_signal_from_host): "
+	       "unrecognized real-time signal"));
+    }
+#endif
+
+  return GDB_SIGNAL_UNKNOWN;
+}
+
+/* Convert a OURSIG (an enum gdb_signal) to the form used by the
+   target operating system (refered to as the ``host'') or zero if the
+   equivalent host signal is not available.  Set/clear OURSIG_OK
+   accordingly. */
+
+static int
+do_gdb_signal_to_host (enum gdb_signal oursig,
+			  int *oursig_ok)
+{
+  int retsig;
+  /* Silence the 'not used' warning, for targets that
+     do not support signals.  */
+  (void) retsig;
+
+  *oursig_ok = 1;
+  switch (oursig)
+    {
+    case GDB_SIGNAL_0:
+      return 0;
+
+#if defined (SIGHUP)
+    case GDB_SIGNAL_HUP:
+      return SIGHUP;
+#endif
+#if defined (SIGINT)
+    case GDB_SIGNAL_INT:
+      return SIGINT;
+#endif
+#if defined (SIGQUIT)
+    case GDB_SIGNAL_QUIT:
+      return SIGQUIT;
+#endif
+#if defined (SIGILL)
+    case GDB_SIGNAL_ILL:
+      return SIGILL;
+#endif
+#if defined (SIGTRAP)
+    case GDB_SIGNAL_TRAP:
+      return SIGTRAP;
+#endif
+#if defined (SIGABRT)
+    case GDB_SIGNAL_ABRT:
+      return SIGABRT;
+#endif
+#if defined (SIGEMT)
+    case GDB_SIGNAL_EMT:
+      return SIGEMT;
+#endif
+#if defined (SIGFPE)
+    case GDB_SIGNAL_FPE:
+      return SIGFPE;
+#endif
+#if defined (SIGKILL)
+    case GDB_SIGNAL_KILL:
+      return SIGKILL;
+#endif
+#if defined (SIGBUS)
+    case GDB_SIGNAL_BUS:
+      return SIGBUS;
+#endif
+#if defined (SIGSEGV)
+    case GDB_SIGNAL_SEGV:
+      return SIGSEGV;
+#endif
+#if defined (SIGSYS)
+    case GDB_SIGNAL_SYS:
+      return SIGSYS;
+#endif
+#if defined (SIGPIPE)
+    case GDB_SIGNAL_PIPE:
+      return SIGPIPE;
+#endif
+#if defined (SIGALRM)
+    case GDB_SIGNAL_ALRM:
+      return SIGALRM;
+#endif
+#if defined (SIGTERM)
+    case GDB_SIGNAL_TERM:
+      return SIGTERM;
+#endif
+#if defined (SIGUSR1)
+    case GDB_SIGNAL_USR1:
+      return SIGUSR1;
+#endif
+#if defined (SIGUSR2)
+    case GDB_SIGNAL_USR2:
+      return SIGUSR2;
+#endif
+#if defined (SIGCHLD) || defined (SIGCLD)
+    case GDB_SIGNAL_CHLD:
+#if defined (SIGCHLD)
+      return SIGCHLD;
+#else
+      return SIGCLD;
+#endif
+#endif /* SIGCLD or SIGCHLD */
+#if defined (SIGPWR)
+    case GDB_SIGNAL_PWR:
+      return SIGPWR;
+#endif
+#if defined (SIGWINCH)
+    case GDB_SIGNAL_WINCH:
+      return SIGWINCH;
+#endif
+#if defined (SIGURG)
+    case GDB_SIGNAL_URG:
+      return SIGURG;
+#endif
+#if defined (SIGIO)
+    case GDB_SIGNAL_IO:
+      return SIGIO;
+#endif
+#if defined (SIGPOLL)
+    case GDB_SIGNAL_POLL:
+      return SIGPOLL;
+#endif
+#if defined (SIGSTOP)
+    case GDB_SIGNAL_STOP:
+      return SIGSTOP;
+#endif
+#if defined (SIGTSTP)
+    case GDB_SIGNAL_TSTP:
+      return SIGTSTP;
+#endif
+#if defined (SIGCONT)
+    case GDB_SIGNAL_CONT:
+      return SIGCONT;
+#endif
+#if defined (SIGTTIN)
+    case GDB_SIGNAL_TTIN:
+      return SIGTTIN;
+#endif
+#if defined (SIGTTOU)
+    case GDB_SIGNAL_TTOU:
+      return SIGTTOU;
+#endif
+#if defined (SIGVTALRM)
+    case GDB_SIGNAL_VTALRM:
+      return SIGVTALRM;
+#endif
+#if defined (SIGPROF)
+    case GDB_SIGNAL_PROF:
+      return SIGPROF;
+#endif
+#if defined (SIGXCPU)
+    case GDB_SIGNAL_XCPU:
+      return SIGXCPU;
+#endif
+#if defined (SIGXFSZ)
+    case GDB_SIGNAL_XFSZ:
+      return SIGXFSZ;
+#endif
+#if defined (SIGWIND)
+    case GDB_SIGNAL_WIND:
+      return SIGWIND;
+#endif
+#if defined (SIGPHONE)
+    case GDB_SIGNAL_PHONE:
+      return SIGPHONE;
+#endif
+#if defined (SIGLOST)
+    case GDB_SIGNAL_LOST:
+      return SIGLOST;
+#endif
+#if defined (SIGWAITING)
+    case GDB_SIGNAL_WAITING:
+      return SIGWAITING;
+#endif
+#if defined (SIGCANCEL)
+    case GDB_SIGNAL_CANCEL:
+      return SIGCANCEL;
+#endif
+#if defined (SIGLWP)
+    case GDB_SIGNAL_LWP:
+      return SIGLWP;
+#endif
+#if defined (SIGDANGER)
+    case GDB_SIGNAL_DANGER:
+      return SIGDANGER;
+#endif
+#if defined (SIGGRANT)
+    case GDB_SIGNAL_GRANT:
+      return SIGGRANT;
+#endif
+#if defined (SIGRETRACT)
+    case GDB_SIGNAL_RETRACT:
+      return SIGRETRACT;
+#endif
+#if defined (SIGMSG)
+    case GDB_SIGNAL_MSG:
+      return SIGMSG;
+#endif
+#if defined (SIGSOUND)
+    case GDB_SIGNAL_SOUND:
+      return SIGSOUND;
+#endif
+#if defined (SIGSAK)
+    case GDB_SIGNAL_SAK:
+      return SIGSAK;
+#endif
+#if defined (SIGPRIO)
+    case GDB_SIGNAL_PRIO:
+      return SIGPRIO;
+#endif
+
+      /* Mach exceptions.  Assumes that the values for EXC_ are positive! */
+#if defined (EXC_BAD_ACCESS) && defined (_NSIG)
+    case TARGET_EXC_BAD_ACCESS:
+      return _NSIG + EXC_BAD_ACCESS;
+#endif
+#if defined (EXC_BAD_INSTRUCTION) && defined (_NSIG)
+    case TARGET_EXC_BAD_INSTRUCTION:
+      return _NSIG + EXC_BAD_INSTRUCTION;
+#endif
+#if defined (EXC_ARITHMETIC) && defined (_NSIG)
+    case TARGET_EXC_ARITHMETIC:
+      return _NSIG + EXC_ARITHMETIC;
+#endif
+#if defined (EXC_EMULATION) && defined (_NSIG)
+    case TARGET_EXC_EMULATION:
+      return _NSIG + EXC_EMULATION;
+#endif
+#if defined (EXC_SOFTWARE) && defined (_NSIG)
+    case TARGET_EXC_SOFTWARE:
+      return _NSIG + EXC_SOFTWARE;
+#endif
+#if defined (EXC_BREAKPOINT) && defined (_NSIG)
+    case TARGET_EXC_BREAKPOINT:
+      return _NSIG + EXC_BREAKPOINT;
+#endif
+
+#if defined (SIGINFO)
+    case GDB_SIGNAL_INFO:
+      return SIGINFO;
+#endif
+
+    default:
+#if defined (REALTIME_LO)
+      retsig = 0;
+
+      if (oursig >= GDB_SIGNAL_REALTIME_33
+	  && oursig <= GDB_SIGNAL_REALTIME_63)
+	{
+	  /* This block of signals is continuous, and
+             GDB_SIGNAL_REALTIME_33 is 33 by definition.  */
+	  retsig = (int) oursig - (int) GDB_SIGNAL_REALTIME_33 + 33;
+	}
+      else if (oursig == GDB_SIGNAL_REALTIME_32)
+	{
+	  /* GDB_SIGNAL_REALTIME_32 isn't contiguous with
+             GDB_SIGNAL_REALTIME_33.  It is 32 by definition.  */
+	  retsig = 32;
+	}
+      else if (oursig >= GDB_SIGNAL_REALTIME_64
+	  && oursig <= GDB_SIGNAL_REALTIME_127)
+	{
+	  /* This block of signals is continuous, and
+             GDB_SIGNAL_REALTIME_64 is 64 by definition.  */
+	  retsig = (int) oursig - (int) GDB_SIGNAL_REALTIME_64 + 64;
+	}
+
+      if (retsig >= REALTIME_LO && retsig < REALTIME_HI)
+	return retsig;
+#endif
+
+      *oursig_ok = 0;
+      return 0;
+    }
+}
+
+int
+gdb_signal_to_host_p (enum gdb_signal oursig)
+{
+  int oursig_ok;
+  do_gdb_signal_to_host (oursig, &oursig_ok);
+  return oursig_ok;
+}
+
+int
+gdb_signal_to_host (enum gdb_signal oursig)
+{
+  int oursig_ok;
+  int targ_signo = do_gdb_signal_to_host (oursig, &oursig_ok);
+  if (!oursig_ok)
+    {
+      /* The user might be trying to do "signal SIGSAK" where this system
+         doesn't have SIGSAK.  */
+      warning (_("Signal %s does not exist on this system."),
+	       gdb_signal_to_name (oursig));
+      return 0;
+    }
+  else
+    return targ_signo;
+}
+@
+
+
+1.11
+log
+@gdb/
+2012-05-24  Pedro Alves  <palves@@redhat.com>
+
+	PR gdb/7205
+
+        Replace TARGET_SIGNAL_ with GDB_SIGNAL_ throughout.
+
+gdb/gdbserver/
+2012-05-24  Pedro Alves  <palves@@redhat.com>
+
+	PR gdb/7205
+
+        Replace TARGET_SIGNAL_ with GDB_SIGNAL_ throughout.
+
+include/gdb/
+2012-05-24  Pedro Alves  <palves@@redhat.com>
+
+	PR gdb/7205
+
+        * gdb/signals.def: Replace TARGET_SIGNAL_ with GDB_SIGNAL_
+	throughout.
+
+sim/arm/
+2012-05-24  Pedro Alves  <palves@@redhat.com>
+
+	PR gdb/7205
+
+        Replace TARGET_SIGNAL_ with GDB_SIGNAL_ throughout.
+
+sim/avr/
+2012-05-24  Pedro Alves  <palves@@redhat.com>
+
+	PR gdb/7205
+
+        Replace TARGET_SIGNAL_ with GDB_SIGNAL_ throughout.
+
+sim/common/
+2012-05-24  Pedro Alves  <palves@@redhat.com>
+
+	PR gdb/7205
+
+        Replace TARGET_SIGNAL_ with GDB_SIGNAL_ throughout.
+
+sim/cr16/
+2012-05-24  Pedro Alves  <palves@@redhat.com>
+
+	PR gdb/7205
+
+        Replace TARGET_SIGNAL_ with GDB_SIGNAL_ throughout.
+
+sim/d10v/
+2012-05-24  Pedro Alves  <palves@@redhat.com>
+
+	PR gdb/7205
+
+        Replace TARGET_SIGNAL_ with GDB_SIGNAL_ throughout.
+
+sim/erc32/
+2012-05-24  Pedro Alves  <palves@@redhat.com>
+
+	PR gdb/7205
+
+        Replace TARGET_SIGNAL_ with GDB_SIGNAL_ throughout.
+
+sim/m32c/
+2012-05-24  Pedro Alves  <palves@@redhat.com>
+
+	PR gdb/7205
+
+        Replace TARGET_SIGNAL_ with GDB_SIGNAL_ throughout.
+
+sim/ppc/
+2012-05-24  Pedro Alves  <palves@@redhat.com>
+
+	PR gdb/7205
+
+        Replace TARGET_SIGNAL_ with GDB_SIGNAL_ throughout.
+
+sim/rl78/
+2012-05-24  Pedro Alves  <palves@@redhat.com>
+
+	PR gdb/7205
+
+        Replace TARGET_SIGNAL_ with GDB_SIGNAL_ throughout.
+
+sim/rx/
+2012-05-24  Pedro Alves  <palves@@redhat.com>
+
+	PR gdb/7205
+
+        Replace TARGET_SIGNAL_ with GDB_SIGNAL_ throughout.
+@
+text
+@d2 1
+a2 1
+   Copyright (C) 1990-2003, 2006-2012 Free Software Foundation, Inc.
+@
+
+
+1.10
+log
+@gdb/
+2012-05-24  Pedro Alves  <palves@@redhat.com>
+
+	PR gdb/7205
+
+	Replace target_signal with gdb_signal throughout.
+
+gdb/gdbserver/
+2012-05-24  Pedro Alves  <palves@@redhat.com>
+
+	PR gdb/7205
+
+	Replace target_signal with gdb_signal throughout.
+
+include/gdb/
+2012-05-24  Pedro Alves  <palves@@redhat.com>
+
+	PR gdb/7205
+
+	Replace target_signal with gdb_signal throughout.
+
+sim/common/
+2012-05-24  Pedro Alves  <palves@@redhat.com>
+
+	PR gdb/7205
+
+	Replace target_signal with gdb_signal throughout.
+@
+text
+@d67 1
+a67 1
+  if ((int) sig >= TARGET_SIGNAL_FIRST && (int) sig <= TARGET_SIGNAL_LAST)
+d70 1
+a70 1
+    return signals[TARGET_SIGNAL_UNKNOWN].string;
+d77 1
+a77 1
+  if ((int) sig >= TARGET_SIGNAL_FIRST && (int) sig <= TARGET_SIGNAL_LAST
+d93 1
+a93 1
+     for TARGET_SIGNAL_SIGCHLD.  SIGIOT, on the other hand, is more
+d98 2
+a99 2
+  for (sig = TARGET_SIGNAL_HUP;
+       sig < TARGET_SIGNAL_LAST;
+d104 1
+a104 1
+  return TARGET_SIGNAL_UNKNOWN;
+d119 1
+a119 1
+    return TARGET_SIGNAL_0;
+d123 1
+a123 1
+    return TARGET_SIGNAL_HUP;
+d127 1
+a127 1
+    return TARGET_SIGNAL_INT;
+d131 1
+a131 1
+    return TARGET_SIGNAL_QUIT;
+d135 1
+a135 1
+    return TARGET_SIGNAL_ILL;
+d139 1
+a139 1
+    return TARGET_SIGNAL_TRAP;
+d143 1
+a143 1
+    return TARGET_SIGNAL_ABRT;
+d147 1
+a147 1
+    return TARGET_SIGNAL_EMT;
+d151 1
+a151 1
+    return TARGET_SIGNAL_FPE;
+d155 1
+a155 1
+    return TARGET_SIGNAL_KILL;
+d159 1
+a159 1
+    return TARGET_SIGNAL_BUS;
+d163 1
+a163 1
+    return TARGET_SIGNAL_SEGV;
+d167 1
+a167 1
+    return TARGET_SIGNAL_SYS;
+d171 1
+a171 1
+    return TARGET_SIGNAL_PIPE;
+d175 1
+a175 1
+    return TARGET_SIGNAL_ALRM;
+d179 1
+a179 1
+    return TARGET_SIGNAL_TERM;
+d183 1
+a183 1
+    return TARGET_SIGNAL_USR1;
+d187 1
+a187 1
+    return TARGET_SIGNAL_USR2;
+d191 1
+a191 1
+    return TARGET_SIGNAL_CHLD;
+d195 1
+a195 1
+    return TARGET_SIGNAL_CHLD;
+d199 1
+a199 1
+    return TARGET_SIGNAL_PWR;
+d203 1
+a203 1
+    return TARGET_SIGNAL_WINCH;
+d207 1
+a207 1
+    return TARGET_SIGNAL_URG;
+d211 1
+a211 1
+    return TARGET_SIGNAL_IO;
+d215 1
+a215 1
+    return TARGET_SIGNAL_POLL;
+d219 1
+a219 1
+    return TARGET_SIGNAL_STOP;
+d223 1
+a223 1
+    return TARGET_SIGNAL_TSTP;
+d227 1
+a227 1
+    return TARGET_SIGNAL_CONT;
+d231 1
+a231 1
+    return TARGET_SIGNAL_TTIN;
+d235 1
+a235 1
+    return TARGET_SIGNAL_TTOU;
+d239 1
+a239 1
+    return TARGET_SIGNAL_VTALRM;
+d243 1
+a243 1
+    return TARGET_SIGNAL_PROF;
+d247 1
+a247 1
+    return TARGET_SIGNAL_XCPU;
+d251 1
+a251 1
+    return TARGET_SIGNAL_XFSZ;
+d255 1
+a255 1
+    return TARGET_SIGNAL_WIND;
+d259 1
+a259 1
+    return TARGET_SIGNAL_PHONE;
+d263 1
+a263 1
+    return TARGET_SIGNAL_LOST;
+d267 1
+a267 1
+    return TARGET_SIGNAL_WAITING;
+d271 1
+a271 1
+    return TARGET_SIGNAL_CANCEL;
+d275 1
+a275 1
+    return TARGET_SIGNAL_LWP;
+d279 1
+a279 1
+    return TARGET_SIGNAL_DANGER;
+d283 1
+a283 1
+    return TARGET_SIGNAL_GRANT;
+d287 1
+a287 1
+    return TARGET_SIGNAL_RETRACT;
+d291 1
+a291 1
+    return TARGET_SIGNAL_MSG;
+d295 1
+a295 1
+    return TARGET_SIGNAL_SOUND;
+d299 1
+a299 1
+    return TARGET_SIGNAL_SAK;
+d303 1
+a303 1
+    return TARGET_SIGNAL_PRIO;
+d334 1
+a334 1
+    return TARGET_SIGNAL_INFO;
+d340 1
+a340 1
+      /* This block of TARGET_SIGNAL_REALTIME value is in order.  */
+d343 1
+a343 1
+	  (hostsig - 33 + (int) TARGET_SIGNAL_REALTIME_33);
+d345 1
+a345 1
+	return TARGET_SIGNAL_REALTIME_32;
+d348 1
+a348 1
+	  (hostsig - 64 + (int) TARGET_SIGNAL_REALTIME_64);
+d355 1
+a355 1
+  return TARGET_SIGNAL_UNKNOWN;
+d375 1
+a375 1
+    case TARGET_SIGNAL_0:
+d379 1
+a379 1
+    case TARGET_SIGNAL_HUP:
+d383 1
+a383 1
+    case TARGET_SIGNAL_INT:
+d387 1
+a387 1
+    case TARGET_SIGNAL_QUIT:
+d391 1
+a391 1
+    case TARGET_SIGNAL_ILL:
+d395 1
+a395 1
+    case TARGET_SIGNAL_TRAP:
+d399 1
+a399 1
+    case TARGET_SIGNAL_ABRT:
+d403 1
+a403 1
+    case TARGET_SIGNAL_EMT:
+d407 1
+a407 1
+    case TARGET_SIGNAL_FPE:
+d411 1
+a411 1
+    case TARGET_SIGNAL_KILL:
+d415 1
+a415 1
+    case TARGET_SIGNAL_BUS:
+d419 1
+a419 1
+    case TARGET_SIGNAL_SEGV:
+d423 1
+a423 1
+    case TARGET_SIGNAL_SYS:
+d427 1
+a427 1
+    case TARGET_SIGNAL_PIPE:
+d431 1
+a431 1
+    case TARGET_SIGNAL_ALRM:
+d435 1
+a435 1
+    case TARGET_SIGNAL_TERM:
+d439 1
+a439 1
+    case TARGET_SIGNAL_USR1:
+d443 1
+a443 1
+    case TARGET_SIGNAL_USR2:
+d447 1
+a447 1
+    case TARGET_SIGNAL_CHLD:
+d455 1
+a455 1
+    case TARGET_SIGNAL_PWR:
+d459 1
+a459 1
+    case TARGET_SIGNAL_WINCH:
+d463 1
+a463 1
+    case TARGET_SIGNAL_URG:
+d467 1
+a467 1
+    case TARGET_SIGNAL_IO:
+d471 1
+a471 1
+    case TARGET_SIGNAL_POLL:
+d475 1
+a475 1
+    case TARGET_SIGNAL_STOP:
+d479 1
+a479 1
+    case TARGET_SIGNAL_TSTP:
+d483 1
+a483 1
+    case TARGET_SIGNAL_CONT:
+d487 1
+a487 1
+    case TARGET_SIGNAL_TTIN:
+d491 1
+a491 1
+    case TARGET_SIGNAL_TTOU:
+d495 1
+a495 1
+    case TARGET_SIGNAL_VTALRM:
+d499 1
+a499 1
+    case TARGET_SIGNAL_PROF:
+d503 1
+a503 1
+    case TARGET_SIGNAL_XCPU:
+d507 1
+a507 1
+    case TARGET_SIGNAL_XFSZ:
+d511 1
+a511 1
+    case TARGET_SIGNAL_WIND:
+d515 1
+a515 1
+    case TARGET_SIGNAL_PHONE:
+d519 1
+a519 1
+    case TARGET_SIGNAL_LOST:
+d523 1
+a523 1
+    case TARGET_SIGNAL_WAITING:
+d527 1
+a527 1
+    case TARGET_SIGNAL_CANCEL:
+d531 1
+a531 1
+    case TARGET_SIGNAL_LWP:
+d535 1
+a535 1
+    case TARGET_SIGNAL_DANGER:
+d539 1
+a539 1
+    case TARGET_SIGNAL_GRANT:
+d543 1
+a543 1
+    case TARGET_SIGNAL_RETRACT:
+d547 1
+a547 1
+    case TARGET_SIGNAL_MSG:
+d551 1
+a551 1
+    case TARGET_SIGNAL_SOUND:
+d555 1
+a555 1
+    case TARGET_SIGNAL_SAK:
+d559 1
+a559 1
+    case TARGET_SIGNAL_PRIO:
+d590 1
+a590 1
+    case TARGET_SIGNAL_INFO:
+d598 2
+a599 2
+      if (oursig >= TARGET_SIGNAL_REALTIME_33
+	  && oursig <= TARGET_SIGNAL_REALTIME_63)
+d602 2
+a603 2
+             TARGET_SIGNAL_REALTIME_33 is 33 by definition.  */
+	  retsig = (int) oursig - (int) TARGET_SIGNAL_REALTIME_33 + 33;
+d605 1
+a605 1
+      else if (oursig == TARGET_SIGNAL_REALTIME_32)
+d607 2
+a608 2
+	  /* TARGET_SIGNAL_REALTIME_32 isn't contiguous with
+             TARGET_SIGNAL_REALTIME_33.  It is 32 by definition.  */
+d611 2
+a612 2
+      else if (oursig >= TARGET_SIGNAL_REALTIME_64
+	  && oursig <= TARGET_SIGNAL_REALTIME_127)
+d615 2
+a616 2
+             TARGET_SIGNAL_REALTIME_64 is 64 by definition.  */
+	  retsig = (int) oursig - (int) TARGET_SIGNAL_REALTIME_64 + 64;
+@
+
+
+1.9
+log
+@2012-03-01  Pedro Alves  <palves@@redhat.com>
+
+	* common/signals.c (default_target_signal_to_host)
+	(default_target_signal_from_host): Move ...
+	* arch-utils.c: ... here.
+	* arch-utils.h (default_target_signal_to_host)
+	(default_target_signal_from_host): Declare.
+
+	* common/signals.c (target_signal_from_command): Move ...
+	* infrun.c: ... here.
+	* inferior.h (target_signal_from_command): Declare.
+	* target.h (target_signal_from_command)
+	(default_target_signal_from_host, default_target_signal_to_host):
+	Delete declarations.
+
+	* common/signals.c (_initialize_signals): Delete.
+@
+text
+@d50 1
+a50 1
+   target_signal.  */
+d65 1
+a65 1
+target_signal_to_string (enum target_signal sig)
+d75 1
+a75 1
+target_signal_to_name (enum target_signal sig)
+d87 2
+a88 2
+enum target_signal
+target_signal_from_name (const char *name)
+d90 1
+a90 1
+  enum target_signal sig;
+d100 1
+a100 1
+       sig = (enum target_signal) ((int) sig + 1))
+d112 2
+a113 2
+enum target_signal
+target_signal_from_host (int hostsig)
+d342 1
+a342 1
+	return (enum target_signal)
+d347 1
+a347 1
+	return (enum target_signal)
+d350 1
+a350 1
+	error (_("GDB bug: target.c (target_signal_from_host): "
+d358 1
+a358 1
+/* Convert a OURSIG (an enum target_signal) to the form used by the
+d364 1
+a364 1
+do_target_signal_to_host (enum target_signal oursig,
+d629 1
+a629 1
+target_signal_to_host_p (enum target_signal oursig)
+d632 1
+a632 1
+  do_target_signal_to_host (oursig, &oursig_ok);
+d637 1
+a637 1
+target_signal_to_host (enum target_signal oursig)
+d640 1
+a640 1
+  int targ_signo = do_target_signal_to_host (oursig, &oursig_ok);
+d646 1
+a646 1
+	       target_signal_to_name (oursig));
+@
+
+
+1.8
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@a651 42
+
+#ifndef GDBSERVER
+
+/* In some circumstances we allow a command to specify a numeric
+   signal.  The idea is to keep these circumstances limited so that
+   users (and scripts) develop portable habits.  For comparison,
+   POSIX.2 `kill' requires that 1,2,3,6,9,14, and 15 work (and using a
+   numeric signal at all is obsolescent.  We are slightly more
+   lenient and allow 1-15 which should match host signal numbers on
+   most systems.  Use of symbolic signal names is strongly encouraged.  */
+
+enum target_signal
+target_signal_from_command (int num)
+{
+  if (num >= 1 && num <= 15)
+    return (enum target_signal) num;
+  error (_("Only signals 1-15 are valid as numeric signals.\n\
+Use \"info signals\" for a list of symbolic signals."));
+}
+
+extern initialize_file_ftype _initialize_signals; /* -Wmissing-prototype */
+
+void
+_initialize_signals (void)
+{
+  if (strcmp (signals[TARGET_SIGNAL_LAST].string, "TARGET_SIGNAL_MAGIC") != 0)
+    internal_error (__FILE__, __LINE__, "failed internal consistency check");
+}
+
+int
+default_target_signal_to_host (struct gdbarch *gdbarch, enum target_signal ts)
+{
+  return target_signal_to_host (ts);
+}
+
+enum target_signal
+default_target_signal_from_host (struct gdbarch *gdbarch, int signo)
+{
+  return target_signal_from_host (signo);
+}
+
+#endif /* ! GDBSERVER */
+@
+
+
+1.7
+log
+@	* common/signals.c (target_signal_from_host): Add _ markup to error
+	function call message.
+	(target_signal_to_host): Add _ markup and remove trailing new line
+	from warning call message.
+	(target_signal_from_command): Add _ markup to error function call
+	message.
+	* gdbserver/server.h (Macro _): Define it if not available.
+@
+text
+@d2 1
+a2 3
+   Copyright (C) 1990, 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999,
+   2000, 2001, 2002, 2003, 2006, 2007, 2008, 2009, 2010, 2011
+   Free Software Foundation, Inc.
+@
+
+
+1.7.4.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d2 3
+a4 1
+   Copyright (C) 1990-2003, 2006-2012 Free Software Foundation, Inc.
+@
+
+
+1.6
+log
+@2011-01-05  Michael Snyder  <msnyder@@vmware.com>
+
+	* cli/cli-cmds.c: Shorten lines of >= 80 columns.
+	* cli/cli-decode.c: Ditto.
+	* cli/cli-dump.c: Ditto.
+	* cli/cli-logging.c: Ditto.
+	* cli/cli-script.c: Ditto.
+	* cli/cli-setshow.c: Ditto.
+	* common/signals.c: Ditto.
+	* mi/mi-cmd-break.c: Ditto.
+	* mi/mi-cmd-disas.c: Ditto.
+	* mi/mi-cmd-stack.c: Ditto.
+	* mi/mi-cmd-var.c: Ditto.
+	* mi/mi-cmds.c: Ditto.
+	* mi/mi-common.h: Ditto.
+	* mi/mi-console.c: Ditto.
+	* mi/mi-interp.c: Ditto.
+	* mi/mi-main.c: Ditto.
+	* osf-share/cma_attr.c: Ditto.
+	* osf-share/cma_deb_core.h: Ditto.
+	* osf-share/cma_debug_client.h: Ditto.
+	* osf-share/cma_handle.h: Ditto.
+	* osf-share/cma_mutex.h: Ditto.
+	* osf-share/cma_stack_int.h: Ditto.
+	* osf-share/cma_tcb_defs.h: Ditto.
+	* python/py-auto-load.c: Ditto.
+	* python/py-breakpoint.c: Ditto.
+	* python/py-cmd.c: Ditto.
+	* python/py-frame.c: Ditto.
+	* python/py-objfile.c: Ditto.
+	* python/py-param.c: Ditto.
+	* python/py-progspace.c: Ditto.
+	* python/py-symbol.c: Ditto.
+	* python/py-value.c: Ditto.
+	* python/python-internal.h: Ditto.
+	* python/python.c: Ditto.
+	* tui/tui-data.c: Ditto.
+	* tui/tui-disasm.c: Ditto.
+	* tui/tui-hooks.c: Ditto.
+	* tui/tui-io.c: Ditto.
+	* tui/tui-layout.c: Ditto.
+	* tui/tui-regs.c: Ditto.
+	* tui/tui-source.c: Ditto.
+	* tui/tui-stack.c: Ditto.
+	* tui/tui-win.c: Ditto.
+	* tui/tui-windata.c: Ditto.
+	* tui/tui-winsource.c: Ditto.
+@
+text
+@d352 2
+a353 2
+	error ("GDB bug: target.c (target_signal_from_host): "
+	       "unrecognized real-time signal");
+d647 1
+a647 1
+      warning ("Signal %s does not exist on this system.\n",
+d670 2
+a671 2
+  error ("Only signals 1-15 are valid as numeric signals.\n\
+Use \"info signals\" for a list of symbolic signals.");
+@
+
+
+1.5
+log
+@run copyright.sh for 2011.
+@
+text
+@d51 2
+a52 1
+/* This table must match in order and size the signals in enum target_signal.  */
+d352 2
+a353 1
+	error ("GDB bug: target.c (target_signal_from_host): unrecognized real-time signal");
+@
+
+
+1.4
+log
+@gdb/
+	* common/signals.c (ANY): Remove.
+	(SET): No longer use ANY.
+
+include/gdb/
+	* signals.def: Replace all ANY uses by SET with specific numbers.
+	* signals.h (ANY): Remove.
+@
+text
+@d3 1
+a3 1
+   2000, 2001, 2002, 2003, 2006, 2007, 2008, 2009, 2010
+@
+
+
+1.3
+log
+@gdb/
+	* common/signals.c (signals): Move the content to signals.def.
+	Include it.  Remove the INDENT comments.
+
+gdb/gdbserver/
+	* Makefile.in (signals_def): New.
+	(server_h): Append include/gdb/signals.h and signals_def.
+	(server.o): Append signals_def.
+
+include/gdb/
+	* signals.h (enum target_signal): Move the content to signals.def.
+	Include it.
+	* signals.def: New file.
+@
+text
+@d58 1
+a58 2
+#define SET(symbol, constant, name, string) ANY (symbol, name, string)
+#define ANY(symbol, name, string) { name, string },
+a59 1
+#undef ANY
+@
+
+
+1.2
+log
+@Update copyright year in most headers.
+
+Automatic update by copyright.sh.
+@
+text
+@d51 2
+a52 3
+/* This table must match in order and size the signals in enum target_signal
+   in src/include/gdb/signals.h.  */
+/* *INDENT-OFF* */
+d58 5
+a62 158
+  {"0", "Signal 0"},
+  {"SIGHUP", "Hangup"},
+  {"SIGINT", "Interrupt"},
+  {"SIGQUIT", "Quit"},
+  {"SIGILL", "Illegal instruction"},
+  {"SIGTRAP", "Trace/breakpoint trap"},
+  {"SIGABRT", "Aborted"},
+  {"SIGEMT", "Emulation trap"},
+  {"SIGFPE", "Arithmetic exception"},
+  {"SIGKILL", "Killed"},
+  {"SIGBUS", "Bus error"},
+  {"SIGSEGV", "Segmentation fault"},
+  {"SIGSYS", "Bad system call"},
+  {"SIGPIPE", "Broken pipe"},
+  {"SIGALRM", "Alarm clock"},
+  {"SIGTERM", "Terminated"},
+  {"SIGURG", "Urgent I/O condition"},
+  {"SIGSTOP", "Stopped (signal)"},
+  {"SIGTSTP", "Stopped (user)"},
+  {"SIGCONT", "Continued"},
+  {"SIGCHLD", "Child status changed"},
+  {"SIGTTIN", "Stopped (tty input)"},
+  {"SIGTTOU", "Stopped (tty output)"},
+  {"SIGIO", "I/O possible"},
+  {"SIGXCPU", "CPU time limit exceeded"},
+  {"SIGXFSZ", "File size limit exceeded"},
+  {"SIGVTALRM", "Virtual timer expired"},
+  {"SIGPROF", "Profiling timer expired"},
+  {"SIGWINCH", "Window size changed"},
+  {"SIGLOST", "Resource lost"},
+  {"SIGUSR1", "User defined signal 1"},
+  {"SIGUSR2", "User defined signal 2"},
+  {"SIGPWR", "Power fail/restart"},
+  {"SIGPOLL", "Pollable event occurred"},
+  {"SIGWIND", "SIGWIND"},
+  {"SIGPHONE", "SIGPHONE"},
+  {"SIGWAITING", "Process's LWPs are blocked"},
+  {"SIGLWP", "Signal LWP"},
+  {"SIGDANGER", "Swap space dangerously low"},
+  {"SIGGRANT", "Monitor mode granted"},
+  {"SIGRETRACT", "Need to relinquish monitor mode"},
+  {"SIGMSG", "Monitor mode data available"},
+  {"SIGSOUND", "Sound completed"},
+  {"SIGSAK", "Secure attention"},
+  {"SIGPRIO", "SIGPRIO"},
+  {"SIG33", "Real-time event 33"},
+  {"SIG34", "Real-time event 34"},
+  {"SIG35", "Real-time event 35"},
+  {"SIG36", "Real-time event 36"},
+  {"SIG37", "Real-time event 37"},
+  {"SIG38", "Real-time event 38"},
+  {"SIG39", "Real-time event 39"},
+  {"SIG40", "Real-time event 40"},
+  {"SIG41", "Real-time event 41"},
+  {"SIG42", "Real-time event 42"},
+  {"SIG43", "Real-time event 43"},
+  {"SIG44", "Real-time event 44"},
+  {"SIG45", "Real-time event 45"},
+  {"SIG46", "Real-time event 46"},
+  {"SIG47", "Real-time event 47"},
+  {"SIG48", "Real-time event 48"},
+  {"SIG49", "Real-time event 49"},
+  {"SIG50", "Real-time event 50"},
+  {"SIG51", "Real-time event 51"},
+  {"SIG52", "Real-time event 52"},
+  {"SIG53", "Real-time event 53"},
+  {"SIG54", "Real-time event 54"},
+  {"SIG55", "Real-time event 55"},
+  {"SIG56", "Real-time event 56"},
+  {"SIG57", "Real-time event 57"},
+  {"SIG58", "Real-time event 58"},
+  {"SIG59", "Real-time event 59"},
+  {"SIG60", "Real-time event 60"},
+  {"SIG61", "Real-time event 61"},
+  {"SIG62", "Real-time event 62"},
+  {"SIG63", "Real-time event 63"},
+  {"SIGCANCEL", "LWP internal signal"},
+  {"SIG32", "Real-time event 32"},
+  {"SIG64", "Real-time event 64"},
+  {"SIG65", "Real-time event 65"},
+  {"SIG66", "Real-time event 66"},
+  {"SIG67", "Real-time event 67"},
+  {"SIG68", "Real-time event 68"},
+  {"SIG69", "Real-time event 69"},
+  {"SIG70", "Real-time event 70"},
+  {"SIG71", "Real-time event 71"},
+  {"SIG72", "Real-time event 72"},
+  {"SIG73", "Real-time event 73"},
+  {"SIG74", "Real-time event 74"},
+  {"SIG75", "Real-time event 75"},
+  {"SIG76", "Real-time event 76"},
+  {"SIG77", "Real-time event 77"},
+  {"SIG78", "Real-time event 78"},
+  {"SIG79", "Real-time event 79"},
+  {"SIG80", "Real-time event 80"},
+  {"SIG81", "Real-time event 81"},
+  {"SIG82", "Real-time event 82"},
+  {"SIG83", "Real-time event 83"},
+  {"SIG84", "Real-time event 84"},
+  {"SIG85", "Real-time event 85"},
+  {"SIG86", "Real-time event 86"},
+  {"SIG87", "Real-time event 87"},
+  {"SIG88", "Real-time event 88"},
+  {"SIG89", "Real-time event 89"},
+  {"SIG90", "Real-time event 90"},
+  {"SIG91", "Real-time event 91"},
+  {"SIG92", "Real-time event 92"},
+  {"SIG93", "Real-time event 93"},
+  {"SIG94", "Real-time event 94"},
+  {"SIG95", "Real-time event 95"},
+  {"SIG96", "Real-time event 96"},
+  {"SIG97", "Real-time event 97"},
+  {"SIG98", "Real-time event 98"},
+  {"SIG99", "Real-time event 99"},
+  {"SIG100", "Real-time event 100"},
+  {"SIG101", "Real-time event 101"},
+  {"SIG102", "Real-time event 102"},
+  {"SIG103", "Real-time event 103"},
+  {"SIG104", "Real-time event 104"},
+  {"SIG105", "Real-time event 105"},
+  {"SIG106", "Real-time event 106"},
+  {"SIG107", "Real-time event 107"},
+  {"SIG108", "Real-time event 108"},
+  {"SIG109", "Real-time event 109"},
+  {"SIG110", "Real-time event 110"},
+  {"SIG111", "Real-time event 111"},
+  {"SIG112", "Real-time event 112"},
+  {"SIG113", "Real-time event 113"},
+  {"SIG114", "Real-time event 114"},
+  {"SIG115", "Real-time event 115"},
+  {"SIG116", "Real-time event 116"},
+  {"SIG117", "Real-time event 117"},
+  {"SIG118", "Real-time event 118"},
+  {"SIG119", "Real-time event 119"},
+  {"SIG120", "Real-time event 120"},
+  {"SIG121", "Real-time event 121"},
+  {"SIG122", "Real-time event 122"},
+  {"SIG123", "Real-time event 123"},
+  {"SIG124", "Real-time event 124"},
+  {"SIG125", "Real-time event 125"},
+  {"SIG126", "Real-time event 126"},
+  {"SIG127", "Real-time event 127"},
+
+  {"SIGINFO", "Information request"},
+
+  {NULL, "Unknown signal"},
+  {NULL, "Internal error: printing TARGET_SIGNAL_DEFAULT"},
+
+  /* Mach exceptions */
+  {"EXC_BAD_ACCESS", "Could not access memory"},
+  {"EXC_BAD_INSTRUCTION", "Illegal instruction/operand"},
+  {"EXC_ARITHMETIC", "Arithmetic exception"},
+  {"EXC_EMULATION", "Emulation instruction"},
+  {"EXC_SOFTWARE", "Software generated exception"},
+  {"EXC_BREAKPOINT", "Breakpoint"},
+
+  /* Last entry, used to check whether the table is the right size.  */
+  {NULL, "TARGET_SIGNAL_MAGIC"}
+a63 2
+/* *INDENT-ON* */
+
+@
+
+
+1.1
+log
+@	* Makefile.in (GDB_CFLAGS): Add -I$(srcdir)/common.
+	(init.c): signals/ -> common/.
+	(signals.o): Update.
+	* target.h (target_signal_to_string,target_signal_to_string)
+	(target_signal_from_name,target_signal_to_host_p)
+	(target_signal_from_host,target_signal_to_host): Move to ...
+	* common/gdb_signals.h: ... here.  New file.
+	* common/signals.c: Moved here from signals/signals.c.
+	#include gdb_signals.h, remove #include of target.h in gdb case.
+	(target_signal_from_command,default_target_signal_to_host)
+	(default_target_signal_from_host): Move inside #ifndef GDBSERVER.
+
+	* gdbserver/Makefile.in (INCLUDE_CFLAGS): Add -I$(srcdir)/../common.
+	(server_h): Add gdb_signals.h.
+	(signals.o): Update.
+	* server.h (target_signal_from_host,target_signal_to_host_p)
+	(target_signal_to_host,target_signal_to_name): Moved to gdb_signals.h.
+@
+text
+@d3 1
+a3 1
+   2000, 2001, 2002, 2003, 2006, 2007, 2008, 2009
+@
+

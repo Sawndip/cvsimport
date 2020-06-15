@@ -1,0 +1,641 @@
+head	1.9;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.5
+	gdb_7_6-2013-04-26-release:1.5
+	gdb_7_6-branch:1.5.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.5
+	gdb_7_5_1-2012-11-29-release:1.3
+	gdb_7_5-2012-08-17-release:1.3
+	gdb_7_5-branch:1.3.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.3
+	gdb_7_4_1-2012-04-26-release:1.2.2.1
+	gdb_7_4-2012-01-24-release:1.2.2.1
+	gdb_7_4-branch:1.2.0.2
+	gdb_7_4-2011-12-13-branchpoint:1.2
+	gdb_7_3_1-2011-09-04-release:1.1
+	gdb_7_3-2011-07-26-release:1.1
+	gdb_7_3-branch:1.1.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.9
+date	2013.05.20.20.36.18;	author tromey;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2013.05.20.20.28.52;	author tromey;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2013.05.20.20.16.24;	author tromey;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2013.05.20.20.09.01;	author tromey;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2013.01.01.06.33.01;	author brobecke;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2012.12.12.16.47.30;	author pkoning;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2012.01.04.08.17.25;	author brobecke;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2011.06.16.05.54.09;	author gingold;	state Exp;
+branches
+	1.2.2.1;
+next	1.1;
+
+1.1
+date	2011.02.05.05.27.23;	author teawater;	state Exp;
+branches;
+next	;
+
+1.2.2.1
+date	2012.01.06.04.43.41;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.9
+log
+@	* python/py-arch.c (gdbpy_initialize_arch): Use
+	gdb_pymodule_addobject.
+	* python/py-block.c (gdbpy_initialize_blocks): Use
+	gdb_pymodule_addobject.
+	* python/py-breakpoint.c (gdbpy_initialize_breakpoints): Use
+	gdb_pymodule_addobject.
+	* python/py-cmd.c (gdbpy_initialize_breakpoints): Use
+	gdb_pymodule_addobject.
+	* python/py-event.c (gdbpy_initialize_event_generic): Use
+	gdb_pymodule_addobject.
+	* python/py-evtregistry.c (gdbpy_initialize_eventregistry): Use
+	gdb_pymodule_addobject.
+	* python/py-evts.c (add_new_registry): Use
+	gdb_pymodule_addobject.
+	(gdbpy_initialize_py_events): Likewise.
+	* python/py-finishbreakpoint.c
+	(gdbpy_initialize_finishbreakpoints): Use
+	gdb_pymodule_addobject.
+	* python/py-frame.c (gdbpy_initialize_frames): Use
+	gdb_pymodule_addobject.
+	* python/py-function.c (gdbpy_initialize_functions): Use
+	gdb_pymodule_addobject.
+	* python/py-inferior.c (gdbpy_initialize_inferior): Use
+	gdb_pymodule_addobject.
+	* python/py-infthread.c (gdbpy_initialize_thread): Use
+	gdb_pymodule_addobject.
+	* python/py-objfile.c (gdbpy_initialize_objfile): Use
+	gdb_pymodule_addobject.
+	* python/py-param.c (gdbpy_initialize_parameters): Use
+	gdb_pymodule_addobject.
+	* python/py-progspace.c (gdbpy_initialize_pspace): Use
+	gdb_pymodule_addobject.
+	* python/py-symbol.c (gdbpy_initialize_symbols): Use
+	gdb_pymodule_addobject.
+	* python/py-symtab.c (gdbpy_initialize_symtabs): Use
+	gdb_pymodule_addobject.
+	* python/py-type.c (gdbpy_initialize_types): Use
+	gdb_pymodule_addobject.
+	* python/py-utils.c (gdb_pymodule_addobject): New function.
+	* python/py-value.c (gdbpy_initialize_values): Use
+	gdb_pymodule_addobject.
+	* python/python-internal.h (gdb_pymodule_addobject): Declare.
+	* python/python.c (_initialize_python): Use
+	gdb_pymodule_addobject.
+@
+text
+@/* Python interface to inferior thread event registries.
+
+   Copyright (C) 2009-2013 Free Software Foundation, Inc.
+
+   This file is part of GDB.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+#include "defs.h"
+#include "command.h"
+#include "py-events.h"
+
+events_object gdb_py_events;
+
+static PyTypeObject eventregistry_object_type
+    CPYCHECKER_TYPE_OBJECT_FOR_TYPEDEF ("eventregistry_object");
+
+/* Implementation of EventRegistry.connect () -> NULL.
+   Add FUNCTION to the list of listeners.  */
+
+static PyObject *
+evregpy_connect (PyObject *self, PyObject *function)
+{
+  PyObject *func;
+  PyObject *callback_list = (((eventregistry_object *) self)->callbacks);
+
+  if (!PyArg_ParseTuple (function, "O", &func))
+    return NULL;
+
+  if (!PyCallable_Check (func))
+    {
+      PyErr_SetString (PyExc_RuntimeError, "Function is not callable");
+      return NULL;
+    }
+
+  if (PyList_Append (callback_list, func) < 0)
+    return NULL;
+
+  Py_RETURN_NONE;
+}
+
+/* Implementation of EventRegistry.disconnect () -> NULL.
+   Remove FUNCTION from the list of listeners.  */
+
+static PyObject *
+evregpy_disconnect (PyObject *self, PyObject *function)
+{
+  PyObject *func;
+  int index;
+  PyObject *callback_list = (((eventregistry_object *) self)->callbacks);
+
+  if (!PyArg_ParseTuple (function, "O", &func))
+    return NULL;
+
+  index = PySequence_Index (callback_list, func);
+  if (index < 0)
+    Py_RETURN_NONE;
+
+  if (PySequence_DelItem (callback_list, index) < 0)
+    return NULL;
+
+  Py_RETURN_NONE;
+}
+
+/* Create a new event registry.  This function uses PyObject_New
+   and therefore returns a new reference that callers must handle.  */
+
+eventregistry_object *
+create_eventregistry_object (void)
+{
+  eventregistry_object *eventregistry_obj;
+
+  eventregistry_obj = PyObject_New (eventregistry_object,
+                                    &eventregistry_object_type);
+
+  if (!eventregistry_obj)
+    return NULL;
+
+  eventregistry_obj->callbacks = PyList_New (0);
+  if (!eventregistry_obj->callbacks)
+    {
+      Py_DECREF (eventregistry_obj);
+      return NULL;
+    }
+
+  return eventregistry_obj;
+}
+
+static void
+evregpy_dealloc (PyObject *self)
+{
+  Py_XDECREF (((eventregistry_object *) self)->callbacks);
+  Py_TYPE (self)->tp_free (self);
+}
+
+/* Initialize the Python event registry code.  */
+
+int
+gdbpy_initialize_eventregistry (void)
+{
+  if (PyType_Ready (&eventregistry_object_type) < 0)
+    return -1;
+
+  return gdb_pymodule_addobject (gdb_module, "EventRegistry",
+				 (PyObject *) &eventregistry_object_type);
+}
+
+/* Retern the number of listeners currently connected to this
+   registry.  */
+
+int
+evregpy_no_listeners_p (eventregistry_object *registry)
+{
+  return PyList_Size (registry->callbacks) == 0;
+}
+
+static PyMethodDef eventregistry_object_methods[] =
+{
+  { "connect", evregpy_connect, METH_VARARGS, "Add function" },
+  { "disconnect", evregpy_disconnect, METH_VARARGS, "Remove function" },
+  { NULL } /* Sentinel.  */
+};
+
+static PyTypeObject eventregistry_object_type =
+{
+  PyVarObject_HEAD_INIT (NULL, 0)
+  "gdb.EventRegistry",                        /* tp_name */
+  sizeof (eventregistry_object),              /* tp_basicsize */
+  0,                                          /* tp_itemsize */
+  evregpy_dealloc,                            /* tp_dealloc */
+  0,                                          /* tp_print */
+  0,                                          /* tp_getattr */
+  0,                                          /* tp_setattr */
+  0,                                          /* tp_compare */
+  0,                                          /* tp_repr */
+  0,                                          /* tp_as_number */
+  0,                                          /* tp_as_sequence */
+  0,                                          /* tp_as_mapping */
+  0,                                          /* tp_hash  */
+  0,                                          /* tp_call */
+  0,                                          /* tp_str */
+  0,                                          /* tp_getattro */
+  0,                                          /* tp_setattro */
+  0,                                          /* tp_as_buffer */
+  Py_TPFLAGS_DEFAULT,                         /* tp_flags */
+  "GDB event registry object",                /* tp_doc */
+  0,                                          /* tp_traverse */
+  0,                                          /* tp_clear */
+  0,                                          /* tp_richcompare */
+  0,                                          /* tp_weaklistoffset */
+  0,                                          /* tp_iter */
+  0,                                          /* tp_iternext */
+  eventregistry_object_methods,               /* tp_methods */
+  0,                                          /* tp_members */
+  0,                                          /* tp_getset */
+  0,                                          /* tp_base */
+  0,                                          /* tp_dict */
+  0,                                          /* tp_descr_get */
+  0,                                          /* tp_descr_set */
+  0,                                          /* tp_dictoffset */
+  0,                                          /* tp_init */
+  0                                           /* tp_alloc */
+};
+@
+
+
+1.8
+log
+@	* python/py-arch.c (gdbpy_initialize_arch): Return 'int'.
+	Check errors.
+	* python/py-auto-load.c (gdbpy_initialize_auto_load): Return 'int'.
+	* python/py-block.c (gdbpy_initialize_blocks): Return 'int'.
+	Check errors.
+	* python/py-breakpoint.c (gdbpy_initialize_breakpoints): Return 'int'.
+	Check errors.
+	* python/py-cmd.c (gdbpy_initialize_commands): Return 'int'.
+	Check errors.
+	* python/py-event.c (gdbpy_initialize_event): Return 'int'.
+	Check errors.
+	* python/py-event.h (GDBPY_NEW_EVENT_TYPE): Change generated
+	init function to return 'int'.
+	* python/py-evtregistry.c (gdbpy_initialize_eventregistry):
+	Return 'int'.  Check errors.
+	* python/py-evts.c (gdbpy_initialize_py_events): Return 'int'.
+	Check errors.
+	* python/py-finishbreakpoint.c (gdbpy_initialize_finishbreakpoints):
+	Return 'int'.  Check errors.
+	* python/py-frame.c (gdbpy_initialize_frames): Return 'int'.
+	Check errors.
+	* python/py-function.c (gdbpy_initialize_functions): Return 'int'.
+	Check errors.
+	* python/py-gdb-readline.c (gdbpy_initialize_gdb_readline):
+	Check errors.
+	* python/py-inferior.c (gdbpy_initialize_inferior): Return 'int'.
+	Check errors.
+	* python/py-infthread.c (gdbpy_initialize_thread): Return 'int'.
+	Check errors.
+	* python/py-lazy-string.c (gdbpy_initialize_lazy_string): Return 'int'.
+	Check errors.
+	* python/py-objfile.c (gdbpy_initialize_objfile): Return 'int'.
+	Check errors.
+	* python/py-param.c (gdbpy_initialize_parameters): Return 'int'.
+	Check errors.
+	* python/py-progspace.c (gdbpy_initialize_pspace): Return 'int'.
+	Check errors.
+	* python/py-symbol.c (gdbpy_initialize_symbols): Return 'int'.
+	Check errors.
+	* python/py-symtab.c (gdbpy_initialize_symtabs): Return 'int'.
+	Check errors.
+	* python/py-type.c (gdbpy_initialize_types): Return 'int'.
+	Check errors.
+	* python/py-value.c (gdbpy_initialize_values): Return 'int'.
+	Check errors.
+	* python/python-internal.h (gdbpy_initialize_auto_load,
+	gdbpy_initialize_values, gdbpy_initialize_frames,
+	gdbpy_initialize_symtabs, gdbpy_initialize_commands,
+	gdbpy_initialize_symbols, gdbpy_initialize_symtabs,
+	gdbpy_initialize_blocks, gdbpy_initialize_types,
+	gdbpy_initialize_functions, gdbpy_initialize_pspace,
+	gdbpy_initialize_objfile, gdbpy_initialize_breakpoints,
+	gdbpy_initialize_finishbreakpoints,
+	gdbpy_initialize_lazy_string, gdbpy_initialize_parameters,
+	gdbpy_initialize_thread, gdbpy_initialize_inferior,
+	gdbpy_initialize_eventregistry, gdbpy_initialize_event,
+	gdbpy_initialize_py_events, gdbpy_initialize_stop_event,
+	gdbpy_initialize_signal_event,
+	gdbpy_initialize_breakpoint_event,
+	gdbpy_initialize_continue_event,
+	gdbpy_initialize_exited_event, gdbpy_initialize_thread_event,
+	gdbpy_initialize_new_objfile_event, gdbpy_initialize_arch):
+	Update.  Use CPYCHECKER_NEGATIVE_RESULT_SETS_EXCEPTION.
+	* python/python.c (gdb_python_initialized): New global.
+	(gdbpy_initialize_events): Return 'int'.  Check errors.
+	(_initialize_python): Check errors.  Set
+	gdb_python_initialized.
+@
+text
+@d115 2
+a116 3
+  Py_INCREF (&eventregistry_object_type);
+  return PyModule_AddObject (gdb_module, "EventRegistry",
+			     (PyObject *) &eventregistry_object_type);
+@
+
+
+1.7
+log
+@	* py-evtregistry.c (create_event_object): Decref
+	eventregistry_object if PyList_New fails.
+@
+text
+@d109 1
+a109 1
+void
+d113 1
+a113 1
+    return;
+d116 2
+a117 2
+  PyModule_AddObject (gdb_module, "EventRegistry",
+                      (PyObject *) &eventregistry_object_type);
+@
+
+
+1.6
+log
+@	* python/py-arch.c (arch_object_type): Use
+	CPYCHECKER_TYPE_OBJECT_FOR_TYPEDEF.
+	* python/py-block.c (block_syms_iterator_object_type):
+	Use CPYCHECKER_TYPE_OBJECT_FOR_TYPEDEF.
+	* python/py-bpevent.c (breakpoint_event_object_type):
+	Use CPYCHECKER_TYPE_OBJECT_FOR_TYPEDEF.
+	* python/py-cmd.c (cmdpy_object_type): Use
+	CPYCHECKER_TYPE_OBJECT_FOR_TYPEDEF.
+	* python/py-continueevent.c (continue_event_object_type):
+	Use CPYCHECKER_TYPE_OBJECT_FOR_TYPEDEF.
+	* python/py-event.h (GDBPY_NEW_EVENT_TYPE):
+	Use CPYCHECKER_TYPE_OBJECT_FOR_TYPEDEF.
+	* python/py-events.h (thread_event_object_type):
+	Use CPYCHECKER_TYPE_OBJECT_FOR_TYPEDEF.
+	* python/py-evtregistry.c (eventregistry_object_type): Use
+	CPYCHECKER_TYPE_OBJECT_FOR_TYPEDEF.
+	* python/py-exitedevent.c (exited_event_object_type):
+	Use CPYCHECKER_TYPE_OBJECT_FOR_TYPEDEF.
+	* python/py-finishbreakpoint.c (finish_breakpoint_object_type):
+	Use CPYCHECKER_TYPE_OBJECT_FOR_TYPEDEF.
+	* python/py-function.c (fnpy_object_type): Use
+	CPYCHECKER_TYPE_OBJECT_FOR_TYPEDEF.
+	* python/py-inferior.c (inferior_object_type, membuf_object_type):
+	Use CPYCHECKER_TYPE_OBJECT_FOR_TYPEDEF.
+	* python/py-infthread.c (thread_object_type): Use
+	CPYCHECKER_TYPE_OBJECT_FOR_TYPEDEF.
+	* python/py-lazy-string.c (lazy_string_object_type):
+	Use CPYCHECKER_TYPE_OBJECT_FOR_TYPEDEF.
+	* python/py-newobjfileevent.c (new_objfile_event_object_type):
+	Use CPYCHECKER_TYPE_OBJECT_FOR_TYPEDEF.
+	* python/py-objfile.c (objfile_object_type): Use
+	CPYCHECKER_TYPE_OBJECT_FOR_TYPEDEF.
+	* python/py-param.c (parmpy_object_type):
+	Use CPYCHECKER_TYPE_OBJECT_FOR_TYPEDEF.
+	* python/py-progspace.c (pspace_object_type):
+	Use CPYCHECKER_TYPE_OBJECT_FOR_TYPEDEF.
+	* python/py-signalevent.c (signal_event_object_type):
+	Use CPYCHECKER_TYPE_OBJECT_FOR_TYPEDEF.
+	* python/py-symtab.c (symtab_object_type, sal_object_type): Use
+	CPYCHECKER_TYPE_OBJECT_FOR_TYPEDEF.
+	* python/py-type.c (type_object_type, field_object_type)
+	(type_iterator_object_type): Use CPYCHECKER_TYPE_OBJECT_FOR_TYPEDEF.
+	* python/py-internal.h (CPYCHECKER_TYPE_OBJECT_FOR_TYPEDEF): New
+	define.
+	(value_object_type, block_object_type, symbol_object_type)
+	(event_object_type, stop_event_object_type, breakpoint_object_type)
+	(frame_object_type): Use CPYCHECKER_TYPE_OBJECT_FOR_TYPEDEF.
+@
+text
+@d92 4
+a95 1
+    return NULL;
+@
+
+
+1.5
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@d26 2
+a27 1
+static PyTypeObject eventregistry_object_type;
+@
+
+
+1.4
+log
+@Add support for Python 3.
+* NEWS: Mention Python 3 support.
+* varobj.c (value_get_print_value): Use
+python_string_to_target_string.
+* python/py-block.c: Use PyVarObject_HEAD_INIT in initialization
+of type objects.
+* python/py-breakpoint.c: Ditto.
+* python/py-cmd.c:  Ditto.
+* python/py-event.c: Ditto.
+* python/py-event.h: Ditto.
+* python/py-evtregistry.c: Ditto.
+* python/py-finishbreakpoint.c: Ditto.
+* python/py-frame.c: Ditto.
+* python/py-function.c: Ditto.
+* python/py-infthread.c: Ditto.
+* python/py-lazy-string.c: Ditto.
+* python/py-progspace.c: Ditto.
+* /python/py-symbol.c: Ditto.
+* python/py-evts.c:  (gdbpy_initialize_py_events): Add module
+initialization for Python 3.
+* python/py-inferior.c: Use PyVarObject_HEAD_INIT in initialization
+of type objects.
+(infpy_read_memory): Return memoryview object if Python 3.
+(infpy_write_memory): Use "s*" operand parsing code for Python 3.
+(infpy_search_memory): Ditto.
+(get_buffer): New function for Python 3.
+* python/py-objfile.c: Use PyVarObject_HEAD_INIT in initialization
+of type objects.
+(objfpy_dealloc): Use Py_TYPE to call tp_free.
+* python/py-param.c: Use PyVarObject_HEAD_INIT in initialization
+of type objects.
+(get_attr): Use PyUnicode_CompareWithASCIIString if Python 3.
+(set_attr): Ditto.
+* python/py-prettyprint.c (print_string_repr): use PyBytes methods
+instead of PyString methods if Python 3.
+(print_children): Skip push_dummy_python_frame call if Python 3.
+* python/py-symtab.c: Use PyVarObject_HEAD_INIT in initialization
+of type objects.
+(salpy_dealloc): Use Py_TYPE to call tp_free.
+* python/py-type.c: Use PyVarObject_HEAD_INIT in initialization
+of type objects.
+(field_dealloc): Use Py_TYPE to call tp_free.
+(typy_dealloc): Ditto.
+(type_object_as_number): Adjust struct initializations for
+differences in layout for Python 2 vs. Python 3.
+* python/py-utils.c (python_string_to_unicode): Omit non-Unicode
+string case for Python 3.
+(unicode_to_encoded_python_string): Shorten code (no functional
+change).
+(python_string_to_target_python_string): Comment that in Python 3
+returned value is a Python "bytes" type.
+(gdbpy_is_string): Omit non-Unicode string check in Python 3.
+(gdb_py_object_from_longest): Omit non-long integer case in Python
+3.
+(gdb_py_object_from_ulongest): Ditto.
+* python/py-value.c: Use PyVarObject_HEAD_INIT in initialization
+of type objects.
+(valpy_dealloc): Use Py_TYPE to call tp_free.
+(valpy_int): Omit function if Python 3.
+(convert_value_from_python): Use "%S" format (Python object as a
+string) if Python 3.
+(value_object_as_number): Adjust struct initializations for
+differences in layout for Python 2 vs. Python 3.
+* python/python-config.py: Adjust syntax for Python 3
+compatibility.
+Include "sys.abiflags" string as part of python library name, if
+that attribute exists (Python 3).
+* python/python-internal.h (IS_PY3): Define if Python 3.
+(Py_TPFLAGS_HAVE_ITER, Py_TPFLAGS_CHECKTYPES): Define with
+placeholder value if Python 3.
+(PyInt_Check, PyInt_FromLong, PyInt_AsLong, PyString_FromString,
+PyString_Decode, PyString_FromFormat, PyString_Check): Define as
+analogous Python 3 API function if Python 3.
+(PyVarObject_HEAD_INIT): Define if not already defined.
+(Py_TYPE): Ditto.
+* python/python.c (eval_python_command): Omit Py_FlushLine call if
+Python 3.
+Check return values of all Python API calls for error.
+Supply dummy "python" and "python-interactive" commands if Python
+initialization failed.
+(_initialize_python): Convert argc to wchar_t** if Python 3.
+Add module initialization for Python 3.
+(finish_python_initialization): Pass wchar_t * argument to
+PySys_SetPath if Python 3.
+* python/lib/gdb/__init__.py: Define "reload" if Python 3.
+(_GdbFile): New class for common output file behavior.
+(GdbOutFile): Subclass from _GdbFile.
+(GdbOutputErrorFile): Ditto.
+(auto_load_packages): Adjust syntax for Python 3 compatibility.
+* python/lib/gdb/printing.py: Define basestr and int if Python 3.
+* python/lib/gdb/prompt.py: Use sorted() function rather than
+sort() method.
+* python/lib/gdb/command/explore.py: Define raw_input if Python 3.
+Adjust syntax for Python 3 compatibility.
+* python/lib/gdb/command/pretty_printers.py: Use sorted() function
+rather than sort() method.
+Adjust syntax for Python 3 compatibility.
+* python/lib/gdb/command/type_printers.py: Ditto.
+* doc/gdb.texinfo (Inferior.read_memory): Mention that the return
+value is a memoryview object if Python 3.
+@
+text
+@d3 1
+a3 1
+   Copyright (C) 2009-2012 Free Software Foundation, Inc.
+@
+
+
+1.3
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d100 1
+a100 1
+  self->ob_type->tp_free (self);
+d134 1
+a134 2
+  PyObject_HEAD_INIT (NULL)
+  0,                                          /* ob_size */
+@
+
+
+1.2
+log
+@2011-06-16  Tristan Gingold  <gingold@@adacore.com>
+
+	* python/py-events.h (gdb_py_events): Make it extern.
+	* python/py-evtregistry.c (gdb_py_events): Declare.
+@
+text
+@d3 1
+a3 1
+   Copyright (C) 2009, 2010, 2011 Free Software Foundation, Inc.
+@
+
+
+1.2.2.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d3 1
+a3 1
+   Copyright (C) 2009-2012 Free Software Foundation, Inc.
+@
+
+
+1.1
+log
+@Add the file that prev commit forget.
+@
+text
+@d24 2
+@
+

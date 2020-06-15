@@ -1,0 +1,357 @@
+head	1.9;
+access;
+symbols
+	cygwin_daemon_merge_HEAD:1.9
+	Z-cygwin_daemon_merge-new_HEAD:1.9
+	Z-cygwin_daemon_merge_HEAD:1.9
+	cygwin_daemon:1.9.0.2
+	cygwin-1-3-1:1.7.0.4
+	cygwin-1-1-8:1.7
+	cygwin-1-1-7:1.6
+	cygwin-1-1-6:1.6
+	cygwin-1-1-5:1.6
+	pre-cygwin-heap:1.5
+	cygwin-1-1-4:1.5.0.2
+	cygwin-1_1_1:1.2
+	winsup-2000-02-17:1.1.1.1
+	SNAPSHOT:1.1.1;
+locks; strict;
+comment	@ * @;
+expand	@o@;
+
+
+1.9
+date	2001.05.16.05.07.51;	author cgf;	state dead;
+branches;
+next	1.8;
+
+1.8
+date	2001.05.03.09.35.08;	author corinna;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2000.12.26.03.21.05;	author cgf;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2000.10.28.05.41.43;	author cgf;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2000.06.01.05.57.54;	author cgf;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2000.06.01.05.41.21;	author cgf;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2000.05.30.00.38.51;	author cgf;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2000.02.24.02.49.44;	author cgf;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2000.02.17.19.38.31;	author cgf;	state Exp;
+branches
+	1.1.1.1;
+next	;
+
+1.1.1.1
+date	2000.02.17.19.38.31;	author cgf;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.9
+log
+@* autoload.h: Eliminate.
+* autoload.cc: Pull in autoload.h.  Eliminate many macros.  Rewrite to avoid
+necessity of initialization routines.  Just use a standard one.
+(wsock_init): New function.  Moved from net.cc.
+* net.cc (wsock_init): Move to autoload.cc.
+(wsadata): Make global.
+* dtable.cc (dtable::build_fhandler): Use more reliable method for checking if
+net stuff has been loaded.
+@
+text
+@/* autoload.h: Define functions for auto-loading symbols from a DLL.
+
+   Copyright 1999, 2000 Cygnus Solutions.
+
+   Written by Christopher Faylor <cgf@@cygnus.com>
+
+This file is part of Cygwin.
+
+This software is a copyrighted work licensed under the terms of the
+Cygwin license.  Please consult the file "CYGWIN_LICENSE" for
+details. */
+
+#define LoadDLLinitfunc(dllname) \
+LoadDLLinitfuncdef(dllname) \
+{ \
+  return LoadDLLstdfunc(dllname); \
+}
+
+#define LoadDLLinitfuncdef(dllname) \
+HANDLE NO_COPY dllname ## _handle = NULL; \
+LONG NO_COPY dllname ## _here = -1L; \
+/*static*/ int dllname ## _init () __asm__ (#dllname "_init"); \
+/*static*/ int dllname ## _init ()
+
+#define LoadDLLstdfunc(dllname) \
+	std_dll_init (dllname ## _handle, #dllname ".dll", dllname ## _here)
+
+#define LoadDLLinitnow(dllname) \
+  ({__asm__ ("movl $cygwin_dll_func_load, " #dllname "_init_holder"); dllname##_init ();})
+
+#define _LoadDLLinitnow(dllname) \
+  __asm__ ("movl $cygwin_dll_func_load, " #dllname "_init_holder"); \
+  __asm__ ("call " #dllname "_init"); \
+
+#define LoadDLLinit(dllname) \
+  __asm__ (".section .data_cygwin_nocopy,\"w\""); \
+  __asm__ (#dllname "_init_holder: .long " #dllname "_init_and_load"); \
+  __asm__ (".text"); \
+  __asm__ (#dllname "_init_and_load:"); \
+  _LoadDLLinitnow (dllname); \
+  __asm__ ("jmp cygwin_dll_func_load");
+
+
+/* Macro for defining "auto-load" functions.
+ * Note that this is self-modifying code *gasp*.
+ * The first invocation of a routine will trigger the loading of
+ * the DLL.  This will then be followed by the discovery of
+ * the procedure's entry point, which is placed into the location
+ * pointed to by the stack pointer.  This code then changes
+ * the "call" operand which invoked it to a "jmp" which will
+ * transfer directly to the DLL function on the next invocation.
+ *
+ * Subsequent calls to routines whose transfer address has not been
+ * determined will skip the "load the dll" step, starting at the
+ * "discovery of the DLL" step.
+ *
+ * So, immediately following the the call to one of the above routines
+ * we have:
+ *  foojmp (4 bytes)	 Pointer to a word containing the routine used
+ *			 to eventually invoke the function.  Initially
+ *			 points to an init function which loads the
+ *			 DLL, gets the process's load address,
+ *			 changes the contents here to point to the
+ *			 function address, and changes the call *(%eax)
+ *			 to a jmp %eax.  If the initialization has been
+ *			 done, only the load part is done.
+ *  DLL handle (4 bytes) The handle to use when loading the DLL.
+ *  flag (4 bytes)	 If "TRUE" then it is not a fatal error if this
+ *			 function cannot be found.  Instead, error is set
+ *			 to ERROR_PROC_NOT_FOUND and 0 is returned.
+ *  func name (n bytes)	 asciz string containing the name of the function
+ *			 to be loaded.
+ */
+
+#define LoadDLLmangle(name, n) #name "@@" #n
+#define LoadDLLfunc(name, n, dllname) LoadDLLfuncEx (name, n, dllname, 0)
+#define LoadDLLfuncEx(name, n, dllname, notimp) \
+__asm__ (".section .data_cygwin_nocopy,\"w\""); \
+__asm__ (".global _" LoadDLLmangle (name, n)); \
+__asm__ (".global _win32_" LoadDLLmangle (name, n)); \
+__asm__ (".align 8"); \
+__asm__ ("_" LoadDLLmangle (name, n) ":"); \
+__asm__ ("_win32_" LoadDLLmangle (name, n) ":"); \
+__asm__ ("movl (" #name "jump),%eax"); \
+__asm__ ("call *(%eax)"); \
+__asm__ (#name "jump: .long " #dllname "_init_holder"); \
+__asm__ (" .long _" #dllname "_handle"); \
+__asm__ (" .long " #n "+" #notimp); \
+__asm__ (".asciz \"" #name "\""); \
+__asm__ (".text"); \
+
+extern "C" void cygwin_dll_func_load () __asm__ ("cygwin_dll_func_load");
+@
+
+
+1.8
+log
+@        * autoload.cc: Use new definition of LoadDLLinitfunc throughout.
+        Redefine wrapper for wsock32.dll and ws2_32.dll.
+        (std_dll_init): New function.
+        * autoload.h: Rename LoadDLLinitfunc to LoadDLLinitfuncdef.
+        Add new defines LoadDLLinitfunc and LoadDLLstdfunc.
+        * net.cc (wsock_init): Add guard variable handling. Take care
+        to call WSAStartup only once. Load WSAStartup without using
+        autoload wrapper to eliminate recursion.  Eliminate FIONBIO
+        and srandom stuff.
+@
+text
+@@
+
+
+1.7
+log
+@* autoload.h: Make DLL initializers global to avoid inlining.
+* exceptions.cc (interrupt_setup): Reorganize arguments to allow use of
+regparm.
+(interrupt_now): Ditto.
+(interrupt_on_return): Ditto.
+(call_handler): Ditto.
+@
+text
+@d14 6
+d21 1
+d24 3
+@
+
+
+1.6
+log
+@Whitespace cleanup.
+
+* configure.in: Eliminate subdir stuff.
+* configure: Regenerate.
+* include/getopt.h (option): Make name field 'const'.
+@
+text
+@d15 2
+a16 2
+static int dllname ## _init () __asm__ (#dllname "_init") __attribute__ ((unused)); \
+static int dllname ## _init ()
+@
+
+
+1.5
+log
+@* exceptions.cc: Remove unneeded include.
+* dcrt0.cc: Wrap LoadDLLfunc stuff in dummy function.
+* init.cc: Ditto.
+* uinfo.cc: Ditto.
+@
+text
+@d49 1
+a49 1
+ *  foojmp (4 bytes) 	 Pointer to a word containing the routine used
+@
+
+
+1.4
+log
+@* autoload.h: Put each info block in its own dummy static function.
+@
+text
+@a67 4
+extern "C" { \
+static void name##_dummy () __attribute__ ((noreturn)) __attribute__ ((unused)) __attribute__ ((stdcall)); \
+static void name##_dummy () \
+{ \
+a80 2
+} \
+}
+@
+
+
+1.3
+log
+@* Makefile.in: Remove libadvapi32.a.
+* autoload.h: Add additional field to autoload block for handling unimplemented
+functions.
+(LoadDLLfuncEx): New function which accepts additional parameter for
+controlling unimplemented function behavior.
+(LoadDLLfunc): Use LoadDLLfuncEx.
+* dcrt0.cc: Use new arguments for LoadDLLfunc.  Add advapi32 routines.
+(noload): Rewrite in assembler.  Handle new unimplemented function type.
+* exceptions.cc: Eliminate another vestige of StackWalk stuff.
+* net.cc: Use new arguments for LoadDLLfunc.
+* uinfo.cc: Ditto.
+
+* config.h.in: Remove obsolete define.
+* path.h (isdrive): New macro.
+* dcrt0.cc (globify): Use new macro to determine if a string refers to an
+MS-DOS drive.
+* environ.cc (winenv): Ditto.
+* spawn.cc (find_exec): Ditto.
+* path.cc (get_raw_device_number): Ditto.
+(mount_info::conv_to_posix_path): Ditto.
+(chdir): Ditto.
+(cygwin_posix_path_list_p): Ditto.
+(cygwin_split_path): Ditto.
+(path_conv::check): Move tmp_buf to beginning of function since it can be used
+earlier in the loop.  Use tmp_buf rather than 'root' to hold root information.
+(mount_info::conv_to_win32_path): Add trailing slash to end of mount path when
+it translates to a drive.  Add defensive code to avoid writing beyond the end
+of 'dst'.
+@
+text
+@d68 4
+d84 3
+a86 1
+__asm__ (".text");
+@
+
+
+1.2
+log
+@* exceptions.cc (interruptible): Change method for determining if something is
+interruptible.
+(call_handler): Avoid suspending a thread if it owns a mutex.  Only set
+signal_arrived if the thread was actually interrupted.
+(events_init): Initialize module information needed by interruptible().
+(sigdelayed): Don't call sig_dispatch_pending since it could screw up
+* init.cc (dll_entry): Record module handle of main for use by interruptible().
+(proc_subproc): Reorganize handling of terminated child so that the bulk of the
+processing comes from the signal thread.
+(wait_sig): Force processing of waiting threads if SIGCHLD is not processed.
+* sync.cc (muto::release): Set tid == 0 after lock is released or signal
+processor will be confused.
+@
+text
+@d50 1
+a50 1
+ *			 to eventually invokethe function.  Initially
+d52 1
+a52 1
+ *			 DLL, gets the processes load address,
+d58 3
+d65 3
+a67 1
+#define LoadDLLfunc(name, mangled, dllname) \
+d69 2
+a70 2
+__asm__ (".global _" #mangled); \
+__asm__ (".global _win32_" #mangled); \
+d72 2
+a73 2
+__asm__ ("_" #mangled ":"); \
+__asm__ ("_win32_" #mangled ":"); \
+d78 1
+@
+
+
+1.1
+log
+@Initial revision
+@
+text
+@d3 1
+a3 1
+   Copyright 1999 Cygnus Solutions.
+@
+
+
+1.1.1.1
+log
+@import winsup-2000-02-17 snapshot
+@
+text
+@@

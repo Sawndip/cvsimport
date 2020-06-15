@@ -1,0 +1,1396 @@
+head	1.19;
+access;
+symbols
+	binutils-2_24-branch:1.19.0.2
+	binutils-2_24-branchpoint:1.19
+	binutils-2_21_1:1.15
+	binutils-2_23_2:1.17
+	binutils-2_23_1:1.17
+	binutils-2_23:1.17
+	binutils-2_23-branch:1.17.0.6
+	binutils-2_23-branchpoint:1.17
+	binutils-2_22_branch:1.17.0.4
+	binutils-2_22:1.17
+	binutils-2_22-branch:1.17.0.2
+	binutils-2_22-branchpoint:1.17
+	binutils-2_21:1.15
+	binutils-2_21-branch:1.15.0.2
+	binutils-2_21-branchpoint:1.15
+	binutils-2_20_1:1.12
+	binutils-2_20:1.12
+	binutils-arc-20081103-branch:1.12.0.10
+	binutils-arc-20081103-branchpoint:1.12
+	binutils-2_20-branch:1.12.0.8
+	binutils-2_20-branchpoint:1.12
+	dje-cgen-play1-branch:1.12.0.6
+	dje-cgen-play1-branchpoint:1.12
+	arc-20081103-branch:1.12.0.4
+	arc-20081103-branchpoint:1.12
+	binutils-2_19_1:1.12
+	binutils-2_19:1.12
+	binutils-2_19-branch:1.12.0.2
+	binutils-2_19-branchpoint:1.12
+	binutils_latest_snapshot:1.19
+	added-to-binutils:1.11;
+locks; strict;
+comment	@ * @;
+
+
+1.19
+date	2013.03.07.23.27.53;	author amodra;	state Exp;
+branches;
+next	1.18;
+
+1.18
+date	2013.02.27.23.11.56;	author amodra;	state Exp;
+branches;
+next	1.17;
+
+1.17
+date	2011.07.01.22.05.01;	author ian;	state Exp;
+branches;
+next	1.16;
+
+1.16
+date	2011.05.24.21.41.10;	author ccoutant;	state Exp;
+branches;
+next	1.15;
+
+1.15
+date	2010.08.25.08.36.54;	author nickc;	state Exp;
+branches;
+next	1.14;
+
+1.14
+date	2009.12.14.19.53.04;	author ian;	state Exp;
+branches;
+next	1.13;
+
+1.13
+date	2009.12.11.13.42.12;	author nickc;	state Exp;
+branches;
+next	1.12;
+
+1.12
+date	2008.05.21.21.37.44;	author ian;	state Exp;
+branches;
+next	1.11;
+
+1.11
+date	2008.03.13.21.04.21;	author iant;	state Exp;
+branches;
+next	1.10;
+
+1.10
+date	2008.03.13.20.58.11;	author iant;	state Exp;
+branches;
+next	1.9;
+
+1.9
+date	2008.02.14.02.40.15;	author iant;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2008.02.02.06.50.45;	author iant;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2007.12.21.21.19.45;	author iant;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2007.12.18.00.48.04;	author iant;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2007.12.07.06.44.01;	author iant;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2007.11.29.20.10.16;	author iant;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2007.11.09.07.00.15;	author iant;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2007.09.26.07.01.34;	author iant;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2007.09.26.05.44.37;	author iant;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.19
+log
+@	* ehframe.h (Post_fdes) Make it a vector of Post_fde rather than
+	pointer to Post_fde.
+	(struct Post_fde): Move definition to here..
+	* ehframe.cc (struct Post_fde): ..from here.
+	(Cie::write): Don't alloc Post_fde.
+	(Eh_frame::do_sized_write): Update.  Don't free Post_fde.
+@
+text
+@// ehframe.h -- handle exception frame sections for gold  -*- C++ -*-
+
+// Copyright 2006, 2007, 2008, 2010, 2011 Free Software Foundation, Inc.
+// Written by Ian Lance Taylor <iant@@google.com>.
+
+// This file is part of gold.
+
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 3 of the License, or
+// (at your option) any later version.
+
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+// MA 02110-1301, USA.
+
+#ifndef GOLD_EHFRAME_H
+#define GOLD_EHFRAME_H
+
+#include <map>
+#include <set>
+#include <vector>
+
+#include "output.h"
+#include "merge.h"
+
+namespace gold
+{
+
+template<int size, bool big_endian>
+class Track_relocs;
+
+class Eh_frame;
+
+// This class manages the .eh_frame_hdr section, which holds the data
+// for the PT_GNU_EH_FRAME segment.  gcc's unwind support code uses
+// the PT_GNU_EH_FRAME segment to find the list of FDEs.  This saves
+// the time required to register the exception handlers at startup
+// time and when a shared object is loaded, and the time required to
+// deregister the exception handlers when a shared object is unloaded.
+
+class Eh_frame_hdr : public Output_section_data
+{
+ public:
+  Eh_frame_hdr(Output_section* eh_frame_section, const Eh_frame*);
+
+  // Record that we found an unrecognized .eh_frame section.
+  void
+  found_unrecognized_eh_frame_section()
+  { this->any_unrecognized_eh_frame_sections_ = true; }
+
+  // Record an FDE.
+  void
+  record_fde(section_offset_type fde_offset, unsigned char fde_encoding)
+  {
+    if (!this->any_unrecognized_eh_frame_sections_)
+      this->fde_offsets_.push_back(std::make_pair(fde_offset, fde_encoding));
+  }
+
+ protected:
+  // Set the final data size.
+  void
+  set_final_data_size();
+
+  // Write the data to the file.
+  void
+  do_write(Output_file*);
+
+  // Write to a map file.
+  void
+  do_print_to_mapfile(Mapfile* mapfile) const
+  { mapfile->print_output_data(this, _("** eh_frame_hdr")); }
+
+ private:
+  // Write the data to the file with the right endianness.
+  template<int size, bool big_endian>
+  void
+  do_sized_write(Output_file*);
+
+  // The data we record for one FDE: the offset of the FDE within the
+  // .eh_frame section, and the FDE encoding.
+  typedef std::pair<section_offset_type, unsigned char> Fde_offset;
+
+  // The list of information we record for an FDE.
+  typedef std::vector<Fde_offset> Fde_offsets;
+
+  // When writing out the header, we convert the FDE offsets into FDE
+  // addresses.  This is a list of pairs of the offset from the header
+  // to the FDE PC and to the FDE itself.
+  template<int size>
+  class Fde_addresses
+  {
+   public:
+    typedef typename elfcpp::Elf_types<size>::Elf_Addr Address;
+    typedef typename std::pair<Address, Address> Fde_address;
+    typedef typename std::vector<Fde_address> Fde_address_list;
+    typedef typename Fde_address_list::iterator iterator;
+
+    Fde_addresses(unsigned int reserve)
+      : fde_addresses_()
+    { this->fde_addresses_.reserve(reserve); }
+
+    void
+    push_back(Address pc_address, Address fde_address)
+    {
+      this->fde_addresses_.push_back(std::make_pair(pc_address, fde_address));
+    }
+
+    iterator
+    begin()
+    { return this->fde_addresses_.begin(); }
+
+    iterator
+    end()
+    { return this->fde_addresses_.end(); }
+
+   private:
+    Fde_address_list fde_addresses_;
+  };
+
+  // Compare Fde_address objects.
+  template<int size>
+  struct Fde_address_compare
+  {
+    bool
+    operator()(const typename Fde_addresses<size>::Fde_address& f1,
+	       const typename Fde_addresses<size>::Fde_address& f2) const
+    { return f1.first < f2.first; }
+  };
+
+  // Return the PC to which an FDE refers.
+  template<int size, bool big_endian>
+  typename elfcpp::Elf_types<size>::Elf_Addr
+  get_fde_pc(typename elfcpp::Elf_types<size>::Elf_Addr eh_frame_address,
+	     const unsigned char* eh_frame_contents,
+	     section_offset_type fde_offset, unsigned char fde_encoding);
+
+  // Convert Fde_offsets to Fde_addresses.
+  template<int size, bool big_endian>
+  void
+  get_fde_addresses(Output_file* of,
+		    const Fde_offsets* fde_offsets,
+		    Fde_addresses<size>* fde_addresses);
+
+  // The .eh_frame section.
+  Output_section* eh_frame_section_;
+  // The .eh_frame section data.
+  const Eh_frame* eh_frame_data_;
+  // Data from the FDEs in the .eh_frame sections.
+  Fde_offsets fde_offsets_;
+  // Whether we found any .eh_frame sections which we could not
+  // process.
+  bool any_unrecognized_eh_frame_sections_;
+};
+
+// This class holds an FDE.
+
+class Fde
+{
+ public:
+  Fde(Relobj* object, unsigned int shndx, section_offset_type input_offset,
+      const unsigned char* contents, size_t length)
+    : object_(object),
+      contents_(reinterpret_cast<const char*>(contents), length)
+  {
+    this->u_.from_object.shndx = shndx;
+    this->u_.from_object.input_offset = input_offset;
+  }
+
+  // Create an FDE associated with a PLT.
+  Fde(Output_data* plt, const unsigned char* contents, size_t length,
+      bool post_map)
+    : object_(NULL),
+      contents_(reinterpret_cast<const char*>(contents), length)
+  {
+    this->u_.from_linker.plt = plt;
+    this->u_.from_linker.post_map = post_map;
+  }
+
+  // Return the length of this FDE.  Add 4 for the length and 4 for
+  // the offset to the CIE.
+  size_t
+  length() const
+  { return this->contents_.length() + 8; }
+
+  // Add a mapping for this FDE to MERGE_MAP, so that relocations
+  // against the FDE are applied to right part of the output file.
+  void
+  add_mapping(section_offset_type output_offset, Merge_map* merge_map) const
+  {
+    if (this->object_ != NULL)
+      merge_map->add_mapping(this->object_, this->u_.from_object.shndx,
+			     this->u_.from_object.input_offset, this->length(),
+			     output_offset);
+  }
+
+  // Return whether this FDE was added after merge mapping.
+  bool
+  post_map()
+  { return this->object_ == NULL && this->u_.from_linker.post_map; }
+
+  // Write the FDE to OVIEW starting at OFFSET.  FDE_ENCODING is the
+  // encoding, from the CIE.  Round up the bytes to ADDRALIGN if
+  // necessary.  ADDRESS is the virtual address of OVIEW.  Record the
+  // FDE in EH_FRAME_HDR.  Return the new offset.
+  template<int size, bool big_endian>
+  section_offset_type
+  write(unsigned char* oview, section_offset_type offset,
+	uint64_t address, unsigned int addralign,
+	section_offset_type cie_offset, unsigned char fde_encoding,
+	Eh_frame_hdr* eh_frame_hdr);
+
+ private:
+  // The object in which this FDE was seen.  This will be NULL for a
+  // linker generated FDE.
+  Relobj* object_;
+  union
+  {
+    // These fields are used if the FDE is from an input object (the
+    // object_ field is not NULL).
+    struct
+    {
+      // Input section index for this FDE.
+      unsigned int shndx;
+      // Offset within the input section for this FDE.
+      section_offset_type input_offset;
+    } from_object;
+    // This field is used if the FDE is generated by the linker (the
+    // object_ field is NULL).
+    struct
+    {
+      // The only linker generated FDEs are for PLT sections, and this
+      // points to the PLT section.
+      Output_data* plt;
+      // Set if the FDE was added after merge mapping.
+      bool post_map;
+    } from_linker;
+  } u_;
+  // FDE data.
+  std::string contents_;
+};
+
+// A FDE plus some info from a CIE to allow later writing of the FDE.
+
+struct Post_fde
+{
+  Post_fde(Fde* f, section_offset_type cie_off, unsigned char encoding)
+    : fde(f), cie_offset(cie_off), fde_encoding(encoding)
+  { }
+
+  Fde* fde;
+  section_offset_type cie_offset;
+  unsigned char fde_encoding;
+};
+
+typedef std::vector<Post_fde> Post_fdes;
+
+// This class holds a CIE.
+
+class Cie
+{
+ public:
+  Cie(Relobj* object, unsigned int shndx, section_offset_type input_offset,
+      unsigned char fde_encoding, const char* personality_name,
+      const unsigned char* contents, size_t length)
+    : object_(object),
+      shndx_(shndx),
+      input_offset_(input_offset),
+      fde_encoding_(fde_encoding),
+      personality_name_(personality_name),
+      fdes_(),
+      contents_(reinterpret_cast<const char*>(contents), length)
+  { }
+
+  ~Cie();
+
+  // We permit copying a CIE when there are no FDEs.  This is
+  // convenient in the code which creates them.
+  Cie(const Cie& cie)
+    : object_(cie.object_),
+      shndx_(cie.shndx_),
+      input_offset_(cie.input_offset_),
+      fde_encoding_(cie.fde_encoding_),
+      personality_name_(cie.personality_name_),
+      fdes_(),
+      contents_(cie.contents_)
+  { gold_assert(cie.fdes_.empty()); }
+
+  // Add an FDE associated with this CIE.
+  void
+  add_fde(Fde* fde)
+  { this->fdes_.push_back(fde); }
+
+  // Return the number of FDEs.
+  unsigned int
+  fde_count() const
+  { return this->fdes_.size(); }
+
+  // Set the output offset of this CIE to OUTPUT_OFFSET.  It will be
+  // followed by all its FDEs.  ADDRALIGN is the required address
+  // alignment, typically 4 or 8.  This updates MERGE_MAP with the
+  // mapping.  It returns the new output offset.
+  section_offset_type
+  set_output_offset(section_offset_type output_offset, unsigned int addralign,
+		    Merge_map*);
+
+  // Write the CIE to OVIEW starting at OFFSET.  Round up the bytes to
+  // ADDRALIGN.  ADDRESS is the virtual address of OVIEW.
+  // EH_FRAME_HDR is the exception frame header for FDE recording.
+  // POST_FDES stashes FDEs created after mappings were done, for later
+  // writing.  Return the new offset.
+  template<int size, bool big_endian>
+  section_offset_type
+  write(unsigned char* oview, section_offset_type offset, uint64_t address,
+	unsigned int addralign, Eh_frame_hdr* eh_frame_hdr,
+	Post_fdes* post_fdes);
+
+  friend bool operator<(const Cie&, const Cie&);
+  friend bool operator==(const Cie&, const Cie&);
+
+ private:
+  // The class is not assignable.
+  Cie& operator=(const Cie&);
+
+  // The object in which this CIE was first seen.  This will be NULL
+  // for a linker generated CIE.
+  Relobj* object_;
+  // Input section index for this CIE.  This will be 0 for a linker
+  // generated CIE.
+  unsigned int shndx_;
+  // Offset within the input section for this CIE.  This will be 0 for
+  // a linker generated CIE.
+  section_offset_type input_offset_;
+  // The encoding of the FDE.  This is a DW_EH_PE code.
+  unsigned char fde_encoding_;
+  // The name of the personality routine.  This will be the name of a
+  // global symbol, or will be the empty string.
+  std::string personality_name_;
+  // List of FDEs.
+  std::vector<Fde*> fdes_;
+  // CIE data.
+  std::string contents_;
+};
+
+extern bool operator<(const Cie&, const Cie&);
+extern bool operator==(const Cie&, const Cie&);
+
+// This class manages .eh_frame sections.  It discards duplicate
+// exception information.
+
+class Eh_frame : public Output_section_data
+{
+ public:
+  Eh_frame();
+
+  // Record the associated Eh_frame_hdr, if any.
+  void
+  set_eh_frame_hdr(Eh_frame_hdr* hdr)
+  { this->eh_frame_hdr_ = hdr; }
+
+  // Add the input section SHNDX in OBJECT.  SYMBOLS is the contents
+  // of the symbol table section (size SYMBOLS_SIZE), SYMBOL_NAMES is
+  // the symbol names section (size SYMBOL_NAMES_SIZE).  RELOC_SHNDX
+  // is the relocation section if any (0 for none, -1U for multiple).
+  // RELOC_TYPE is the type of the relocation section if any.  This
+  // returns whether the section was incorporated into the .eh_frame
+  // data.
+  template<int size, bool big_endian>
+  bool
+  add_ehframe_input_section(Sized_relobj_file<size, big_endian>* object,
+			    const unsigned char* symbols,
+			    section_size_type symbols_size,
+			    const unsigned char* symbol_names,
+			    section_size_type symbol_names_size,
+			    unsigned int shndx, unsigned int reloc_shndx,
+			    unsigned int reloc_type);
+
+  // Add a CIE and an FDE for a PLT section, to permit unwinding
+  // through a PLT.  The FDE data should start with 8 bytes of zero,
+  // which will be replaced by a 4 byte PC relative reference to the
+  // address of PLT and a 4 byte size of PLT.
+  void
+  add_ehframe_for_plt(Output_data* plt, const unsigned char* cie_data,
+		      size_t cie_length, const unsigned char* fde_data,
+		      size_t fde_length);
+
+  // Return the number of FDEs.
+  unsigned int
+  fde_count() const;
+
+ protected:
+  // Set the final data size.
+  void
+  set_final_data_size();
+
+  // Return the output address for an input address.
+  bool
+  do_output_offset(const Relobj*, unsigned int shndx,
+		   section_offset_type offset,
+		   section_offset_type* poutput) const;
+
+  // Return whether this is the merge section for an input section.
+  bool
+  do_is_merge_section_for(const Relobj*, unsigned int shndx) const;
+
+  // Write the data to the file.
+  void
+  do_write(Output_file*);
+
+  // Write to a map file.
+  void
+  do_print_to_mapfile(Mapfile* mapfile) const
+  { mapfile->print_output_data(this, _("** eh_frame")); }
+
+ private:
+  // The comparison routine for the CIE map.
+  struct Cie_less
+  {
+    bool
+    operator()(const Cie* cie1, const Cie* cie2) const
+    { return *cie1 < *cie2; }
+  };
+
+  // A set of unique CIEs.
+  typedef std::set<Cie*, Cie_less> Cie_offsets;
+
+  // A list of unmergeable CIEs.
+  typedef std::vector<Cie*> Unmergeable_cie_offsets;
+
+  // A mapping from offsets to CIEs.  This is used while reading an
+  // input section.
+  typedef std::map<uint64_t, Cie*> Offsets_to_cie;
+
+  // A list of CIEs, and a bool indicating whether the CIE is
+  // mergeable.
+  typedef std::vector<std::pair<Cie*, bool> > New_cies;
+
+  // Skip an LEB128.
+  static bool
+  skip_leb128(const unsigned char**, const unsigned char*);
+
+  // The implementation of add_ehframe_input_section.
+  template<int size, bool big_endian>
+  bool
+  do_add_ehframe_input_section(Sized_relobj_file<size, big_endian>* object,
+			       const unsigned char* symbols,
+			       section_size_type symbols_size,
+			       const unsigned char* symbol_names,
+			       section_size_type symbol_names_size,
+			       unsigned int shndx,
+			       unsigned int reloc_shndx,
+			       unsigned int reloc_type,
+			       const unsigned char* pcontents,
+			       section_size_type contents_len,
+			       New_cies*);
+
+  // Read a CIE.
+  template<int size, bool big_endian>
+  bool
+  read_cie(Sized_relobj_file<size, big_endian>* object,
+	   unsigned int shndx,
+	   const unsigned char* symbols,
+	   section_size_type symbols_size,
+	   const unsigned char* symbol_names,
+	   section_size_type symbol_names_size,
+	   const unsigned char* pcontents,
+	   const unsigned char* pcie,
+	   const unsigned char* pcieend,
+	   Track_relocs<size, big_endian>* relocs,
+	   Offsets_to_cie* cies,
+	   New_cies* new_cies);
+
+  // Read an FDE.
+  template<int size, bool big_endian>
+  bool
+  read_fde(Sized_relobj_file<size, big_endian>* object,
+	   unsigned int shndx,
+	   const unsigned char* symbols,
+	   section_size_type symbols_size,
+	   const unsigned char* pcontents,
+	   unsigned int offset,
+	   const unsigned char* pfde,
+	   const unsigned char* pfdeend,
+	   Track_relocs<size, big_endian>* relocs,
+	   Offsets_to_cie* cies);
+
+  // Template version of write function.
+  template<int size, bool big_endian>
+  void
+  do_sized_write(unsigned char* oview);
+
+  // The exception frame header, if any.
+  Eh_frame_hdr* eh_frame_hdr_;
+  // A mapping from all unique CIEs to their offset in the output
+  // file.
+  Cie_offsets cie_offsets_;
+  // A mapping from unmergeable CIEs to their offset in the output
+  // file.
+  Unmergeable_cie_offsets unmergeable_cie_offsets_;
+  // A mapping from input sections to the output section.
+  Merge_map merge_map_;
+  // Whether we have created the mappings to the output section.
+  bool mappings_are_done_;
+  // The final data size.  This is only set if mappings_are_done_ is
+  // true.
+  section_size_type final_data_size_;
+};
+
+} // End namespace gold.
+
+#endif // !defined(GOLD_EHFRAME_H)
+@
+
+
+1.18
+log
+@	* target.h (Target::plt_fde_location, do_plt_fde_location): Declare.
+	* target.cc (Target::do_plt_fde_location): New function.
+	* ehframe.h (class FDE): Add post_map field to u_.from_linker,
+	accessor function, and constructor param.
+	(struct Post_fde, Post_fdes): Declare.
+	(Cie::write): Add post_fdes param.
+	* ehframe.cc (Fde::write): Use plt_fde_location.
+	(struct Post_fde): Define.
+	(Cie::write): Stash FDEs added post merge mapping.
+	(Eh_frame::add_ehframe_for_plt): Assert no new CIEs after mapping.
+	Adjust Fde constructor call.  Bump final_data_size_ for post map FDEs.
+	(Eh_frame::do_sized_write): Arrange to write post map FDES after
+	other FDEs.
+	* powerpc.cc (Target_powerpc::do_plt_fde_location): New function.
+	(Target_powerpc::has_glink): New function.
+	(Target_powerpc::do_relax): Add eh_frame info for stubs.
+	(struct Eh_cie, eh_frame_cie, glink_eh_frame_fde_64,
+	glink_eh_frame_fde_32, default_fde): New data.
+	(Stub_table::eh_frame_added_): New var.
+	(Stub_table::find_long_branch_entry, stub_address, stub_offset):
+	Make const.
+	(Stub_table::add_eh_frame): New function.
+	(Output_data_glink::add_eh_frame): New function.
+	(Target_powerpc::make_glink_section): Call add_eh_frame.
+@
+text
+@d249 1
+a249 1
+// FDEs stashed for later processing.
+d251 12
+a262 2
+struct Post_fde;
+typedef std::vector<Post_fde*> Post_fdes;
+@
+
+
+1.17
+log
+@	PR gold/12571
+	* options.h (class General_options): Add
+	--ld-generated-unwind-info.
+	* ehframe.cc (Fde::write): Add address parameter.  Change all
+	callers.  If associated with PLT, fill in address and size.
+	(Cie::set_output_offset): Only add merge mapping if there is an
+	object.
+	(Cie::write): Add address parameter.  Change all callers.
+	(Eh_frame::add_ehframe_for_plt): New function.
+	* ehframe.h (class Fde): Update declarations.  Move shndx_ and
+	input_offset_ fields into union u_, with new plt field.
+	(Fde::Fde): Adjust for new union field.
+	(Fde::Fde) [Output_data version]: New constructor.
+	(Fde::add_mapping): Only add merge mapping if there is an object.
+	(class Cie): Update declarations.
+	(class Eh_frame): Declare add_ehframe_for_plt.
+	* layout.cc (Layout::layout_eh_frame): Break out code into
+	make_eh_frame_section, and call it.
+	(Layout::make_eh_frame_section): New function.
+	(Layout::add_eh_frame_for_plt): New function.
+	* layout.h (class Layout): Update declarations.
+	* merge.cc (Merge_map::add_mapping): Add assertion.
+	* i386.cc: Include "dwarf.h".
+	(class Output_data_plt_i386): Make first_plt_entry,
+	dyn_first_plt_entry, exec_plt_entry, and dyn_plt_entry const.  Add
+	plt_eh_frame_cie_size, plt_eh_frame_fde_size, plt_eh_frame_cie,
+	and plt_eh_frame_fde.
+	(Output_data_plt_i386::Output_data_plt_i386): Align to 16-byte
+	boundary.  Call add_eh_frame_for_plt if appropriate.
+	* x86_64.cc: Include "dwarf.h".
+	(class Output_data_plt_x86_64): Align to 16-byte boundary.  Make
+	first_plt_entry, plt_entry and tlsdesc_plt_entry const.  Add
+	plt_eh_frame_cie_size, plt_eh_frame_fde_size, plt_eh_frame_cie,
+	and plt_eh_frame_fde.
+	(Output_data_plt_x86_64::init): Call add_eh_frame_for_plt if
+	appropriate.
+@
+text
+@d177 2
+a178 1
+  Fde(Output_data* plt, const unsigned char* contents, size_t length)
+d181 4
+a184 1
+  { this->u_.from_linker.plt = plt; }
+d203 5
+d241 2
+d249 5
+d303 5
+a307 4
+  // Write the CIE to OVIEW starting at OFFSET.  EH_FRAME_HDR is the
+  // exception frame header for FDE recording.  Round up the bytes to
+  // ADDRALIGN.  ADDRESS is the virtual address of OVIEW.  Return the
+  // new offset.
+d311 2
+a312 1
+	unsigned int addralign, Eh_frame_hdr* eh_frame_hdr);
+@
+
+
+1.16
+log
+@	* incremental-dump.cc (dump_incremental_inputs): Print dynamic reloc
+	info; adjust display of GOT entries.
+	* incremental.cc (Sized_incremental_binary::setup_readers): Allocate
+	vector of input objects; remove file_status_.
+	(Sized_incremental_binary::do_reserve_layout): Remove file_status_.
+	(Sized_incremental_binary::do_process_got_plt): Adjust calls to
+	got_plt reader; call target hooks to reserve GOT entries.
+	(Output_section_incremental_inputs::set_final_data_size): Adjust size
+	of input file info header and GOT info entry.
+	(Output_section_incremental_inputs::write_info_blocks): Write dynamic
+	relocation info.
+	(Got_plt_view_info::got_descriptor): Remove.
+	(Got_plt_view_info::sym_index): New data member.
+	(Got_plt_view_info::input_index): New data member.
+	(Local_got_offset_visitor::visit): Write input file index.
+	(Global_got_offset_visitor::visit): Write 0 for input file index.
+	(Global_symbol_visitor_got_plt::operator()): Replace got_descriptor
+	with sym_index and input_index.
+	(Output_section_incremental_inputs::write_got_plt): Adjust size of
+	incremental info GOT entry; replace got_descriptor with input_index.
+	(Sized_relobj_incr::Sized_relobj_incr): Adjust initializers; record
+	map from input file index to object.
+	(Sized_relobj_incr::do_layout): Replace direct data member reference
+	with accessor function.
+	(Sized_relobj_incr::do_for_all_local_got_entries): Move to base class.
+	* incremental.h (Incremental_input_entry_reader::get_symbol_offset):
+	Adjust size of input file info header.
+	(Incremental_input_entry_reader::get_first_dyn_reloc): New function.
+	(Incremental_input_entry_reader::get_dyn_reloc_count): New function.
+	(Incremental_input_entry_reader::get_input_section): Adjust size of
+	input file info header.
+	(Incremental_got_plt_reader::Incremental_got_plt_reader): Adjust size
+	of incremental info GOT entry.
+	(Incremental_got_plt_reader::get_got_desc): Remove.
+	(Incremental_got_plt_reader::get_got_symndx): New function.
+	(Incremental_got_plt_reader::get_got_input_index): New function.
+	(Sized_incremental_binary::Sized_incremental_binary): Remove
+	file_status_; add input_objects_.
+	(Sized_incremental_binary::~Sized_incremental_binary): Remove.
+	(Sized_incremental_binary::set_file_is_unchanged): Remove.
+	(Sized_incremental_binary::file_is_unchanged): Remove.
+	(Sized_incremental_binary::set_input_object): New function.
+	(Sized_incremental_binary::input_object): New function.
+	(Sized_incremental_binary::file_status_): Remove.
+	(Sized_incremental_binary::input_objects_): New data member.
+	(Sized_relobj_incr): Rename Sized_incr_relobj to this; adjust all
+	references.
+	(Sized_relobj_incr::invalid_address): Move to base class.
+	(Sized_relobj_incr::is_output_section_offset_invalid): Move to base
+	class.
+	(Sized_relobj_incr::do_output_section_offset): Likewise.
+	(Sized_relobj_incr::do_for_all_local_got_entries): Likewise.
+	(Sized_relobj_incr::section_offsets_): Likewise.
+	* object.cc (Sized_relobj::do_for_all_local_got_entries): New
+	function.
+	(Sized_relobj_file::Sized_relobj_file): Remove local_got_offsets_.
+	(Sized_relobj_file::layout_section): Replace refs to section_offsets_
+	with accessor function.
+	(Sized_relobj_file::do_layout): Likewise.
+	(Sized_relobj_file::do_layout_deferred_sections): Likewise.
+	(Sized_relobj_file::do_for_all_local_got_entries): Move to base class.
+	(Sized_relobj_file::compute_final_local_value): Replace refs to
+	section_offsets_ with accessor function.
+	(Sized_relobj_file::do_finalize_local_symbols): Likewise.
+	* object.h (Relobj::Relobj): Initialize new data members.
+	(Relobj::add_dyn_reloc): New function.
+	(Relobj::first_dyn_reloc): New function.
+	(Relobj::dyn_reloc_count): New function.
+	(Relobj::first_dyn_reloc_): New data member.
+	(Relobj::dyn_reloc_count_): New data member.
+	(Sized_relobj): Rename Sized_relobj_base to this; adjust all
+	references.
+	(Sized_relobj::Address): New typedef.
+	(Sized_relobj::invalid_address): Move here from child class.
+	(Sized_relobj::Sized_relobj): Initialize new data members.
+	(Sized_relobj::sized_relobj): New function.
+	(Sized_relobj::is_output_section_offset_invalid): Move here from
+	child class.
+	(Sized_relobj::get_output_section_offset): Likewise.
+	(Sized_relobj::local_has_got_offset): Likewise.
+	(Sized_relobj::local_got_offset): Likewise.
+	(Sized_relobj::set_local_got_offset): Likewise.
+	(Sized_relobj::do_for_all_local_got_entries): Likewise.
+	(Sized_relobj::clear_got_offsets): New function.
+	(Sized_relobj::section_offsets): Move here from child class.
+	(Sized_relobj::do_output_section_offset): Likewise.
+	(Sized_relobj::do_set_section_offset): Likewise.
+	(Sized_relobj::Local_got_offsets): Likewise.
+	(Sized_relobj::local_got_offsets_): Likewise.
+	(Sized_relobj::section_offsets_): Likewise.
+	(Sized_relobj_file): Rename Sized_relobj to this; adjust all
+	references.
+	(Sized_relobj_file::is_output_section_offset_invalid): Move to base
+	class.
+	(Sized_relobj_file::sized_relobj): New function
+	(Sized_relobj_file::local_has_got_offset): Move to base class.
+	(Sized_relobj_file::local_got_offset): Likewise.
+	(Sized_relobj_file::set_local_got_offset): Likewise.
+	(Sized_relobj_file::get_output_section_offset): Likewise.
+	(Sized_relobj_file::do_for_all_local_got_entries): Likewise.
+	(Sized_relobj_file::do_output_section_offset): Likewise.
+	(Sized_relobj_file::do_set_section_offset): Likewise.
+	(Sized_relobj_file::Local_got_offsets): Likewise.
+	(Sized_relobj_file::local_got_offsets_): Likewise.
+	(Sized_relobj_file::section_offsets_): Likewise.
+	* output.cc (Output_reloc::Output_reloc): Adjust type of relobj
+	(all constructors).
+	(set_needs_dynsym_index): Convert relobj to derived class pointer.
+	(Output_reloc::get_symbol_index): Likewise.
+	(Output_reloc::local_section_offset): Likewise.
+	(Output_reloc::get_address): Likewise.
+	(Output_reloc::symbol_value): Likewise.
+	(Output_data_got::reserve_slot): Move to class definition.
+	(Output_data_got::reserve_local): New function.
+	(Output_data_got::reserve_slot_for_global): Remove.
+	(Output_data_got::reserve_global): New function.
+	* output.h (Output_reloc::Output_reloc): Adjust type of relobj
+	(all constructors, two instantiations).
+	(Output_reloc::get_relobj): New function (two instantiations).
+	(Output_reloc::u1_.relobj, Output_reloc::u2_.relobj): Adjust type.
+	(Output_data_reloc_base::add): Convert relobj to derived class pointer.
+	(Output_data_reloc::add_global): Adjust type of relobj.
+	(Output_data_reloc::add_global_relative): Likewise.
+	(Output_data_reloc::add_symbolless_global_addend): Likewise.
+	(Output_data_reloc::add_local): Likewise.
+	(Output_data_reloc::add_local_relative): Likewise.
+	(Output_data_reloc::add_symbolless_local_addend): Likewise.
+	(Output_data_reloc::add_local_section): Likewise.
+	(Output_data_reloc::add_output_section): Likewise.
+	(Output_data_reloc::add_absolute): Likewise.
+	(Output_data_reloc::add_target_specific): Likewise.
+	(Output_data_got::reserve_slot): Move definition here.
+	(Output_data_got::reserve_local): New function.
+	(Output_data_got::reserve_global): New function.
+	* reloc.cc (Sized_relobj_file::do_read_relocs): Replace refs to
+	section_offsets_ with accessor function.
+	(Sized_relobj_file::write_sections): Likewise.
+	(Sized_relobj_file::do_relocate_sections): Likewise.
+	* target.h (Sized_target::reserve_local_got_entry): New function.
+	(Sized_target::reserve_global_got_entry): New function.
+	* x86_64.cc (Target_x86_64::reserve_local_got_entry): New function.
+	(Target_x86_64::reserve_global_got_entry): New function.
+	(Target_x86_64::init_got_plt_for_update): Create rela_dyn section.
+@
+text
+@d3 1
+a3 1
+// Copyright 2006, 2007, 2008 Free Software Foundation, Inc.
+a47 4
+// FIXME: gcc supports using storing a sorted lookup table for the
+// FDEs in the PT_GNU_EH_FRAME segment, but we do not yet generate
+// that.
+
+d169 1
+a169 1
+    : object_(object), shndx_(shndx), input_offset_(input_offset),
+d171 10
+a180 1
+  { }
+d188 2
+a189 1
+  // Add a mapping for this FDE to MERGE_MAP.
+d193 4
+a196 3
+    merge_map->add_mapping(this->object_, this->shndx_,
+			   this->input_offset_, this->length(),
+			   output_offset);
+d201 2
+a202 2
+  // necessary.  Record the FDE in EH_FRAME_HDR.  Return the new
+  // offset.
+d206 3
+a208 2
+	unsigned int addralign, section_offset_type cie_offset,
+        unsigned char fde_encoding, Eh_frame_hdr* eh_frame_hdr);
+d211 2
+a212 1
+  // The object in which this FDE was seen.
+d214 20
+a233 4
+  // Input section index for this FDE.
+  unsigned int shndx_;
+  // Offset within the input section for this FDE.
+  section_offset_type input_offset_;
+d289 2
+a290 1
+  // ADDRALIGN.  Return the new offset.
+d293 1
+a293 1
+  write(unsigned char* oview, section_offset_type offset,
+d303 2
+a304 1
+  // The object in which this CIE was first seen.
+d306 2
+a307 1
+  // Input section index for this CIE.
+d309 2
+a310 1
+  // Offset within the input section for this CIE.
+d356 9
+@
+
+
+1.15
+log
+@        * archive.cc: Formatting fixes: Remove whitespace between
+        typename and following asterisk.  Remove whitespace between
+        function name and opening parenthesis.
+        * archive.h: Likewise.
+        * arm.cc: Likewise.
+        * attributes.cc: Likewise.
+        * attributes.h: Likewise.
+        * common.cc: Likewise.
+        * copy-relocs.cc: Likewise.
+        * dirsearch.h: Likewise.
+        * dynobj.cc: Likewise.
+        * ehframe.cc: Likewise.
+        * ehframe.h: Likewise.
+        * expression.cc: Likewise.
+        * fileread.cc: Likewise.
+        * fileread.h: Likewise.
+        * gc.h: Likewise.
+        * gold-threads.cc: Likewise.
+        * gold.cc: Likewise.
+        * i386.cc: Likewise.
+        * icf.h: Likewise.
+        * incremental-dump.cc: Likewise.
+        * incremental.cc: Likewise.
+        * layout.cc: Likewise.
+        * layout.h: Likewise.
+        * main.cc: Likewise.
+        * merge.cc: Likewise.
+        * merge.h: Likewise.
+        * object.cc: Likewise.
+        * object.h: Likewise.
+        * options.cc: Likewise.
+        * options.h: Likewise.
+        * output.cc: Likewise.
+        * output.h: Likewise.
+        * plugin.cc: Likewise.
+        * plugin.h: Likewise.
+        * powerpc.cc: Likewise.
+        * reloc.cc: Likewise.
+        * script-c.h: Likewise.
+        * script-sections.cc: Likewise.
+        * script.cc: Likewise.
+        * stringpool.cc: Likewise.
+        * symtab.cc: Likewise.
+        * symtab.h: Likewise.
+        * target.cc: Likewise.
+        * timer.cc: Likewise.
+        * timer.h: Likewise.
+        * version.cc: Likewise.
+        * x86_64.cc: Likewise.
+@
+text
+@d319 1
+a319 1
+  add_ehframe_input_section(Sized_relobj<size, big_endian>* object,
+d385 1
+a385 1
+  do_add_ehframe_input_section(Sized_relobj<size, big_endian>* object,
+d400 1
+a400 1
+  read_cie(Sized_relobj<size, big_endian>* object,
+d416 1
+a416 1
+  read_fde(Sized_relobj<size, big_endian>* object,
+@
+
+
+1.14
+log
+@	Revert -Wshadow changes, all changes from:
+	2009-12-11  Doug Kwan  <dougkwan@@google.com>
+	2009-12-11  Nick Clifton  <nickc@@redhat.com>
+	* configure.ac: Remove -Wshadow when setting WARN_CXXFLAGS.
+@
+text
+@d408 1
+a408 1
+	   const unsigned char *pcieend,
+d423 1
+a423 1
+	   const unsigned char *pfdeend,
+@
+
+
+1.13
+log
+@Add -Wshadow to the gcc command line options used when compiling the binutils.
+Fix up all warnings generated by the addition of this switch.
+@
+text
+@d3 1
+a3 1
+// Copyright 2006, 2007, 2008, 2009 Free Software Foundation, Inc.
+d172 1
+a172 1
+      const unsigned char* contents, size_t len)
+d174 1
+a174 1
+      contents_(reinterpret_cast<const char*>(contents), len)
+@
+
+
+1.12
+log
+@	* mapfile.cc: New file.
+	* mapfile.h: New file.
+	* options.h (class General_options): Add -M/--print-map and -Map.
+	* options.cc (General_options::finalize): Make -M equivalent to
+	-Map -.
+	* main.cc: Include <cstdio> and "mapfile.h".
+	(main): Open mapfile if requested.
+	* gold.cc (class Middle_runner): Add mapfile_ field.  Update
+	constructor.  Change caller.
+	(queue_initial_tasks): Add mapfile parameter.  Change caller.
+	(queue_middle_tasks): Likewise.
+	* gold.h (queue_initial_tasks, queue_middle_tasks): Update
+	declarations.
+	* archive.cc: Include "mapfile.h".
+	(Archive::add_symbols): Add mapfile parameter.  Change all
+	callers.  Pass mapfile, symbol, and reason to include_member.
+	(Archive::include_all_members): Add mapfile parameter.  Change all
+	callers.
+	(Archive::include_member): Add mapfile, sym, and why parameters.
+	Change all callers.  Report inclusion to map file.
+	* archive.h: Include "fileread.h".
+	(class Archive): Update declarations.
+	(Archive::file): New const method.
+	(class Add_archive_symbols): Add mapfile_ field.  Update
+	constructor.  Change all callers.
+	* readsyms.h (class Read_symbols): Likewise.
+	(class Finish_group): Likewise.
+	(class Read_script): Likewise.
+	* common.cc: Include "mapfile.h".
+	(Symbol_table::allocate_commons): Add mapfile parameter.  Change
+	all callers.
+	(Symbol_table::do_allocate_commons): Likewise.
+	(Symbol_table::do_allocate_commons_list): Likewise.  Report common
+	symbol allocation to mapfile.
+	* common.h (class Allocate_commons_task): Add mapfile_ field.
+	Update constructor.  Change all callers.
+	* symtab.h (class Symbol_table): Update declarations.
+	* layout.cc: Include "mapfile.h".
+	(Layout_task_runner::run): Print information to mapfile.
+	(Layout::create_gold_note): Change Output_data_fixed_space to
+	Output_data_zero_fill.
+	(Layout::create_build_id): Likewise.
+	(Layout::print_to_mapfile): New function.
+	* layout.h (class Layout_task_runner): Add mapfile_ field.  Update
+	constructor.  Change caller.
+	(class Layout): Declare print_to_mapfile.
+	* output.cc (Output_section::Input_section::print_to_mapfile): New
+	function.
+	(Output_section::add_input_section): If producing a map, always
+	add to input_sections_ list.
+	(Output_section::do_print_to_mapfile): New function.
+	(Output_segment::print_sections_to_mapfile): New function.
+	(Output_segment::print_section_list_to_mapfile): New function.
+	* output.h: Include "mapfile.h".
+	(Output_data::print_to_mapfile): New function.
+	(Output_data::do_print_to_mapfile): New virtual function.
+	(Output_segment_headers::do_print_to_mapfile): New function.
+	(Output_file_header::do_print_to_mapfile): New function.
+	(Output_data_const::do_print_to_mapfile): New function.
+	(class Output_data_const_buffer): Add map_name_ field.  Update
+	constructor.  Change all callers.  Add do_print_to_mapfile
+	function.
+	(class Output_data_fixed_space): Likewise.
+	(class Output_data_space): Likewise.
+	(class Output_data_zero_fill): New class.
+	(Output_data_strtab::do_print_to_mapfile): New function.
+	(Output_data_reloc_base::do_print_to_mapfile): New function.
+	(Output_relocatable_relocs::do_print_to_mapfile): New function.
+	(Output_data_group::do_print_to_mapfile): New function.
+	(Output_data_got::do_print_to_mapfile): New function.
+	(Output_data_dynamic::do_print_to_mapfile): New function.
+	(Output_symtab_xindex::do_print_to_mapfile): New function.
+	(class Output_section): Declare do_print_to_mapflie.  Declare
+	print_to_mapfile in Input_section.
+	(class Output_segment): Declare new functions.
+	* object.h (Sized_relobj::symbol_count): New function.
+	* script-sections.cc
+	(Output_section_element_dot_assignment::set_section_addresses):
+	Change Output_data_fixed_space to Output_data_zero_fill.
+	(Output_data_expression::do_print_to_mapfile): New function.
+	* script.cc (read_input_script): Add mapfile parameter.  Change
+	all callers.
+	* script.h (read_input_script): Update declaration.
+	* ehframe.h (Eh_frame_hdr::do_print_to_mapfile): New function.
+	(Eh_frame::do_print_to_mapfile): New function.
+	* merge.h (Output_merge_data::do_print_to_mapfile): New function.
+	(Output_merge_string::do_print_to_mapfile): New function.
+	* i386.cc (Output_data_plt_i386::do_print_to_mapfile): New
+	function.
+	* sparc.cc (Output_data_plt_sparc::do_print_to_mapfile): New
+	function.
+	* x86_64.cc (Output_data_plt_x86_64::do_print_to_mapfile): New
+	function.
+	* Makefile.am (CCFILES): Add mapfile.cc.
+	(HFILES): Add mapfile.h.
+	* Makefile.in: Rebuild.
+@
+text
+@d3 1
+a3 1
+// Copyright 2006, 2007, 2008 Free Software Foundation, Inc.
+d172 1
+a172 1
+      const unsigned char* contents, size_t length)
+d174 1
+a174 1
+      contents_(reinterpret_cast<const char*>(contents), length)
+@
+
+
+1.11
+log
+@Update copyright years.  Update language files.
+@
+text
+@d70 1
+d79 5
+d331 1
+d350 5
+@
+
+
+1.10
+log
+@Don't crash if we change the address of the .eh_frame section after we
+find its size.
+@
+text
+@d3 1
+a3 1
+// Copyright 2006, 2007 Free Software Foundation, Inc.
+@
+
+
+1.9
+log
+@Align FDE and CIE lengths as needed.
+@
+text
+@d430 5
+@
+
+
+1.8
+log
+@Don't record file offset for CIEs.
+@
+text
+@d187 3
+a189 2
+  // encoding, from the CIE.  Record the FDE in EH_FRAME_HDR.  Return
+  // the new offset.
+d193 2
+a194 2
+	section_offset_type cie_offset, unsigned char fde_encoding,
+	Eh_frame_hdr* eh_frame_hdr);
+d257 2
+a258 1
+  // exception frame header for FDE recording.  Return the new offset.
+d262 1
+a262 1
+	Eh_frame_hdr* eh_frame_hdr);
+@
+
+
+1.7
+log
+@Speed up relocations against local symbols in merged sections.
+@
+text
+@d26 4
+d350 2
+a351 2
+  // A mapping from unique CIEs to their offset in the output file.
+  typedef std::map<Cie*, uint64_t, Cie_less> Cie_offsets;
+d353 2
+a354 2
+  // A list of unmergeable CIEs with their offsets.
+  typedef std::vector<std::pair<Cie*, uint64_t> > Unmergeable_cie_offsets;
+@
+
+
+1.6
+log
+@Add section_size_type and section_offset_type, use them to replace a
+lot of instances of off_t.
+@
+text
+@d329 4
+@
+
+
+1.5
+log
+@Fix ehframe header handling for shared libraries.
+@
+text
+@d60 1
+a60 1
+  record_fde(off_t fde_offset, unsigned char fde_encoding)
+d82 1
+a82 1
+  typedef std::pair<off_t, unsigned char> Fde_offset;
+d136 1
+a136 1
+	     off_t fde_offset, unsigned char fde_encoding);
+d161 1
+a161 1
+  Fde(Relobj* object, unsigned int shndx, off_t input_offset,
+d175 1
+a175 1
+  add_mapping(off_t output_offset, Merge_map* merge_map) const
+d186 4
+a189 3
+  off_t
+  write(unsigned char* oview, off_t offset, off_t cie_offset,
+	unsigned char fde_encoding, Eh_frame_hdr* eh_frame_hdr);
+d197 1
+a197 1
+  off_t input_offset_;
+d207 1
+a207 1
+  Cie(Relobj* object, unsigned int shndx, off_t input_offset,
+d247 3
+a249 2
+  off_t
+  set_output_offset(off_t output_offset, unsigned int addralign, Merge_map*);
+d254 3
+a256 2
+  off_t
+  write(unsigned char* oview, off_t offset, Eh_frame_hdr* eh_frame_hdr);
+d270 1
+a270 1
+  off_t input_offset_;
+d309 1
+a309 1
+			    off_t symbols_size,
+d311 1
+a311 1
+			    off_t symbol_names_size,
+d325 3
+a327 2
+  do_output_offset(const Relobj*, unsigned int shndx, off_t offset,
+		   off_t* poutput) const;
+d365 1
+a365 1
+			       off_t symbols_size,
+d367 1
+a367 1
+			       off_t symbol_names_size,
+d372 1
+a372 1
+			       off_t contents_len,
+d381 1
+a381 1
+	   off_t symbols_size,
+d383 1
+a383 1
+	   off_t symbol_names_size,
+d397 1
+a397 1
+	   off_t symbols_size,
+@
+
+
+1.4
+log
+@Clean up setting address and section offset.
+@
+text
+@d134 2
+a135 1
+  get_fde_pc(const unsigned char* eh_frame_contents,
+@
+
+
+1.3
+log
+@Generate a complete exception frame header.  Discard duplicate
+exception frame information.
+@
+text
+@d68 1
+a68 1
+  do_set_address(uint64_t address, off_t offset);
+d317 1
+a317 1
+  do_set_address(uint64_t, off_t);
+@
+
+
+1.2
+log
+@Put size and endianness in parameters.
+@
+text
+@d27 1
+d32 5
+d51 14
+a64 1
+  Eh_frame_hdr(Output_section* eh_frame_section);
+d75 69
+d146 269
+@
+
+
+1.1
+log
+@Add basic exception frame header, plus test.
+@
+text
+@d45 1
+a45 1
+  Eh_frame_hdr(const Target*, Output_section* eh_frame_section);
+a55 2
+  // The output target.
+  const Target* target_;
+@
+

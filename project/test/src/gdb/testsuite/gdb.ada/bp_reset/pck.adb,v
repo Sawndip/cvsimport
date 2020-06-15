@@ -1,0 +1,103 @@
+head	1.2;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.2
+	gdb_7_6-2013-04-26-release:1.2
+	gdb_7_6-branch:1.2.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.2;
+locks; strict;
+comment	@-- @;
+
+
+1.2
+date	2013.01.01.06.33.10;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2012.09.18.16.52.19;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@--  Copyright 2012-2013 Free Software Foundation, Inc.
+--
+--  This program is free software; you can redistribute it and/or modify
+--  it under the terms of the GNU General Public License as published by
+--  the Free Software Foundation; either version 3 of the License, or
+--  (at your option) any later version.
+--
+--  This program is distributed in the hope that it will be useful,
+--  but WITHOUT ANY WARRANTY; without even the implied warranty of
+--  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+--  GNU General Public License for more details.
+--
+--  You should have received a copy of the GNU General Public License
+--  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+package body Pck is
+   procedure Do_Nothing is
+   begin
+      null;
+   end Do_Nothing;
+end Pck;
+@
+
+
+1.1
+log
+@wrong language used when re-setting breakpoint
+
+The debugger sometimes fails to re-set a breakpoint as follow,
+causing it to become disabled:
+
+    (gdb) b nested_sub
+    Breakpoint 1 at 0x401cec: file foo.adb, line 7.
+    (gdb) b do_nothing
+    Breakpoint 2 at 0x401cdc: file pck.adb, line 4.
+    (gdb) run
+    Starting program: /[...]/foo
+    Error in re-setting breakpoint 1: Function "nested_sub" not defined.
+
+    Breakpoint 2, pck.do_nothing () at pck.adb:4
+    4             null;
+
+This only happens on machines where the debug-file-directory is
+a valid directory name.
+
+The reason behind the error is that the linespec code that re-sets
+the breakpoints uses the current_language global when iterating
+over a symtab's symbols. However, the that global gets switched from
+Ada to C during the startup phase, probably as a side-effect of stopping
+in some system code for which debugging info is available. The fix
+is to make sure that we use the correct language.
+
+gdb/ChangeLog:
+
+        * linespec.c (iterate_over_all_matching_symtabs): Use the correct
+        language when iterating over symbols.
+
+gdb/testsuite/ChangeLog:
+
+        * gdb.ada/bp_reset: New testcase.
+@
+text
+@d1 1
+a1 1
+--  Copyright 2012 Free Software Foundation, Inc.
+@
+

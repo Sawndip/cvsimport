@@ -1,0 +1,187 @@
+head	1.1;
+access;
+symbols
+	cygwin-1_7_35-release:1.1
+	cygwin-1_7_34-release:1.1
+	newlib-2_2_0:1.1.0.10
+	cygwin-1_7_33-release:1.1
+	cygwin-1_7_32-release:1.1
+	cygwin-1_7_31-release:1.1
+	cygwin-1_7_30-release:1.1
+	cygwin-1_7_29-release:1.1
+	cygwin-1_7_28-release:1.1
+	newlib-2_1_0:1.1
+	cygwin-1_7_27-release:1.1
+	cygwin-1_7_26-release:1.1
+	cygwin-1_7_25-release:1.1
+	cygwin-1_7_24-release:1.1
+	cygwin-1_7_23-release:1.1
+	cygwin-1_7_22-release:1.1
+	cygwin-1_7_21-release:1.1
+	cygwin-1_7_20-release:1.1
+	cygwin-1_7_19-release:1.1
+	cygwin-64bit-postmerge:1.1
+	cygwin-64bit-premerge-branch:1.1.0.8
+	cygwin-64bit-premerge:1.1
+	cygwin-1_7_18-release:1.1
+	newlib-2_0_0:1.1
+	cygwin-1_7_17-release:1.1
+	cygwin-64bit-branch:1.1.0.6
+	cygwin-1_7_16-release:1.1
+	cygwin-1_7_15-release:1.1
+	cygwin-1_7_14_2-release:1.1
+	cygwin-1_7_14-release:1.1
+	cygwin-1_7_12-release:1.1
+	cygwin-1_7_11-release:1.1
+	cygwin-1_7_10-release:1.1
+	newlib-1_20_0:1.1
+	cygwin-1_7_9-release:1.1
+	cygwin-1_7_8-release:1.1
+	newlib-1_19_0:1.1
+	cygwin-1_7_7-release:1.1
+	cygwin-1_7_5-release:1.1
+	cygwin-1_7_4-release:1.1
+	cygwin-1_7_3-release:1.1
+	cygwin-1_7_2-release:1.1
+	newlib-1_18_0:1.1
+	cygwin-1_7_1-release:1.1
+	newlib-1_17_0-arc:1.1.0.4
+	binutils-arc-20080908-branch:1.1.0.2
+	binutils-arc-20080908-branchpoint:1.1
+	newlib-1_17_0:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.1
+date	2008.06.10.02.13.22;	author jjohnstn;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.1
+log
+@
+2008-06-09  Ken Werner  <ken.werner@@de.ibm.com>
+
+	* libc/machine/spu/Makefile.am: Add new files.
+	* libc/machine/spu/Makefile.in: Likewise.
+	* libc/machine/spu/include/spu_timer.h: New file to add timer support
+        using interrupts.
+	* libc/machine/spu/spu_clock_stop.c: Likewise.
+	* libc/machine/spu/spu_clock_svcs.c: Likewise.
+	* libc/machine/spu/spu_timer_flih.S: Likewise.
+	* libc/machine/spu/spu_timer_free.c: Likewise.
+	* libc/machine/spu/spu_timer_internal.h: Likewise.
+	* libc/machine/spu/spu_timer_slih.c: Likewise.
+	* libc/machine/spu/spu_timer_slih_reg.c: Likewise.
+	* libc/machine/spu/spu_timer_stop.c: Likewise.
+	* libc/machine/spu/spu_timer_svcs.c: Likewise.
+@
+text
+@/*
+(C) Copyright IBM Corp. 2008
+
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+* Redistributions of source code must retain the above copyright notice,
+this list of conditions and the following disclaimer.
+* Redistributions in binary form must reproduce the above copyright
+notice, this list of conditions and the following disclaimer in the
+documentation and/or other materials provided with the distribution.
+* Neither the name of IBM nor the names of its contributors may be
+used to endorse or promote products derived from this software without
+specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
+*/
+
+/* SPU timer stop library service.  */
+#include <spu_timer.h>
+#include "spu_timer_internal.h"
+
+/* Stop a timer.  Moves it from either the active or handled list to the
+   stopped list. Returns 0 on sucess, timer was successfully stopped.
+   Returns <0 - Failure:
+    * SPU_TIMER_ERR_NOT_ACTIVE - timer was not active
+    * SPU_TIMER_ERR_INVALID_ID - invalid timer id
+    * SPU_TIMER_ERR_NOCLOCK    -  spu clock is not running  */
+int
+spu_timer_stop (int id)
+{
+  spu_timer_t *t, **pn;
+  unsigned was_enabled;
+
+  if (id < 0 || id >= SPU_TIMER_NTIMERS)
+    return SPU_TIMER_ERR_INVALID_ID;
+
+  if (__spu_clock_startcnt == 0)
+    return SPU_TIMER_ERR_NOCLOCK;
+
+
+  /* Free or stopped states.  */
+  if (__spu_timers[id].state == SPU_TIMER_ACTIVE ||
+      __spu_timers[id].state == SPU_TIMER_HANDLED)
+    {
+      was_enabled = spu_readch (SPU_RdMachStat) & 0x1;
+      spu_idisable ();
+
+      /* Timer is on either active list or handled list.  */
+      t = (__spu_timers[id].state == SPU_TIMER_ACTIVE)
+	? __spu_timers_active : __spu_timers_handled;
+
+      pn = (__spu_timers[id].state == SPU_TIMER_ACTIVE)
+	? &__spu_timers_active : &__spu_timers_handled;
+
+      while (t && t->id != id)
+	{
+	  pn = &t->next;
+	  t = t->next;
+	}
+#ifdef SPU_TIMER_DEBUG
+      if (!t)
+	ABORT (); /* Internal error.  */
+#endif
+      /* Fix timeout of next timer and decrementer if we were at the head of
+         the active list.  */
+      if (t->next)
+	{
+	  t->next->tmout += t->tmout;
+	  if (__spu_timers_active == t)
+	    __reset_spu_decr (t->next->tmout);
+	}
+      else
+	__reset_spu_decr (CLOCK_START_VALUE);
+
+      *pn = t->next; /* Update this elements to pointer.  */
+      t->next = __spu_timers_stopped;
+      __spu_timers_stopped = t;
+
+      __spu_timers[id].state = SPU_TIMER_STOPPED;
+
+      if (__likely (was_enabled))
+	spu_ienable ();
+
+      return 0;
+    }
+
+  return SPU_TIMER_ERR_NOT_ACTIVE;
+}
+@

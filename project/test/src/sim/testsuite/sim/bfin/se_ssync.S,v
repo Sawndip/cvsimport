@@ -1,0 +1,105 @@
+head	1.1;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.1
+	gdb_7_6-2013-04-26-release:1.1
+	gdb_7_6-branch:1.1.0.6
+	gdb_7_6-2013-03-12-branchpoint:1.1
+	gdb_7_5_1-2012-11-29-release:1.1
+	gdb_7_5-2012-08-17-release:1.1
+	gdb_7_5-branch:1.1.0.4
+	gdb_7_5-2012-07-18-branchpoint:1.1
+	gdb_7_4_1-2012-04-26-release:1.1
+	gdb_7_4-2012-01-24-release:1.1
+	gdb_7_4-branch:1.1.0.2
+	gdb_7_4-2011-12-13-branchpoint:1.1;
+locks; strict;
+comment	@# @;
+
+
+1.1
+date	2011.06.04.17.44.22;	author vapier;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.1
+log
+@sim: bfin: import testsuite
+
+Now that the common sim testsuite code supports .S and .c files, we
+can import the Blackfin testsuite.  There are about ~800 tests here,
+so I'm only attaching a compressed patch of them.  Other than adding
+files to sim/testsuite/sim/bfin/, the sim/configure.tgt file was
+updated to mark Blackfin as having a testsuite, and sim/configure
+regenerated.
+
+Signed-off-by: Mike Frysinger <vapier@@gentoo.org>
+@
+text
+@//Original:/proj/frio/dv/testcases/seq/se_ssync/se_ssync.dsp
+// Description: Test SSYNC by writing a bunch of MMRs and verifying read
+# mach: bfin
+# sim: --environment operating
+
+#include "test.h"
+.include "testutils.inc"
+start
+
+//
+// Constants and Defines
+//
+
+include(selfcheck.inc)
+include(std.inc)
+include(mmrs.inc)
+include(symtable.inc)
+
+#ifndef STACKSIZE
+#define STACKSIZE 0x10   // change for how much stack you need
+#endif
+
+LD32(p0, EVT5);
+LD32(r0, 0x55555555);
+LD32(p1, EVT6);
+LD32(r1, 0xAAAAAAAA);
+LD32(p2, EVT7);
+LD32(r2, 0xBABEFACE);
+LD32(p3, EVT8);
+LD32(r3, 0xCFCFCFCF);
+LD32(p4, EVT9);
+LD32(r4, 0xDEADBEEF);
+LD32(p5, EVT10);
+LD32(r5, 0xBAD1BAD1);
+
+    [ P0 ] = R0;      // write the MMRS
+    [ P1 ] = R1;
+    [ P2 ] = R2;
+    [ P3 ] = R3;
+    [ P4 ] = R4;
+    [ P5 ] = R5;
+
+SSYNC;          // wait for it
+
+    R7 = [ P5 ];      // read back MMRs
+    R6 = [ P4 ];      // should be updated
+    R5 = [ P3 ];
+    R4 = [ P2 ];
+    R3 = [ P1 ];
+    R2 = [ P0 ];
+
+CHECK_INIT_DEF(p0); //CHECK_INIT(p0, 0xFF7FFFFC);
+
+CHECKREG(r2, 0x55555555);
+CHECKREG(r3, 0xAAAAAAAA);
+CHECKREG(r4, 0xBABEFACE);
+CHECKREG(r5, 0xCFCFCFCF);
+CHECKREG(r6, 0xDEADBEEF);
+CHECKREG(r7, 0xBAD1BAD1);
+
+dbg_pass;
+@

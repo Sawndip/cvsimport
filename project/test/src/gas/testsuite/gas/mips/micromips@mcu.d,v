@@ -1,0 +1,317 @@
+head	1.2;
+access;
+symbols
+	binutils-2_24-branch:1.2.0.2
+	binutils-2_24-branchpoint:1.2
+	binutils-2_23_2:1.1
+	binutils-2_23_1:1.1
+	binutils-2_23:1.1
+	binutils-2_23-branch:1.1.0.6
+	binutils-2_23-branchpoint:1.1
+	binutils-2_22_branch:1.1.0.4
+	binutils-2_22:1.1
+	binutils-2_22-branch:1.1.0.2
+	binutils-2_22-branchpoint:1.1
+	binutils_latest_snapshot:1.2;
+locks; strict;
+comment	@# @;
+
+
+1.2
+date	2013.07.07.11.32.31;	author rsandifo;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2011.08.09.15.20.02;	author macro;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@include/opcode/
+	* mips.h (M_ACLR_OB, M_ASET_OB, M_CACHE_OB, M_CACHEE_OB, M_L_DOB)
+	(M_LB_A, M_LBE_OB, M_LBU_A, M_LBUE_OB, M_LD_A, M_LD_OB, M_LDC2_OB)
+	(M_LDL_OB, M_LDM_OB, M_LDP_OB, M_LDR_OB, M_LH_A, M_LHE_OB, M_LHU_A)
+	(M_LHUE_OB, M_LL_OB, M_LLD_OB, M_LLE_OB, M_LS_A, M_LW_A, M_LWE_OB)
+	(M_LWC0_A, M_LWC1_A, M_LWC2_A, M_LWC2_OB, M_LWC3_A, M_LWL_A, M_LWL_OB)
+	(M_LWLE_OB, M_LWM_OB, M_LWP_OB, M_LWR_A, M_LWR_OB, M_LWRE_OB, M_LWU_OB)
+	(M_PREF_OB, M_PREFE_OB, M_S_DOB, M_SAA_OB, M_SAAD_OB, M_SC_OB)
+	(M_SCD_OB, M_SCE_OB, M_SD_A, M_SD_OB, M_SDC2_OB, M_SDL_OB, M_SDM_OB)
+	(M_SDP_OB, M_SDR_OB, M_SB_A, M_SBE_OB, M_SH_A, M_SHE_OB, M_SW_A)
+	(M_SWE_OB, M_SWC0_A, M_SWC1_A, M_SWC2_A, M_SWC2_OB, M_SWC3_A, M_SWL_A)
+	(M_SWL_OB, M_SWLE_OB, M_SWM_OB, M_SWP_OB, M_SWR_A, M_SWR_OB, M_SWRE_OB)
+	(M_ULD, M_ULH, M_ULHU, M_ULW, M_USH, M_USW, M_USD): Delete.
+	(M_ULD_A, M_ULH_A, M_ULHU_A, M_ULW_A, M_USH_A, M_USW_A, M_USD_A):
+	Rename to...
+	(M_ULD_AB, M_ULH_AB, M_ULHU_AB, M_ULW_AB, M_USH_AB, M_USW_AB)
+	(M_USD_AB): ...these.
+
+opcodes/
+	* mips-opc.c (mips_builtin_opcodes): Remove o(b) macros.  Move LD
+	and SD A(B) macros up.
+	* micromips-opc.c (micromips_opcodes): Likewise.
+
+gas/
+	* config/tc-mips.c (gprel16_reloc_p): New function.
+	(macro_read_relocs): Assume BFD_RELOC_LO16 if all relocs are
+	BFD_RELOC_UNUSED.
+	(offset_high_part, small_offset_p): New functions.
+	(nacro): Use them.  Remove *_OB and *_DOB cases.  For single-
+	register load and store macros, handle the 16-bit offset case first.
+	If a 16-bit offset is not suitable for the instruction we're
+	generating, load it into the temporary register using
+	ADDRESS_ADDI_INSN.  Make the M_LI_DD code fall through into the
+	M_L_DAB code once the address has been constructed.  For double load
+	and store macros, again handle the 16-bit offset case first.
+	If the second register cannot be accessed from the same high
+	part as the first, load it into AT using ADDRESS_ADDI_INSN.
+	Fix the handling of LD in cases where the first register is the
+	same as the base.  Also handle the case where the offset is
+	not 16 bits and the second register cannot be accessed from the
+	same high part as the first.  For unaligned loads and stores,
+	fuse the offbits == 12 and old "ab" handling.  Apply this handling
+	whenever the second offset needs a different high part from the first.
+	Construct the offset using ADDRESS_ADDI_INSN where possible,
+	for offbits == 16 as well as offbits == 12.  Use offset_reloc
+	when constructing the individual loads and stores.
+	(mips_ip): Set up imm_expr, imm2_expr, offset_expr, imm_reloc
+	and offset_reloc before matching against a particular opcode.
+	Handle elided 'A' constants.  Allow 'A' constants to use
+	relocation operators.
+
+gas/testsuite/
+	* gas/mips/ldstla-32.d: Avoid "lui at,0x0" sequences for
+	truncated constants.
+	* gas/mips/ldstla-32-shared.d: Likewise.
+	* gas/mips/mcu.d: Use ADDIU in preference to LI+ADDU when adding
+	16-bit constants to the base.
+	* gas/mips/micromips@@mcu.d: Likewise.
+	* gas/mips/micromips@@cache.d: Likewise.
+	* gas/mips/micromips@@pref.d: Likewise.
+	* gas/mips/micromips.d, gas/mips/micromips-insn32.d,
+	gas/mips/micromips-noinsn32.d, gas/mips/micromips-trap.d: Likewise.
+	Allow the full 16-bit offset range to be used for SB, LB and LBU in
+	USH and ULH sequences.  Fix the expected output for LD and SD when
+	the two LW and SW offsets need different high parts.
+	* gas/mips/eva.s: Test PREFE with relocation operators.
+	* gas/mips/eva.d: Use ADDIU in preference to LI+ADDU for 16-bit
+	constants.  Update after eva.s change.
+	* gas/mips/micromips@@eva.d: Likewise.
+	* gas/mips/ld-reloc.s, gas/mips/ld-reloc.d, gas/mips/l_d-reloc.s,
+	gas/mips/l_d-reloc.d, gas/mips/ulw-reloc.s, gas/mips/ulw-reloc.d,
+	gas/mips/micromips@@ulw-reloc.d, gas/mips/ulh-reloc.s,
+	gas/mips/ulh-reloc.d: New tests.
+	* gas/mips/mips.exp: Run them.
+@
+text
+@#objdump: -dr --show-raw-insn
+#name: MCU for MIPS32r2
+#as: -32
+#source: mcu.s
+
+.*: +file format .*mips.*
+
+Disassembly of section \.text:
+
+[0-9a-f]+ <foo>:
+[ 0-9a-f]+:	0000 d37c 	iret
+[ 0-9a-f]+:	2000 b000 	aclr	0x0,0\(zero\)
+[ 0-9a-f]+:	2000 b000 	aclr	0x0,0\(zero\)
+[ 0-9a-f]+:	2000 b000 	aclr	0x0,0\(zero\)
+[ 0-9a-f]+:	2020 b000 	aclr	0x1,0\(zero\)
+[ 0-9a-f]+:	2040 b000 	aclr	0x2,0\(zero\)
+[ 0-9a-f]+:	2060 b000 	aclr	0x3,0\(zero\)
+[ 0-9a-f]+:	2080 b000 	aclr	0x4,0\(zero\)
+[ 0-9a-f]+:	20a0 b000 	aclr	0x5,0\(zero\)
+[ 0-9a-f]+:	20c0 b000 	aclr	0x6,0\(zero\)
+[ 0-9a-f]+:	20e0 b000 	aclr	0x7,0\(zero\)
+[ 0-9a-f]+:	20e2 b000 	aclr	0x7,0\(v0\)
+[ 0-9a-f]+:	20ff b000 	aclr	0x7,0\(ra\)
+[ 0-9a-f]+:	20ff b7ff 	aclr	0x7,2047\(ra\)
+[ 0-9a-f]+:	20ff b800 	aclr	0x7,-2048\(ra\)
+[ 0-9a-f]+:	303f 0800 	addiu	at,ra,2048
+[ 0-9a-f]+:	20e1 b000 	aclr	0x7,0\(at\)
+[ 0-9a-f]+:	303f f7ff 	addiu	at,ra,-2049
+[ 0-9a-f]+:	20e1 b000 	aclr	0x7,0\(at\)
+[ 0-9a-f]+:	303f 7fff 	addiu	at,ra,32767
+[ 0-9a-f]+:	20e1 b000 	aclr	0x7,0\(at\)
+[ 0-9a-f]+:	303f 8000 	addiu	at,ra,-32768
+[ 0-9a-f]+:	20e1 b000 	aclr	0x7,0\(at\)
+[ 0-9a-f]+:	41a1 0001 	lui	at,0x1
+[ 0-9a-f]+:	0081 0950 	addu	at,at,a0
+[ 0-9a-f]+:	20e1 bfff 	aclr	0x7,-1\(at\)
+[ 0-9a-f]+:	41a1 0001 	lui	at,0x1
+[ 0-9a-f]+:	0081 0950 	addu	at,at,a0
+[ 0-9a-f]+:	20e1 b000 	aclr	0x7,0\(at\)
+[ 0-9a-f]+:	41a1 ffff 	lui	at,0xffff
+[ 0-9a-f]+:	0081 0950 	addu	at,at,a0
+[ 0-9a-f]+:	20e1 b000 	aclr	0x7,0\(at\)
+[ 0-9a-f]+:	3024 8000 	addiu	at,a0,-32768
+[ 0-9a-f]+:	20e1 b000 	aclr	0x7,0\(at\)
+[ 0-9a-f]+:	41a1 ffff 	lui	at,0xffff
+[ 0-9a-f]+:	0081 0950 	addu	at,at,a0
+[ 0-9a-f]+:	20e1 b001 	aclr	0x7,1\(at\)
+[ 0-9a-f]+:	3024 8001 	addiu	at,a0,-32767
+[ 0-9a-f]+:	20e1 b000 	aclr	0x7,0\(at\)
+[ 0-9a-f]+:	41a1 f000 	lui	at,0xf000
+[ 0-9a-f]+:	0081 0950 	addu	at,at,a0
+[ 0-9a-f]+:	20e1 b000 	aclr	0x7,0\(at\)
+[ 0-9a-f]+:	20e4 bfff 	aclr	0x7,-1\(a0\)
+[ 0-9a-f]+:	41a1 1234 	lui	at,0x1234
+[ 0-9a-f]+:	5021 5000 	ori	at,at,0x5000
+[ 0-9a-f]+:	0081 0950 	addu	at,at,a0
+[ 0-9a-f]+:	20e1 b678 	aclr	0x7,1656\(at\)
+[ 0-9a-f]+:	3023 0000 	addiu	at,v1,0
+[ 	]*[0-9a-f]+: R_MICROMIPS_LO16	foo
+[ 0-9a-f]+:	2021 b000 	aclr	0x1,0\(at\)
+[ 0-9a-f]+:	3023 0000 	addiu	at,v1,0
+[ 	]*[0-9a-f]+: R_MICROMIPS_LO16	foo
+[ 0-9a-f]+:	2021 3000 	aset	0x1,0\(at\)
+[ 0-9a-f]+:	2000 3000 	aset	0x0,0\(zero\)
+[ 0-9a-f]+:	2000 3000 	aset	0x0,0\(zero\)
+[ 0-9a-f]+:	2000 3000 	aset	0x0,0\(zero\)
+[ 0-9a-f]+:	2020 3000 	aset	0x1,0\(zero\)
+[ 0-9a-f]+:	2040 3000 	aset	0x2,0\(zero\)
+[ 0-9a-f]+:	2060 3000 	aset	0x3,0\(zero\)
+[ 0-9a-f]+:	2080 3000 	aset	0x4,0\(zero\)
+[ 0-9a-f]+:	20a0 3000 	aset	0x5,0\(zero\)
+[ 0-9a-f]+:	20c0 3000 	aset	0x6,0\(zero\)
+[ 0-9a-f]+:	20e0 3000 	aset	0x7,0\(zero\)
+[ 0-9a-f]+:	20e2 3000 	aset	0x7,0\(v0\)
+[ 0-9a-f]+:	20ff 3000 	aset	0x7,0\(ra\)
+[ 0-9a-f]+:	20ff 37ff 	aset	0x7,2047\(ra\)
+[ 0-9a-f]+:	20ff 3800 	aset	0x7,-2048\(ra\)
+[ 0-9a-f]+:	303f 0800 	addiu	at,ra,2048
+[ 0-9a-f]+:	20e1 3000 	aset	0x7,0\(at\)
+[ 0-9a-f]+:	303f f7ff 	addiu	at,ra,-2049
+[ 0-9a-f]+:	20e1 3000 	aset	0x7,0\(at\)
+[ 0-9a-f]+:	303f 7fff 	addiu	at,ra,32767
+[ 0-9a-f]+:	20e1 3000 	aset	0x7,0\(at\)
+[ 0-9a-f]+:	303f 8000 	addiu	at,ra,-32768
+[ 0-9a-f]+:	20e1 3000 	aset	0x7,0\(at\)
+[ 0-9a-f]+:	41a1 0001 	lui	at,0x1
+[ 0-9a-f]+:	0081 0950 	addu	at,at,a0
+[ 0-9a-f]+:	20e1 3fff 	aset	0x7,-1\(at\)
+[ 0-9a-f]+:	41a1 0001 	lui	at,0x1
+[ 0-9a-f]+:	0081 0950 	addu	at,at,a0
+[ 0-9a-f]+:	20e1 3000 	aset	0x7,0\(at\)
+[ 0-9a-f]+:	41a1 ffff 	lui	at,0xffff
+[ 0-9a-f]+:	0081 0950 	addu	at,at,a0
+[ 0-9a-f]+:	20e1 3000 	aset	0x7,0\(at\)
+[ 0-9a-f]+:	3024 8000 	addiu	at,a0,-32768
+[ 0-9a-f]+:	20e1 3000 	aset	0x7,0\(at\)
+[ 0-9a-f]+:	41a1 ffff 	lui	at,0xffff
+[ 0-9a-f]+:	0081 0950 	addu	at,at,a0
+[ 0-9a-f]+:	20e1 3001 	aset	0x7,1\(at\)
+[ 0-9a-f]+:	3024 8001 	addiu	at,a0,-32767
+[ 0-9a-f]+:	20e1 3000 	aset	0x7,0\(at\)
+[ 0-9a-f]+:	41a1 f000 	lui	at,0xf000
+[ 0-9a-f]+:	0081 0950 	addu	at,at,a0
+[ 0-9a-f]+:	20e1 3000 	aset	0x7,0\(at\)
+[ 0-9a-f]+:	20e4 3fff 	aset	0x7,-1\(a0\)
+[ 0-9a-f]+:	41a1 1234 	lui	at,0x1234
+[ 0-9a-f]+:	5021 5000 	ori	at,at,0x5000
+[ 0-9a-f]+:	0081 0950 	addu	at,at,a0
+[ 0-9a-f]+:	20e1 3678 	aset	0x7,1656\(at\)
+	\.\.\.
+@
+
+
+1.1
+log
+@	gas/
+	* config/tc-mips.c (mips_set_options): Add ase_mcu.
+	(mips_opts): Initialise ase_mcu to -1.
+	(ISA_SUPPORTS_MCU_ASE): New macro.
+	(MIPS_CPU_ASE_MCU): Likewise.
+	(is_opcode_valid): Handle MCU.
+	(macro_build, macro): Likewise.
+	(validate_mips_insn, validate_micromips_insn): Likewise.
+	(mips_ip): Likewise.
+	(options): Add OPTION_MCU and OPTION_NO_MCU.
+	(md_longopts): Add mmcu and mno-mcu.
+	(md_parse_option): Handle OPTION_MCU and OPTION_NO_MCU.
+	(mips_after_parse_args): Handle MCU.
+	(s_mipsset): Likewise.
+	(md_show_usage): Handle MCU options.
+
+	* doc/as.texinfo: Document -mmcu and -mno-mcu options.
+	* doc/c-mips.texi: Likewise, and document ".set mcu" and
+	".set nomcu" directives.
+
+	gas/testsuite/
+	* gas/mips/micromips@@mcu.d: New test.
+	* gas/mips/mcu.d: Likewise.
+	* gas/mips/mcu.s: New test source.
+	* gas/mips/mips.exp: Run the new tests.
+
+	include/opcode/
+	* mips.h (OP_MASK_3BITPOS, OP_SH_3BITPOS): New macros.
+	(OP_MASK_OFFSET12, OP_SH_OFFSET12): Redefine.
+	(INSN_ASE_MASK): Add the MCU bit.
+	(INSN_MCU): New macro.
+	(M_ACLR_AB, M_ACLR_OB, M_ASET_AB, M_ASET_OB): New enum values.
+	(MICROMIPSOP_MASK_3BITPOS, MICROMIPSOP_SH_3BITPOS): New macros.
+
+	opcodes/
+	* mips-dis.c (mips_arch_choices): Enable MCU for "mips32r2"
+	and "mips64r2".
+	(print_insn_args, print_insn_micromips): Handle MCU.
+	* micromips-opc.c (MC): New macro.
+	(micromips_opcodes): Add "aclr", "aset" and "iret".
+	* mips-opc.c (MC): New macro.
+	(mips_builtin_opcodes): Add "aclr", "aset" and "iret".
+@
+text
+@d26 7
+a32 11
+[ 0-9a-f]+:	3020 1000 	li	at,4096
+[ 0-9a-f]+:	03e1 0950 	addu	at,at,ra
+[ 0-9a-f]+:	20e1 b800 	aclr	0x7,-2048\(at\)
+[ 0-9a-f]+:	3020 f000 	li	at,-4096
+[ 0-9a-f]+:	03e1 0950 	addu	at,at,ra
+[ 0-9a-f]+:	20e1 b7ff 	aclr	0x7,2047\(at\)
+[ 0-9a-f]+:	5020 8000 	li	at,0x8000
+[ 0-9a-f]+:	03e1 0950 	addu	at,at,ra
+[ 0-9a-f]+:	20e1 bfff 	aclr	0x7,-1\(at\)
+[ 0-9a-f]+:	3020 8000 	li	at,-32768
+[ 0-9a-f]+:	03e1 0950 	addu	at,at,ra
+d43 1
+a43 2
+[ 0-9a-f]+:	3020 8000 	li	at,-32768
+[ 0-9a-f]+:	0081 0950 	addu	at,at,a0
+d48 2
+a49 3
+[ 0-9a-f]+:	3020 8000 	li	at,-32768
+[ 0-9a-f]+:	0081 0950 	addu	at,at,a0
+[ 0-9a-f]+:	20e1 b001 	aclr	0x7,1\(at\)
+d78 7
+a84 11
+[ 0-9a-f]+:	3020 1000 	li	at,4096
+[ 0-9a-f]+:	03e1 0950 	addu	at,at,ra
+[ 0-9a-f]+:	20e1 3800 	aset	0x7,-2048\(at\)
+[ 0-9a-f]+:	3020 f000 	li	at,-4096
+[ 0-9a-f]+:	03e1 0950 	addu	at,at,ra
+[ 0-9a-f]+:	20e1 37ff 	aset	0x7,2047\(at\)
+[ 0-9a-f]+:	5020 8000 	li	at,0x8000
+[ 0-9a-f]+:	03e1 0950 	addu	at,at,ra
+[ 0-9a-f]+:	20e1 3fff 	aset	0x7,-1\(at\)
+[ 0-9a-f]+:	3020 8000 	li	at,-32768
+[ 0-9a-f]+:	03e1 0950 	addu	at,at,ra
+d95 1
+a95 2
+[ 0-9a-f]+:	3020 8000 	li	at,-32768
+[ 0-9a-f]+:	0081 0950 	addu	at,at,a0
+d100 2
+a101 3
+[ 0-9a-f]+:	3020 8000 	li	at,-32768
+[ 0-9a-f]+:	0081 0950 	addu	at,at,a0
+[ 0-9a-f]+:	20e1 3001 	aset	0x7,1\(at\)
+@
+

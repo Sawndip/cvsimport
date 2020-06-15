@@ -1,0 +1,139 @@
+head	1.2;
+access;
+symbols;
+locks; strict;
+comment	@.\" @;
+
+
+1.2
+date	2001.05.14.06.35.30;	author bje;	state dead;
+branches;
+next	1.1;
+
+1.1
+date	2000.12.07.19.30.59;	author fche;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@2001-05-14  Ben Elliston  <bje@@redhat.com>
+
+	* sidcomp.cgen-cpu/armconf.exp: Move to sidcomp.cgen-cpu.arm7t.
+	* sidcomp.cgen-cpu/armeit.conf: Ditto.
+	* sidcomp.cgen-cpu/armeit.tcl: Ditto.
+	* sidcomp.cgen-cpu/armfiq.cs: Ditto.
+	* sidcomp.cgen-cpu/armhello.ms: Ditto.
+	* sidcomp.cgen-cpu/armimemfault.ms: Ditto.
+	* sidcomp.cgen-cpu/arminvinsn.ms: Ditto.
+	* sidcomp.cgen-cpu/armirq.cs: Ditto.
+	* sidcomp.cgen-cpu/armmemfault.ms: Ditto.
+	* sidcomp.cgen-cpu/armmisc.exp: Ditto.
+	* sidcomp.cgen-cpu/armutils.inc: Ditto.
+@
+text
+@# output(): Hello, world.\n
+# mach(): all
+
+# Emit hello world while switching back and forth between arm/thumb.
+
+	.macro invalid
+# This is "undefined" but it's not properly decoded yet.
+	.word 0x07ffffff
+# This is stc which isn't recognized yet.
+	stc 0,cr0,[r0]
+	.endm
+
+	.global _start
+_start:
+# Run some simple insns to confirm the engine is at least working.
+	nop
+
+# Skip over output text.
+
+	bl skip_output
+
+hello_text:
+	.asciz "Hello, world.\n"
+
+	.p2align 2
+skip_output:
+
+# Prime loop.
+
+	mov r4, r14
+
+output_next:
+
+# Switch arm->thumb to output next chacter.
+# At this point r4 must point to the next character to output.
+
+	adr r0, into_thumb + 1
+	bx r0
+
+into_thumb:
+	.thumb
+
+# Output a character.
+
+	mov r0,#3 @@ writec angel call
+	mov r1,r4
+	swi 0xab @@ ??? Confirm number.
+
+# Switch thumb->arm.
+
+	adr r5, back_to_arm
+	bx r5
+
+	.p2align 2
+back_to_arm:
+	.arm
+
+# Load next character, see if done.
+
+	add r4,r4,#1
+	sub r3,r3,r3
+	ldrb r5,[r4,r3]
+	teq r5,#0
+	beq done
+
+# Output a character (in arm mode).
+
+	mov r0,#3
+	mov r1,r4
+	swi #0x123456
+
+# Load next character, see if done.
+
+	add r4,r4,#1
+	sub r3,r3,r3
+	ldrb r5,[r4,r3]
+	teq r5,#0
+	bne output_next
+
+done:
+	mov r0,#0x18
+	ldr r1,exit_code
+	swi #0x123456
+
+# If that fails, try to die with an invalid insn.
+
+	invalid
+
+exit_code:
+	.word 0x20026
+@
+
+
+1.1
+log
+@* public snapshot of sid simulator
+@
+text
+@@
+

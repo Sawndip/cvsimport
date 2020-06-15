@@ -1,0 +1,548 @@
+head	1.11;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.11
+	gdb_7_6-2013-04-26-release:1.11
+	gdb_7_6-branch:1.11.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.11
+	gdb_7_5_1-2012-11-29-release:1.10
+	gdb_7_5-2012-08-17-release:1.10
+	gdb_7_5-branch:1.10.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.10
+	gdb_7_4_1-2012-04-26-release:1.6.2.1
+	gdb_7_4-2012-01-24-release:1.6.2.1
+	gdb_7_4-branch:1.6.0.2
+	gdb_7_4-2011-12-13-branchpoint:1.6
+	gdb_7_3_1-2011-09-04-release:1.4
+	gdb_7_3-2011-07-26-release:1.4
+	gdb_7_3-branch:1.4.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.4
+	gdb_7_2-2010-09-02-release:1.3
+	gdb_7_2-branch:1.3.0.2
+	gdb_7_2-2010-07-07-branchpoint:1.3
+	gdb_7_1-2010-03-18-release:1.2
+	gdb_7_1-branch:1.2.0.2
+	gdb_7_1-2010-02-18-branchpoint:1.2;
+locks; strict;
+comment	@# @;
+
+
+1.11
+date	2013.01.01.06.41.26;	author brobecke;	state Exp;
+branches;
+next	1.10;
+
+1.10
+date	2012.07.11.15.21.36;	author tromey;	state Exp;
+branches;
+next	1.9;
+
+1.9
+date	2012.06.26.17.54.59;	author tromey;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2012.02.02.18.10.07;	author palves;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2012.01.04.08.27.54;	author brobecke;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2011.12.09.17.36.02;	author jkratoch;	state Exp;
+branches
+	1.6.2.1;
+next	1.5;
+
+1.5
+date	2011.11.08.08.23.48;	author qiyao;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2011.01.01.15.33.49;	author brobecke;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2010.05.28.18.26.41;	author msnyder;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2010.01.01.07.32.06;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2009.10.22.19.58.26;	author msnyder;	state Exp;
+branches;
+next	;
+
+1.6.2.1
+date	2012.01.06.04.54.28;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.11
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@# Copyright 2008-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+# This file is part of the GDB testsuite.  It tests 'until' and 
+# 'advance' in precord logfile.
+
+# This test suitable only for process record-replay
+if ![supports_process_record] {
+    return
+}
+
+standard_testfile until-reverse.c ur1.c
+set precsave [standard_output_file until.precsave]
+
+if { [prepare_for_testing $testfile.exp $testfile \
+	  [list $srcfile $srcfile2]] } {
+    return -1
+}
+
+set bp_location1  [gdb_get_line_number "set breakpoint 1 here"]
+set bp_location7  [gdb_get_line_number "set breakpoint 7 here"]
+set bp_location9  [gdb_get_line_number "set breakpoint 9 here" "$srcfile2"]
+set bp_location19 [gdb_get_line_number "set breakpoint 19 here"]
+set bp_location20 [gdb_get_line_number "set breakpoint 20 here"]
+set bp_location21 [gdb_get_line_number "set breakpoint 21 here"]
+
+runto main
+
+if [supports_process_record] {
+    # Activate process record/replay
+    gdb_test_no_output "record" "Turn on process record"
+}
+
+set end_of_main [gdb_get_line_number "set breakpoint 10a here" ]
+gdb_test "break $end_of_main" \
+    "Breakpoint $decimal at .*/$srcfile, line $end_of_main\." \
+    "BP at end of main"
+
+# This can take awhile.
+set oldtimeout $timeout
+set timeout [expr $oldtimeout + 120]
+gdb_test "continue" "Breakpoint .* set breakpoint 10a here .*" "run to end of main"
+
+# So can this, against gdbserver, for example.
+gdb_test "record save $precsave" \
+    "Saved core file $precsave with execution log\."  \
+    "save process recfile"
+set timeout $oldtimeout
+
+gdb_test "kill" "" "Kill process, prepare to debug log file" \
+    "Kill the program being debugged\\? \\(y or n\\) " "y"
+
+gdb_test "record restore $precsave" \
+    "Program terminated with signal .*" \
+    "reload core file"
+
+# Verify that plain vanilla "until <location>" works.
+#
+gdb_test "until $bp_location1" \
+    "main .* at .*:$bp_location1.*" \
+    "until line number"
+
+# Advance up to factorial, outer invocation
+#
+gdb_test "advance factorial" \
+    "factorial .value=6..*$srcfile:$bp_location7.*" \
+    "advance to factorial"
+
+# At this point, 'until' should continue the inferior up to when all the
+# inner invocations of factorial() are completed and we are back at this
+# frame.
+#
+gdb_test "until $bp_location19" \
+    "factorial .value=720.*${srcfile}:$bp_location19.*" \
+    "until factorial, recursive function"
+
+# Finish out to main scope
+#
+gdb_test "finish" \
+    " in main .*$srcfile:$bp_location1.*" \
+    "finish to main"
+
+# Advance to a function called by main (marker2)
+#
+gdb_test "advance marker2" \
+    "marker2 .a=43.*$srcfile2:$bp_location9.*" \
+    "advance to marker2"
+
+# Now issue an until with another function, not called by the current
+# frame, as argument. This should not work, i.e. the program should
+# stop at main, the caller, where we put the 'guard' breakpoint.
+#
+set test_msg "until func, not called by current frame"
+gdb_test_multiple "until marker3" "$test_msg" {
+    -re "main .*at .*${srcfile}:$bp_location20.*$gdb_prompt $" {
+	pass "$test_msg"
+    }
+    -re "main .*at .*${srcfile}:$bp_location21.*$gdb_prompt $" {
+	pass "$test_msg"
+    }
+}
+
+###
+###
+###
+
+# Set reverse execution direction
+
+gdb_test_no_output "set exec-dir reverse" "set reverse execution"
+
+#
+# We should now be at main, after the return from marker2.
+# "Advance" backward into marker2.
+#
+
+gdb_test "advance marker2" \
+    "marker2 .a=43.*$srcfile2:$bp_location9.*" \
+    "reverse-advance to marker2"
+
+# Finish out to main scope (backward)
+
+gdb_test "finish" \
+    " in main .*$srcfile:$bp_location20.*" \
+    "reverse-finish from marker2"
+
+# Advance backward to last line of factorial (outer invocation)
+
+gdb_test "advance $bp_location19" \
+    "factorial .value=720.*${srcfile}:$bp_location19.*" \
+    "reverse-advance to final return of factorial"
+
+# Now do "until" across the recursive calls, 
+# ending up in the same frame where we are now.
+
+gdb_test "until $bp_location7" \
+    "factorial .value=6..*$srcfile:$bp_location7.*" \
+    "reverse-until to entry of factorial"
+@
+
+
+1.10
+log
+@	* gdb.reverse/break-precsave.exp: Use standard_output_file.
+	* gdb.reverse/consecutive-precsave.exp: Use standard_output_file.
+	* gdb.reverse/finish-precsave.exp: Use standard_output_file.
+	* gdb.reverse/i386-precsave.exp: Use standard_output_file.
+	* gdb.reverse/machinestate-precsave.exp: Use standard_output_file.
+	* gdb.reverse/sigall-precsave.exp: Use standard_output_file.
+	* gdb.reverse/solib-precsave.exp: Use standard_output_file.
+	* gdb.reverse/step-precsave.exp: Use standard_output_file.
+	* gdb.reverse/until-precsave.exp: Use standard_output_file.
+	* gdb.reverse/watch-precsave.exp: Use standard_output_file.
+@
+text
+@d1 1
+a1 1
+# Copyright 2008-2012 Free Software Foundation, Inc.
+@
+
+
+1.9
+log
+@	* gdb.reverse/break-precsave.exp: Use standard_testfile.
+	* gdb.reverse/break-reverse.exp: Use standard_testfile.
+	* gdb.reverse/consecutive-precsave.exp: Use standard_testfile.
+	* gdb.reverse/consecutive-reverse.exp: Use standard_testfile.
+	* gdb.reverse/finish-precsave.exp: Use standard_testfile.
+	* gdb.reverse/finish-reverse-bkpt.exp: Use standard_testfile.
+	* gdb.reverse/finish-reverse.exp: Use standard_testfile.
+	* gdb.reverse/i386-precsave.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.reverse/i386-reverse.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.reverse/i386-sse-reverse.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.reverse/i387-env-reverse.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.reverse/i387-stack-reverse.exp: Use standard_testfile,
+	prepare_for_testing
+	* gdb.reverse/machinestate-precsave.exp: Use standard_testfile.
+	* gdb.reverse/machinestate.exp: Use standard_testfile.
+	* gdb.reverse/next-reverse-bkpt-over-sr.exp: Use standard_testfile.
+	* gdb.reverse/sigall-precsave.exp: Use standard_testfile,
+	build_executable.
+	* gdb.reverse/sigall-reverse.exp: Use standard_testfile,
+	build_executable.
+	* gdb.reverse/solib-precsave.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.reverse/solib-reverse.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.reverse/step-precsave.exp: Use standard_testfile.
+	* gdb.reverse/step-reverse.exp: Use standard_testfile.
+	* gdb.reverse/until-precsave.exp: Use standard_testfile.
+	* gdb.reverse/until-reverse.exp: Use standard_testfile.
+	* gdb.reverse/watch-precsave.exp: Use standard_testfile.
+	* gdb.reverse/watch-reverse.exp: Use standard_testfile.
+@
+text
+@d25 1
+d57 2
+a58 2
+gdb_test "record save until.precsave" \
+    "Saved core file until.precsave with execution log\."  \
+d65 1
+a65 1
+gdb_test "record restore until.precsave" \
+@
+
+
+1.8
+log
+@2012-02-02  Pedro Alves  <palves@@redhat.com>
+
+	* gdb.reverse/until-precsave.exp: Also put "record save" under the
+	extended timeout.
+@
+text
+@d24 1
+a24 3
+set testfile "until-reverse"
+set srcfile ${testfile}.c
+set srcfile1 ur1.c
+d26 2
+a27 1
+if { [prepare_for_testing $testfile.exp $testfile {until-reverse.c ur1.c} ] } {
+d33 1
+a33 1
+set bp_location9  [gdb_get_line_number "set breakpoint 9 here" "$srcfile1"]
+d97 1
+a97 1
+    "marker2 .a=43.*$srcfile1:$bp_location9.*" \
+d128 1
+a128 1
+    "marker2 .a=43.*$srcfile1:$bp_location9.*" \
+@
+
+
+1.7
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@a54 1
+set timeout $oldtimeout
+d56 1
+d60 1
+@
+
+
+1.6
+log
+@gdb/testsuite/
+	* gdb.reverse/until-precsave.exp (run to end of main) Extend the
+	timeout.
+@
+text
+@d1 1
+a1 1
+# Copyright 2008, 2009, 2010, 2011 Free Software Foundation, Inc.
+@
+
+
+1.6.2.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d1 1
+a1 1
+# Copyright 2008-2012 Free Software Foundation, Inc.
+@
+
+
+1.5
+log
+@gdb/testsuite/
+
+	* gdb.exp (supports_process_record): New.
+	(supports_reverse): New.
+	* gdb.reverse/break-precsave.exp: Call support_process_record
+	to run test conditionally.
+	* gdb.reverse/consecutive-precsave.exp: Likewise.
+	* gdb.reverse/i386-precsave.exp: Likewise.
+	* gdb.reverse/machinestate-precsave.exp: Likewise.
+	* gdb.reverse/solib-precsave.exp: Likewise.
+	* gdb.reverse/step-precsave.exp: Likewise.
+	* gdb.reverse/until-precsave.exp: Likewise.
+	* gdb.reverse/watch-precsave.exp: Likewise.
+	* gdb.reverse/break-reverse.exp: Call support_reverse  to run
+	test conditionally.
+	* gdb.reverse/consecutive-reverse.exp: Likewise.
+	* gdb.reverse/finish-precsave.exp: Likewise.
+	* gdb.reverse/finish-reverse-bkpt.exp: Likewise.
+	* gdb.reverse/finish-reverse.exp: Likewise.
+	* gdb.reverse/i386-reverse.exp: Likewise.
+	* gdb.reverse/i386-sse-reverse.exp: Likewise.
+	* gdb.reverse/machinestate.exp: Likewise.
+	* gdb.reverse/next-reverse-bkpt-over-sr.exp: Likewise.
+	* gdb.reverse/sigall-precsave.exp: Likewise.
+	* gdb.reverse/sigall-reverse.exp: Likewise.
+	* gdb.reverse/solib-reverse.exp: Likewise.
+	* gdb.reverse/step-reverse.exp: Likewise.
+	* gdb.reverse/until-reverse.exp: Likewise.
+	* gdb.reverse/watch-reverse.exp: Likewise.
+@
+text
+@d51 3
+d55 1
+@
+
+
+1.4
+log
+@run copyright.sh for 2011.
+@
+text
+@d20 1
+a20 1
+if ![target_info exists gdb,use_precord] {
+d41 1
+a41 1
+if [target_info exists gdb,use_precord] {
+@
+
+
+1.3
+log
+@2010-05-28  Michael Snyder  <msnyder@@msnyder-server.eng.vmware.com>
+
+	* gdb.reverse/break-precsave.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/break-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/consecutive-precsave.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/consecutive-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/finish-precsave.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/finish-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/i386-precsave.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/i386-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/i386-sse-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/i387-env-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/i387-stack-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/machinestate-precsave.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/machinestate.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/sigall-precsave.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/sigall-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/solib-precsave.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/solib-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/step-precsave.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/step-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/until-precsave.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/until-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/watch-precsave.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/watch-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+@
+text
+@d1 1
+a1 1
+# Copyright 2008, 2009, 2010 Free Software Foundation, Inc.
+@
+
+
+1.2
+log
+@Update copyright year in most headers.
+
+Automatic update by copyright.sh.
+@
+text
+@d43 1
+a43 2
+    gdb_test "record" "" "Turn on process record"
+    # FIXME: command ought to acknowledge, so we can test if it succeeded.
+a114 1
+# FIXME: command needs to acknowledge, so we can test if it succeeded.
+d116 1
+a116 1
+gdb_test "set exec-dir reverse" "" "set reverse execution"
+@
+
+
+1.1
+log
+@2009-10-19  Michael Snyder  <msnyder@@vmware.com>
+
+	* gdb.reverse/break-precsave.exp: New test.
+	* gdb.reverse/consecutive-precsave.exp: Ditto.
+	* gdb.reverse/finish-precsave.exp: Ditto.
+	* gdb.reverse/i386-precsave.exp: Ditto.
+	* gdb.reverse/machinestate-precsave.exp: Ditto.
+	* gdb.reverse/sigall-precsave.exp: Ditto.
+	* gdb.reverse/solilb-precsave.exp: Ditto.
+	* gdb.reverse/step-precsave.exp: Ditto.
+	* gdb.reverse/until-precsave.exp: Ditto.
+	* gdb.reverse/watch-precsave.exp: Ditto.
+@
+text
+@d1 1
+a1 1
+# Copyright 2008, 2009 Free Software Foundation, Inc.
+@
+

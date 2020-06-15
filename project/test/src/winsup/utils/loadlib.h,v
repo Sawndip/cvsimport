@@ -1,0 +1,222 @@
+head	1.4;
+access;
+symbols
+	cygwin-1_7_35-release:1.4
+	cygwin-1_7_34-release:1.4
+	cygwin-1_7_33-release:1.4
+	cygwin-1_7_32-release:1.4
+	cygwin-1_7_31-release:1.4
+	cygwin-1_7_30-release:1.4
+	cygwin-1_7_29-release:1.4
+	cygwin-1_7_29-release-branchpoint:1.4.0.4
+	cygwin-1_7_28-release:1.4
+	cygwin-1_7_27-release:1.4
+	cygwin-1_7_26-release:1.4
+	cygwin-1_7_25-release:1.4
+	cygwin-1_7_24-release:1.4
+	cygwin-1_7_23-release:1.4
+	cygwin-1_7_22-release:1.4
+	cygwin-1_7_21-release:1.4
+	cygwin-1_7_20-release:1.4
+	cygwin-1_7_19-release:1.4
+	cygwin-64bit-postmerge:1.4
+	cygwin-64bit-premerge-branch:1.4.0.2
+	cygwin-64bit-premerge:1.4
+	cygwin-1_7_18-release:1.4
+	cygwin-1_7_17-release:1.3
+	cygwin-64bit-branch:1.3.0.2
+	cygwin-1_7_16-release:1.3
+	cygwin-1_7_15-release:1.3
+	cygwin-1_7_14_2-release:1.3
+	cygwin-1_7_14-release:1.3
+	cygwin-1_7_12-release:1.3
+	cygwin-1_7_11-release:1.3
+	cygwin-1_7_10-release:1.3
+	cygwin-1_7_9-release:1.1
+	cygwin-1_7_8-release:1.1
+	cygwin-1_7_7-release:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.4
+date	2012.11.28.03.22.36;	author cgf;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2011.12.17.23.39.47;	author cgf;	state Exp;
+branches
+	1.3.2.1;
+next	1.2;
+
+1.2
+date	2011.03.29.11.02.58;	author corinna;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2010.08.28.11.22.37;	author corinna;	state Exp;
+branches;
+next	;
+
+1.3.2.1
+date	2012.11.29.17.15.23;	author corinna;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.4
+log
+@* Makefile.in: Move CFLAGS and CXXFLAGS so that they can be manipulated by
+Makefile.common.  Add -static-libstdc++ to *LDFLAGS.  Add dependencies for
+loadlib.h.
+* loadlib.h: Update copyright.
+(_load_sys_library): Properly define set_dll_library as WINAPI to avoid stack
+corruption.
+@
+text
+@/* loadlib.h
+
+   Copyright 2010, 2011, 2012 Red Hat, Inc.
+
+   This file is part of Cygwin.
+
+   This software is a copyrighted work licensed under the terms of the
+   Cygwin license.  Please consult the file "CYGWIN_LICENSE" for
+   details. */
+
+#ifndef _LOADLIB_H
+#define _LOADLIB_H
+
+#include <windows.h>
+#include <wchar.h>
+
+/* Load all system libs from the windows system directory by prepending the
+   full path.  This doesn't work for loadling cygwin1.dll.  For this case,
+   instead of prepending the path, make sure that the CWD is removed from
+   the DLL search path, if possible (XP SP1++, Vista++). */
+static HMODULE _load_sys_library (const wchar_t *dll) __attribute__ ((used));
+
+static HMODULE
+_load_sys_library (const wchar_t *dll)
+{
+  static BOOL WINAPI (*set_dll_directory)(LPCWSTR);
+  static WCHAR sysdir[MAX_PATH];
+  static UINT sysdir_len;
+
+  WCHAR dllpath[MAX_PATH];
+
+  if (!sysdir_len)
+    {
+      sysdir_len = GetSystemDirectoryW (sysdir, MAX_PATH);
+      sysdir[sysdir_len++] = L'\\';
+      sysdir[sysdir_len] = L'\0';
+    }
+  if (!set_dll_directory)
+    {
+      HMODULE k32 = GetModuleHandleW (L"kernel32.dll");
+      if (k32)
+      	set_dll_directory = (BOOL WINAPI (*)(LPCWSTR))
+		     GetProcAddress (k32, "SetDllDirectoryW");
+      if (!set_dll_directory)
+	set_dll_directory = (BOOL WINAPI (*)(LPCWSTR)) -1;
+      else
+      	set_dll_directory (L"");
+    }
+
+  if (wcscmp (dll, L"cygwin1.dll") == 0)
+    return LoadLibraryExW (L"cygwin1.dll", NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
+
+  wcscpy (dllpath, sysdir);
+  wcscpy (dllpath + sysdir_len, dll);
+  return LoadLibraryExW (dllpath, NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
+}
+
+#define LoadLibraryW(d)	_load_sys_library(d)
+#define LoadLibraryA(d)	_load_sys_library(L##d)
+
+#endif /* _LOADLIB_H */
+@
+
+
+1.3
+log
+@Clean up whitespace.
+@
+text
+@d3 1
+a3 1
+   Copyright 2010, 2011 Red Hat, Inc.
+d26 1
+a26 1
+  static BOOL (*set_dll_directory)(LPCWSTR);
+d42 1
+a42 1
+      	set_dll_directory = (BOOL (*)(LPCWSTR))
+d45 1
+a45 1
+	set_dll_directory = (BOOL (*)(LPCWSTR)) -1;
+@
+
+
+1.3.2.1
+log
+@Pull in changes from HEAD
+@
+text
+@d3 1
+a3 1
+   Copyright 2010, 2011, 2012 Red Hat, Inc.
+d26 1
+a26 1
+  static BOOL WINAPI (*set_dll_directory)(LPCWSTR);
+d42 1
+a42 1
+      	set_dll_directory = (BOOL WINAPI (*)(LPCWSTR))
+d45 1
+a45 1
+	set_dll_directory = (BOOL WINAPI (*)(LPCWSTR)) -1;
+@
+
+
+1.2
+log
+@	* cygcheck.cc (handle_unique_object_name): Avoid a compiler warning.
+	(dump_sysinfo): Ditto.
+	* loadlib.h (_load_sys_library): Mark as used, to avoid a compiler
+	warning.
+	* path.cc (oopt): Gurad with !FSTAB_ONLY to avoid a compiler warning.
+	(read_flags): Ditto.
+@
+text
+@d52 1
+a52 1
+    
+@
+
+
+1.1
+log
+@	* loadlib.h: New header implementing safe LoadLibrary calls.
+	Include throughout files using LoadLibrary function.
+	* cygcheck.cc (dump_sysinfo): Retrieve kernel32.dll handle via
+	GetModuleHandle, rather than using LoadLibrary.
+	* cygpath.cc (get_long_name): Ditto.
+	(do_sysfolders): Append .dll suffix in LoadLibrary call.
+	* ldh.cc (WinMain): Use LoadLibraryExW with DONT_RESOLVE_DLL_REFERENCES
+	to avoid loading malicious library code.
+	* locale.cc (print_locale_with_codeset): Change way to retrieve
+	kernel32.dll path.
+@
+text
+@d3 1
+a3 1
+   Copyright 2010 Red Hat, Inc.
+d21 2
+@
+

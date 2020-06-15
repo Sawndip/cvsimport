@@ -1,0 +1,1650 @@
+head	1.14;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.6
+	gdb_7_6-2013-04-26-release:1.6
+	gdb_7_6-branch:1.6.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.6
+	gdb_7_5_1-2012-11-29-release:1.3
+	gdb_7_5-2012-08-17-release:1.3
+	gdb_7_5-branch:1.3.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.3
+	gdb_7_4_1-2012-04-26-release:1.2.4.1
+	gdb_7_4-2012-01-24-release:1.2.4.1
+	gdb_7_4-branch:1.2.0.4
+	gdb_7_4-2011-12-13-branchpoint:1.2
+	gdb_7_3_1-2011-09-04-release:1.2
+	gdb_7_3-2011-07-26-release:1.2
+	gdb_7_3-branch:1.2.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.2;
+locks; strict;
+comment	@# @;
+
+
+1.14
+date	2013.10.08.19.56.15;	author tromey;	state Exp;
+branches;
+next	1.13;
+
+1.13
+date	2013.09.20.22.43.28;	author devans;	state Exp;
+branches;
+next	1.12;
+
+1.12
+date	2013.08.24.01.53.06;	author qiyao;	state Exp;
+branches;
+next	1.11;
+
+1.11
+date	2013.08.22.14.01.04;	author tromey;	state Exp;
+branches;
+next	1.10;
+
+1.10
+date	2013.06.18.18.11.19;	author tromey;	state Exp;
+branches;
+next	1.9;
+
+1.9
+date	2013.05.20.22.11.37;	author devans;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2013.05.06.19.44.04;	author tromey;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2013.04.17.21.07.09;	author devans;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2013.02.01.18.08.52;	author tromey;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2013.01.31.17.32.34;	author tromey;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2013.01.01.06.41.28;	author brobecke;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2012.01.04.08.27.56;	author brobecke;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2011.01.19.20.38.41;	author qiyao;	state Exp;
+branches
+	1.2.4.1;
+next	1.1;
+
+1.1
+date	2011.01.19.20.26.10;	author qiyao;	state Exp;
+branches;
+next	;
+
+1.2.4.1
+date	2012.01.06.04.54.30;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.14
+log
+@fix PR symtab/15597
+
+This patch fixes gdb PR symtab/15597.
+
+The bug is that the .gnu_debugaltlink section includes the build-id of
+the alt file, but gdb does not use it.
+
+This patch fixes the problem by changing gdb to do what it ought to
+always have done: verify the build id of the file found using the
+filename in .gnu_debugaltlink; and if that does not match, try to find
+the correct debug file using the build-id and debug-file-directory.
+
+This patch touches BFD.  Previously, gdb had its own code for parsing
+.gnu_debugaltlink; I changed it to use the BFD functions after those
+were introduced.  However, the BFD functions are incorrect -- they
+assume that .gnu_debugaltlink is formatted like .gnu_debuglink.
+However, it it is not.  Instead, it consists of a file name followed
+by the build-id -- no alignment, and the build-id is not a CRC.
+
+Fixing this properly is a bit of a pain.  But, because
+separate_alt_debug_file_exists just has a FIXME for the build-id case,
+I did not fix it properly.  Instead I introduced a hack.  This leaves
+BFD working just as well as it did before my patch.
+
+I'm willing to do something better here but I could use some guidance
+as to what.  It seems that the build-id code in BFD is largely punted
+on.
+
+FWIW gdb is the only user of bfd_get_alt_debug_link_info outside of
+BFD itself.
+
+I moved the build-id logic out of elfread.c and into a new file.
+This seemed cleanest to me.
+
+Writing a test case was a bit of a pain.  I added a couple new
+features to the DWARF assembler to handle this.
+
+Built and regtested on x86-64 Fedora 18.
+
+	* bfd-in2.h: Rebuild.
+	* opncls.c (bfd_get_alt_debug_link_info): Add buildid_len
+	parameter.  Change type of buildid_out.  Update.
+	(get_alt_debug_link_info_shim): New function.
+	(bfd_follow_gnu_debuglink): Use it.
+
+	* Makefile.in (SFILES): Add build-id.c.
+	(HFILES_NO_SRCDIR): Add build-id.h.
+	* build-id.c: New file, largely from elfread.c.  Modified
+	most functions.
+	* build-id.h: New file.
+	* dwarf2read.c (dwarf2_get_dwz_file): Update for change to
+	bfd_get_alt_debug_link_info.  Verify dwz file's build-id.
+	Search for dwz file using build-id.
+	* elfread.c (build_id_bfd_get, build_id_verify)
+	(build_id_to_debug_filename, find_separate_debug_file): Remove.
+
+	* gdb.dwarf2/dwzbuildid.exp: New file.
+	* lib/dwarf.exp (Dwarf::_section): Add "flags" and "type"
+	parameters.
+	(Dwarf::_defer_output): Change "section" parameter to
+	"section_spec"; update.
+	(Dwarf::gnu_debugaltlink, Dwarf::_note, Dwarf::build_id): New
+	procs.
+@
+text
+@# Copyright 2010-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# Return true if the target supports DWARF-2 and uses gas.
+# For now pick a sampling of likely targets.
+proc dwarf2_support {} {
+    if {[istarget *-*-linux*]
+	|| [istarget *-*-gnu*]
+	|| [istarget *-*-elf*]
+	|| [istarget *-*-openbsd*]
+	|| [istarget arm*-*-eabi*]
+	|| [istarget arm*-*-symbianelf*]
+	|| [istarget powerpc-*-eabi*]} {
+	return 1
+    }
+
+    return 0
+}
+
+# Build an executable from a fission-based .S file.
+# This handles the extra work of splitting the .o into non-dwo and dwo
+# pieces, making sure the .dwo is available if we're using cc-with-tweaks.sh
+# to build a .dwp file.
+# The arguments and results are the same as for build_executable.
+#
+# Current restrictions:
+# - only supports one source file
+# - cannot be run on remote hosts
+
+proc build_executable_from_fission_assembler { testname executable sources options } {
+    verbose -log "build_executable_from_fission_assembler $testname $executable $sources $options"
+    if { [llength $sources] != 1 } {
+	error "Only one source file supported."
+    }
+    if [is_remote host] {
+	error "Remote hosts are not supported."
+    }
+
+    global srcdir subdir
+    set source_file ${srcdir}/${subdir}/${sources}
+    set root_name [file rootname [file tail $source_file]]
+    set output_base [standard_output_file $root_name]
+    set object_file ${output_base}.o
+    set dwo_file ${output_base}.dwo
+    set object_options "object $options"
+    set objcopy [gdb_find_objcopy]
+
+    set result [gdb_compile $source_file $object_file object $options]
+    if { "$result" != "" } {
+	return -1
+    }
+
+    set command "$objcopy --extract-dwo $object_file $dwo_file"
+    verbose -log "Executing $command"
+    set result [catch "exec $command" output]
+    verbose -log "objcopy --extract-dwo output: $output"
+    if { $result == 1 } {
+	return -1
+    }
+
+    set command "$objcopy --strip-dwo $object_file"
+    verbose -log "Executing $command"
+    set result [catch "exec $command" output]
+    verbose -log "objcopy --strip-dwo output: $output"
+    if { $result == 1 } {
+	return -1
+    }
+
+    set result [gdb_compile $object_file $executable executable {nodebug}]
+    if { "$result" != "" } {
+	return -1
+    }
+
+    return 0
+}
+
+# A DWARF assembler.
+#
+# All the variables in this namespace are private to the
+# implementation.  Also, any procedure whose name starts with "_" is
+# private as well.  Do not use these.
+#
+# Exported functions are documented at their definition.
+#
+# In addition to the hand-written functions documented below, this
+# module automatically generates a function for each DWARF tag.  For
+# most tags, two forms are made: a full name, and one with the
+# "DW_TAG_" prefix stripped.  For example, you can use either
+# 'DW_TAG_compile_unit' or 'compile_unit' interchangeably.
+#
+# There are two exceptions to this rule: DW_TAG_variable and
+# DW_TAG_namespace.  For these, the full name must always be used,
+# as the short name conflicts with Tcl builtins.  (Should future
+# versions of Tcl or DWARF add more conflicts, this list will grow.
+# If you want to be safe you should always use the full names.)
+#
+# Each tag procedure is defined like:
+#
+# proc DW_TAG_mumble {{attrs {}} {children {}}} { ... }
+#
+# ATTRS is an optional list of attributes.
+# It is run through 'subst' in the caller's context before processing.
+#
+# Each attribute in the list has one of two forms:
+#   1. { NAME VALUE }
+#   2. { NAME VALUE FORM }
+#
+# In each case, NAME is the attribute's name.
+# This can either be the full name, like 'DW_AT_name', or a shortened
+# name, like 'name'.  These are fully equivalent.
+#
+# If FORM is given, it should name a DW_FORM_ constant.
+# This can either be the short form, like 'DW_FORM_addr', or a
+# shortened version, like 'addr'.  If the form is given, VALUE
+# is its value; see below.  In some cases, additional processing
+# is done; for example, DW_FORM_strp manages the .debug_str
+# section automatically.
+#
+# If FORM is 'SPECIAL_expr', then VALUE is treated as a location
+# expression.  The effective form is then DW_FORM_block, and VALUE
+# is passed to the (internal) '_location' proc to be translated.
+# This proc implements a miniature DW_OP_ assembler.
+#
+# If FORM is not given, it is guessed:
+# * If VALUE starts with the "@@" character, the rest of VALUE is
+#   looked up as a DWARF constant, and DW_FORM_sdata is used.  For
+#   example, '@@DW_LANG_c89' could be used.
+# * If VALUE starts with the ":" character, then it is a label
+#   reference.  The rest of VALUE is taken to be the name of a label,
+#   and DW_FORM_ref4 is used.  See 'new_label' and 'define_label'.
+# * Otherwise, VALUE is taken to be a string and DW_FORM_string is
+#   used.
+# More form-guessing functionality may be added.
+#
+# CHILDREN is just Tcl code that can be used to define child DIEs.  It
+# is evaluated in the caller's context.
+#
+# Currently this code is missing nice support for CFA handling, and
+# probably other things as well.
+
+namespace eval Dwarf {
+    # True if the module has been initialized.
+    variable _initialized 0
+
+    # Constants from dwarf2.h.
+    variable _constants
+    # DW_AT short names.
+    variable _AT
+    # DW_FORM short names.
+    variable _FORM
+    # DW_OP short names.
+    variable _OP
+
+    # The current output file.
+    variable _output_file
+
+    # Note: The _cu_ values here also apply to type units (TUs).
+    # Think of a TU as a special kind of CU.
+
+    # Current CU count.
+    variable _cu_count
+
+    # The current CU's base label.
+    variable _cu_label
+
+    # The current CU's version.
+    variable _cu_version
+
+    # The current CU's address size.
+    variable _cu_addr_size
+    # The current CU's offset size.
+    variable _cu_offset_size
+
+    # Label generation number.
+    variable _label_num
+
+    # The deferred output array.  The index is the section name; the
+    # contents hold the data for that section.
+    variable _deferred_output
+
+    # If empty, we should write directly to the output file.
+    # Otherwise, this is the name of a section to write to.
+    variable _defer
+
+    # The abbrev section.  Typically .debug_abbrev but can be .debug_abbrev.dwo
+    # for Fission.
+    variable _abbrev_section
+
+    # The next available abbrev number in the current CU's abbrev
+    # table.
+    variable _abbrev_num
+
+    # The string table for this assembly.  The key is the string; the
+    # value is the label for that string.
+    variable _strings
+
+    proc _process_one_constant {name value} {
+	variable _constants
+	variable _AT
+	variable _FORM
+	variable _OP
+
+	set _constants($name) $value
+
+	if {![regexp "^DW_(\[A-Z\]+)_(\[A-Za-z0-9_\]+)$" $name \
+		  ignore prefix name2]} {
+	    error "non-matching name: $name"
+	}
+
+	if {$name2 == "lo_user" || $name2 == "hi_user"} {
+	    return
+	}
+
+	# We only try to shorten some very common things.
+	# FIXME: CFA?
+	switch -exact -- $prefix {
+	    TAG {
+		# Create two procedures for the tag.  These call
+		# _handle_DW_TAG with the full tag name baked in; this
+		# does all the actual work.
+		proc $name {{attrs {}} {children {}}} \
+		    "_handle_DW_TAG $name \$attrs \$children"
+
+		# Filter out ones that are known to clash.
+		if {$name2 == "variable" || $name2 == "namespace"} {
+		    set name2 "tag_$name2"
+		}
+
+		if {[info commands $name2] != {}} {
+		    error "duplicate proc name: from $name"
+		}
+
+		proc $name2 {{attrs {}} {children {}}} \
+		    "_handle_DW_TAG $name \$attrs \$children"
+	    }
+
+	    AT {
+		set _AT($name2) $name
+	    }
+
+	    FORM {
+		set _FORM($name2) $name
+	    }
+
+	    OP {
+		set _OP($name2) $name
+	    }
+
+	    default {
+		return
+	    }
+	}
+    }
+
+    proc _read_constants {} {
+	global srcdir hex decimal
+	variable _constants
+
+	# DWARF name-matching regexp.
+	set dwrx "DW_\[a-zA-Z0-9_\]+"
+	# Whitespace regexp.
+	set ws "\[ \t\]+"
+
+	set fd [open [file join $srcdir .. .. include dwarf2.h]]
+	while {![eof $fd]} {
+	    set line [gets $fd]
+	    if {[regexp -- "^${ws}($dwrx)${ws}=${ws}($hex|$decimal),?$" \
+		     $line ignore name value ignore2]} {
+		_process_one_constant $name $value
+	    }
+	}
+	close $fd
+
+	set fd [open [file join $srcdir .. .. include dwarf2.def]]
+	while {![eof $fd]} {
+	    set line [gets $fd]
+	    if {[regexp -- \
+		     "^DW_\[A-Z_\]+${ws}\\(($dwrx),${ws}($hex|$decimal)\\)$" \
+		     $line ignore name value ignore2]} {
+		_process_one_constant $name $value
+	    }
+	}
+	close $fd
+
+	set _constants(SPECIAL_expr) $_constants(DW_FORM_block)
+    }
+
+    proc _quote {string} {
+	# FIXME
+	return "\"${string}\\0\""
+    }
+
+    proc _nz_quote {string} {
+	# For now, no quoting is done.
+	return "\"${string}\""
+    }
+
+    proc _handle_DW_FORM {form value} {
+	switch -exact -- $form {
+	    DW_FORM_string  {
+		_op .ascii [_quote $value]
+	    }
+
+	    DW_FORM_flag_present {
+		# We don't need to emit anything.
+	    }
+
+	    DW_FORM_data4 -
+	    DW_FORM_ref4 {
+		_op .4byte $value
+	    }
+
+	    DW_FORM_ref_addr {
+		variable _cu_offset_size
+		variable _cu_version
+		variable _cu_addr_size
+
+		if {$_cu_version == 2} {
+		    set size $_cu_addr_size
+		} else {
+		    set size $_cu_offset_size
+		}
+
+		_op .${size}byte $value
+	    }
+
+	    DW_FORM_ref1 -
+	    DW_FORM_flag -
+	    DW_FORM_data1 {
+		_op .byte $value
+	    }
+
+	    DW_FORM_sdata {
+		_op .sleb128 $value
+	    }
+
+	    DW_FORM_ref_udata -
+	    DW_FORM_udata {
+		_op .uleb128 $value
+	    }
+
+	    DW_FORM_addr {
+		variable _cu_addr_size
+
+		_op .${_cu_addr_size}byte $value
+	    }
+
+	    DW_FORM_data2 -
+	    DW_FORM_ref2 {
+		_op .2byte $value
+	    }
+
+	    DW_FORM_data8 -
+	    DW_FORM_ref8 -
+	    DW_FORM_ref_sig8 {
+		_op .8byte $value
+	    }
+
+	    DW_FORM_strp {
+		variable _strings
+		variable _cu_offset_size
+
+		if {![info exists _strings($value)]} {
+		    set _strings($value) [new_label strp]
+		    _defer_output .debug_string {
+			define_label $_strings($value)
+			_op .ascii [_quote $value]
+		    }
+		}
+
+		_op .${_cu_offset_size}byte $_strings($value) "strp: $value"
+	    }
+
+	    SPECIAL_expr {
+		set l1 [new_label "expr_start"]
+		set l2 [new_label "expr_end"]
+		_op .uleb128 "$l2 - $l1" "expression"
+		define_label $l1
+		_location $value
+		define_label $l2
+	    }
+
+	    DW_FORM_block1 {
+		set len [string length $value]
+		if {$len > 255} {
+		    error "DW_FORM_block1 length too long"
+		}
+		_op .byte $len
+		_op .ascii [_nz_quote $value]
+	    }
+
+	    DW_FORM_block2 -
+	    DW_FORM_block4 -
+
+	    DW_FORM_block -
+
+	    DW_FORM_ref2 -
+	    DW_FORM_indirect -
+	    DW_FORM_sec_offset -
+	    DW_FORM_exprloc -
+
+	    DW_FORM_GNU_addr_index -
+	    DW_FORM_GNU_str_index -
+	    DW_FORM_GNU_ref_alt -
+	    DW_FORM_GNU_strp_alt -
+
+	    default {
+		error "unhandled form $form"
+	    }
+	}
+    }
+
+    proc _guess_form {value varname} {
+	upvar $varname new_value
+
+	switch -exact -- [string range $value 0 0] {
+	    @@ {
+		# Constant reference.
+		variable _constants
+
+		set new_value $_constants([string range $value 1 end])
+		# Just the simplest.
+		return DW_FORM_sdata
+	    }
+
+	    : {
+		# Label reference.
+		variable _cu_label
+
+		set new_value "[string range $value 1 end] - $_cu_label"
+
+		return DW_FORM_ref4
+	    }
+
+	    default {
+		return DW_FORM_string
+	    }
+	}
+    }
+
+    # Map NAME to its canonical form.
+    proc _map_name {name ary} {
+	variable $ary
+
+	if {[info exists ${ary}($name)]} {
+	    set name [set ${ary}($name)]
+	}
+
+	return $name
+    }
+
+    proc _handle_DW_TAG {tag_name {attrs {}} {children {}}} {
+	variable _abbrev_section
+	variable _abbrev_num
+	variable _constants
+
+	set has_children [expr {[string length $children] > 0}]
+	set my_abbrev [incr _abbrev_num]
+
+	# We somewhat wastefully emit a new abbrev entry for each tag.
+	# There's no reason for this other than laziness.
+	_defer_output $_abbrev_section {
+	    _op .uleb128 $my_abbrev "Abbrev start"
+	    _op .uleb128 $_constants($tag_name) $tag_name
+	    _op .byte $has_children "has_children"
+	}
+
+	_op .uleb128 $my_abbrev "Abbrev ($tag_name)"
+
+	foreach attr $attrs {
+	    set attr_name [_map_name [lindex $attr 0] _AT]
+	    set attr_value [uplevel 2 [list subst [lindex $attr 1]]]
+	    if {[llength $attr] > 2} {
+		set attr_form [lindex $attr 2]
+	    } else {
+		set attr_form [_guess_form $attr_value attr_value]
+	    }
+	    set attr_form [_map_name $attr_form _FORM]
+
+	    _handle_DW_FORM $attr_form $attr_value
+
+	    _defer_output $_abbrev_section {
+		_op .uleb128 $_constants($attr_name) $attr_name
+		_op .uleb128 $_constants($attr_form) $attr_form
+	    }
+	}
+
+	_defer_output $_abbrev_section {
+	    # Terminator.
+	    _op .byte 0x0 Terminator
+	    _op .byte 0x0 Terminator
+	}
+
+	if {$has_children} {
+	    uplevel 2 $children
+
+	    # Terminate children.
+	    _op .byte 0x0 "Terminate children"
+	}
+    }
+
+    proc _emit {string} {
+	variable _output_file
+	variable _defer
+	variable _deferred_output
+
+	if {$_defer == ""} {
+	    puts $_output_file $string
+	} else {
+	    append _deferred_output($_defer) ${string}\n
+	}
+    }
+
+    proc _section {name {flags ""} {type ""}} {
+	if {$flags == "" && $type == ""} {
+	    _emit "        .section $name"
+	} elseif {$type == ""} {
+	    _emit "        .section $name, \"$flags\""
+	} else {
+	    _emit "        .section $name, \"$flags\", %$type"
+	}
+    }
+
+    # SECTION_SPEC is a list of arguments to _section.
+    proc _defer_output {section_spec body} {
+	variable _defer
+	variable _deferred_output
+
+	set old_defer $_defer
+	set _defer [lindex $section_spec 0]
+
+	if {![info exists _deferred_output($_defer)]} {
+	    set _deferred_output($_defer) ""
+	    eval _section $section_spec
+	}
+
+	uplevel $body
+
+	set _defer $old_defer
+    }
+
+    proc _defer_to_string {body} {
+	variable _defer
+	variable _deferred_output
+
+	set old_defer $_defer
+	set _defer temp
+
+	set _deferred_output($_defer) ""
+
+	uplevel $body
+
+	set result $_deferred_output($_defer)
+	unset _deferred_output($_defer)
+
+	set _defer $old_defer
+	return $result
+    }
+
+    proc _write_deferred_output {} {
+	variable _output_file
+	variable _deferred_output
+
+	foreach section [array names _deferred_output] {
+	    # The data already has a newline.
+	    puts -nonewline $_output_file $_deferred_output($section)
+	}
+
+	# Save some memory.
+	unset _deferred_output
+    }
+
+    proc _op {name value {comment ""}} {
+	set text "        ${name}        ${value}"
+	if {$comment != ""} {
+	    # Try to make stuff line up nicely.
+	    while {[string length $text] < 40} {
+		append text " "
+	    }
+	    append text "/* ${comment} */"
+	}
+	_emit $text
+    }
+
+    proc _compute_label {name} {
+	return ".L${name}"
+    }
+
+    # Return a name suitable for use as a label.  If BASE_NAME is
+    # specified, it is incorporated into the label name; this is to
+    # make debugging the generated assembler easier.  If BASE_NAME is
+    # not specified a generic default is used.  This proc does not
+    # define the label; see 'define_label'.  'new_label' attempts to
+    # ensure that label names are unique.
+    proc new_label {{base_name label}} {
+	variable _label_num
+
+	return [_compute_label ${base_name}[incr _label_num]]
+    }
+
+    # Define a label named NAME.  Ordinarily, NAME comes from a call
+    # to 'new_label', but this is not required.
+    proc define_label {name} {
+	_emit "${name}:"
+    }
+
+    # Declare a global label.  This is typically used to refer to
+    # labels defined in other files, for example a function defined in
+    # a .c file.
+    proc extern {args} {
+	foreach name $args {
+	    _op .global $name
+	}
+    }
+
+    # A higher-level interface to label handling.
+    #
+    # ARGS is a list of label descriptors.  Each one is either a
+    # single element, or a list of two elements -- a name and some
+    # text.  For each descriptor, 'new_label' is invoked.  If the list
+    # form is used, the second element in the list is passed as an
+    # argument.  The label name is used to define a variable in the
+    # enclosing scope; this can be used to refer to the label later.
+    # The label name is also used to define a new proc whose name is
+    # the label name plus a trailing ":".  This proc takes a body as
+    # an argument and can be used to define the label at that point;
+    # then the body, if any, is evaluated in the caller's context.
+    #
+    # For example:
+    #
+    # declare_labels int_label
+    # something { ... $int_label }   ;# refer to the label
+    # int_label: constant { ... }    ;# define the label
+    proc declare_labels {args} {
+	foreach arg $args {
+	    set name [lindex $arg 0]
+	    set text [lindex $arg 1]
+
+	    upvar $name label_var
+	    if {$text == ""} {
+		set label_var [new_label]
+	    } else {
+		set label_var [new_label $text]
+	    }
+
+	    proc ${name}: {args} [format {
+		define_label %s
+		uplevel $args
+	    } $label_var]
+	}
+    }
+
+    # This is a miniature assembler for location expressions.  It is
+    # suitable for use in the attributes to a DIE.  Its output is
+    # prefixed with "=" to make it automatically use DW_FORM_block.
+    # BODY is split by lines, and each line is taken to be a list.
+    # (FIXME should use 'info complete' here.)
+    # Each list's first element is the opcode, either short or long
+    # forms are accepted.
+    # FIXME argument handling
+    # FIXME move docs
+    proc _location {body} {
+	variable _constants
+	variable _cu_label
+	variable _cu_addr_size
+	variable _cu_offset_size
+
+	foreach line [split $body \n] {
+	    if {[lindex $line 0] == ""} {
+		continue
+	    }
+	    set opcode [_map_name [lindex $line 0] _OP]
+	    _op .byte $_constants($opcode) $opcode
+
+	    switch -exact -- $opcode {
+		DW_OP_addr {
+		    _op .${_cu_addr_size}byte [lindex $line 1]
+		}
+
+		DW_OP_const1u -
+		DW_OP_const1s {
+		    _op .byte [lindex $line 1]
+		}
+
+		DW_OP_const2u -
+		DW_OP_const2s {
+		    _op .2byte [lindex $line 1]
+		}
+
+		DW_OP_const4u -
+		DW_OP_const4s {
+		    _op .4byte [lindex $line 1]
+		}
+
+		DW_OP_const8u -
+		DW_OP_const8s {
+		    _op .8byte [lindex $line 1]
+		}
+
+		DW_OP_constu {
+		    _op .uleb128 [lindex $line 1]
+		}
+		DW_OP_consts {
+		    _op .sleb128 [lindex $line 1]
+		}
+
+		DW_OP_piece {
+		    _op .uleb128 [lindex $line 1]
+		}
+
+		DW_OP_GNU_implicit_pointer {
+		    if {[llength $line] != 3} {
+			error "usage: DW_OP_GNU_implicit_pointer LABEL OFFSET"
+		    }
+
+		    # Here label is a section offset.
+		    set label [lindex $line 1]
+		    _op .${_cu_offset_size}byte $label
+		    _op .sleb128 [lindex $line 2]
+		}
+
+		DW_OP_deref_size {
+		    if {[llength $line] != 2} {
+			error "usage: DW_OP_deref_size SIZE"
+		    }
+
+		    _op .byte [lindex $line 1]
+		}
+
+		default {
+		    if {[llength $line] > 1} {
+			error "Unimplemented: operands in location for $opcode"
+		    }
+		}
+	    }
+	}
+    }
+
+    # Emit a DWARF CU.
+    # OPTIONS is a list with an even number of elements containing
+    # option-name and option-value pairs.
+    # Current options are:
+    # is_64 0|1    - boolean indicating if you want to emit 64-bit DWARF
+    #                default = 0 (32-bit)
+    # version n    - DWARF version number to emit
+    #                default = 4
+    # addr_size n  - the size of addresses, 32, 64, or default
+    #                default = default
+    # fission 0|1  - boolean indicating if generating Fission debug info
+    #                default = 0
+    # BODY is Tcl code that emits the DIEs which make up the body of
+    # the CU.  It is evaluated in the caller's context.
+    proc cu {options body} {
+	variable _cu_count
+	variable _abbrev_section
+	variable _abbrev_num
+	variable _cu_label
+	variable _cu_version
+	variable _cu_addr_size
+	variable _cu_offset_size
+
+	# Establish the defaults.
+	set is_64 0
+	set _cu_version 4
+	set _cu_addr_size default
+	set fission 0
+	set section ".debug_info"
+	set _abbrev_section ".debug_abbrev"
+
+	foreach { name value } $options {
+	    switch -exact -- $name {
+		is_64 { set is_64 $value }
+		version { set _cu_version $value }
+		addr_size { set _cu_addr_size $value }
+		fission { set fission $value }
+		default { error "unknown option $name" }
+	    }
+	}
+	if {$_cu_addr_size == "default"} {
+	    if {[is_64_target]} {
+		set _cu_addr_size 8
+	    } else {
+		set _cu_addr_size 4
+	    }
+	}
+	set _cu_offset_size [expr { $is_64 ? 8 : 4 }]
+	if { $fission } {
+	    set section ".debug_info.dwo"
+	    set _abbrev_section ".debug_abbrev.dwo"
+	}
+
+	_section $section
+
+	set cu_num [incr _cu_count]
+	set my_abbrevs [_compute_label "abbrev${cu_num}_begin"]
+	set _abbrev_num 1
+
+	set _cu_label [_compute_label "cu${cu_num}_begin"]
+	set start_label [_compute_label "cu${cu_num}_start"]
+	set end_label [_compute_label "cu${cu_num}_end"]
+	
+	define_label $_cu_label
+	if {$is_64} {
+	    _op .4byte 0xffffffff
+	    _op .8byte "$end_label - $start_label"
+	} else {
+	    _op .4byte "$end_label - $start_label"
+	}
+	define_label $start_label
+	_op .2byte $_cu_version Version
+	_op .4byte $my_abbrevs Abbrevs
+	_op .byte $_cu_addr_size "Pointer size"
+
+	_defer_output $_abbrev_section {
+	    define_label $my_abbrevs
+	}
+
+	uplevel $body
+
+	_defer_output $_abbrev_section {
+	    # Emit the terminator.
+	    _op .byte 0x0 Terminator
+	    _op .byte 0x0 Terminator
+	}
+
+	define_label $end_label
+    }
+
+    # Emit a DWARF TU.
+    # OPTIONS is a list with an even number of elements containing
+    # option-name and option-value pairs.
+    # Current options are:
+    # is_64 0|1    - boolean indicating if you want to emit 64-bit DWARF
+    #                default = 0 (32-bit)
+    # version n    - DWARF version number to emit
+    #                default = 4
+    # addr_size n  - the size of addresses, 32, 64, or default
+    #                default = default
+    # fission 0|1  - boolean indicating if generating Fission debug info
+    #                default = 0
+    # SIGNATURE is the 64-bit signature of the type.
+    # TYPE_LABEL is the label of the type defined by this TU,
+    # or "" if there is no type (i.e., type stubs in Fission).
+    # BODY is Tcl code that emits the DIEs which make up the body of
+    # the TU.  It is evaluated in the caller's context.
+    proc tu {options signature type_label body} {
+	variable _cu_count
+	variable _abbrev_section
+	variable _abbrev_num
+	variable _cu_label
+	variable _cu_version
+	variable _cu_addr_size
+	variable _cu_offset_size
+
+	# Establish the defaults.
+	set is_64 0
+	set _cu_version 4
+	set _cu_addr_size default
+	set fission 0
+	set section ".debug_types"
+	set _abbrev_section ".debug_abbrev"
+
+	foreach { name value } $options {
+	    switch -exact -- $name {
+		is_64 { set is_64 $value }
+		version { set _cu_version $value }
+		addr_size { set _cu_addr_size $value }
+		fission { set fission $value }
+		default { error "unknown option $name" }
+	    }
+	}
+	if {$_cu_addr_size == "default"} {
+	    if {[is_64_target]} {
+		set _cu_addr_size 8
+	    } else {
+		set _cu_addr_size 4
+	    }
+	}
+	set _cu_offset_size [expr { $is_64 ? 8 : 4 }]
+	if { $fission } {
+	    set section ".debug_types.dwo"
+	    set _abbrev_section ".debug_abbrev.dwo"
+	}
+
+	_section $section
+
+	set cu_num [incr _cu_count]
+	set my_abbrevs [_compute_label "abbrev${cu_num}_begin"]
+	set _abbrev_num 1
+
+	set _cu_label [_compute_label "cu${cu_num}_begin"]
+	set start_label [_compute_label "cu${cu_num}_start"]
+	set end_label [_compute_label "cu${cu_num}_end"]
+
+	define_label $_cu_label
+	if {$is_64} {
+	    _op .4byte 0xffffffff
+	    _op .8byte "$end_label - $start_label"
+	} else {
+	    _op .4byte "$end_label - $start_label"
+	}
+	define_label $start_label
+	_op .2byte $_cu_version Version
+	_op .4byte $my_abbrevs Abbrevs
+	_op .byte $_cu_addr_size "Pointer size"
+	_op .8byte $signature Signature
+	if { $type_label != "" } {
+	    uplevel declare_labels $type_label
+	    upvar $type_label my_type_label
+	    if {$is_64} {
+		_op .8byte "$my_type_label - $_cu_label"
+	    } else {
+		_op .4byte "$my_type_label - $_cu_label"
+	    }
+	} else {
+	    if {$is_64} {
+		_op .8byte 0
+	    } else {
+		_op .4byte 0
+	    }
+	}
+
+	_defer_output $_abbrev_section {
+	    define_label $my_abbrevs
+	}
+
+	uplevel $body
+
+	_defer_output $_abbrev_section {
+	    # Emit the terminator.
+	    _op .byte 0x0 Terminator
+	    _op .byte 0x0 Terminator
+	}
+
+	define_label $end_label
+    }
+
+    proc _empty_array {name} {
+	upvar $name the_array
+
+	catch {unset the_array}
+	set the_array(_) {}
+	unset the_array(_)
+    }
+
+    # Emit a .gnu_debugaltlink section with the given file name and
+    # build-id.  The buildid should be represented as a hexadecimal
+    # string, like "ffeeddcc".
+    proc gnu_debugaltlink {filename buildid} {
+	_defer_output .gnu_debugaltlink {
+	    _op .ascii [_quote $filename]
+	    foreach {a b} [split $buildid {}] {
+		_op .byte 0x$a$b
+	    }
+	}
+    }
+
+    proc _note {type name hexdata} {
+	set namelen [expr [string length $name] + 1]
+
+	# Name size.
+	_op .4byte $namelen
+	# Data size.
+	_op .4byte [expr [string length $hexdata] / 2]
+	# Type.
+	_op .4byte $type
+	# The name.
+	_op .ascii [_quote $name]
+	# Alignment.
+	set align 2
+	set total [expr {($namelen + (1 << $align) - 1) & (-1 << $align)}]
+	for {set i $namelen} {$i < $total} {incr i} {
+	    _op .byte 0
+	}
+	# The data.
+	foreach {a b} [split $hexdata {}] {
+	    _op .byte 0x$a$b
+	}
+    }
+
+    # Emit a note section holding the given build-id.
+    proc build_id {buildid} {
+	_defer_output {.note.gnu.build-id a note} {
+	    # From elf/common.h.
+	    set NT_GNU_BUILD_ID 3
+
+	    _note $NT_GNU_BUILD_ID GNU $buildid
+	}
+    }
+
+    # The top-level interface to the DWARF assembler.
+    # FILENAME is the name of the file where the generated assembly
+    # code is written.
+    # BODY is Tcl code to emit the assembly.  It is evaluated via
+    # "eval" -- not uplevel as you might expect, because it is
+    # important to run the body in the Dwarf namespace.
+    #
+    # A typical invocation is something like:
+    #    Dwarf::assemble $file {
+    #        cu 0 2 8 {
+    #            compile_unit {
+    #            ...
+    #            }
+    #        }
+    #        cu 0 2 8 {
+    #        ...
+    #        }
+    #    }
+    proc assemble {filename body} {
+	variable _initialized
+	variable _output_file
+	variable _deferred_output
+	variable _defer
+	variable _label_num
+	variable _strings
+	variable _cu_count
+
+	if {!$_initialized} {
+	    _read_constants
+	    set _initialized 1
+	}
+
+	set _output_file [open $filename w]
+	set _cu_count 0
+	_empty_array _deferred_output
+	set _defer ""
+	set _label_num 0
+	_empty_array _strings
+
+	# Not "uplevel" here, because we want to evaluate in this
+	# namespace.  This is somewhat bad because it means we can't
+	# readily refer to outer variables.
+	eval $body
+
+	_write_deferred_output
+
+	catch {close $_output_file}
+	set _output_file {}
+    }
+}
+@
+
+
+1.13
+log
+@	* lib/dwarf.exp (build_executable_from_fission_assembler): New proc.
+	* gdb.dwarf2/fission-base.S: Update.  Split out .dwo into separate
+	file.
+	* gdb.dwarf2/fission-loclists.S: Ditto.
+	* gdb.dwarf2/fission-reread.S: Ditto.
+	* gdb.dwarf2/fission-base.exp: Skip of remote host.  Compile with
+	build_executable_from_fission_assembler.
+	* gdb.dwarf2/fission-loclists.exp: Ditto.
+	* gdb.dwarf2/fission-reread.exp: Ditto.
+@
+text
+@d526 8
+a533 2
+    proc _section {name} {
+	_emit "        .section $name"
+d536 2
+a537 1
+    proc _defer_output {section body} {
+d542 1
+a542 1
+	set _defer $section
+d546 1
+a546 1
+	    _section $section
+d958 45
+@
+
+
+1.12
+log
+@gdb/testsuite/
+
+	* lib/dwarf.exp (_location): Handle DW_OP_deref_size.
+	* gdb.trace/entry-values.c: New.
+	* gdb.trace/entry-values.exp: New.
+@
+text
+@d32 57
+@
+
+
+1.11
+log
+@fix dwz.exp on 32-bit targets
+
+This fixes dwz.exp on 32-bit targets.  It does so by introducing a new
+"default" setting for the address size in the DWARF assembler.
+
+Built and regtested on x86-64 Fedora 18.
+I also ran the gdb.dwarf2 tests on an x86 machine (gcc45).
+
+	* lib/dwarf.exp (cu, tu): Handle addr_size of "default".  Change
+	default addr_size.
+	* lib/gdb.exp (is_64_target): New gdb_caching_proc.
+@
+text
+@d670 8
+@
+
+
+1.10
+log
+@Fix PR symtab/15391
+
+PR symtab/15391 is a failure with the DW_OP_GNU_implicit_pointer
+feature.
+
+I tracked it down to a logic error in read_pieced_value.  The code
+truncates this_size_bits according to the type size and offset too
+early -- it should do it after taking bits_to_skip into account.
+
+This patch fixes the bug.
+
+While testing this, I also tripped across a latent bug because
+indirect_pieced_value does not sign-extend where needed.  This patch
+fixes this bug as well.
+
+Finally, Pedro pointed out that a previous version implemented sign
+extension incorrectly.  This version introduces a new gdb_sign_extend
+function for this.  A couple of notes on this function:
+
+* It has the gdb_ prefix to avoid clashes with various libraries that
+  felt free to avoid proper namespacing.  There is a "sign_extend"
+  function in a Tile GX header, in an SOM-related BFD header (and in
+  sh64-tdep.c and as a macro in arm-wince-tdep.c, but those are
+  ours...)
+
+* I looked at all the sign extensions in gdb and didn't see ones that
+  I felt comfortable converting to use this function; in large part
+  because I don't have a good way to test the conversion.
+
+Built and regtested on x86-64 Fedora 18.  New test cases included;
+this required a minor addition to the DWARF assembler.  Note that the
+DWARF CU made by implptrpiece.exp uses a funny pointer size in order
+to show the sign-extension bug on all platforms.
+
+	* dwarf2loc.c (read_pieced_value): Truncate this_size_bits
+	after taking bits_to_skip into account.  Sign extend byte_offset.
+	* utils.h (gdb_sign_extend): Declare.
+	* utils.c (gdb_sign_extend): New function.
+
+	* gdb.dwarf2/implptrpiece.exp: New file.
+	* gdb.dwarf2/implptrconst.exp (d): New variable.
+	Print d.
+	* lib/dwarf2.exp (Dwarf::_location): Handle DW_OP_piece.
+@
+text
+@d687 2
+a688 2
+    # addr_size n  - the size of addresses, 32 or 64
+    #                default = 64
+d705 1
+a705 1
+	set _cu_addr_size 8
+d719 7
+d777 2
+a778 2
+    # addr_size n  - the size of addresses, 32 or 64
+    #                default = 64
+d798 1
+a798 1
+	set _cu_addr_size 8
+d812 7
+@
+
+
+1.9
+log
+@	* lib/dwarf.exp (Dwarf): New variable _abbrev_section.
+	(_handle_DW_TAG): Use it.
+	(cu, tu): Replace parameters is_64, version, addr_size with options.
+	All callers updated.  Add Fission support.
+	* gdb.dwarf2/implptrconst.exp: Update callers of "cu".
+	* gdb.dwarf2/method-ptr.exp: Ditto.
+	* gdb.dwarf2/nostaticblock.exp: Ditto.
+	* gdb.dwarf2/subrange.exp: Ditto.
+	* gdb.dwarf2/missing-sig-type.exp: Update callers of "cu", "tu".
+@
+text
+@d614 1
+d655 4
+d666 1
+a666 1
+		    _op .${_cu_addr_size}byte $label
+@
+
+
+1.8
+log
+@	* dwarf2loc.c (invalid_synthetic_pointer): Move earlier.
+	(indirect_pieced_value): Call dwarf2_fetch_constant_bytes
+	if needed.
+	* dwarf2loc.h (dwarf2_fetch_constant_bytes): Declare.
+	* dwarf2read.c (write_constant_as_bytes)
+	(dwarf2_fetch_constant_bytes): New functions.
+gdb/testsuite
+	* gdb.dwarf2/implptrconst.c: New file.
+	* gdb.dwarf2/implptrconst.exp: New file.
+	* lib/dwarf.exp (Dwarf::_nz_quote): New proc.
+	(Dwarf::_handle_DW_FORM): Handle DW_FORM_block1.
+	(Dwarf::_location): Handle DW_OP_GNU_implicit_pointer.
+@
+text
+@d140 4
+d408 1
+d417 1
+a417 1
+	_defer_output .debug_abbrev {
+d437 1
+a437 1
+	    _defer_output .debug_abbrev {
+d443 1
+a443 1
+	_defer_output .debug_abbrev {
+d675 11
+a685 4
+    # IS_64 is a boolean which is true if you want to emit 64-bit
+    # DWARF, and false for 32-bit DWARF.
+    # VERSION is the DWARF version number to emit.
+    # ADDR_SIZE is the size of addresses in bytes.
+d688 1
+a688 1
+    proc cu {is_64 version addr_size body} {
+d690 1
+d697 21
+a717 5
+	set _cu_version $version
+	if {$is_64} {
+	    set _cu_offset_size 8
+	} else {
+	    set _cu_offset_size 4
+a718 1
+	set _cu_addr_size $addr_size
+d720 1
+a720 1
+	_section .debug_info
+d738 1
+a738 1
+	_op .2byte $version Version
+d740 1
+a740 1
+	_op .byte $addr_size "Pointer size"
+d742 1
+a742 1
+	_defer_output .debug_abbrev {
+d748 1
+a748 1
+	_defer_output .debug_abbrev {
+d758 11
+a768 4
+    # IS_64 is a boolean which is true if you want to emit 64-bit
+    # DWARF, and false for 32-bit DWARF.
+    # VERSION is the DWARF version number to emit.
+    # ADDR_SIZE is the size of addresses in bytes.
+d770 2
+a771 1
+    # TYPE_LABEL is the label of the type defined by this TU.
+d773 2
+a774 2
+    # the CU.  It is evaluated in the caller's context.
+    proc tu {is_64 version addr_size signature type_label body} {
+d776 1
+d783 21
+a803 5
+	set _cu_version $version
+	if {$is_64} {
+	    set _cu_offset_size 8
+	} else {
+	    set _cu_offset_size 4
+a804 1
+	set _cu_addr_size $addr_size
+d806 1
+a806 1
+	_section .debug_types
+d824 1
+a824 1
+	_op .2byte $version Version
+d826 1
+a826 1
+	_op .byte $addr_size "Pointer size"
+d828 8
+a835 4
+	uplevel declare_labels $type_label
+	upvar $type_label my_type_label
+	if {$is_64} {
+	    _op .8byte "$my_type_label - $_cu_label"
+d837 5
+a841 1
+	    _op .4byte "$my_type_label - $_cu_label"
+d844 1
+a844 1
+	_defer_output .debug_abbrev {
+d850 1
+a850 1
+	_defer_output .debug_abbrev {
+@
+
+
+1.7
+log
+@	* lib/dwarf.exp (Dwarf): New proc "tu".
+	* gdb.dwarf2/missing-sig-type.exp: New file.
+@
+text
+@d244 5
+d334 9
+a346 1
+	    DW_FORM_block1 -
+d607 2
+a618 2
+		    variable _cu_addr_size
+
+d649 11
+@
+
+
+1.6
+log
+@2013-02-01  Jan Kratochvil  <jan.kratochvil@@redhat.com>
+	    Tom Tromey  <tromey@@redhat.com>
+
+	* gdb.dwarf2/method-ptr.exp: Link with c++.
+	* lib/dwarf.exp (Dwarf::assemble): Declare _cu_count.
+@
+text
+@d112 3
+d705 70
+@
+
+
+1.5
+log
+@	* lib/dwarf.exp (namespace Dwarf): New.
+@
+text
+@d735 1
+@
+
+
+1.4
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@d31 728
+@
+
+
+1.3
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d1 1
+a1 1
+# Copyright 2010, 2012 Free Software Foundation, Inc.
+@
+
+
+1.2
+log
+@2011-01-19  Yao Qi  <yao@@codesourcery.com>
+
+	* lib/dwarf.exp (dwarf2_support): Change supported targets to a
+	positve list.
+@
+text
+@d1 1
+a1 1
+# Copyright 2010 Free Software Foundation, Inc.
+@
+
+
+1.2.4.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d1 1
+a1 1
+# Copyright 2010, 2012 Free Software Foundation, Inc.
+@
+
+
+1.1
+log
+@2011-01-19  Yao Qi  <yao@@codesourcery.com>
+
+	* gdb.asm/asm-source.exp: Replace ARM target triplet with a
+	canonical form.
+	Remove "xscale-*-*"
+	* gdb.xml/tdesc-regs.exp: Likewise.
+	* gdb.python/py-section-script.exp: Replace ARM target triplet
+	with canonical form.
+	Match arm*-*-symbianelf*.
+	* gdb.base/dup-sect.exp: Likewise.
+	* lib/dwarf.exp: New.
+	* gdb.dwarf2/callframecfa.exp: Check dwarf2 support by routine
+	dwarf2_support.
+	* gdb.dwarf2/dup-psym.exp: Likewise.
+	* gdb.dwarf2/dw2-ada-ffffffff.exp: Likewise.
+	* gdb.dwarf2/dw2-anonymous-func.exp: Likewise.
+	* gdb.dwarf2/dw2-bad-parameter-type.exp: Likewise.
+	* gdb.dwarf2/dw2-basic.exp: Likewise.
+	* gdb.dwarf2/dw2-compressed.exp: Likewise.
+	* gdb.dwarf2/dw2-const.exp: Likewise.
+	* gdb.dwarf2/dw2-cp-infcall-ref-static.exp: Likewise.
+	* gdb.dwarf2/dw2-cu-size.exp: Likewise.
+	* gdb.dwarf2/dw2-double-set-die-type.exp: Likewise.
+	* gdb.dwarf2/dw2-empty-namespace.exp: Likewise.
+	* gdb.dwarf2/dw2-filename.exp: Likewise.
+	* gdb.dwarf2/dw2-inheritance.exp: Likewise.
+	* gdb.dwarf2/dw2-inline-param.exp: Likewise.
+	* gdb.dwarf2/dw2-intercu.exp: Likewise.
+	* gdb.dwarf2/dw2-intermix.exp: Likewise.
+	* gdb.dwarf2/dw2-modula2-self-type.exp: Likewise.
+	* gdb.dwarf2/dw2-noloc.exp: Likewise.
+	* gdb.dwarf2/dw2-op-call.exp: Likewise.
+	* gdb.dwarf2/dw2-producer.exp: Likewise.
+	* gdb.dwarf2/dw2-ranges.exp: Likewise.
+	* gdb.dwarf2/dw2-ref-missing-frame.exp: Likewise.
+	* gdb.dwarf2/dw2-stack-boundary.exp: Likewise.
+	* gdb.dwarf2/dw2-strp.exp: Likewise.
+	* gdb.dwarf2/dw2-unresolved.exp: Likewise.
+	* gdb.dwarf2/implptr.exp: Likewise.
+	* gdb.dwarf2/mac-fileno.exp: Likewise.
+	* gdb.dwarf2/member-ptr-forwardref.exp: Likewise.
+	* gdb.dwarf2/pieces.exp: Likewise.
+	* gdb.dwarf2/pr11465.exp: Likewise.
+	* gdb.dwarf2/valop.exp: Likewise.
+	* gdb.dwarf2/watch-notconst.exp: Likewise.
+	* gdb.mi/dw2-ref-missing-frame.exp: Likewise.
+@
+text
+@d19 8
+a26 8
+    if {![istarget *-*-linux*]
+	&& ![istarget *-*-gnu*]
+	&& ![istarget *-*-elf*]
+	&& ![istarget *-*-openbsd*]
+	&& ![istarget arm*-*-eabi*]
+	&& ![istarget arm*-*-symbianelf*]
+	&& ![istarget powerpc-*-eabi*]} {
+	return 0
+d29 1
+a29 1
+    return 1
+@
+

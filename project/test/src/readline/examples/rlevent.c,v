@@ -1,0 +1,265 @@
+head	1.1;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.1
+	gdb_7_6-2013-04-26-release:1.1
+	gdb_7_6-branch:1.1.0.6
+	gdb_7_6-2013-03-12-branchpoint:1.1
+	gdb_7_5_1-2012-11-29-release:1.1
+	gdb_7_5-2012-08-17-release:1.1
+	gdb_7_5-branch:1.1.0.4
+	gdb_7_5-2012-07-18-branchpoint:1.1
+	gdb_7_4_1-2012-04-26-release:1.1
+	gdb_7_4-2012-01-24-release:1.1
+	gdb_7_4-branch:1.1.0.2
+	gdb_7_4-2011-12-13-branchpoint:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.1
+date	2011.05.11.23.38.40;	author jkratoch;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.1
+log
+@Imported readline 6.2, and upstream patch 001.
+
+[patch 0/3] readline-6.2 rebase
+http://sourceware.org/ml/gdb-patches/2011-05/msg00003.html
+[patch 1/3] readline-6.2: Merge of already posted patches
+http://sourceware.org/ml/gdb-patches/2011-05/msg00004.html
+	=
+	[Bug-readline] [RFC/readline] bind.c, rl_function_dumper, Free allocated
+	http://lists.gnu.org/archive/html/bug-readline/2011-03/msg00000.html
+	[Bug-readline] [patch] Fix underquotation in readline/examples/rlfe/conf
+	http://lists.gnu.org/archive/html/bug-readline/2011-04/msg00001.html
+	[Bug-readline] [patch] Makefile.in htm<->html
+	http://lists.gnu.org/archive/html/bug-readline/2011-04/msg00002.html
+	Re: [Bug-readline] [patch] Makefile.in dependency: callback.o: xmalloc.h
+	http://lists.gnu.org/archive/html/bug-readline/2011-04/msg00004.html
+	[Bug-readline] [patch] Remove . from the VPATH directive
+	http://lists.gnu.org/archive/html/bug-readline/2011-04/msg00005.html
+	Eli Zaretskii's __MSDOS__ / __GO32__ / __MINGW32__ / __DJGPP__ stuff:
+	http://sourceware.org/ml/gdb/2011-04/msg00002.html
+	Jan Kratochvil's patch for FSF GDB tree local-specific changes:
+	http://sourceware.org/ml/gdb/2011-04/msg00006.html
+	Preservation of existing ChangeLog.gdb files, their updates.
+[patch 2/3] readline-6.2: Workaround "ask" regression
+http://sourceware.org/ml/gdb-patches/2011-05/msg00005.html
+[patch 3/3] readline-6.2: Revert 5.x compat., apply 6.x compat.
+http://sourceware.org/ml/gdb-patches/2011-05/msg00006.html
+[patch 4/3] readline-6.2: Substitute inc-hist.texinfo
+http://sourceware.org/ml/gdb-patches/2011-05/msg00010.html
+
+readline/
+	Workaround gdb.base/completion.exp regression on readline-6.2.
+	* complete.c (get_y_or_n): Disable the return on RL_STATE_CALLBACK.
+
+	Imported readline 6.2, and upstream patch 001.
+	* configure: Regenerate.
+
+readline/doc/
+	* hsuser.texi (Using History Interactively): Disable !BashFeatures
+	@@defcodeindex.  Make the `Programming with GNU History' reference
+	external.
+	* inc-hist.texinfo: Remove.
+
+	Imported readline 6.2, and upstream patch 001.
+
+readline/examples/
+	Imported readline 6.2, and upstream patch 001.
+
+readline/examples/rlfe/
+	Imported readline 6.2, and upstream patch 001.
+
+gdb/
+	* config.in: Regenerate.
+	* configure: Regenerate.
+	* configure.ac <--with-system-readline> (for readline_echoing_p):
+	Remove the test.
+	* tui/tui-io.c (tui_old_readline_echoing_p): Rename to ...
+	(tui_old_rl_echoing_p): ... here.
+	(tui_setup_io): Rename extern declaration readline_echoing_p to
+	_rl_echoing_p.  Adjust assignments for the both renames.
+
+gdb/doc/
+	* Makefile.in (GDB_DOC_SOURCE_INCLUDES): Rename inc-hist.texinfo to
+	hsuser.texi.
+	* gdb.texinfo <!SYSTEM_READLINE>: Rename inc-hist.texinfo inclusion and
+	comment to hsuser.texi.  Change rluser.texi name in the comment.
+@
+text
+@/*
+ * rl - command-line interface to read a line from the standard input
+ *      (or another fd) using readline.
+ *
+ * usage: rl [-p prompt] [-u unit] [-d default] [-n nchars]
+ */
+
+/* Copyright (C) 1987-2009 Free Software Foundation, Inc.
+
+   This file is part of the GNU Readline Library (Readline), a library for
+   reading lines of text with interactive input and history editing.
+
+   Readline is free software: you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation, either version 3 of the License, or
+   (at your option) any later version.
+
+   Readline is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with Readline.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+#if defined (HAVE_CONFIG_H)
+#  include <config.h>
+#endif
+
+#include <stdio.h>
+#include <sys/types.h>
+
+#ifdef HAVE_STDLIB_H
+#  include <stdlib.h>
+#else 
+extern void exit();
+#endif
+
+#if defined (READLINE_LIBRARY)
+#  include "posixstat.h"
+#  include "readline.h"
+#  include "history.h"
+#else
+#  include <sys/stat.h>
+#  include <readline/readline.h>
+#  include <readline/history.h>
+#endif
+
+extern int optind;
+extern char *optarg;
+
+#if !defined (strchr) && !defined (__STDC__)
+extern char *strrchr();
+#endif
+
+static char *progname;
+static char *deftext;
+
+static int
+event_hook ()
+{
+  fprintf (stderr, "ding!\n");
+  sleep (1);
+  return 0;
+}
+
+static int
+set_deftext ()
+{
+  if (deftext)
+    {
+      rl_insert_text (deftext);
+      deftext = (char *)NULL;
+      rl_startup_hook = (rl_hook_func_t *)NULL;
+    }
+  return 0;
+}
+
+static void
+usage()
+{
+  fprintf (stderr, "%s: usage: %s [-p prompt] [-u unit] [-d default] [-n nchars]\n",
+		progname, progname);
+}
+
+int
+main (argc, argv)
+     int argc;
+     char **argv;
+{
+  char *temp, *prompt;
+  struct stat sb;
+  int opt, fd, nch;
+  FILE *ifp;
+
+  progname = strrchr(argv[0], '/');
+  if (progname == 0)
+    progname = argv[0];
+  else
+    progname++;
+
+  /* defaults */
+  prompt = "readline$ ";
+  fd = nch = 0;
+  deftext = (char *)0;
+
+  while ((opt = getopt(argc, argv, "p:u:d:n:")) != EOF)
+    {
+      switch (opt)
+	{
+	case 'p':
+	  prompt = optarg;
+	  break;
+	case 'u':
+	  fd = atoi(optarg);
+	  if (fd < 0)
+	    {
+	      fprintf (stderr, "%s: bad file descriptor `%s'\n", progname, optarg);
+	      exit (2);
+	    }
+	  break;
+	case 'd':
+	  deftext = optarg;
+	  break;
+	case 'n':
+	  nch = atoi(optarg);
+	  if (nch < 0)
+	    {
+	      fprintf (stderr, "%s: bad value for -n: `%s'\n", progname, optarg);
+	      exit (2);
+	    }
+	  break;
+	default:
+	  usage ();
+	  exit (2);
+	}
+    }
+
+  if (fd != 0)
+    {
+      if (fstat (fd, &sb) < 0)
+	{
+	  fprintf (stderr, "%s: %d: bad file descriptor\n", progname, fd);
+	  exit (1);
+	}
+      ifp = fdopen (fd, "r");
+      rl_instream = ifp;
+    }
+
+  if (deftext && *deftext)
+    rl_startup_hook = set_deftext;
+
+  if (nch > 0)
+    rl_num_chars_to_read = nch;
+
+  rl_event_hook = event_hook;
+  temp = readline (prompt);
+
+  /* Test for EOF. */
+  if (temp == 0)
+    exit (1);
+
+  printf ("%s\n", temp);
+  exit (0);
+}
+@

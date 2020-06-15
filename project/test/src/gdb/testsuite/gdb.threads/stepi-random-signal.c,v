@@ -1,0 +1,227 @@
+head	1.1;
+access;
+symbols;
+locks; strict;
+comment	@ * @;
+
+
+1.1
+date	2013.10.18.14.28.33;	author palves;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.1
+log
+@[gdb/16062] stepi sometimes doesn't make progress
+
+I noticed something odd while doing "stepi" over a fork syscall:
+
+ ...
+ (gdb) set disassemble-next-line on
+ ...
+ (gdb) si
+ 0x000000323d4ba7c2      131       pid = ARCH_FORK ();
+    0x000000323d4ba7a4 <__libc_fork+132>:        64 4c 8b 04 25 10 00 00 00      mov    %fs:0x10,%r8
+    0x000000323d4ba7ad <__libc_fork+141>:        31 d2   xor    %edx,%edx
+    0x000000323d4ba7af <__libc_fork+143>:        4d 8d 90 d0 02 00 00    lea    0x2d0(%r8),%r10
+    0x000000323d4ba7b6 <__libc_fork+150>:        31 f6   xor    %esi,%esi
+    0x000000323d4ba7b8 <__libc_fork+152>:        bf 11 00 20 01  mov    $0x1200011,%edi
+    0x000000323d4ba7bd <__libc_fork+157>:        b8 38 00 00 00  mov    $0x38,%eax
+ => 0x000000323d4ba7c2 <__libc_fork+162>:        0f 05   syscall
+    0x000000323d4ba7c4 <__libc_fork+164>:        48 3d 00 f0 ff ff       cmp    $0xfffffffffffff000,%rax
+    0x000000323d4ba7ca <__libc_fork+170>:        0f 87 2b 01 00 00       ja     0x323d4ba8fb <__libc_fork+475>
+ (gdb) si
+ 0x000000323d4ba7c4      131       pid = ARCH_FORK ();
+    0x000000323d4ba7a4 <__libc_fork+132>:        64 4c 8b 04 25 10 00 00 00      mov    %fs:0x10,%r8
+    0x000000323d4ba7ad <__libc_fork+141>:        31 d2   xor    %edx,%edx
+    0x000000323d4ba7af <__libc_fork+143>:        4d 8d 90 d0 02 00 00    lea    0x2d0(%r8),%r10
+    0x000000323d4ba7b6 <__libc_fork+150>:        31 f6   xor    %esi,%esi
+    0x000000323d4ba7b8 <__libc_fork+152>:        bf 11 00 20 01  mov    $0x1200011,%edi
+    0x000000323d4ba7bd <__libc_fork+157>:        b8 38 00 00 00  mov    $0x38,%eax
+    0x000000323d4ba7c2 <__libc_fork+162>:        0f 05   syscall
+ => 0x000000323d4ba7c4 <__libc_fork+164>:        48 3d 00 f0 ff ff       cmp    $0xfffffffffffff000,%rax
+    0x000000323d4ba7ca <__libc_fork+170>:        0f 87 2b 01 00 00       ja     0x323d4ba8fb <__libc_fork+475>
+ (gdb) si
+ 0x000000323d4ba7c4      131       pid = ARCH_FORK ();
+    0x000000323d4ba7a4 <__libc_fork+132>:        64 4c 8b 04 25 10 00 00 00      mov    %fs:0x10,%r8
+    0x000000323d4ba7ad <__libc_fork+141>:        31 d2   xor    %edx,%edx
+    0x000000323d4ba7af <__libc_fork+143>:        4d 8d 90 d0 02 00 00    lea    0x2d0(%r8),%r10
+    0x000000323d4ba7b6 <__libc_fork+150>:        31 f6   xor    %esi,%esi
+    0x000000323d4ba7b8 <__libc_fork+152>:        bf 11 00 20 01  mov    $0x1200011,%edi
+    0x000000323d4ba7bd <__libc_fork+157>:        b8 38 00 00 00  mov    $0x38,%eax
+    0x000000323d4ba7c2 <__libc_fork+162>:        0f 05   syscall
+ => 0x000000323d4ba7c4 <__libc_fork+164>:        48 3d 00 f0 ff ff       cmp    $0xfffffffffffff000,%rax
+    0x000000323d4ba7ca <__libc_fork+170>:        0f 87 2b 01 00 00       ja     0x323d4ba8fb <__libc_fork+475>
+ (gdb) si
+ 0x000000323d4ba7ca      131       pid = ARCH_FORK ();
+    0x000000323d4ba7a4 <__libc_fork+132>:        64 4c 8b 04 25 10 00 00 00      mov    %fs:0x10,%r8
+    0x000000323d4ba7ad <__libc_fork+141>:        31 d2   xor    %edx,%edx
+    0x000000323d4ba7af <__libc_fork+143>:        4d 8d 90 d0 02 00 00    lea    0x2d0(%r8),%r10
+    0x000000323d4ba7b6 <__libc_fork+150>:        31 f6   xor    %esi,%esi
+    0x000000323d4ba7b8 <__libc_fork+152>:        bf 11 00 20 01  mov    $0x1200011,%edi
+    0x000000323d4ba7bd <__libc_fork+157>:        b8 38 00 00 00  mov    $0x38,%eax
+    0x000000323d4ba7c2 <__libc_fork+162>:        0f 05   syscall
+    0x000000323d4ba7c4 <__libc_fork+164>:        48 3d 00 f0 ff ff       cmp    $0xfffffffffffff000,%rax
+ => 0x000000323d4ba7ca <__libc_fork+170>:        0f 87 2b 01 00 00       ja     0x323d4ba8fb <__libc_fork+475>
+
+Notice how the third "si" didn't actually make progress.
+
+Turning on infrun and lin-lwp debug, we see:
+
+ (gdb)
+ infrun: clear_proceed_status_thread (process 5252)
+ infrun: proceed (addr=0xffffffffffffffff, signal=144, step=1)
+ infrun: resume (step=1, signal=0), trap_expected=0, current thread [process 5252] at 0x323d4ba7c4
+ LLR: Preparing to step process 5252, 0, inferior_ptid process 5252
+ RC: Not resuming sibling process 5252 (not stopped)
+ LLR: PTRACE_SINGLESTEP process 5252, 0 (resume event thread)
+ sigchld
+ infrun: wait_for_inferior ()
+ linux_nat_wait: [process -1], []
+ LLW: enter
+ LNW: waitpid(-1, ...) returned 5252, No child processes
+ LLW: waitpid 5252 received Child exited (stopped)
+ LLW: Candidate event Child exited (stopped) in process 5252.
+ SEL: Select single-step process 5252
+ LLW: exit
+ infrun: target_wait (-1, status) =
+ infrun:   5252 [process 5252],
+ infrun:   status->kind = stopped, signal = SIGCHLD
+ infrun: infwait_normal_state
+ infrun: TARGET_WAITKIND_STOPPED
+ infrun: stop_pc = 0x323d4ba7c4
+ infrun: random signal 20
+ infrun: stepi/nexti
+ infrun: stop_stepping
+
+So the inferior got a SIGCHLD (because the fork child exited while
+we're doing 'si'), and since that signal is set to "nostop noprint
+pass" (by default), it's considered a random signal, so it should not
+cause a stop.  But, it resulted in an immediate a stop_stepping call
+anyway.  So the single-step never really finished.
+
+This is a regression caused by:
+
+ [[PATCH] Do not respawn signals, take 2.]
+ https://sourceware.org/ml/gdb-patches/2012-06/msg00702.html
+
+Specifically, caused by this change (as mentioned in the "the lost
+step issue first" part of that mail):
+
+ diff --git a/gdb/infrun.c b/gdb/infrun.c
+ index 53db335..3e8dbc8 100644
+ --- a/gdb/infrun.c
+ +++ b/gdb/infrun.c
+ @@@@ -4363,10 +4363,8 @@@@ process_event_stop_test:
+  	 (leaving the inferior at the step-resume-breakpoint without
+  	 actually executing it).  Either way continue until the
+  	 breakpoint is really hit.  */
+ -      keep_going (ecs);
+ -      return;
+      }
+ -
+ +  else
+    /* Handle cases caused by hitting a breakpoint.  */
+    {
+
+
+That made GDB fall through to the
+
+>   /* In all-stop mode, if we're currently stepping but have stopped in
+>   some other thread, we need to switch back to the stepped thread.  */
+>  if (!non_stop)
+
+part.  However, if we don't have a stepped thread to get back to,
+we'll now also fall through to all the "stepping" tests.  For line
+stepping, that'll turn out okay, as we'll just end up realizing the
+thread is still in the stepping range, and needs to be re-stepped.
+However, for stepi/nexti, we'll reach:
+
+  if (ecs->event_thread->control.step_range_end == 1)
+    {
+      /* It is stepi or nexti.  We always want to stop stepping after
+         one instruction.  */
+      if (debug_infrun)
+	 fprintf_unfiltered (gdb_stdlog, "infrun: stepi/nexti\n");
+      ecs->event_thread->control.stop_step = 1;
+      print_end_stepping_range_reason ();
+      stop_stepping (ecs);
+      return;
+    }
+
+and stop, even though the thread actually made no progress.  The fix
+is to restore the keep_going call, but put it after the "switch back
+to the stepped thread" code, and before the stepping tests.
+
+Tested on x86_64 Fedora 17, native and gdbserver.  New test included.
+
+gdb/
+2013-10-18  Pedro Alves  <palves@@redhat.com>
+
+	PR gdb/16062
+	* infrun.c (handle_inferior_event): Keep going if we got a random
+	signal we should not stop for, instead of falling through to the
+	step tests.
+
+gdb/testsuite/
+2013-10-18  Pedro Alves  <palves@@redhat.com>
+
+	PR gdb/16062
+	* gdb.threads/stepi-random-signal.c: New file.
+	* gdb.threads/stepi-random-signal.exp: New file.
+@
+text
+@/* This testcase is part of GDB, the GNU debugger.
+
+   Copyright 2013 Free Software Foundation, Inc.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+#include <pthread.h>
+#include <signal.h>
+#include <unistd.h>
+
+static pthread_t main_thread;
+
+static void *
+start (void *arg)
+{
+  /* A signal whose default action is ignore.  */
+  pthread_kill (main_thread, SIGCHLD);
+
+  while (1)
+    sleep (1); /* set break here */
+  return NULL;
+}
+
+int
+main (void)
+{
+  unsigned int counter = 1;
+  pthread_t thread;
+
+  main_thread = pthread_self ();
+  pthread_create (&thread, NULL, start, NULL);
+
+  while (counter != 0)
+    counter++; /* set break 2 here */
+
+  return 0;
+}
+@

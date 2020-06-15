@@ -1,0 +1,305 @@
+head	1.4;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.4
+	gdb_7_6-2013-04-26-release:1.4
+	gdb_7_6-branch:1.4.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.4
+	gdb_7_5_1-2012-11-29-release:1.3
+	gdb_7_5-2012-08-17-release:1.3
+	gdb_7_5-branch:1.3.0.4
+	gdb_7_5-2012-07-18-branchpoint:1.3
+	gdb_7_4_1-2012-04-26-release:1.3
+	gdb_7_4-2012-01-24-release:1.3
+	gdb_7_4-branch:1.3.0.2
+	gdb_7_4-2011-12-13-branchpoint:1.3
+	gdb_7_3_1-2011-09-04-release:1.2
+	gdb_7_3-2011-07-26-release:1.2
+	gdb_7_3-branch:1.2.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.2
+	gdb_7_2-2010-09-02-release:1.1.2.1
+	gdb_7_2-branch:1.1.0.2
+	gdb_7_2-2010-07-07-branchpoint:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.4
+date	2012.07.26.19.09.35;	author jkratoch;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2011.06.08.16.56.11;	author brobecke;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2010.07.27.16.58.22;	author tromey;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2010.06.28.21.16.04;	author pmuldoon;	state Exp;
+branches
+	1.1.2.1;
+next	;
+
+1.1.2.1
+date	2010.07.27.17.05.27;	author tromey;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.4
+log
+@gdb/
+	* python/py-inferior.c (infpy_threads): Call update_thread_list ().
+
+gdb/testsuite/
+	* gdb.python/py-inferior.c (thread): New function.
+	(check_threads): New function.
+	(test_threads): New function.
+	* gdb.python/py-inferior.exp: Added test.
+	Replaced runto with continue to breakpoint.
+@
+text
+@#include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
+#include <string.h>
+#include <pthread.h>
+
+#define CHUNK_SIZE 16000 /* same as findcmd.c's */
+#define BUF_SIZE (2 * CHUNK_SIZE) /* at least two chunks */
+#define NUMTH 8
+
+int8_t int8_search_buf[100];
+int16_t int16_search_buf[100];
+int32_t int32_search_buf[100];
+int64_t int64_search_buf[100];
+
+static char *search_buf;
+static int search_buf_size;
+
+
+int f2 (int a)
+{
+  /* We use a `char[]' type below rather than the typical `char *'
+     to make sure that `str' gets allocated on the stack.  Otherwise,
+     the compiler may place the "hello, testsuite" string inside
+     a read-only section, preventing us from over-writing it from GDB.  */
+  char str[] = "hello, testsuite";
+
+  puts (str);	/* Break here.  */
+
+  return ++a;
+}
+
+int f1 (int a, int b)
+{
+  return f2(a) + b;
+}
+
+static void
+init_bufs ()
+{
+  search_buf_size = BUF_SIZE;
+  search_buf = malloc (search_buf_size);
+  if (search_buf == NULL)
+    exit (1);
+  memset (search_buf, 'x', search_buf_size);
+}
+
+static void *
+thread (void *param)
+{
+  pthread_barrier_t *barrier = (pthread_barrier_t *) param;
+
+  pthread_barrier_wait (barrier);
+
+  return param;
+}
+
+static void
+check_threads (pthread_barrier_t *barrier)
+{
+  pthread_barrier_wait (barrier);
+}
+
+extern int
+test_threads (void)
+{
+  pthread_t threads[NUMTH];
+  pthread_barrier_t barrier;
+  int i;
+
+  pthread_barrier_init (&barrier, NULL, NUMTH + 1);
+
+  for (i = 0; i < NUMTH; ++i)
+    pthread_create (&threads[i], NULL, thread, &barrier);
+
+  check_threads (&barrier);
+
+  for (i = 0; i < NUMTH; ++i)
+    pthread_join (threads[i], NULL);
+
+  pthread_barrier_destroy (&barrier);
+
+  return 0;
+}
+
+int main (int argc, char *argv[])
+{
+  test_threads ();
+  init_bufs ();
+
+  return f1 (1, 2);
+}
+@
+
+
+1.3
+log
+@py-inferior.exp: Make sure local var is allocated on the stack.
+
+The testcase, at some point, is trying to change the contents
+of a string that was defined as follow:
+
+    char *str = "hello, testsuite";
+
+The problem is that the string is constant, and str is never used
+to change the contents of the string in the program, so the compiler
+is free to allocate it in a read-only section.  This is what happens
+on x86-windows, for instance.
+
+As a result, trying to change the contents of the string during
+the `python gdb.inferiors()[0].write_memory (addr, str)' results
+in the following error:
+
+    (gdb) python gdb.inferiors()[0].write_memory (addr, str)
+    gdb: write target memory, 5 bytes at 0x00403064
+    Traceback (most recent call last):
+      File "<string>", line 1, in <module>
+    gdb.MemoryError: Cannot access memory at address 0x403064
+    Error while executing Python code.
+
+This patch prevents this from happening by declaring str as an
+array rather than a pointer.
+
+gdb/testsuite/ChangeLog:
+
+        * gdb.python/py-inferior.c (f2): Make str an array rather
+        than a pointer.
+        * gdb.python/py-inferior.exp: Adjust testcase accordingly.
+@
+text
+@d5 1
+d9 1
+d48 38
+d88 1
+@
+
+
+1.2
+log
+@	* gdb.stabs/gdb11479.c (hack): New function.
+	(test): Use it.
+	(test2): Use it.
+	* gdb.python/py-inferior.c (int8_search_buf, int16_search_buf)
+	(int32_search_buf, int64_search_buf): No longer static.
+	(x): Remove.
+	* gdb.base/relocate.c (hack): New function.
+@
+text
+@d20 5
+a24 1
+  char *str = "hello, testsuite";
+@
+
+
+1.1
+log
+@2010-06-28  Phil Muldoon  <pmuldoon@@redhat.com>
+            Tom Tromey  <tromey@@redhat.com>
+            Thiago Jung Bauermann  <bauerman@@br.ibm.com>
+
+	* value.c (pack_unsigned_long): New function.
+	(value_from_ulongest): New function.
+	* value.h (value_from_ulongest): Declare.
+	* python/python.c (_initialize_python): Call
+	gdbpy_initialize_thread and gdbpy_initialize_inferior.
+	* python/python-internal.h: Define thread_object.
+	(gdbpy_inferiors, gdbpy_selected_thread)
+	(frame_info_to_frame_object, create_thread_object)
+	(find_thread_object, find_inferior_object)
+	(gdbpy_initialize_thread, gdbpy_initialize_inferiors)
+	(gdbpy_is_value_object, get_addr_from_python): Declare.
+	* python/py-value.c (builtin_type_upylong): Define.
+	(convert_value_from_python): Add logic for ulongest.
+	(gdbpy_is_value_object): New function.
+	* python/py-utils.c (get_addr_from_python): New function.
+	* python/py-frame.c (frame_info_to_frame_object): Return a PyObject.
+	(gdbpy_selected_frame): Use PyObject over frame_info.
+	* Makefile.in (SUBDIR_PYTHON_OBS): Add py-inferior and
+	py-infthread.
+	(SUBDIR_PYTHON_SRCS): Likewise.
+	(py-inferior.o): New Rule.
+	(py-infthread.o): New Rule.
+	* python/py-inferior.c: New File.
+	* python/py-infthread.c: New File.
+
+2010-06-28  Phil Muldoon  <pmuldoon@@redhat.com>
+	    Tom Tromey  <tromey@@redhat.com>
+	    Thiago Jung Bauermann  <bauerman@@br.ibm.com>
+
+	* gdb.texinfo (Inferiors In Python): New node.
+	* gdb.texinfo (Threads In Python): New node.
+
+2010-06-28  Phil Muldoon  <pmuldoon@@redhat.com>
+            Tom Tromey  <tromey@@redhat.com>
+            Thiago Jung Bauermann  <bauerman@@br.ibm.com>
+
+	* gdb.python/py-inferior.c: New File.
+	* gdb.python/py-infthread.c: New File.
+	* gdb.python/py-inferior.exp: New File.
+	* gdb.python/py-infthread.exp: New File.
+@
+text
+@d9 4
+a12 4
+static int8_t int8_search_buf[100];
+static int16_t int16_search_buf[100];
+static int32_t int32_search_buf[100];
+static int64_t int64_search_buf[100];
+a16 2
+static int x;
+
+@
+
+
+1.1.2.1
+log
+@	* gdb.stabs/gdb11479.c (hack): New function.
+	(test): Use it.
+	(test2): Use it.
+	* gdb.python/py-inferior.c (int8_search_buf, int16_search_buf)
+	(int32_search_buf, int64_search_buf): No longer static.
+	(x): Remove.
+	* gdb.base/relocate.c (hack): New function.
+@
+text
+@d9 4
+a12 4
+int8_t int8_search_buf[100];
+int16_t int16_search_buf[100];
+int32_t int32_search_buf[100];
+int64_t int64_search_buf[100];
+d17 2
+@
+
+

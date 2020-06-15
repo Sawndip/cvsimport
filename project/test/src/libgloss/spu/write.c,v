@@ -1,0 +1,251 @@
+head	1.5;
+access;
+symbols
+	newlib-2_2_0:1.5.0.6
+	newlib-2_1_0:1.5
+	newlib-2_0_0:1.5
+	newlib-1_20_0:1.5
+	newlib-1_19_0:1.5
+	newlib-1_18_0:1.5
+	newlib-1_17_0-arc:1.5.0.4
+	binutils-arc-20080908-branch:1.5.0.2
+	binutils-arc-20080908-branchpoint:1.5
+	newlib-1_17_0:1.5
+	newlib-1_16_0:1.5
+	newlib-1_15_0:1.2
+	newlib-csl-sourcerygxx-3_4_4-25:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.5
+date	2007.06.05.19.01.30;	author jjohnstn;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2007.05.23.21.39.54;	author jjohnstn;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2007.04.04.20.59.38;	author jjohnstn;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2006.08.30.19.06.48;	author jjohnstn;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2006.08.23.16.13.24;	author jjohnstn;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.5
+log
+@
+2007-06-05  Patrick Mansfield  <patman@@us.ibm.com>
+
+        * spu/jsre.h: Remove the assist call structs and defines that are
+        specific to one assist call from here.
+        * spu/access.c: Move struct syscall_access_t to here.
+        * spu/fstat.c: Move struct syscall_fstat_t to here.
+        * spu/ftruncate.c: Move struct syscall_ftruncate_t to here.
+        * spu/gettimeofday.c: Move struct syscall_gettimeofday_t to here.
+        * spu/lseek.c: Move struct syscall_lseek_t and JSRE_SEEK defines to
+        here.
+        * spu/open.c: Move struct syscall_open_t and JSRE_O_ defines to here.
+        * spu/read.c: Move struct syscall_read_t to here, and actually use
+        it (it is the same as syscall_write_t).
+        * spu/stat.c: Move struct syscall_stat_t to here.
+        * spu/write.c: Move struct syscall_write_t to here.
+        * spu/close.c: Pass the address of the first and only argument to
+        __send_to_ppe rather than using an automatic variable and a
+        special struct.
+        * spu/dup.c: Ditto.
+        * spu/unlink.c: Ditto.
+@
+text
+@/*
+(C) Copyright IBM Corp. 2005, 2006
+
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without 
+modification, are permitted provided that the following conditions are met:
+
+    * Redistributions of source code must retain the above copyright notice, 
+this list of conditions and the following disclaimer.
+    * Redistributions in binary form must reproduce the above copyright 
+notice, this list of conditions and the following disclaimer in the 
+documentation and/or other materials provided with the distribution.
+    * Neither the name of IBM nor the names of its contributors may be 
+used to endorse or promote products derived from this software without 
+specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" 
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE 
+LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR 
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS 
+INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE 
+POSSIBILITY OF SUCH DAMAGE.
+
+Author: Andreas Neukoetter (ti95neuk@@de.ibm.com)
+*/
+
+#include <fcntl.h>
+#include "jsre.h"
+
+typedef struct
+{
+        unsigned int file;
+        unsigned int pad0[3];
+        unsigned int ptr;
+        unsigned int pad1[3];
+        unsigned int len;
+        unsigned int pad2[3];
+} syscall_write_t;
+
+int
+write (int file, const void *ptr, size_t len)
+{
+        syscall_write_t sys;
+
+	sys.file = file;
+	sys.ptr = ( unsigned int )ptr;
+	sys.len = len;
+	return __send_to_ppe (JSRE_POSIX1_SIGNALCODE, JSRE_WRITE, &sys);
+}
+@
+
+
+1.4
+log
+@
+2007-05-23 Patrick Mansfield <patmans@@us.ibm.com>
+
+        * spu/syscalls.c: Change __send_to_ppe to return the result stored
+        in stored in slot 0 of the data, rather than have each assisted
+        call retrieve the value.
+        * spu/jsre.h: Remove the now unused syscall_out_t.
+        * spu/access.c: Use the __send_to_ppe result instead of the slot 0
+        value, remove unused syscall_out_t variable.
+        * spu/close.c: Ditto.
+        * spu/dup.c: Ditto.
+        * spu/fstat.c: Ditto.
+        * spu/ftruncate.c: Ditto.
+        * spu/gettimeofday.c: Ditto.
+        * spu/lseek.c: Ditto.
+        * spu/open.c: Ditto.
+        * spu/read.c: Ditto.
+        * spu/stat.c: Ditto.
+        * spu/unlink.c: Ditto.
+        * spu/write.c: Ditto.
+@
+text
+@d36 10
+@
+
+
+1.3
+log
+@
+2007-04-04  Patrick Mansfield <patmans@@us.ibm.com>
+
+        * spu/syscalls.c: Rename _send_to_ppe __send_to_ppe, and set errno
+        on return from the offload call.
+        * spu/jsre.h: Include sys/syscall.h for the send_to_ppe prototype.
+        * spu/access.c: Call __send_to_ppe instead of _send_to_ppe, and
+        remove the setting of errno.
+        * spu/close.c: Ditto.
+        * spu/dup.c: Ditto.
+        * spu/fstat.c: Ditto.
+        * spu/ftruncate.c: Ditto.
+        * spu/gettimeofday.c: Ditto.
+        * spu/lseek.c: Ditto.
+        * spu/open.c: Ditto.
+        * spu/read.c: Ditto.
+        * spu/stat.c: Ditto.
+        * spu/unlink.c: Ditto.
+        * spu/write.c: Ditto.
+@
+text
+@a39 1
+	syscall_out_t	*psys_out = ( syscall_out_t* )&sys;
+d44 1
+a44 4
+
+	__send_to_ppe (JSRE_POSIX1_SIGNALCODE, JSRE_WRITE, &sys);
+
+        return ( psys_out->rc);
+a45 1
+
+@
+
+
+1.2
+log
+@
+2006-08-30  Kazunori Asayama  <asayama@@sm.sony.co.jp>
+
+        * spu/syscalls.c: Add a new argument to _send_to_ppe() to
+        specify signal code.
+        * spu/jsre.h: Update declaration of _send_to_ppe().
+        * spu/close.c: Replace _send_to_ppe_0x2101() by _send_to_ppe().
+        * spu/fstat.c: Ditto.
+        * spu/lseek.c: Ditto.
+        * spu/open.c: Ditto.
+        * spu/read.c: Ditto.
+        * spu/stat.c: Ditto.
+        * spu/unlink.c: Ditto.
+        * spu/write.c: Ditto.
+@
+text
+@a33 1
+#include <errno.h>
+d46 1
+a46 1
+	_send_to_ppe (JSRE_POSIX1_SIGNALCODE, JSRE_WRITE, &sys);
+a47 1
+        errno = psys_out->err;
+@
+
+
+1.1
+log
+@
+2006-08-23  Kazunori Asayama  <asayama@@sm.sony.co.jp>
+
+        * spu/Makefile.in: Add new object files.
+        * spu/syscalls.c: Move each system call to individual file.
+        * spu/jsre.h: Add declaration of _send_to_ppe_0x2101().
+        * spu/close.c: New file. Moved from spu/syscalls.c.
+        * spu/fstat.c: Likewise.
+        * spu/getpid.c: Likewise.
+        * spu/isatty.c: Likewise.
+        * spu/kill.c: Likewise.
+        * spu/lseek.c: Likewise.
+        * spu/open.c: Likewise.
+        * spu/read.c: Likewise.
+        * spu/stat.c: Likewise.
+        * spu/unlink.c: Likewise.
+        * spu/write.c: Likewise.
+@
+text
+@d47 1
+a47 1
+	_send_to_ppe_0x2101 (JSRE_WRITE, &sys);
+@
+

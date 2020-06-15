@@ -1,0 +1,232 @@
+head	1.4;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.4
+	gdb_7_6-2013-04-26-release:1.4
+	gdb_7_6-branch:1.4.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.4
+	gdb_7_5_1-2012-11-29-release:1.3
+	gdb_7_5-2012-08-17-release:1.3
+	gdb_7_5-branch:1.3.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.3;
+locks; strict;
+comment	@ * @;
+
+
+1.4
+date	2013.01.01.06.32.40;	author brobecke;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2012.04.19.19.11.02;	author devans;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2012.04.17.21.24.47;	author devans;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2012.04.17.21.13.19;	author devans;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.4
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@/* Cleanups.
+   Copyright (C) 1986-2013 Free Software Foundation, Inc.
+
+   This file is part of GDB.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+#ifndef CLEANUPS_H
+#define CLEANUPS_H
+
+/* Outside of cleanups.c, this is an opaque type.  */
+struct cleanup;
+
+/* NOTE: cagney/2000-03-04: This typedef is strictly for the
+   make_cleanup function declarations below.  Do not use this typedef
+   as a cast when passing functions into the make_cleanup() code.
+   Instead either use a bounce function or add a wrapper function.
+   Calling a f(char*) function with f(void*) is non-portable.  */
+typedef void (make_cleanup_ftype) (void *);
+
+/* Function type for the dtor in make_cleanup_dtor.  */
+typedef void (make_cleanup_dtor_ftype) (void *);
+
+/* WARNING: The result of the "make cleanup" routines is not the intuitive
+   choice of being a handle on the just-created cleanup.  Instead it is an
+   opaque handle of the cleanup mechanism and represents all cleanups created
+   from that point onwards.
+   The result is guaranteed to be non-NULL though.  */
+
+extern struct cleanup *make_cleanup (make_cleanup_ftype *, void *);
+
+extern struct cleanup *make_cleanup_dtor (make_cleanup_ftype *, void *,
+					  make_cleanup_dtor_ftype *);
+
+extern struct cleanup *make_final_cleanup (make_cleanup_ftype *, void *);
+
+/* A special value to pass to do_cleanups and do_final_cleanups
+   to tell them to do all cleanups.  */
+extern struct cleanup *all_cleanups (void);
+
+extern void do_cleanups (struct cleanup *);
+extern void do_final_cleanups (struct cleanup *);
+
+extern void discard_cleanups (struct cleanup *);
+extern void discard_final_cleanups (struct cleanup *);
+
+extern struct cleanup *save_cleanups (void);
+extern struct cleanup *save_final_cleanups (void);
+
+extern void restore_cleanups (struct cleanup *);
+extern void restore_final_cleanups (struct cleanup *);
+
+/* A no-op cleanup.
+   This is useful when you want to establish a known reference point
+   to pass to do_cleanups.  */
+extern void null_cleanup (void *);
+
+#endif /* CLEANUPS_H */
+@
+
+
+1.3
+log
+@	* cleanups.h (struct cleanup): Move to cleanups.c.
+	(make_cleanup_dtor_ftype): New typedef.
+	(make_cleanup_dtor): Use it.
+	(ALL_CLEANUPS): Replace with ...
+	(all_cleanups): ... this.  Declare.  All uses updated.
+	* cleanups.c: #include "gdb_assert.h".
+	(sentinel_cleanup): New static global.
+	(SENTINEL_CLEANUP): Define.
+	(cleanup_chain, final_cleanup_chain): Initialize to SENTINEL_CLEANUP.
+	(make_my_cleanup2): Assert result is non-NULL.
+	(all_cleanups): New function.
+	(save_my_cleanups): Initialize new chain to SENTINEL_CLEANUP instead
+	of NULL.
+@
+text
+@d2 1
+a2 1
+   Copyright (C) 1986, 1988-2005, 2007-2012 Free Software Foundation, Inc.
+@
+
+
+1.2
+log
+@	* cleanups.c (make_my_cleanup,make_my_cleanup2): Make static.
+	(discard_my_cleanups,save_my_cleanups,restore_my_cleanups): Ditto.
+	* cleanups.h (make_my_cleanup,make_my_cleanup2): Delete
+	(discard_my_cleanups,save_my_cleanups,restore_my_cleanups): Delete.
+@
+text
+@d22 2
+a23 22
+/* The cleanup list records things that have to be undone
+   if an error happens (descriptors to be closed, memory to be freed, etc.)
+   Each link in the chain records a function to call and an
+   argument to give it.
+
+   Use make_cleanup to add an element to the cleanup chain.
+   Use do_cleanups to do all cleanup actions back to a given
+   point in the chain.  Use discard_cleanups to remove cleanups
+   from the chain back to a given point, not doing them.
+
+   If the argument is pointer to allocated memory, then you need
+   to additionally set the 'free_arg' member to a function that will
+   free that memory.  This function will be called both when the cleanup
+   is executed and when it's discarded.  */
+
+struct cleanup
+  {
+    struct cleanup *next;
+    void (*function) (void *);
+    void (*free_arg) (void *);
+    void *arg;
+  };
+d32 3
+d38 2
+a39 1
+   from that point onwards.  */
+d44 1
+a44 1
+					  void (*dtor) (void *));
+d50 1
+a50 1
+#define	ALL_CLEANUPS	((struct cleanup *)0)
+@
+
+
+1.1
+log
+@	* cleanups.h: New file.
+	* cleanups.c: New file.
+	* Makefile.in (SFILES): Add cleanups.c.
+	(HFILES_NO_SRCDIR): Add cleanups.h.
+	(COMMON_OBS): Add cleanups.o.
+	* defs.h (struct cleanup): Moved to cleanups.h.
+	(do_cleanups,do_final_cleanups): Ditto.
+	(discard_cleanups,discard_final_cleanups): Ditto
+	(make_cleanup,make_cleanup_dtor,make_final_cleanup): Ditto.
+	(save_cleanups,save_final_cleanups): Ditto.
+	(restore_cleanups,restore_final_cleanups): Ditto.
+	(null_cleanup): Ditto.
+	(make_my_cleanup,make_my_cleanup2): Ditto.
+	(discard_my_cleanups,save_my_cleanups,restore_my_cleanups): Ditto.
+	* utils.c (cleanup_chain,final_cleanup_chain): Moved to cleanups.c.
+	(do_cleanups,do_final_cleanups): Ditto.
+	(discard_cleanups,discard_final_cleanups): Ditto
+	(make_cleanup,make_cleanup_dtor,make_final_cleanup): Ditto.
+	(save_cleanups,save_final_cleanups): Ditto.
+	(restore_cleanups,restore_final_cleanups): Ditto.
+	(null_cleanup): Ditto.
+	(make_my_cleanup,make_my_cleanup2): Ditto.
+	(discard_my_cleanups,save_my_cleanups,restore_my_cleanups): Ditto.
+@
+text
+@a63 6
+extern struct cleanup *make_my_cleanup (struct cleanup **,
+					make_cleanup_ftype *, void *);
+extern struct cleanup *make_my_cleanup2 (struct cleanup **,
+					 make_cleanup_ftype *, void *,
+					 void (*free_arg) (void *));
+
+a72 1
+extern void discard_my_cleanups (struct cleanup **, struct cleanup *);
+a75 1
+extern struct cleanup *save_my_cleanups (struct cleanup **);
+a78 1
+extern void restore_my_cleanups (struct cleanup **, struct cleanup *);
+@
+

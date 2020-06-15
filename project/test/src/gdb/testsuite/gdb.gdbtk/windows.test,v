@@ -1,0 +1,235 @@
+head	1.3;
+access;
+symbols
+	insight_7_6-2013-04-10-branchpoint:1.3
+	gdb_7_6-branch:1.3.0.12
+	gdb_7_5-branch:1.3.0.10
+	gdb_7_4-branch:1.3.0.8
+	gdb_7_3-branch:1.3.0.6
+	gdb_7_1-branch:1.3.0.4
+	gdb_7_0-branch:1.3.0.2
+	arc-sim-20090309:1.2
+	arc-insight_6_8-branch:1.2.0.16
+	arc-insight_6_8-branchpoint:1.2
+	insight_6_8-branch:1.2.0.14
+	insight_6_8-branchpoint:1.2
+	insight_6_6-20070208-release:1.2
+	gdb_6_6-branch:1.2.0.12
+	gdb_6_6-2006-11-15-branchpoint:1.2
+	insight_6_5-20061003-release:1.2
+	gdb_6_5-branch:1.2.0.10
+	gdb_6_5-2006-05-14-branchpoint:1.2
+	gdb_6_4-branch:1.2.0.8
+	gdb_6_4-2005-11-01-branchpoint:1.2
+	gdb-csl-arm-20051020-branch:1.2.0.6
+	gdb-csl-arm-20051020-branchpoint:1.2
+	gdb_6_1-2004-04-05-release:1.2
+	gdb_6_1-branch:1.2.0.4
+	gdb_6_1-2004-03-01-gmt-branchpoint:1.2
+	gdb_6_0-2003-10-04-release:1.2
+	gdb_6_0-branch:1.2.0.2
+	gdb_6_0-2003-06-23-branchpoint:1.2
+	gdb_5_3-2002-12-12-release:1.1
+	gdb_5_3-branch:1.1.0.4
+	gdb_5_3-2002-09-04-branchpoint:1.1
+	gdb_5_2_1-2002-07-23-release:1.1
+	gdb_5_2-2002-04-29-release:1.1
+	gdb_5_2-branch:1.1.0.2
+	gdb_5_2-2002-03-03-branchpoint:1.1
+	cygnus_cvs_20020108_pre:1.1;
+locks; strict;
+comment	@# @;
+
+
+1.3
+date	2008.12.21.17.38.55;	author jkratoch;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2003.02.27.22.21.33;	author hunt;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2001.10.26.06.00.07;	author kseitz;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.3
+log
+@	Fix for PR gdb/8648.
+	* gdb.arch/ppc-fp.exp, gdb.arch/vsx-regs.exp, gdb.base/watchpoint-hw.c,
+	gdb.gdbtk/browser.test, gdb.gdbtk/console.test, gdb.gdbtk/srcwin.test,
+	gdb.gdbtk/srcwin2.test, gdb.gdbtk/srcwin3.test, gdb.gdbtk/windows.test,
+	gdb.threads/tls2.c: Remove reference to bug-gdb@@prep.ai.mit.edu .
+@
+text
+@# Basic window tests
+# Copyright 2001, 2003 Red Hat, Inc.
+#
+# This Program Is Free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+
+# This file was written by Keith Seitz (keiths@@cygnus.com)
+
+# Read in the standard defs file
+if {![gdbtk_read_defs]} {
+  break
+}
+
+global objdir test_ran
+
+# Windows to test
+# FIXME: TfindArgs needs to be updated before it can go in the list...
+set windows [list BpWin BrowserWin Console DebugWin KodWin LocalsWin \
+	     MemWin ProcessWin RegWin StackWin TdumpWin WatchWin]
+
+# Dialogs to test
+# FIXME: ActionhDlg,TraceDlg cannot be independently opened
+set dialogs [list About AttachDlg GlobalPref SrcPref TargetSelection]
+
+# Helper proc to do all the testing
+proc do_open_close {num winlist} {
+  set i 1
+  foreach win $winlist {
+
+    # Test: windows-$num.*
+    # Desc: Open each window before running
+    set win_obj ""
+    gdbtk_test windows-$num.$i "open $win before running" {
+      set err [catch {ManagedWin::open $win} txt]
+      if {$err} {
+	# display error
+	set txt
+      } else {
+	# display "0"
+	set win_obj $txt
+	set err
+      }
+    } {0}
+
+    # Update screen
+    update idletasks
+
+    # Test: windows-{$num+1}.*
+    # Desc: Close each window before running
+    gdbtk_test windows-[expr {$num+1}].$i "close $win before running" {
+      set err [catch {delete object $win_obj} txt]
+      if {$err} {
+	# display error
+	set txt
+      } else {
+	# display "0"
+	set err
+      }
+    } {0}
+
+    # Update screen
+    update idletasks
+    incr i
+  }
+}
+
+#
+# Tests start here
+#
+
+# Counter for tests. Increment by 2 after each call to do_open_close.
+set num 1
+
+#
+# Check if all windows open with no file loaded
+#
+do_open_close $num $windows
+incr num 2
+
+# Sadly, there is no good way to unpost dialogs (except for setting
+# an after callback). Until something better comes along, skip them.
+# do_open_close $num $dialogs
+# incr num 2
+
+#
+# Check if all windows open with file loaded
+#
+
+# Load in a file
+set program [file join $objdir c_variable]
+if {[catch {gdbtk_test_file $program} t]} {
+  # This isn't a test case, since if this fails, we're hosed.
+  gdbtk_test_error "loading \"$program\": $t"
+}
+
+do_open_close $num $windows
+incr num 2
+#do_open_close $num $dialogs
+incr num 2
+
+#
+# Check if all windows open after running
+#
+
+# Break in main and run
+gdb_cmd "break main"
+gdbtk_test_run
+
+do_open_close $num $windows
+incr num 2
+#do_open_close $num $dialogs
+#incr num 2
+
+#
+#  Exit
+#
+gdbtk_test_done
+@
+
+
+1.2
+log
+@2003-02-27  Martin M. Hunt  <hunt@@redhat.com>
+
+	* windows.test: Remove HtmlViewer from list of windows.
+@
+text
+@a17 3
+# Please email any bugs, comments, and/or additions to this file to:
+# bug-gdb@@prep.ai.mit.edu
+
+@
+
+
+1.1
+log
+@	* defs (_report_error): Fix typo.
+	(show_warning): Redefine the standard warning handler
+	so that we don't end up stalling tests with a warning dialog.
+
+	* windows.exp: New file.
+	* windows.test: New file.
+@
+text
+@d2 1
+a2 1
+# Copyright 2001 Red Hat, Inc.
+d32 1
+a32 1
+set windows [list BpWin BrowserWin Console DebugWin HtmlViewer KodWin LocalsWin \
+@
+

@@ -1,0 +1,185 @@
+head	1.1;
+access;
+symbols
+	cygwin-1_7_35-release:1.1
+	cygwin-1_7_34-release:1.1
+	newlib-2_2_0:1.1.0.10
+	cygwin-1_7_33-release:1.1
+	cygwin-1_7_32-release:1.1
+	cygwin-1_7_31-release:1.1
+	cygwin-1_7_30-release:1.1
+	cygwin-1_7_29-release:1.1
+	cygwin-1_7_28-release:1.1
+	newlib-2_1_0:1.1
+	cygwin-1_7_27-release:1.1
+	cygwin-1_7_26-release:1.1
+	cygwin-1_7_25-release:1.1
+	cygwin-1_7_24-release:1.1
+	cygwin-1_7_23-release:1.1
+	cygwin-1_7_22-release:1.1
+	cygwin-1_7_21-release:1.1
+	cygwin-1_7_20-release:1.1
+	cygwin-1_7_19-release:1.1
+	cygwin-64bit-postmerge:1.1
+	cygwin-64bit-premerge-branch:1.1.0.8
+	cygwin-64bit-premerge:1.1
+	cygwin-1_7_18-release:1.1
+	newlib-2_0_0:1.1
+	cygwin-1_7_17-release:1.1
+	cygwin-64bit-branch:1.1.0.6
+	cygwin-1_7_16-release:1.1
+	cygwin-1_7_15-release:1.1
+	cygwin-1_7_14_2-release:1.1
+	cygwin-1_7_14-release:1.1
+	cygwin-1_7_12-release:1.1
+	cygwin-1_7_11-release:1.1
+	cygwin-1_7_10-release:1.1
+	newlib-1_20_0:1.1
+	cygwin-1_7_9-release:1.1
+	cygwin-1_7_8-release:1.1
+	newlib-1_19_0:1.1
+	cygwin-1_7_7-release:1.1
+	cygwin-1_7_5-release:1.1
+	cygwin-1_7_4-release:1.1
+	cygwin-1_7_3-release:1.1
+	cygwin-1_7_2-release:1.1
+	newlib-1_18_0:1.1
+	cygwin-1_7_1-release:1.1
+	newlib-1_17_0-arc:1.1.0.4
+	binutils-arc-20080908-branch:1.1.0.2
+	binutils-arc-20080908-branchpoint:1.1
+	newlib-1_17_0:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.1
+date	2008.01.12.04.25.55;	author ericb;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.1
+log
+@Make strstr and strcasestr O(n), not O(n^2); add memmem.
+* libc/string/str-two-way.h: New file.
+* libc/string/memmem.c (memmem): New file.
+* libc/include/string.h (memmem): Declare for all platforms.
+* libc/string/strstr.c (strstr): Provide O(n) implementation when
+not optimizing for space.
+* libc/string/strcasestr.c (strcasestr): Likewise.
+* libc/string/Makefile.am (ELIX_SOURCES): Rename to...
+(ELIX_2_SOURCES): ...this.
+(ELIX_4_SOURCES): New category, for memmem.
+(lib_a_SOURCES, libstring_la_SOURCES): Build new file.
+(CHEWOUT_FILES): Build documentation for memmem.
+* libc/string/strings.tex: Include new docs.
+@
+text
+@/* Byte-wise substring search, using the Two-Way algorithm.
+ * Copyright (C) 2008 Eric Blake
+ * Permission to use, copy, modify, and distribute this software
+ * is freely granted, provided that this notice is preserved.
+ */
+
+/*
+FUNCTION
+	<<memmem>>---find memory segment
+
+INDEX
+	memmem
+
+ANSI_SYNOPSIS
+	#include <string.h>
+	char *memmem(const void *<[s1]>, size_t <[l1]>, const void *<[s2]>,
+		     size_t <[l2]>);
+
+DESCRIPTION
+
+	Locates the first occurrence in the memory region pointed to
+	by <[s1]> with length <[l1]> of the sequence of bytes pointed
+	to by <[s2]> of length <[l2]>.  If you already know the
+	lengths of your haystack and needle, <<memmem>> can be much
+	faster than <<strstr>>.
+
+RETURNS
+	Returns a pointer to the located segment, or a null pointer if
+	<[s2]> is not found. If <[l2]> is 0, <[s1]> is returned.
+
+PORTABILITY
+<<memmem>> is a newlib extension.
+
+<<memmem>> requires no supporting OS subroutines.
+
+QUICKREF
+	memmem pure
+*/
+
+#include <string.h>
+
+#if !defined(PREFER_SIZE_OVER_SPEED) && !defined(__OPTIMIZE_SIZE__)
+# define RETURN_TYPE void *
+# define AVAILABLE(h, h_l, j, n_l) ((j) <= (h_l) - (n_l))
+# include "str-two-way.h"
+#endif
+
+void *
+_DEFUN (memmem, (haystack_start, haystack_len, needle_start, needle_len),
+	const void *haystack_start _AND
+	size_t haystack_len _AND
+	const void *needle_start _AND
+	size_t needle_len)
+{
+  /* Abstract memory is considered to be an array of 'unsigned char' values,
+     not an array of 'char' values.  See ISO C 99 section 6.2.6.1.  */
+  const unsigned char *haystack = (const unsigned char *) haystack_start;
+  const unsigned char *needle = (const unsigned char *) needle_start;
+
+  if (needle_len == 0)
+    /* The first occurrence of the empty string is deemed to occur at
+       the beginning of the string.  */
+    return (void *) haystack;
+
+#if defined(PREFER_SIZE_OVER_SPEED) || defined(__OPTIMIZE_SIZE__)
+
+  /* Less code size, but quadratic performance in the worst case.  */
+  while (needle_len <= haystack_len)
+    {
+      if (!memcmp (haystack, needle, needle_len))
+        return (void *) haystack;
+      haystack++;
+      haystack_len--;
+    }
+  return NULL;
+
+#else /* compilation for speed */
+
+  /* Larger code size, but guaranteed linear performance.  */
+
+  /* Sanity check, otherwise the loop might search through the whole
+     memory.  */
+  if (haystack_len < needle_len)
+    return NULL;
+
+  /* Use optimizations in memchr when possible, to reduce the search
+     size of haystack using a linear algorithm with a smaller
+     coefficient.  However, avoid memchr for long needles, since we
+     can often achieve sublinear performance.  */
+  if (needle_len < LONG_NEEDLE_THRESHOLD)
+    {
+      haystack = memchr (haystack, *needle, haystack_len);
+      if (!haystack || needle_len == 1)
+	return (void *) haystack;
+      haystack_len -= haystack - (const unsigned char *) haystack_start;
+      if (haystack_len < needle_len)
+	return NULL;
+      return two_way_short_needle (haystack, haystack_len, needle, needle_len);
+    }
+  return two_way_long_needle (haystack, haystack_len, needle, needle_len);
+#endif /* compilation for speed */
+}
+@

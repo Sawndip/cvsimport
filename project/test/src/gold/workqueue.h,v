@@ -1,0 +1,1091 @@
+head	1.15;
+access;
+symbols
+	binutils-2_24-branch:1.15.0.8
+	binutils-2_24-branchpoint:1.15
+	binutils-2_21_1:1.14
+	binutils-2_23_2:1.15
+	binutils-2_23_1:1.15
+	binutils-2_23:1.15
+	binutils-2_23-branch:1.15.0.6
+	binutils-2_23-branchpoint:1.15
+	binutils-2_22_branch:1.15.0.4
+	binutils-2_22:1.15
+	binutils-2_22-branch:1.15.0.2
+	binutils-2_22-branchpoint:1.15
+	binutils-2_21:1.14
+	binutils-2_21-branch:1.14.0.2
+	binutils-2_21-branchpoint:1.14
+	binutils-2_20_1:1.11
+	binutils-2_20:1.11
+	binutils-arc-20081103-branch:1.10.0.6
+	binutils-arc-20081103-branchpoint:1.10
+	binutils-2_20-branch:1.11.0.4
+	binutils-2_20-branchpoint:1.11
+	dje-cgen-play1-branch:1.11.0.2
+	dje-cgen-play1-branchpoint:1.11
+	arc-20081103-branch:1.10.0.4
+	arc-20081103-branchpoint:1.10
+	binutils-2_19_1:1.10
+	binutils-2_19:1.10
+	binutils-2_19-branch:1.10.0.2
+	binutils-2_19-branchpoint:1.10
+	binutils_latest_snapshot:1.15
+	added-to-binutils:1.10;
+locks; strict;
+comment	@ * @;
+
+
+1.15
+date	2011.07.28.23.25.06;	author ccoutant;	state Exp;
+branches;
+next	1.14;
+
+1.14
+date	2010.02.23.17.42.26;	author ian;	state Exp;
+branches;
+next	1.13;
+
+1.13
+date	2009.12.14.19.53.05;	author ian;	state Exp;
+branches;
+next	1.12;
+
+1.12
+date	2009.12.11.13.42.12;	author nickc;	state Exp;
+branches;
+next	1.11;
+
+1.11
+date	2009.03.14.05.56.46;	author ian;	state Exp;
+branches;
+next	1.10;
+
+1.10
+date	2008.03.13.21.04.21;	author iant;	state Exp;
+branches;
+next	1.9;
+
+1.9
+date	2008.02.28.19.46.06;	author iant;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2007.12.14.19.00.21;	author iant;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2007.11.22.00.05.51;	author iant;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2007.10.17.06.24.50;	author iant;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2007.09.22.21.02.10;	author iant;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2006.11.03.18.26.11;	author iant;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2006.10.20.20.40.49;	author iant;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2006.09.21.22.13.18;	author iant;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2006.08.04.23.10.59;	author iant;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.15
+log
+@	* workqueue-internal.h (Workqueue_threader::should_cancel_thread):
+	Add thread_number parameter.
+	(Workqueue_threader_threadpool::should_cancel_thread): Likewise.
+	* workqueue-threads.cc
+	(Workqueue_threader_threadpool::should_cancel_thread): Cancel
+	current thread if its thread number is greater than desired thread
+	count.
+	* workqueue.cc (Workqueue_threader_single::should_cancel_thread):
+	Add thread_number parameter.
+	(Workqueue::should_cancel_thread): Likewise.
+	(Workqueue::find_runnable_or_wait): Pass thread_number to
+	should_cancel_thread.
+	* workqueue.h (Workqueue::should_cancel_thread): Add thread_number
+	parameter.
+@
+text
+@// workqueue.h -- the work queue for gold   -*- C++ -*-
+
+// Copyright 2006, 2007, 2008 Free Software Foundation, Inc.
+// Written by Ian Lance Taylor <iant@@google.com>.
+
+// This file is part of gold.
+
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 3 of the License, or
+// (at your option) any later version.
+
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+// MA 02110-1301, USA.
+
+// After processing the command line, everything the linker does is
+// driven from a work queue.  This permits us to parallelize the
+// linker where possible.
+
+#ifndef GOLD_WORKQUEUE_H
+#define GOLD_WORKQUEUE_H
+
+#include <string>
+
+#include "gold-threads.h"
+#include "token.h"
+
+namespace gold
+{
+
+class General_options;
+class Workqueue;
+
+// The superclass for tasks to be placed on the workqueue.  Each
+// specific task class will inherit from this one.
+
+class Task
+{
+ public:
+  Task()
+    : list_next_(NULL), name_(), should_run_soon_(false)
+  { }
+  virtual ~Task()
+  { }
+
+  // Check whether the Task can be run now.  This method is only
+  // called with the workqueue lock held.  If the Task can run, this
+  // returns NULL.  Otherwise it returns a pointer to a token which
+  // must be released before the Task can run.
+  virtual Task_token*
+  is_runnable() = 0;
+
+  // Lock all the resources required by the Task, and store the locks
+  // in a Task_locker.  This method does not need to do anything if no
+  // locks are required.  This method is only called with the
+  // workqueue lock held.
+  virtual void
+  locks(Task_locker*) = 0;
+
+  // Run the task.
+  virtual void
+  run(Workqueue*) = 0;
+
+  // Return whether this task should run soon.
+  bool
+  should_run_soon() const
+  { return this->should_run_soon_; }
+
+  // Note that this task should run soon.
+  void
+  set_should_run_soon()
+  { this->should_run_soon_ = true; }
+
+  // Get the next Task on the list of Tasks.  Called by Task_list.
+  Task*
+  list_next() const
+  { return this->list_next_; }
+
+  // Set the next Task on the list of Tasks.  Called by Task_list.
+  void
+  set_list_next(Task* t)
+  {
+    gold_assert(this->list_next_ == NULL);
+    this->list_next_ = t;
+  }
+
+  // Clear the next Task on the list of Tasks.  Called by Task_list.
+  void
+  clear_list_next()
+  { this->list_next_ = NULL; }
+
+  // Return the name of the Task.  This is only used for debugging
+  // purposes.
+  const std::string&
+  name()
+  {
+    if (this->name_.empty())
+      this->name_ = this->get_name();
+    return this->name_;
+  }
+
+ protected:
+  // Get the name of the task.  This must be implemented by the child
+  // class.
+  virtual std::string
+  get_name() const = 0;
+
+ private:
+  // Tasks may not be copied.
+  Task(const Task&);
+  Task& operator=(const Task&);
+
+  // If this Task is on a list, this is a pointer to the next Task on
+  // the list.  We use this simple list structure rather than building
+  // a container, in order to avoid memory allocation while holding
+  // the Workqueue lock.
+  Task* list_next_;
+  // Task name, for debugging purposes.
+  std::string name_;
+  // Whether this Task should be executed soon.  This is used for
+  // Tasks which can be run after some data is read.
+  bool should_run_soon_;
+};
+
+// An interface for Task_function.  This is a convenience class to run
+// a single function.
+
+class Task_function_runner
+{
+ public:
+  virtual ~Task_function_runner()
+  { }
+
+  virtual void
+  run(Workqueue*, const Task*) = 0;
+};
+
+// A simple task which waits for a blocker and then runs a function.
+
+class Task_function : public Task
+{
+ public:
+  // RUNNER and BLOCKER should be allocated using new, and will be
+  // deleted after the task runs.
+  Task_function(Task_function_runner* runner, Task_token* blocker,
+		const char* name)
+    : runner_(runner), blocker_(blocker), name_(name)
+  { gold_assert(blocker != NULL); }
+
+  ~Task_function()
+  {
+    delete this->runner_;
+    delete this->blocker_;
+  }
+
+  // The standard task methods.
+
+  // Wait until the task is unblocked.
+  Task_token*
+  is_runnable()
+  { return this->blocker_->is_blocked() ? this->blocker_ : NULL; }
+
+  // This type of task does not normally hold any locks.
+  virtual void
+  locks(Task_locker*)
+  { }
+
+  // Run the action.
+  void
+  run(Workqueue* workqueue)
+  { this->runner_->run(workqueue, this); }
+
+  // The debugging name.
+  std::string
+  get_name() const
+  { return this->name_; }
+
+ private:
+  Task_function(const Task_function&);
+  Task_function& operator=(const Task_function&);
+
+  Task_function_runner* runner_;
+  Task_token* blocker_;
+  const char* name_;
+};
+
+// The workqueue itself.
+
+class Workqueue_threader;
+
+class Workqueue
+{
+ public:
+  Workqueue(const General_options&);
+  ~Workqueue();
+
+  // Add a new task to the work queue.
+  void
+  queue(Task*);
+
+  // Add a new task to the work queue which should run soon.  If the
+  // task is ready, it will be run before any tasks added using
+  // queue().
+  void
+  queue_soon(Task*);
+
+  // Add a new task to the work queue which should run next if it is
+  // ready.
+  void
+  queue_next(Task*);
+
+  // Process all the tasks on the work queue.  This function runs
+  // until all tasks have completed.  The argument is the thread
+  // number, used only for debugging.
+  void
+  process(int);
+
+  // Set the desired thread count--the number of threads we want to
+  // have running.
+  void
+  set_thread_count(int);
+
+  // Add a new blocker to an existing Task_token. This must be done
+  // with the workqueue lock held.  This should not be done routinely,
+  // only in special circumstances.
+  void
+  add_blocker(Task_token*);
+
+ private:
+  // This class can not be copied.
+  Workqueue(const Workqueue&);
+  Workqueue& operator=(const Workqueue&);
+
+  // Add a task to a queue.
+  void
+  add_to_queue(Task_list* queue, Task* t, bool front);
+
+  // Find a runnable task, or wait for one.
+  Task*
+  find_runnable_or_wait(int thread_number);
+
+  // Find a runnable task.
+  Task*
+  find_runnable();
+
+  // Find a runnable task in a list.
+  Task*
+  find_runnable_in_list(Task_list*);
+
+  // Find an run a task.
+  bool
+  find_and_run_task(int);
+
+  // Release the locks for a Task.  Return the next Task to run.
+  Task*
+  release_locks(Task*, Task_locker*);
+
+  // Store T into *PRET, or queue it as appropriate.
+  bool
+  return_or_queue(Task* t, bool is_blocker, Task** pret);
+
+  // Return whether to cancel this thread.
+  bool
+  should_cancel_thread(int thread_number);
+
+  // Master Workqueue lock.  This controls access to the following
+  // member variables.
+  Lock lock_;
+  // List of tasks to execute soon.
+  Task_list first_tasks_;
+  // List of tasks to execute after the ones in first_tasks_.
+  Task_list tasks_;
+  // Number of tasks currently running.
+  int running_;
+  // Number of tasks waiting for a lock to release.
+  int waiting_;
+  // Condition variable associated with lock_.  This is signalled when
+  // there may be a new Task to execute.
+  Condvar condvar_;
+
+  // The threading implementation.  This is set at construction time
+  // and not changed thereafter.
+  Workqueue_threader* threader_;
+};
+
+} // End namespace gold.
+
+#endif // !defined(GOLD_WORKQUEUE_H)
+@
+
+
+1.14
+log
+@	* gold.cc (queue_middle_tasks): If no input files were opened,
+	exit.
+	* workqueue.h (Task_function::Task_function): Assert that there is
+	a blocker.
+@
+text
+@d271 1
+a271 1
+  should_cancel_thread();
+@
+
+
+1.13
+log
+@	Revert -Wshadow changes, all changes from:
+	2009-12-11  Doug Kwan  <dougkwan@@google.com>
+	2009-12-11  Nick Clifton  <nickc@@redhat.com>
+	* configure.ac: Remove -Wshadow when setting WARN_CXXFLAGS.
+@
+text
+@d155 1
+a155 1
+  { }
+@
+
+
+1.12
+log
+@Add -Wshadow to the gcc command line options used when compiling the binutils.
+Fix up all warnings generated by the addition of this switch.
+@
+text
+@d153 2
+a154 2
+		const char* tname)
+    : runner_(runner), blocker_(blocker), name_(tname)
+@
+
+
+1.11
+log
+@	* readsyms.cc (Read_symbols::incompatible_warning): New function.
+	(Read_symbols::requeue): New function.
+	(Read_symbols::do_read_symbols): If make_elf_object fails because
+	the target type is not configured, and the file was searched for,
+	issue a warning and retry with the next directory.
+	(Add_symbols::run): If the file has an incompatible format, and
+	it was searched for, requeue the Read_symbols task.  On error,
+	release the object.
+	* readsyms.h (class Read_symbols): Add dirindex_ field.  Add
+	dirindex parameter to constructor.  Change all callers.  Declare
+	incompatible_warning and requeue.
+	(class Add_symbols): Add dirpath_, dirindex_, mapfile_,
+	input_argument_ and input_group_ fields.  Add them to
+	constructor.  Change all callers.
+	(class Read_script): Add dirindex_ field.  Add it to constructor.
+	Change all callers.
+	* archive.cc (Archive::setup): Remove input_objects parameter.
+	Change all callers.
+	(Archive::get_file_and_offset): Likewise.
+	(Archive::read_all_symbols): Likewise.
+	(Archive::read_symbols): Likewise.
+	(Archive::get_elf_object_for_member): Remove input_objects
+	parameter.  Add punconfigured parameter.  Change all callers.
+	(Archive::add_symbols): Change return type to bool.  Check return
+	value of include_member.
+	(Archive::include_all_members): Likewise.
+	(Archive::include_member): Change return type to bool.  Return
+	false if first included object has incompatible target.  Set
+	included_member_ field.
+	(Add_archive_symbols::run): If add_symbols returns false, requeue
+	Read_symbols task.
+	* archive.h (class Archive): Add included_member_ field.
+	Initialize it in constructor.  Add input_file and searched_for
+	methods.  Update declarations.
+	(class Add_archive_symbols): Add dirpath_, dirindex_, and
+	input_argument_ fields.  Add them to constructor.  Change all
+	callers.
+	* script.cc: Include "target-select.h".
+	(class Parser_closure): Add skip_on_incompatible_target_ and
+	found_incompatible_target_ fields.  Add
+	skip_on_incompatible_target parameter to constructor.  Change all
+	callers.  Add methods skip_on_incompatible_target,
+	clear_skip_on_incompatible_target, found_incompatible_target, and
+	set_found_incompatible_target.
+	(read_input_script): Add dirindex parameter.  Change all callers.
+	If parser finds an incompatible target, requeue Read_symbols
+	task.
+	(script_set_symbol): Clear skip_on_incompatible_target in
+	closure.
+	(script_add_assertion, script_parse_option): Likewise.
+	(script_start_sections, script_add_phdr): Likewise.
+	(script_check_output_format): New function.
+	* script.h (read_input_script): Update declaration.
+	* script-c.h (script_check_output_format): Declare.
+	* yyscript.y (file_cmd): Handle OUTPUT_FORMAT.
+	(ignore_cmd): Remove OUTPUT_FORMAT.
+	* fileread.cc (Input_file::Input_file): Add explicit this.
+	(Input_file::will_search_for): New function.
+	(Input_file::open): Add pindex parameter.  Change all callers.
+	* fileread.h (class Input_file): Add input_file_argument method.
+	Declare will_search_for.  Update declarations.
+	* object.cc (make_elf_object): Add punconfigured parameter.
+	Change all callers.
+	* object.h (class Object): Make input_file public.  Add
+	searched_for method.
+	(make_elf_object): Update declaration.
+	* dirsearch.cc (Dirsearch::find): Add pindex parameter.  Use it to
+	restart search.
+	* dirsearch.h (class Dirsearch): Update declaration.
+	* options.h (class General_options): Add --warn-search-mismatch.
+	* parameters.cc (Parameters::is_compatible_target): New function.
+	* parameters.h (class Parameters): Declare is_compatible_target.
+	* workqueue.cc (Workqueue::add_blocker): New function.
+	* workqueue.h (class Workqueue): Declare add_blocker.
+@
+text
+@d153 2
+a154 2
+		const char* name)
+    : runner_(runner), blocker_(blocker), name_(name)
+@
+
+
+1.10
+log
+@Update copyright years.  Update language files.
+@
+text
+@d230 6
+@
+
+
+1.9
+log
+@Read input scripts which look like input objects with proper
+serialization.
+@
+text
+@d3 1
+a3 1
+// Copyright 2006, 2007 Free Software Foundation, Inc.
+@
+
+
+1.8
+log
+@Rewrite workqueue.  This version eliminates the master thread, and
+reduces the amount of locking required to find a new thread to run.
+@
+text
+@d208 3
+a210 2
+  // Add a new task to the front of the work queue.  It will be the
+  // next task to run if it is ready.
+d212 6
+a217 1
+  queue_front(Task*);
+d237 1
+a237 1
+  add_to_queue(Task_list* queue, Task* t);
+@
+
+
+1.7
+log
+@Add threading support.
+@
+text
+@a26 9
+// Task_token
+//   A simple locking implementation to ensure proper task ordering.
+// Task_read_token, Task_write_token
+//   Lock a Task_token for read or write.
+// Task_locker
+//   Task locking using RAII.
+// Task
+//   An abstract class for jobs to run.
+
+d30 2
+d33 1
+a33 1
+#include "fileread.h"
+a38 1
+class Task;
+a40 222
+// Some tasks require access to shared data structures, such as the
+// symbol table.  Some tasks must be executed in a particular order,
+// such as reading input file symbol tables--if we see foo.o -llib, we
+// have to read the symbols for foo.o before we read the ones for
+// -llib.  To implement this safely and efficiently, we use tokens.
+// Task_tokens support shared read/exclusive write access to some
+// resource.  Alternatively, they support blockers: blockers implement
+// the requirement that some set of tasks must complete before another
+// set of tasks can start.  In such a case we increment the block
+// count when we create the task, and decrement it when the task
+// completes.  Task_tokens are only manipulated by the main thread, so
+// they do not themselves require any locking.
+
+class Task_token
+{
+ public:
+  Task_token();
+
+  ~Task_token();
+
+  // A read/write token uses these methods.
+
+  bool
+  is_readable() const;
+
+  void
+  add_reader();
+
+  void
+  remove_reader();
+
+  bool
+  is_writable() const;
+
+  void
+  add_writer(const Task*);
+
+  void
+  remove_writer(const Task*);
+
+  bool
+  has_write_lock(const Task*);
+
+  // A blocker token uses these methods.
+
+  void
+  add_blocker();
+
+  // Returns true if block count drops to zero.
+  bool
+  remove_blocker();
+
+  bool
+  is_blocked() const;
+
+ private:
+  // It makes no sense to copy these.
+  Task_token(const Task_token&);
+  Task_token& operator=(const Task_token&);
+
+  bool is_blocker_;
+  int readers_;
+  const Task* writer_;
+};
+
+// In order to support tokens more reliably, we provide objects which
+// handle them using RAII.
+
+class Task_read_token
+{
+ public:
+  Task_read_token(Task_token& token)
+    : token_(token)
+  { this->token_.add_reader(); }
+
+  ~Task_read_token()
+  { this->token_.remove_reader(); }
+
+ private:
+  Task_read_token(const Task_read_token&);
+  Task_read_token& operator=(const Task_read_token&);
+
+  Task_token& token_;
+};
+
+class Task_write_token
+{
+ public:
+  Task_write_token(Task_token& token, const Task* task)
+    : token_(token), task_(task)
+  { this->token_.add_writer(this->task_); }
+
+  ~Task_write_token()
+  { this->token_.remove_writer(this->task_); }
+
+ private:
+  Task_write_token(const Task_write_token&);
+  Task_write_token& operator=(const Task_write_token&);
+
+  Task_token& token_;
+  const Task* task_;
+};
+
+class Task_block_token
+{
+ public:
+  // The blocker count must be incremented when the task is created.
+  // This object is created when the task is run.  When we unblock the
+  // last task, we notify the workqueue.
+  Task_block_token(Task_token& token, Workqueue* workqueue);
+  ~Task_block_token();
+
+ private:
+  Task_block_token(const Task_block_token&);
+  Task_block_token& operator=(const Task_block_token&);
+
+  Task_token& token_;
+  Workqueue* workqueue_;
+};
+
+// An object which implements an RAII lock for any object which
+// supports lock and unlock methods.
+
+template<typename Obj>
+class Task_lock_obj
+{
+ public:
+  Task_lock_obj(Obj& obj)
+    : obj_(obj)
+  { this->obj_.lock(); }
+
+  ~Task_lock_obj()
+  { this->obj_.unlock(); }
+
+ private:
+  Task_lock_obj(const Task_lock_obj&);
+  Task_lock_obj& operator=(const Task_lock_obj&);
+
+  Obj& obj_;
+};
+
+// An abstract class used to lock Task_tokens using RAII.  A typical
+// implementation would simply have a set of members of type
+// Task_read_token, Task_write_token, and Task_block_token.
+
+class Task_locker
+{
+ public:
+  Task_locker()
+  { }
+
+  virtual ~Task_locker()
+  { }
+};
+
+// A version of Task_locker which may be used for a single read lock.
+
+class Task_locker_read : public Task_locker
+{
+ public:
+  Task_locker_read(Task_token& token)
+    : read_token_(token)
+  { }
+
+ private:
+  Task_locker_read(const Task_locker_read&);
+  Task_locker_read& operator=(const Task_locker_read&);
+
+  Task_read_token read_token_;
+};
+
+// A version of Task_locker which may be used for a single write lock.
+
+class Task_locker_write : public Task_locker
+{
+ public:
+  Task_locker_write(Task_token& token, const Task* task)
+    : write_token_(token, task)
+  { }
+
+ private:
+  Task_locker_write(const Task_locker_write&);
+  Task_locker_write& operator=(const Task_locker_write&);
+
+  Task_write_token write_token_;
+};
+
+// A version of Task_locker which may be used for a single blocker
+// lock.
+
+class Task_locker_block : public Task_locker
+{
+ public:
+  Task_locker_block(Task_token& token, Workqueue* workqueue)
+    : block_token_(token, workqueue)
+  { }
+
+ private:
+  Task_locker_block(const Task_locker_block&);
+  Task_locker_block& operator=(const Task_locker_block&);
+
+  Task_block_token block_token_;
+};
+
+// A version of Task_locker which may be used to hold a lock on any
+// object which supports lock() and unlock() methods.
+
+template<typename Obj>
+class Task_locker_obj : public Task_locker
+{
+ public:
+  Task_locker_obj(Obj& obj)
+    : obj_lock_(obj)
+  { }
+
+ private:
+  Task_locker_obj(const Task_locker_obj&);
+  Task_locker_obj& operator=(const Task_locker_obj&);
+
+  Task_lock_obj<Obj> obj_lock_;
+};
+
+d48 1
+a48 1
+    : name_()
+d53 13
+a65 23
+  // Type returned by Is_runnable.
+  enum Is_runnable_type
+  {
+    // Task is runnable.
+    IS_RUNNABLE,
+    // Task is waiting for a block to clear.
+    IS_BLOCKED,
+    // Task is not waiting for a block, but is not runnable--i.e., is
+    // waiting for a lock.
+    IS_LOCKED
+  };
+
+  // Return whether the task can be run now.  This method is only
+  // called from the main thread.
+  virtual Is_runnable_type
+  is_runnable(Workqueue*) = 0;
+
+  // Return a pointer to a Task_locker which locks all the resources
+  // required by the task.  We delete the pointer when the task is
+  // complete.  This method can return NULL if no locks are required.
+  // This method is only called from the main thread.
+  virtual Task_locker*
+  locks(Workqueue*) = 0;
+d71 28
+d116 1
+a116 1
+  // This task may not be copied.
+d120 5
+d127 3
+d132 2
+a133 1
+// A simple task which waits for a blocker and then runs a function.
+d142 1
+a142 1
+  run(Workqueue*) = 0;
+d145 2
+d150 2
+a151 2
+  // Both points should be allocated using new, and will be deleted
+  // after the task runs.
+d166 3
+a168 3
+  Is_runnable_type
+  is_runnable(Workqueue*)
+  { return this->blocker_->is_blocked() ? IS_BLOCKED : IS_RUNNABLE; }
+d171 3
+a173 3
+  virtual Task_locker*
+  locks(Workqueue*)
+  { return NULL; }
+d178 1
+a178 1
+  { this->runner_->run(workqueue); }
+d194 1
+a194 1
+// The workqueue
+d196 1
+a196 1
+class Workqueue_runner;
+d213 3
+a215 1
+  // Process all the tasks on the work queue.
+d217 1
+a217 1
+  process();
+d219 2
+a220 5
+  // A complete set of blocking tasks has completed.
+  void
+  cleared_blocker();
+
+  // Set the thread count.
+d229 1
+a229 3
+  typedef std::list<Task*> Task_list;
+
+  // Run a task.
+d231 1
+a231 1
+  run(Task*);
+d233 3
+a235 1
+  friend class Workqueue_runner;
+d239 1
+a239 1
+  find_runnable(Task_list*, bool*);
+d241 3
+a243 3
+  // Add a lock to the completed queue.
+  void
+  completed(Task*, Task_locker*);
+d245 1
+a245 1
+  // Clear the completed queue.
+d247 5
+a251 1
+  clear_completed();
+d253 3
+a255 3
+  // Print the list of queued tasks.
+  void
+  show_queued_tasks();
+d257 3
+a259 2
+  // How to run a task.  Only accessed from main thread.
+  Workqueue_runner* runner_;
+d261 3
+a263 2
+  // Lock for access to tasks_ members.
+  Lock tasks_lock_;
+a267 5
+
+  // Lock for access to completed_, running_, and queued_.
+  Lock completed_lock_;
+  // List of Task_locker objects for main thread to free.
+  std::list<Task_locker*> completed_;
+d270 9
+a278 13
+  // Number of tasks currently on queue (both first_tasks_ and
+  // tasks_).
+  int queued_;
+  // Condition variable signalled when a new entry is added to completed_.
+  Condvar completed_condvar_;
+
+  // Number of blocker tokens which were fully cleared.  Only accessed
+  // from main thread.
+  int cleared_blockers_;
+
+  // The desired thread count.  Only set by the main thread or by a
+  // singleton thread.  Only accessed from the main thread.
+  int desired_thread_count_;
+@
+
+
+1.6
+log
+@Add infrastructure for threading support.
+@
+text
+@d278 1
+d311 16
+d328 1
+d331 3
+d353 3
+a355 2
+  Task_function(Task_function_runner* runner, Task_token* blocker)
+    : runner_(runner), blocker_(blocker)
+d381 5
+d392 1
+d434 2
+a435 1
+  void run(Task*);
+d440 2
+a441 1
+  Task* find_runnable(Task_list&, bool*);
+d444 2
+a445 1
+  void completed(Task*, Task_locker*);
+d448 6
+a453 1
+  bool clear_completed();
+d460 3
+a462 1
+  // List of tasks to execute at each link level.
+d465 1
+a465 1
+  // Lock for access to completed_ and running_ members.
+d471 3
+d480 4
+@
+
+
+1.5
+log
+@Add licensing text to every source file.
+@
+text
+@d50 1
+a50 1
+// symbol table.  Some tasks must be executed in a particular error,
+d393 4
+@
+
+
+1.4
+log
+@Can now do a full static link of hello, world in C or C++
+@
+text
+@d3 20
+@
+
+
+1.3
+log
+@Framework for relocation scanning.  Implement simple static TLS
+relocations.
+@
+text
+@a19 1
+#include "options.h"
+d25 1
+d289 4
+@
+
+
+1.2
+log
+@New drop, with first cut of section layout code.
+@
+text
+@d291 52
+d356 5
+@
+
+
+1.1
+log
+@Initial CVS checkin of gold
+@
+text
+@d149 21
+d233 2
+a234 2
+// A version of Task_locker which may be used to hold a lock on a
+// File_read.
+d236 2
+a237 1
+class Task_locker_file : public Task_locker
+d240 2
+a241 2
+  Task_locker_file(File_read& file)
+    : file_lock_(file)
+d245 2
+a246 2
+  Task_locker_file(const Task_locker_file&);
+  Task_locker_file& operator=(const Task_locker_file&);
+d248 1
+a248 1
+  File_read_lock file_lock_;
+@
+

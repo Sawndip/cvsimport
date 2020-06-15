@@ -1,0 +1,154 @@
+head	1.2;
+access;
+symbols
+	newlib-2_2_0:1.2.0.10
+	newlib-2_1_0:1.2
+	newlib-2_0_0:1.2
+	newlib-1_20_0:1.2
+	newlib-1_19_0:1.2
+	newlib-1_18_0:1.2
+	newlib-1_17_0-arc:1.2.0.8
+	binutils-arc-20080908-branch:1.2.0.6
+	binutils-arc-20080908-branchpoint:1.2
+	newlib-1_17_0:1.2
+	newlib-1_16_0:1.2
+	newlib-1_15_0:1.2
+	newlib-csl-coldfire-4_1-32:1.2
+	newlib-csl-sourcerygxx-4_1-32:1.2
+	newlib-csl-innovasic-fido-3_4_4-33:1.2
+	newlib-csl-coldfire-4_1-30:1.2
+	newlib-csl-sourcerygxx-4_1-30:1.2
+	newlib-csl-coldfire-4_1-28:1.2
+	newlib-csl-sourcerygxx-4_1-28:1.2
+	newlib-csl-arm-2006q3-27:1.2
+	newlib-csl-sourcerygxx-4_1-27:1.2
+	newlib-csl-arm-2006q3-26:1.2
+	newlib-csl-sourcerygxx-4_1-26:1.2
+	newlib-csl-sourcerygxx-4_1-24:1.2
+	newlib-csl-sourcerygxx-4_1-23:1.2
+	newlib-csl-sourcerygxx-4_1-21:1.2
+	newlib-csl-arm-2006q3-21:1.2
+	newlib-csl-arm-2006q3-19:1.2
+	newlib-csl-sourcerygxx-4_1-19:1.2
+	newlib-csl-sourcerygxx-4_1-18:1.2
+	newlib-csl-sourcerygxx-3_4_4-25:1.2
+	newlib-csl-sourcerygxx-4_1-17:1.2
+	newlib-csl-sourcerygxx-4_1-14:1.2
+	newlib-csl-sourcerygxx-4_1-13:1.2
+	newlib-csl-sourcerygxx-4_1-12:1.2
+	newlib-csl-sourcerygxx-4_1-9:1.2
+	newlib-csl-sourcerygxx-4_1-8:1.2
+	newlib-csl-sourcerygxx-4_1-7:1.2
+	newlib-csl-arm-2006q1-6:1.2
+	newlib-csl-sourcerygxx-4_1-6:1.2
+	newlib-csl-sourcerygxx-4_1-5:1.2
+	newlib-csl-sourcerygxx-4_1-4:1.2
+	newlib-autotools-branch:1.2.0.4
+	newlib-csl-20060320-branch:1.2.0.2
+	newlib-csl-20060320-branchpoint:1.2
+	newlib-1_14_0:1.2
+	newlib-csl-arm-2005-q1b:1.2
+	newlib-csl-arm-2005-q1a:1.2
+	newlib-1_13_0:1.2
+	csl-arm-2004-q3:1.2
+	csl-arm-2004-q1a:1.2
+	csl-arm-2004-q1:1.2
+	newlib-1_12_0:1.2
+	csl-arm-2003-q4:1.2
+	newlib-1_11_0:1.1
+	cygnus_cvs_20020108_pre:1.1
+	newlib-1_10_0:1.1
+	newlib-1_9_0:1.1;
+locks; strict;
+comment	@# @;
+
+
+1.2
+date	2003.06.23.19.06.12;	author jjohnstn;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2000.03.17.22.48.50;	author ranjith;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@
+2003-06-23  Kazuhiro Inaoka  <inaoka.kazuhiro@@renesas.com>
+
+        * m32r/crt0.S (_start): Allow _stack to be placed anywhere
+        in memory.
+@
+text
+@	.text
+	.balign 4
+	.global	_start
+_start:
+
+	seth	sp, #shigh(_stack)
+	add3	sp, sp, #low(_stack)
+	ldi	fp, #0
+
+# Clear the BSS.  Do it in two parts for efficiency: longwords first
+# for most of it, then the remaining 0 to 3 bytes.
+
+	seth	r2, #shigh(__bss_start)
+	add3	r2, r2, #low(__bss_start); R2 = start of BSS
+	seth	r3, #shigh(_end)
+	add3	r3, r3, #low(_end)	; R3 = end of BSS + 1
+	
+	sub	r3, r2		; R3 = BSS size in bytes
+	mv	r4, r3
+	srli	r4, #2		; R4 = BSS size in longwords (rounded down)
+	ldi	r1, #0		; clear R1 for longword store
+	addi	r2, #-4		; account for pre-inc store
+	beqz	r4, .Lendloop1	; any more to go?
+.Lloop1:
+	st	r1, @@+r2	; yep, zero out another longword
+	addi	r4, #-1		; decrement count
+	bnez	r4, .Lloop1	; go do some more
+.Lendloop1:
+	and3	r4, r3, #3	; get no. of remaining BSS bytes to clear
+	addi	r2, #4		; account for pre-inc store
+	beqz	r4, .Lendloop2	; any more to go?
+.Lloop2:
+	stb	r1, @@r2		; yep, zero out another byte
+	addi	r2, #1		; bump address
+	addi	r4, #-1		; decrement count
+	bnez	r4, .Lloop2	; go do some more
+.Lendloop2:
+
+# Run code in the .init section.
+# This will queue the .fini section to be run with atexit.
+
+	bl	__init
+
+# Call main, then exit.
+
+	bl	main
+	bl	exit
+
+# If that fails just loop.
+
+.Lexit:
+	bra	.Lexit
+@
+
+
+1.1
+log
+@20000317 sourceware import
+@
+text
+@d6 2
+a7 1
+	ld24	sp, _stack
+@
+

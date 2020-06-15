@@ -1,0 +1,667 @@
+head	1.9;
+access;
+symbols
+	msnyder-checkpoint-072509-branch:1.8.0.2
+	msnyder-checkpoint-072509-branchpoint:1.8
+	reverse-20081226-branch:1.2.0.2
+	reverse-20081226-branchpoint:1.2
+	multiprocess-20081120-branch:1.1.0.4
+	multiprocess-20081120-branchpoint:1.1
+	reverse-20080930-branch:1.1.0.2
+	reverse-20080930-branchpoint:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.9
+date	2009.09.09.17.45.41;	author brobecke;	state dead;
+branches;
+next	1.8;
+
+1.8
+date	2009.07.10.10.35.17;	author pmuldoon;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2009.07.02.17.04.23;	author uweigand;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2009.02.26.20.45.21;	author pmuldoon;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2009.02.05.21.16.09;	author bauermann;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2009.02.04.21.55.40;	author bauermann;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2009.01.03.05.57.57;	author brobecke;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2008.11.21.14.59.56;	author tromey;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2008.08.06.19.41.32;	author bauermann;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.9
+log
+@Checking in this patch for Thiago: Rename python-* files into py-*,
+more 8+3 friendly.
+
+
+gdb/
+        * Makefile.in (py-cmd.o): Renamed from python-cmd.o.  Updated
+        references.
+        (py-frame.o): Renamed from python-frame.o.  Updated references.
+        (py-function.o): Renamed from python-function.o.  Updated references.
+        (py-objfile.o): Renamed from python-objfile.o.  Updated references.
+        (py-prettyprint.o): Renamed from python-prettyprint.o.  Updated
++references.
+        (py-type.o): Renamed from python-type.o.  Updated references.
+        (py-utils.o): Renamed from python-utils.o.  Updated references.
+        (py-value.o): Renamed from python-value.o.  Updated references.
+        * py-cmd.o: Renamed from python-cmd.o.
+        * py-frame.o: Renamed from python-frame.o.
+        * py-function.o: Renamed from python-function.o.
+        * py-objfile.o: Renamed from python-objfile.o.
+        * py-prettyprint.o: Renamed from python-prettyprint.o.
+        * py-type.o: Renamed from python-type.o.
+        * py-utils.o: Renamed from python-utils.o.
+        * py-value.o: Renamed from python-value.o.
+
+gdb/testsuite/
+        * gdb.python/Makefile.in (EXECUTABLES): Adjust to new executable
+        names, add missing ones.
+        * gdb.python/py-cmd.exp: Rename from python-cmd.exp.
+        * gdb.python/py-frame.c: Rename from python-frame.c.
+        * gdb.python/py-frame.exp: Rename from python-frame.exp.  Adjust
+        testfile name.
+        * gdb.python/py-function.exp: Rename from python-function.exp.
+        * gdb.python/py-mi.exp: Rename from python-mi.exp.  Adjust
+        testfile name.
+        * gdb.python/py-prettyprint.c: Rename from python-prettyprint.c.
+        * gdb.python/py-prettyprint.exp: Rename from python-prettyprint.exp.
+        Adjust testfile name.
+        * gdb.python/py-prettyprint.py: Rename from python-prettyprint.py.
+        * gdb.python/py-template.cc: Rename from python-template.cc.
+        * gdb.python/py-template.exp: Rename from python-template.exp.
+        Adjust testfile name.
+        * gdb.python/py-value.c: Rename from python-value.c.
+        * gdb.python/py-value.exp: Rename from python-value.exp.  Adjust
+        testfile name.
+@
+text
+@/* General utility routines for GDB/Python.
+
+   Copyright (C) 2008, 2009 Free Software Foundation, Inc.
+
+   This file is part of GDB.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+#include "defs.h"
+#include "charset.h"
+#include "python-internal.h"
+
+
+/* This is a cleanup function which decrements the refcount on a
+   Python object.  */
+
+static void
+py_decref (void *p)
+{
+  PyObject *py = p;
+  /* Note that we need the extra braces in this 'if' to avoid a
+     warning from gcc.  */
+  if (py)
+    {
+      Py_DECREF (py);
+    }
+}
+
+/* Return a new cleanup which will decrement the Python object's
+   refcount when run.  */
+
+struct cleanup *
+make_cleanup_py_decref (PyObject *py)
+{
+  return make_cleanup (py_decref, (void *) py);
+}
+
+/* Converts a Python 8-bit string to a unicode string object.  Assumes the
+   8-bit string is in the host charset.  If an error occurs during conversion,
+   returns NULL with a python exception set.
+
+   As an added bonus, the functions accepts a unicode string and returns it
+   right away, so callers don't need to check which kind of string they've
+   got.
+
+   If the given object is not one of the mentioned string types, NULL is
+   returned, with the TypeError python exception set.  */
+PyObject *
+python_string_to_unicode (PyObject *obj)
+{
+  PyObject *unicode_str;
+
+  /* If obj is already a unicode string, just return it.
+     I wish life was always that simple...  */
+  if (PyUnicode_Check (obj))
+    {
+      unicode_str = obj;
+      Py_INCREF (obj);
+    }
+  
+  else if (PyString_Check (obj))
+    unicode_str = PyUnicode_FromEncodedObject (obj, host_charset (), NULL);
+  else
+    {
+      PyErr_SetString (PyExc_TypeError,
+		       _("Expected a string or unicode object."));
+      unicode_str = NULL;
+    }
+
+  return unicode_str;
+}
+
+/* Returns a newly allocated string with the contents of the given unicode
+   string object converted to CHARSET.  If an error occurs during the
+   conversion, NULL will be returned and a python exception will be set.
+
+   The caller is responsible for xfree'ing the string.  */
+static char *
+unicode_to_encoded_string (PyObject *unicode_str, const char *charset)
+{
+  char *result;
+  PyObject *string;
+
+  /* Translate string to named charset.  */
+  string = PyUnicode_AsEncodedString (unicode_str, charset, NULL);
+  if (string == NULL)
+    return NULL;
+
+  result = xstrdup (PyString_AsString (string));
+
+  Py_DECREF (string);
+
+  return result;
+}
+
+/* Returns a PyObject with the contents of the given unicode string
+   object converted to a named charset.  If an error occurs during
+   the conversion, NULL will be returned and a python exception will
+   be set.  */
+static PyObject *
+unicode_to_encoded_python_string (PyObject *unicode_str, const char *charset)
+{
+  PyObject *string;
+
+  /* Translate string to named charset.  */
+  string = PyUnicode_AsEncodedString (unicode_str, charset, NULL);
+  if (string == NULL)
+    return NULL;
+
+  return string;
+}
+
+/* Returns a newly allocated string with the contents of the given unicode
+   string object converted to the target's charset.  If an error occurs during
+   the conversion, NULL will be returned and a python exception will be set.
+
+   The caller is responsible for xfree'ing the string.  */
+char *
+unicode_to_target_string (PyObject *unicode_str)
+{
+  return unicode_to_encoded_string (unicode_str, target_charset ());
+}
+
+/* Returns a PyObject with the contents of the given unicode string
+   object converted to the target's charset.  If an error occurs
+   during the conversion, NULL will be returned and a python exception
+   will be set.  */
+PyObject *
+unicode_to_target_python_string (PyObject *unicode_str)
+{
+  return unicode_to_encoded_python_string (unicode_str, target_charset ());
+}
+
+/* Converts a python string (8-bit or unicode) to a target string in
+   the target's charset.  Returns NULL on error, with a python exception set.
+
+   The caller is responsible for xfree'ing the string.  */
+char *
+python_string_to_target_string (PyObject *obj)
+{
+  PyObject *str;
+  char *result;
+
+  str = python_string_to_unicode (obj);
+  if (str == NULL)
+    return NULL;
+
+  result = unicode_to_target_string (str);
+  Py_DECREF (str);
+  return result;
+}
+
+/* Converts a python string (8-bit or unicode) to a target string in the
+   target's charset.  Returns NULL on error, with a python exception
+   set.  */
+PyObject *
+python_string_to_target_python_string (PyObject *obj)
+{
+  PyObject *str;
+  PyObject *result;
+
+  str = python_string_to_unicode (obj);
+  if (str == NULL)
+    return NULL;
+
+  result = unicode_to_target_python_string (str);
+  Py_DECREF (str);
+  return result;
+}
+
+/* Converts a python string (8-bit or unicode) to a target string in
+   the host's charset.  Returns NULL on error, with a python exception set.
+
+   The caller is responsible for xfree'ing the string.  */
+char *
+python_string_to_host_string (PyObject *obj)
+{
+  PyObject *str;
+  char *result;
+
+  str = python_string_to_unicode (obj);
+  if (str == NULL)
+    return NULL;
+
+  result = unicode_to_encoded_string (str, host_charset ()); 
+  Py_DECREF (str);
+  return result;
+}
+
+/* Converts a target string of LENGTH bytes in the target's charset to a
+   Python Unicode string. If LENGTH is -1, convert until a null byte is found.
+
+   Returns NULL on error, with a python exception set.  */
+PyObject *
+target_string_to_unicode (const gdb_byte *str, int length)
+{
+  if (length == -1)
+    length = strlen (str);
+
+  return PyUnicode_Decode (str, length, target_charset (), NULL);
+}
+
+/* Return true if OBJ is a Python string or unicode object, false
+   otherwise.  */
+
+int
+gdbpy_is_string (PyObject *obj)
+{
+  return PyString_Check (obj) || PyUnicode_Check (obj);
+}
+@
+
+
+1.8
+log
+@2009-07-10 Phil Muldoon  <pmuldoon@@redhat.com>
+
+	* python/python-internal.h (apply_varobj_pretty_printer): Update
+	definition.
+	(python_string_to_target_python_string): Add definition.
+	* python/python-utils.c (unicode_to_encoded_python_string)
+	(unicode_to_target_python_string)
+	(python_string_to_target_python_string): New Functions.
+	* python/python-prettyprint.c (pretty_print_one_value): Likewise.
+	(print_string_repr): Refactor to logic to account for PyObject
+	returned strings.
+	(apply_varobj_pretty_printer): Likewise.
+	* python/python-value.c (valpy_string): Parse length keyword. Use
+	length keyword in LA_GET_STRING.
+	* varobj.c (value_get_print_value): Refactor logic to account for
+	PyObject returned strings.
+	* c-lang.c (c_get_string): If the length parameter is specified,
+	use that. Return value in characters. Update comments.
+	* language.h: Update c_get_string prototype comments.
+
+2009-07-10  Phil Muldoon  <pmuldoon@@redhat.com>
+
+	* gdb.texinfo (Values From Inferior): Add length parameter
+	description.
+
+2009-07-10 Phil Muldoon  <pmuldoon@@redhat.com>
+
+	* gdb.python/python-prettyprint.c: Add counted null string
+	structure.
+	* gdb.python/python-prettyprint.exp: Print null string. Test for
+	embedded nulls.
+	* gdb.python/python-prettyprint.py (pp_ns): New Function.
+	* gdb.python/python-value.exp (test_value_in_inferior): Add
+	variable length string fetch tests.
+	* gdb.python/python-value.c (main): Add strings for string fetch tests.
+@
+text
+@@
+
+
+1.7
+log
+@	* python/python-internal.h (struct language_defn): Declare.
+	(python_gdbarch, python_language): Likewise.
+	(ensure_python_env): Add prototype.
+	(make_cleanup_py_restore_gil): Remove prototype.
+
+	* python/python.c: Include "arch-utils.h", "value.h" and "language.h".
+	(python_gdbarch, python_language): New global variables.
+	(struct python_env): New data type.
+	(ensure_python_env, restore_python_env): New functions.
+	(eval_python_from_control_command): Call ensure_python_env to
+	install current architecture and language.
+	(python_command, gdbpy_new_objfile): Likewise.
+	* python/python-cmd.c: Include "arch-utils.h" and "language.h".
+	(cmdpy_destroyer, cmdpy_function, cmdpy_completer): Call
+	ensure_python_env.
+	* python/python-type.c (clean_up_objfile_types): Likewise.
+	* python/python-objfile.c: Include "language.h".
+	(clean_up_objfile): Call ensure_python_env.
+	* python/python-prettyprint.c (apply_val_pretty_printer): Likewise.
+	(apply_varobj_pretty_printer): Do not call PyGILState_Ensure.
+	* varobj.c (varobj_ensure_python_env): New helper function.
+	(varobj_get_display_hint, update_dynamic_varobj_children,
+	install_default_visualizer, varobj_set_visualizer, free_variable,
+	value_get_print_value): Call it.
+	(value_get_print_value): Add varobj argument instead of pretty
+	printer argument.  Update all callers.
+
+	* python/python-utils.c (py_gil_restore, make_cleanup_py_restore_gil):
+	Remove.
+
+	* value.h (internal_function_fn): Add GDBARCH and LANGUAGE argument.
+	(call_internal_function): Likewise.
+	* value.c (call_internal_function): Likewise.  Pass to handler.
+	* eval.c (evaluate_subexp_standard): Update call.
+	* python/python-function.c: Include "language.h".
+	(fnpy_call): Add GDBARCH and LANGAUAGE arguments and call
+	make_cleanup_python_env.
+
+	* python/python-value.c (builtin_type_pyint, builtin_type_pyfloat,
+	builtin_type_pylong, builtin_type_pybool, builtin_type_pychar,
+	valpy_str): Use python_gdbarch and python_language instead of
+	current_gdbarch and current_language.
+	* python/python-type.c (typy_lookup_typename): Likewise.
+@
+text
+@d107 17
+d135 10
+d164 18
+@
+
+
+1.6
+log
+@2009-02-26  Phil Muldoon  <pmuldoon@@redhat.com>
+
+        * python/python-utils.c (python_string_to_unicode): Always return
+        a new reference.
+        (python_string_to_target_string): Decrement transient python
+        instance.
+        (python_string_to_host_string): Likewise.
+@
+text
+@a48 17
+/* A cleanup function to restore the thread state.  */
+
+static void
+py_gil_restore (void *p)
+{
+  PyGILState_STATE *state = p;
+  PyGILState_Release (*state);
+}
+
+/* Return a new cleanup which will restore the Python GIL state.  */
+
+struct cleanup *
+make_cleanup_py_restore_gil (PyGILState_STATE *state)
+{
+  return make_cleanup (py_gil_restore, state);
+}
+
+@
+
+
+1.5
+log
+@gdb/
+2009-02-05  Thiago Jung Bauermann  <bauerman@@br.ibm.com>
+	    Tom Tromey  <tromey@@redhat.com>
+
+	* python/python-utils.c (target_string_to_unicode): New function.
+	* python/python-internal.h (target_string_to_unicode): New prototype.
+	* python/python-value.c (valpy_string): New function.
+	(value_object_methods): Add `string' entry.
+
+gdb/doc/
+2009-02-05  Tom Tromey  <tromey@@redhat.com>
+
+	* gdb.texinfo (Values From Inferior): Document Value.string.
+@
+text
+@d84 5
+a88 1
+    unicode_str = obj;
+d143 1
+d149 3
+a151 1
+  return unicode_to_target_string (str);
+d162 1
+d168 3
+a170 1
+  return unicode_to_encoded_string (str, host_charset ());
+@
+
+
+1.4
+log
+@gdb/
+2009-02-04  Tom Tromey  <tromey@@redhat.com>
+	    Thiago Jung Bauermann  <bauerman@@br.ibm.com>
+	    Phil Muldoon  <pmuldoon@@redhat.com>
+
+	* python/python-internal.h (gdbpy_get_value_from_history): Rename
+	prototype to gdbpy_history.
+	(gdbpy_is_string): Declare.
+	(python_string_to_host_string): Declare.
+	* python/python-utils.c (gdbpy_is_string): New function.
+	(unicode_to_encoded_string): New function.
+	(unicode_to_target_string): Use it.
+	(python_string_to_host_string): New function.
+	* python/python-value.c (valpy_address): New function.
+	(convert_value_from_python): Use gdbpy_is_string.  Change to throw
+	Python exception instead of a GDB exception on error.  Properly check
+	Python booleans.
+	(valpy_getitem): Convert field name to host string.  Handle array
+	accesses.  Adapt to new behaviour of convert_value_from_python.
+	(valpy_new): Adapt to new behaviour of convert_value_from_python.
+	(enum valpy_opcode) <VALPY_LSH, VALPY_RSH, VALPY_BITAND,
+	VALPY_BITXOR, VALPY_BITOR>: New constants.
+	(valpy_binop): Update.  Adapt to new behaviour of
+	convert_value_from_python.
+	(valpy_invert): New function.
+	(valpy_lsh): Likewise.
+	(valpy_rsh): Likewise.
+	(valpy_and): Likewise.
+	(valpy_or): Likewise.
+	(valpy_xor): Likewise.
+	(valpy_richcompare): Call convert_value_from_python instead of doing
+	conversions itself.
+	(is_intlike, valpy_int, valpy_long, valpy_float): New functions.
+	(gdbpy_get_value_from_history): Rename
+	function to gdbpy_history.
+	(gdbpy_initialize_values): Don't set tp_new.
+	(value_object_type): Add valpy_new.
+	(value_object_methods): Add `address' entry.
+	(value_object_as_number): Update for new methods.
+	* python/python.c (GdbMethods): Rename entry from
+	`get_value_from_history' to `history'.
+
+gdb/doc/
+2009-02-04  Tom Tromey  <tromey@@redhat.com>
+
+	* gdb.texinfo (Basic Python): Document gdb.history.
+
+gdb/testsuite/
+2009-02-04  Tom Tromey  <tromey@@redhat.com>
+	    Thiago Jung Bauermann  <bauerman@@br.ibm.com>
+
+	* gdb.python/python-value.exp: Use `gdb.history' instead of
+	`gdb.value_from_history'.
+	(test_value_numeric_ops): Add test for conversion of enum constant.
+	* gdb.python/python-value.c (enum e): New type.
+	(evalue): New global.
+	(main): Use argv.
+@
+text
+@d163 13
+@
+
+
+1.3
+log
+@        Updated copyright notices for most files.
+@
+text
+@d98 2
+a99 2
+   string object converted to the target's charset.  If an error occurs during
+   the conversion, NULL will be returned and a python exception will be set.
+d102 2
+a103 2
+char *
+unicode_to_target_string (PyObject *unicode_str)
+d105 1
+a105 1
+  char *target_string;
+d108 2
+a109 2
+  /* Translate string to target's charset.  */
+  string = PyUnicode_AsEncodedString (unicode_str, target_charset (), NULL);
+d113 1
+a113 1
+  target_string = xstrdup (PyString_AsString (string));
+d117 12
+a128 1
+  return target_string;
+d146 25
+@
+
+
+1.2
+log
+@	* python/python-internal.h (PyGILState_Ensure): New define.
+	(PyGILState_Release): Likewise.
+	(PyEval_InitThreads): Likewise.
+	(PyThreadState_Swap): Likewise.
+	(PyEval_InitThreads): Likewise.
+	* python/python.c (_initialize_python): Initialize threads.
+	Release GIL.
+	(eval_python_from_control_command): Acquire GIL.
+	(python_command): Likewise.
+	* python/python-internal.h (make_cleanup_py_restore_gil):
+	Declare.
+	* python/python-utils.c (py_gil_restore): New function.
+	(make_cleanup_py_restore_gil): Likewise.
+@
+text
+@d3 1
+a3 1
+   Copyright (C) 2008 Free Software Foundation, Inc.
+@
+
+
+1.1
+log
+@Initial python support.
+
+gdb/
+2008-08-06  Vladimir Prus  <vladimir@@codesourcery.com>
+	    Tom Tromey  <tromey@@redhat.com>
+	    Thiago Jung Bauermann  <bauerman@@br.ibm.com>
+	    Doug Evans  <dje@@google.com>
+
+	* Makefile.in (SUBDIR_PYTHON_OBS, SUBDIR_PYTHON_SRCS,
+	SUBDIR_PYTHON_DEPS, SUBDIR_PYTHON_LDFLAGS, SUBDIR_PYTHON_CFLAGS,
+	PYTHON_CFLAGS): New.
+	(python_h, python_internal_h): New.
+	(cli-script.o): Depend on python.h
+	(python.o, python-utils.o): New.
+	* cli/cli-script.c (print_command_lines): Handle python_control.
+	(execute_control_command): Handle python_control.
+	(execute_control_command_untraced): New function.
+	(while_command): Call execute_control_command_untraced.
+	(if_command): Likewise.
+	(get_command_line): Remove static attribute.
+	(read_next_line): Handle "python".
+	(recurse_read_control_structure): Handle python_control.
+	(read_command_lines): Handle python_control.
+	Include python.h.
+	* cli/cli-script.h (get_command_line): Add prototype.
+	(execute_control_command_untraced): Likewise.
+	* configure.ac: Add --with-python.
+	* defs.h (enum command_control_type) <python_control>: New
+	constant.
+	* python/python-internal.h: New file.
+	* python/python.c: New file.
+	* python/python.h: New file.
+	* python/python-utils.c: New file.
+	* NEWS: Mention Python scripting support and its new commands.
+
+gdb/doc/
+2008-08-06  Tom Tromey  <tromey@@redhat.com>
+
+	* gdb.texinfo (Extending GDB): New chapter.
+	(Sequences): Demoted chapter, now a section under the new
+	Extending GDB chapter.
+	(Python): New section.
+
+gdb/testsuite/
+2008-08-06  Tom Tromey  <tromey@@redhat.com>
+
+	* gdb.python/python.exp: New file.
+@
+text
+@d49 17
+@
+

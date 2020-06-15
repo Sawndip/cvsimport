@@ -1,0 +1,238 @@
+head	1.3;
+access;
+symbols
+	cygwin-1_7_17-release:1.2
+	cygwin-64bit-branch:1.2.0.4
+	cygwin-1_7_16-release:1.2
+	cygwin-1_7_15-release:1.2
+	cygwin-1_7_14_2-release:1.2
+	cygwin-1_7_14-release:1.2
+	cygwin-1_7_12-release:1.2
+	cygwin-1_7_11-release:1.2
+	cygwin-1_7_10-release:1.2
+	cygwin-1_7_9-release:1.2
+	cygwin-1_7_8-release:1.2
+	cygwin-1_7_7-release:1.2
+	cygwin-1_7_5-release:1.2
+	cygwin-1_7_4-release:1.2
+	cygwin-1_7_3-release:1.2
+	cygwin-1_7_2-release:1.2
+	cygwin-1_7_1-release:1.2
+	cv-branch-2:1.2.0.2
+	cr-0x5f1:1.1.0.18
+	cv-branch:1.1.0.16
+	cr-0x3b58:1.1.0.14
+	cr-0x9e:1.1.0.12
+	cr-0x9d:1.1.0.10
+	corinna-01:1.1
+	cr-0x9c:1.1.0.8
+	cr-0x9b:1.1.0.6
+	cr-0x99:1.1
+	Z-emcb-cygwin_daemon:1.1.0.4
+	w32api-2_2:1.1
+	mingw-runtime-2_4:1.1
+	mingw-std-ns-branch:1.1.0.2;
+locks; strict;
+comment	@ * @;
+
+
+1.3
+date	2012.11.07.16.52.19;	author cgf;	state dead;
+branches;
+next	1.2;
+
+1.2
+date	2006.08.31.23.48.56;	author dannysmith;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2002.11.26.00.11.06;	author dannysmith;	state Exp;
+branches
+	1.1.2.1;
+next	;
+
+1.1.2.1
+date	2002.12.10.10.48.20;	author dannysmith;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.3
+log
+@* mingw: Delete obsolete directory.
+* w32api: Ditto.
+@
+text
+@/*  Wide char wrapper for strtold
+ *  Revision history:
+ *  6 Nov 2002	Initial version.
+ *  25 Aug 2006  Don't use strtold internal functions.
+ *
+ *  Contributor:   Danny Smith <dannysmith@@users.sourceforege.net>
+ */
+
+ /* This routine has been placed in the public domain.*/
+
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <locale.h>
+#include <wchar.h>
+#include <stdlib.h>
+#include <string.h>
+#include <mbstring.h>
+
+#include "mb_wc_common.h"
+
+long double wcstold (const wchar_t * __restrict__ wcs, wchar_t ** __restrict__ wcse)
+{
+  char * cs;
+  char * cse;
+  unsigned int i;
+  long double ret;
+  const unsigned int cp = get_codepage ();   
+  
+  /* Allocate enough room for (possibly) mb chars */
+  cs = (char *) malloc ((wcslen(wcs)+1) * MB_CUR_MAX);
+
+  if (cp == 0) /* C locale */
+    {
+      for (i = 0; (wcs[i] != 0) && wcs[i] <= 255; i++)
+        cs[i] = (char) wcs[i];                                                                                                                                                                                                                                                                                                   
+      cs[i]  = '\0';
+    }
+  else
+    {
+      int nbytes = -1;
+      int mb_len = 0;
+      /* loop through till we hit null or invalid character */
+      for (i = 0; (wcs[i] != 0) && (nbytes != 0); i++)
+	{
+     	  nbytes = WideCharToMultiByte(cp, WC_COMPOSITECHECK | WC_SEPCHARS,
+				       wcs + i, 1, cs + mb_len, MB_CUR_MAX,
+				       NULL, NULL);
+	  mb_len += nbytes;
+	}
+      cs[mb_len] = '\0';
+    }
+
+  ret =  strtold (cs, &cse);
+
+  if (wcse)
+    {
+      /* Make sure temp mbstring has 0 at cse.  */ 
+      *cse = '\0';
+      i = _mbslen ((unsigned char*) cs); /* Number of chars, not bytes */
+      *wcse = (wchar_t *) wcs + i;
+    }
+  free (cs);
+
+  return ret;
+}
+@
+
+
+1.2
+log
+@	Import David Gay's gdtoa library.
+
+	* mingwex/gdtoa: New directory.
+	* mingwex/gdtoa/(arithchk.c, dmisc.c, dtoa.c, g__fmt.c, g_dfmt.c,
+	g_ffmt.c, g_xfmt.c, gd_arith.h, gd_qnan.h, gdtoa.c, gdtoa.h,
+	gdtoaimp.h, gethex.c, gmisc.c, hd_init.c, hexnan.c, misc.c, qnan.c,
+	README, smisc.c, strtodg.c, strtodnrp.c, strtof.c, strtopx.c, sum.c,
+	ulp.c): New files.
+	* mingwex/(strtof.c, strtold.c, ldtoa.c): Remove files.
+	* mingwex/math/(cephes-emath.c, cephes-emath.h): Remove files.
+	* mingwex/mb_wc_common.h (get_cp_from_locale); Rename to get_codepage().
+        * mingwex/(btowc.c, wctob.c, mbrtowc.c, wcrtomb.c): Adjust call to get_codepage().
+	* mingwex/wcstold.c: Avoid using strtold internals.
+	* mingwex/wcstof.c: Rewrite.
+	* mingwex/Makefile.in (GDTOA_DISTFILES): Add to distribution.
+	(GDTOA_OBJS): Add to library.
+	(DISTFILES): Remove strtof.c strtold.c ldtoa.c cephes-emath.c cephes-emath.h.
+	(STDLIB_OBJS): Remove.
+	(STDLIB_STUB_OBJS): Remove strtof.o wcstof,o.
+	(Q8_OBJS): Add wcstof.o wcstold.o.
+	* include/stdlib.h (strtof): Remove inline definition.
+	(wcstof): Likewise.
+	* include/wchar.h (wcstof): Remove inline definition.
+@
+text
+@@
+
+
+1.1
+log
+@Add strtold and wcstold to libmingwex.a
+
+	* mingwex/strtold.c: New file.
+	* mingwex/wcstold.c: New file.
+	* mingwex/ldtoa.c: New file.
+	* mingwex/math/cephes_emath.h: New file.
+	* mingwex/math/cephes_emath.c: New file.
+	* mingwex/Makefile.in (DISTFILES): Add new files.
+	(MATH_DISTFILES): Ditto.
+	(STDLIB_OBJS): New. Define as strtold.c wcstold.c.
+	(MATH_OBJS): Add cephes_emath.o.
+	(LIB_OBJS): Add $(STDLIB_OBJS).
+	* include/stdlib.h (strtold, wcstold): Add prototypes.
+	* include/wchar.h (wcstold): Add prototype.
+
+Add missing ChangeLog entry for 2002-11-09.
+@
+text
+@d4 1
+d17 1
+d19 1
+a19 17
+extern int __asctoe64(const char * __restrict__ ss,
+	       short unsigned int * __restrict__ y);
+
+
+static __inline__ unsigned int get_codepage (void)
+{
+  char* cp;
+
+  /*
+    locale :: "lang[_country[.code_page]]" 
+               | ".code_page"
+  */
+  if ((cp = strchr(setlocale(LC_CTYPE, NULL), '.')))
+    return atoi( cp + 1);
+  else
+    return 0;
+}
+d24 4
+a27 9
+  int i;
+  int lenldstr;
+  union
+  {
+    unsigned short int us[6];
+    long double ld;
+  } xx;
+
+  unsigned int cp = get_codepage ();   
+d52 10
+a61 1
+  lenldstr =  __asctoe64( cs, xx.us);
+d63 2
+a64 3
+  if (wcse)
+    *wcse = (wchar_t*) wcs + lenldstr;
+  return xx.ld;
+@
+
+
+1.1.2.1
+log
+@	Merge from mingw trunk (changes since 2002-11-19).
+@
+text
+@@
+

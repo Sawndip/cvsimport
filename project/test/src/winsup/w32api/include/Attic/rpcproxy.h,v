@@ -1,0 +1,476 @@
+head	1.6;
+access;
+symbols
+	cygwin-1_7_17-release:1.5
+	cygwin-64bit-branch:1.5.0.10
+	cygwin-1_7_16-release:1.5
+	cygwin-1_7_15-release:1.5
+	cygwin-1_7_14_2-release:1.5
+	cygwin-1_7_14-release:1.5
+	cygwin-1_7_12-release:1.5
+	cygwin-1_7_11-release:1.5
+	cygwin-1_7_10-release:1.5
+	cygwin-1_7_9-release:1.5
+	cygwin-1_7_8-release:1.5
+	cygwin-1_7_7-release:1.5
+	cygwin-1_7_5-release:1.5
+	cygwin-1_7_4-release:1.5
+	cygwin-1_7_3-release:1.5
+	cygwin-1_7_2-release:1.5
+	cygwin-1_7_1-release:1.5
+	cv-branch-2:1.5.0.8
+	cr-0x5f1:1.5.0.6
+	cv-branch:1.5.0.4
+	cr-0x3b58:1.5.0.2
+	cr-0x9e:1.4.0.10
+	cr-0x9d:1.4.0.8
+	corinna-01:1.4
+	cr-0x9c:1.4.0.6
+	cr-0x9b:1.4.0.4
+	cr-0x99:1.4
+	Z-emcb-cygwin_daemon:1.4.0.2
+	w32api-2_2:1.4
+	mingw-runtime-2_4:1.4
+	w32api-1_5:1.4
+	cygnus_cvs_20020108_pre:1.2
+	Z-cygwin_daemon_merge-new_HEAD:1.1.1.1
+	Z-cygwin_daemon_merge_HEAD:1.1.1.1
+	cygwin_daemon:1.1.1.1.0.10;
+locks; strict;
+comment	@ * @;
+expand	@o@;
+
+
+1.6
+date	2012.11.07.16.52.39;	author cgf;	state dead;
+branches;
+next	1.5;
+
+1.5
+date	2004.04.18.07.07.56;	author infidel;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2002.03.09.09.04.09;	author dannysmith;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2002.01.11.10.23.20;	author rbcollins;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2001.12.03.19.59.34;	author earnie;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2000.02.17.19.38.31;	author cgf;	state Exp;
+branches
+	1.1.1.1;
+next	;
+
+1.1.1.1
+date	2000.02.17.19.38.31;	author cgf;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.6
+log
+@* mingw: Delete obsolete directory.
+* w32api: Ditto.
+@
+text
+@/*
+    -DREGISTER_PROXY_DLL Generates DllMain, DllRegisterServer, and DllUnregisterServer
+    -DPROXY_CLSID=clsid Specifies a class ID to be used by the proxy DLL.
+    -DPROXY_CLSID_IS={..} Specifies the class ID to be used by the proxy DLL.
+    -DNT35_STRICT No new features
+*/
+#ifndef _RPCPROXY_H
+#define _RPCPROXY_H
+#if __GNUC__ >=3
+#pragma GCC system_header
+#endif
+
+#if defined  __cplusplus  && !defined CINTERFACE
+#warning "rpcproxy type definitions require CINTERFACE"
+#else
+#ifdef __cplusplus
+extern "C" {
+#endif
+#include <rpc.h>
+#include <rpcndr.h>
+#include <string.h>
+
+#define CStdStubBuffer_METHODS CStdStubBuffer_QueryInterface,CStdStubBuffer_AddRef,\
+CStdStubBuffer_Release,CStdStubBuffer_Connect,CStdStubBuffer_Disconnect,CStdStubBuffer_Invoke,\
+CStdStubBuffer_IsIIDSupported,CStdStubBuffer_CountRefs,CStdStubBuffer_DebugServerQueryInterface,\
+CStdStubBuffer_DebugServerRelease
+#define IID_GENERIC_CHECK_IID(name,pIID,index) memcmp(pIID,name##_ProxyVtblList[index]->header.piid,16)
+#define IID_BS_LOOKUP_SETUP int result, low=-1;
+#define IID_BS_LOOKUP_INITIAL_TEST(name,sz,split) if ((result = name##_CHECK_IID(split))>0) { low=sz-split;} else if (!result) { low = split; goto found_label; }
+#define IID_BS_LOOKUP_NEXT_TEST(name,split) if ((result = name##_CHECK_IID(low+split))>=0) { low=low+split; if (!result) goto found_label; }
+#define IID_BS_LOOKUP_RETURN_RESULT(name,sz,index) low+=1; if ((low>=sz )||(result=name##_CHECK_IID(low))) goto not_found_label; found_label: (index)=low; return 1; not_found_label: return 0;
+#define REGISTER_PROXY_DLL_ROUTINES(pProxyFileList, pClsID) \
+HINSTANCE hProxyDll = 0; \
+BOOL WINAPI DllMain(HINSTANCE hinstDLL,DWORD fdwReason,LPVOID lpvReserved) \
+{ \
+if(fdwReason == DLL_PROCESS_ATTACH) hProxyDll = hinstDLL; \
+return TRUE; \
+} \
+HRESULT STDAPICALLTYPE DllRegisterServer(void) \
+{\
+return NdrDllRegisterProxy(hProxyDll, pProxyFileList, pClsID); \
+}\
+HRESULT STDAPICALLTYPE DllUnregisterServer(void)\
+{\
+return NdrDllUnregisterProxy(hProxyDll, pProxyFileList, pClsID);\
+}
+#ifdef PROXY_CLSID
+#define CLSID_PSFACTORYBUFFER extern CLSID PROXY_CLSID;
+#else
+#ifdef PROXY_CLSID_IS
+#define CLSID_PSFACTORYBUFFER const CLSID CLSID_PSFactoryBuffer = PROXY_CLSID_IS;
+#define PROXY_CLSID CLSID_PSFactoryBuffer
+#else
+#define CLSID_PSFACTORYBUFFER
+#endif
+#endif
+#ifndef PROXY_CLSID
+#define GET_DLL_CLSID (aProxyFileList[0]->pStubVtblList[0] != 0 ? aProxyFileList[0]->pStubVtblList[0]->header.piid : 0)
+#else
+#define GET_DLL_CLSID &PROXY_CLSID
+#endif
+#define EXTERN_PROXY_FILE(name) EXTERN_C const ProxyFileInfo name##_ProxyFileInfo;
+#define PROXYFILE_LIST_START const ProxyFileInfo * aProxyFileList[] = {
+#define REFERENCE_PROXY_FILE(name) & name##_ProxyFileInfo
+#define PROXYFILE_LIST_END 0 };
+#define DLLDATA_GETPROXYDLLINFO(pPFList,pClsid) \
+void RPC_ENTRY GetProxyDllInfo( const ProxyFileInfo*** pInfo, const CLSID ** pId ) \
+{ *pInfo = pPFList; *pId = pClsid; };
+#define DLLGETCLASSOBJECTROUTINE(pPFlist, pClsid,pFactory) HRESULT STDAPICALLTYPE DllGetClassObject(REFCLSID rclsid,REFIID riid,void **ppv) \
+{ return NdrDllGetClassObject(rclsid,riid,ppv,pPFlist,pClsid,pFactory ); }
+#define DLLCANUNLOADNOW(pFactory) HRESULT STDAPICALLTYPE DllCanUnloadNow(void) \
+{ return NdrDllCanUnloadNow( pFactory ); }
+#define DLLDUMMYPURECALL void __cdecl _purecall(void) { }
+#define CSTDSTUBBUFFERRELEASE(pFactory) ULONG STDMETHODCALLTYPE CStdStubBuffer_Release(IRpcStubBuffer *This) \
+{ return NdrCStdStubBuffer_Release(This,(IPSFactoryBuffer *)pFactory); }
+#ifdef PROXY_DELEGATION
+#define CSTDSTUBBUFFER2RELEASE(pFactory) ULONG STDMETHODCALLTYPE CStdStubBuffer2_Release(IRpcStubBuffer *This) \
+{ return NdrCStdStubBuffer2_Release(This,(IPSFactoryBuffer *)pFactory); }
+#else
+#define CSTDSTUBBUFFER2RELEASE(pFactory)
+#endif
+
+#ifdef REGISTER_PROXY_DLL
+#define DLLREGISTRY_ROUTINES(pProxyFileList,pClsID ) REGISTER_PROXY_DLL_ROUTINES(pProxyFileList,pClsID)
+#else
+#define DLLREGISTRY_ROUTINES(pProxyFileList,pClsID)
+#endif
+#define DLLDATA_ROUTINES(pProxyFileList,pClsID) \
+CLSID_PSFACTORYBUFFER \
+CStdPSFactoryBuffer gPFactory = {0,0,0,0}; \
+DLLDATA_GETPROXYDLLINFO(pProxyFileList,pClsID) \
+DLLGETCLASSOBJECTROUTINE(pProxyFileList,pClsID,&gPFactory) \
+DLLCANUNLOADNOW(&gPFactory) \
+CSTDSTUBBUFFERRELEASE(&gPFactory) \
+CSTDSTUBBUFFER2RELEASE(&gPFactory) \
+DLLDUMMYPURECALL \
+DLLREGISTRY_ROUTINES(pProxyFileList, pClsID)
+
+#define DLLDATA_STANDARD_ROUTINES DLLDATA_ROUTINES( (const ProxyFileInfo**) pProxyFileList, &CLSID_PSFactoryBuffer)
+
+struct tagCInterfaceStubVtbl;
+struct tagCInterfaceProxyVtbl;
+typedef struct tagCInterfaceStubVtbl *PCInterfaceStubVtblList;
+typedef struct tagCInterfaceProxyVtbl *PCInterfaceProxyVtblList;
+typedef const char *PCInterfaceName;
+typedef int __stdcall IIDLookupRtn(const IID*,int*);
+typedef IIDLookupRtn *PIIDLookup;
+typedef struct tagProxyFileInfo {
+    const PCInterfaceProxyVtblList *pProxyVtblList;
+    const PCInterfaceStubVtblList *pStubVtblList;
+    const PCInterfaceName * pNamesArray;
+    const IID ** pDelegatedIIDs;
+    const PIIDLookup pIIDLookupRtn;
+    unsigned short TableSize;
+    unsigned short TableVersion;
+    unsigned long Filler1;
+    unsigned long Filler2;
+    unsigned long Filler3;
+    unsigned long Filler4;
+}ProxyFileInfo;
+typedef ProxyFileInfo ExtendedProxyFileInfo;
+
+typedef struct tagCInterfaceProxyHeader {
+#ifdef USE_STUBLESS_PROXY
+    const void *pStublessProxyInfo;
+#endif
+    const IID *piid;
+} CInterfaceProxyHeader;
+typedef struct tagCInterfaceProxyVtbl {
+    CInterfaceProxyHeader header;
+#if defined(__WATCOMC__)
+    void *Vtbl[1];
+#else
+#ifdef __GNUC__
+__extension__
+#endif
+    void *Vtbl[0];
+#endif
+} CInterfaceProxyVtbl;
+typedef void (__RPC_STUB *PRPC_STUB_FUNCTION)(IRpcStubBuffer*,IRpcChannelBuffer*,PRPC_MESSAGE,DWORD*);
+typedef struct tagCInterfaceStubHeader {
+    const IID *piid;
+    const MIDL_SERVER_INFO *pServerInfo;
+    unsigned long DispatchTableCount;
+    const PRPC_STUB_FUNCTION *pDispatchTable;
+} CInterfaceStubHeader;
+typedef struct tagCInterfaceStubVtbl {
+    CInterfaceStubHeader header;
+    IRpcStubBufferVtbl Vtbl;
+} CInterfaceStubVtbl;
+typedef struct tagCStdStubBuffer {
+    const struct IRpcStubBufferVtbl * lpVtbl;
+    long RefCount;
+    struct IUnknown *pvServerObject;
+    const struct ICallFactoryVtbl * pCallFactoryVtbl;
+    const IID * pAsyncIID;
+    struct IPSFactoryBuffer * pPSFactory;
+    const struct IReleaseMarshalBuffersVtbl * pRMBVtbl;
+} CStdStubBuffer;
+typedef struct tagCStdPSFactoryBuffer {
+    const IPSFactoryBufferVtbl *lpVtbl;
+    long RefCount;
+    const ProxyFileInfo ** pProxyFileList;
+    long Filler1;
+} CStdPSFactoryBuffer;
+void RPC_ENTRY NdrProxyInitialize(void*,PRPC_MESSAGE,PMIDL_STUB_MESSAGE,PMIDL_STUB_DESC,unsigned int);
+void RPC_ENTRY NdrProxyGetBuffer(void*,PMIDL_STUB_MESSAGE);
+void RPC_ENTRY NdrProxySendReceive(void*,MIDL_STUB_MESSAGE*);
+void RPC_ENTRY NdrProxyFreeBuffer(void*,MIDL_STUB_MESSAGE*);
+HRESULT RPC_ENTRY NdrProxyErrorHandler(DWORD);
+void RPC_ENTRY NdrStubInitialize(PRPC_MESSAGE,PMIDL_STUB_MESSAGE,PMIDL_STUB_DESC,IRpcChannelBuffer*);
+void __RPC_STUB NdrStubForwardingFunction(IRpcStubBuffer*,IRpcChannelBuffer*,PRPC_MESSAGE,DWORD*);
+void RPC_ENTRY NdrStubGetBuffer(IRpcStubBuffer*,IRpcChannelBuffer*,PMIDL_STUB_MESSAGE);
+HRESULT RPC_ENTRY NdrStubErrorHandler(DWORD);
+HRESULT STDMETHODCALLTYPE CStdStubBuffer_QueryInterface(IRpcStubBuffer*,REFIID,void**);
+ULONG STDMETHODCALLTYPE CStdStubBuffer_AddRef(IRpcStubBuffer*);
+ULONG STDMETHODCALLTYPE CStdStubBuffer_Release(IRpcStubBuffer*);
+ULONG STDMETHODCALLTYPE NdrCStdStubBuffer_Release(IRpcStubBuffer*,IPSFactoryBuffer*);
+HRESULT STDMETHODCALLTYPE CStdStubBuffer_Connect(IRpcStubBuffer*,IUnknown*);
+void STDMETHODCALLTYPE CStdStubBuffer_Disconnect(IRpcStubBuffer*);
+HRESULT STDMETHODCALLTYPE CStdStubBuffer_Invoke(IRpcStubBuffer*,RPCOLEMESSAGE*,IRpcChannelBuffer*);
+IRpcStubBuffer* STDMETHODCALLTYPE CStdStubBuffer_IsIIDSupported(IRpcStubBuffer*,REFIID);
+ULONG STDMETHODCALLTYPE CStdStubBuffer_CountRefs(IRpcStubBuffer*);
+HRESULT STDMETHODCALLTYPE CStdStubBuffer_DebugServerQueryInterface(IRpcStubBuffer*,void**);
+void STDMETHODCALLTYPE CStdStubBuffer_DebugServerRelease(IRpcStubBuffer*,void*);
+HRESULT RPC_ENTRY NdrDllGetClassObject(REFCLSID,REFIID,void**,const ProxyFileInfo**,const CLSID*,CStdPSFactoryBuffer*);
+HRESULT RPC_ENTRY NdrDllCanUnloadNow(CStdPSFactoryBuffer*);
+#ifndef NT35_STRICT
+HRESULT RPC_ENTRY NdrDllRegisterProxy(HMODULE,const ProxyFileInfo**,const CLSID*);
+HRESULT RPC_ENTRY NdrDllUnregisterProxy(HMODULE,const ProxyFileInfo**,const CLSID*);
+#define STUB_FORWARDING_FUNCTION NdrStubForwardingFunction
+ULONG STDMETHODCALLTYPE
+CStdStubBuffer2_Release(IRpcStubBuffer*);
+ULONG STDMETHODCALLTYPE
+NdrCStdStubBuffer2_Release(IRpcStubBuffer*,IPSFactoryBuffer*);
+#define CStdStubBuffer_DELEGATING_METHODS 0, 0, CStdStubBuffer2_Release, 0, 0, 0, 0, 0, 0, 0
+#endif
+
+#ifdef __cplusplus
+}
+#endif
+#endif  /* defined  __cplusplus  && !defined CINTERFACE  */
+#endif  /* ndef _RPCPROXY_H  */
+
+@
+
+
+1.5
+log
+@Merge numerous changes from ReactOS. Submitted by Filip Navara.
+@
+text
+@@
+
+
+1.4
+log
+@	* include/accctrl.h, aclapi.h, basetsd.h, basetyps.h, cderr.h,
+	cguid.h, commctrl.h, commdlg.h, cpl.h, cplext.h, custcntl.h,
+	dbt.h, dde.h, ddeml.h, dlgs.h, excpt.h, httpext.h, imagehlp.h,
+	imm.h, initguid.h, intshcut.h, ipexport.h, iphlpapi.h,
+	ipifcons.h, iprtrmib.h, iptypes.h, isguids.h, largeint.h, lm.h,
+	lmaccess.h, lmalert.h, lmapibuf.h, lmat.h, lmaudit.h,
+	lmbrowsr.h, lmchdev.h, lmconfig.h, lmcons.h, lmerr.h,
+	lmerrlog.h, lmmsg.h, lmremutl.h, lmrepl.h, lmserver.h,
+	lmshare.h, lmsname.h, lmstats.h, lmsvc.h, lmuse.h, lmuseflg.h,
+	lmwksta.h, lzexpand.h, mapi.h, mciavi.h, mcx.h, mmsystem.h,
+	mswsock.h, nb30.h, nddeapi.h, nspapi.h, ntdef.h, ntsecapi.h,
+	ntsecpkg.h, oaidl.h, objbase.h, objfwd.h, objidl.h, odbcinst.h,
+	ole.h, ole2.h, ole2ver.h, oleauto.h, olectl.h, olectlid.h,
+	oledlg.h, oleidl.h, pbt.h, prsht.h, psapi.h, rapi.h, ras.h,
+	raserror.h, rassapi.h, regstr.h, richedit.h, richole.h, rpc.h,
+	rpcdce.h, rpcdce2.h, rpcdcep.h, rpcndr.h, rpcnsi.h, rpcnsip.h,
+	rpcnterr.h, rpcproxy.h, schannel.h, schnlsp.h, scrnsave.h,
+	security.h, setupapi.h, shellapi.h, shlguid.h, shlobj.h, sql.h,
+	sqlext.h, sqltypes.h, sqlucode.h, sspi.h, subauth.h,
+	tlhelp32.h, unknwn.h, userenv.h, w32api.h, winbase.h, wincon.h,
+	wincrypt.h, windef.h, windows.h, windowsx.h, winerror.h,
+	wingdi.h, wininet.h, winioctl.h, winnetwk.h, winnls.h, winnt.h,
+	winperf.h, winreg.h, winresrc.h, winsock.h, winsock2.h,
+	winspool.h, winsvc.h, winuser.h, winver.h, ws2tcpip.h,
+	wsnetbs.h, wtypes.h, zmouse.h:	Add #pragma GCC system_header
+	if __GNUC__ >= 3.
+	* include/mapi.h: Change header guard name to _MAPI_H  for
+	consistency.
+@
+text
+@d155 4
+@
+
+
+1.3
+log
+@2002-01-11 Ralf Habacker  <Ralf.Habacker@@freenet.de>
+
+        * include/ntsecapi.h:  Fixed missing void parameter type in some prototypes.
+        * include/objbase.h: Ditto.
+        * include/rapi.h: Ditto.
+        * include/rpc.h: Ditto.
+        * include/rpcdce.h: Ditto.
+        * include/rpcdcep.h: Ditto.
+        * include/rpcndr.h: Ditto.
+        * include/rpcnsip.h: Ditto.
+        * include/rpcproxy.h: Ditto.
+        * include/windef.h: Ditto.
+@
+text
+@d9 4
+@
+
+
+1.2
+log
+@
+2001-12-03  Earnie Boyd  <earnie@@users.sf.net>
+
+	* include/accctrl.h: Change \r\n to \n.
+
+2001-11-30  Danny Smith  <dannysmith@@users.sourceforge.net>
+
+	* include/ipexport.h (IP_UNIDIRECTIONAL_ADAPTER_ADDRESS):
+	Add structure definition.
+	* include/iptypes.h (IP_PER_ADAPTER_INFO): Ditto.
+	* include/iphlpapi.h (AddIPAddress,CreateProxyArpEntry,
+	DeleteIPAddress,DeleteProxyArpEntry,EnableRouter,
+	FlushIpNetTable,GetAdapterIndex,GetPerAdapterInfo,
+	GetUniDirectionalAdapterInfo,SendARP,SetAdapterIpAddress,
+	UnenableRouter) Declare functions.
+	* lib/iphlpapi.def: Add function names to import lib.
+
+2001-11-24  Danny Smith  <dannysmith@@users.sourceforge.net>
+
+	* include/winnt.h (PACCESS_MASK): Add typedef.
+	* include/aclapi.h: New file.
+	* include/acctrl.h: New file.
+	* lib/advapi32.def: Add missing symbols.
+	* lib/test.c: Add #include <aclapi.h>.
+
+2001-11-23  Danny Smith  <dannysmith@@users.sourceforge.net>
+
+	* include/winbase.h (OSVERSIONINFO[AW],VER_PLATFORM_WIN32s,
+	VER_PLATFORM_WIN32_WINDOWS,VER_PLATFORM_WIN32_NT): Move from
+	here ...
+	* include/winnt.h: ... to here.
+	* include/winbase.h (VerifyVersionInfo[AW]): Add declaration.
+	* include/winnt.h (OSVERSIONINFOEX[AW]): Add structure definitions
+	and typedefs.
+	(VER_NT_WORKSTATION,VER_NT_DOMAIN_CONTROLLER,VER_NT_SERVER):
+	Add defines.
+
+2001-11-19  Pierre Muller  <muller@@ics.u-strasbg.fr>
+
+	* w32api/include/winnt.h: prepare SSE register support.
+	(CONTEXT_EXTENDED_REGISTERS): Add new define.
+	(MAXIMUM_SUPPORTED_EXTENSION): New define.
+	(struct CONTEXT): ExtendedRegisters field added.
+
+2001-11-16  Danny Smith  <dannysmith@@users.sourceforge.net>
+
+	* include/winuser.h (tagALTTABINFO, tagCOMBOBOXINFO,
+	tagCURSORINFO, tagMENUBARINFO, tagMENUINFO, tagMONITORINFO
+	tagSCROLLBARINFO, tagTITLEBARINFO. tagWINDOWINFO,
+	tagLASTINPUTINFO ): Define new structures.
+	(EndMenu, GetAltTabInfo[AW],GetComboBoxInfo,GetCursorInfo,
+	GetLastInputInfo, GetListBoxInfo, GetMenuBarInfo,
+	GetMonitorInfo[AW], GetScrollBarInfo, GetTitleBarInfo,
+	GetWindowInfo, GetWindowModuleFileName[AW],GetMenuInfo
+	SetMenuInfo): Add new prototypes.
+	* lib/user32.def: Add import stubs for above functions.
+
+	* include/winuser.h (IDC_STATIC): Protect against prior
+	definition.
+
+2001-11-12  Corinna Vinschen  <corinna@@vinschen.de>
+
+	* include/winbase.h (OSVERSIONINFOEX): Add definition.
+	* include/winnt.h: Add VER_NT_* and VER_SUITE_* defines.
+
+2001-11-10  Robert Collins  <rbtcollins@@hotmail.com>
+
+	* include/winnt.h: Add Danny Smith's text comment about gcc compiler
+	warnings with _AUTHORITY #defines.
+
+2001-11-09  Robert Collins  <rbtcollins@@hotmail.com>
+
+	* include/winnt.h (GetCurrentFiber): Create a prototype before the
+	implementation;
+	(GetFiberData): Ditto.
+
+2001-11-09  Robert Collins  <rbtcollins@@hotmail.com>
+
+	* include/winnt.h: Backout last change.
+@
+text
+@d35 1
+a35 1
+HRESULT STDAPICALLTYPE DllRegisterServer() \
+d39 1
+a39 1
+HRESULT STDAPICALLTYPE DllUnregisterServer()\
+d67 1
+a67 1
+#define DLLCANUNLOADNOW(pFactory) HRESULT STDAPICALLTYPE DllCanUnloadNow() \
+@
+
+
+1.1
+log
+@Initial revision
+@
+text
+@d9 3
+d127 6
+d134 1
+d194 2
+a195 1
+#endif
+@
+
+
+1.1.1.1
+log
+@import winsup-2000-02-17 snapshot
+@
+text
+@@

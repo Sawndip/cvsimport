@@ -1,0 +1,160 @@
+head	1.2;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.2
+	gdb_7_6-2013-04-26-release:1.2
+	gdb_7_6-branch:1.2.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.2
+	gdb_7_5_1-2012-11-29-release:1.1
+	gdb_7_5-2012-08-17-release:1.1
+	gdb_7_5-branch:1.1.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.2
+date	2013.01.01.06.32.45;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2012.03.08.19.08.11;	author jkratoch;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@/* Frame unwinder for ia64 frames with libunwind frame information.
+
+   Copyright (C) 2003-2013 Free Software Foundation, Inc.
+
+   Contributed by Jeff Johnston.
+
+   This file is part of GDB.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+#ifndef IA64_LIBUNWIND_TDEP_H
+#define IA64_LIBUNWIND_TDEP_H 1
+
+struct frame_info;
+struct frame_id;
+struct regcache;
+struct gdbarch;
+struct frame_unwind;
+
+/* IA-64 is the only target that currently uses libunwind.  If some
+   other target wants to use it, we will need to do some abstracting
+   in order to make it possible to have more than one
+   ia64-libunwind-tdep instance.  Including "libunwind.h" is wrong as
+   that ends up including the libunwind-$(arch).h for the host gdb is
+   running on.  */
+#include "libunwind-ia64.h"
+
+struct libunwind_descr
+{
+  int (*gdb2uw) (int);
+  int (*uw2gdb) (int);
+  int (*is_fpreg) (int);
+  void *accessors;
+  void *special_accessors;
+};
+
+int libunwind_frame_sniffer (const struct frame_unwind *self,
+                             struct frame_info *this_frame,
+                             void **this_cache);
+                          
+int libunwind_sigtramp_frame_sniffer (const struct frame_unwind *self,
+                                      struct frame_info *this_frame,
+                                      void **this_cache);
+
+void libunwind_frame_set_descr (struct gdbarch *arch,
+				struct libunwind_descr *descr);
+
+void libunwind_frame_this_id (struct frame_info *this_frame, void **this_cache,
+			      struct frame_id *this_id);
+struct value *libunwind_frame_prev_register (struct frame_info *this_frame,
+                                             void **this_cache, int regnum);
+void libunwind_frame_dealloc_cache (struct frame_info *self, void *cache);
+
+int libunwind_is_initialized (void);
+
+int libunwind_search_unwind_table (void *as, long ip, void *di,
+				   void *pi, int need_unwind_info, void *args);
+
+unw_word_t libunwind_find_dyn_list (unw_addr_space_t, unw_dyn_info_t *,
+				    void *);
+
+int libunwind_get_reg_special (struct gdbarch *gdbarch,
+			       struct regcache *regcache,
+			       int regnum, void *buf);
+
+#endif /* IA64_LIBUNWIND_TDEP_H */
+@
+
+
+1.1
+log
+@gdb/
+	* libunwind-frame.c: Rename to ...
+	* ia64-libunwind-tdep.c: ... here.
+	* libunwind-frame.h: Rename to ...
+	* ia64-libunwind-tdep.h: ... here.
+	* Makefile.in (HFILES_NO_SRCDIR): Rename libunwind-frame.h to
+	ia64-libunwind-tdep.h.
+	(ALLDEPFILES): Rename libunwind-frame.c to ia64-libunwind-tdep.c.
+	* README (--with-libunwind): Rename to ...
+	(--with-libunwind-ia64): ... here, note it is ia64 specific now.
+	* config.in: Regenerate.
+	* configure: Regenerate.
+	* configure.ac: New option --with-libunwind-ia64, make the
+	AS_HELP_STRING ia64 specific.  Deprecate option --with-libunwind.
+	Remove AC_DEFINE for HAVE_LIBUNWIND.
+	* ia64-libunwind-tdep.c: Make the file top comment ia64 specific.
+	Rename libunwind-frame.h #include to ia64-libunwind-tdep.h.
+	Rename libunwind-frame in the general comment.
+	* ia64-libunwind-tdep.h: Make the file top comment ia64 specific.
+	Rename symbol LIBUNWIND_FRAME_H to IA64_TDEP_LIBUNWIND_FRAME_H.
+	Move forward declarations inside #ifndef.  Rename libunwind-frame in
+	the general comment.
+	* ia64-tdep.c: Rename libunwind-frame.h #include to
+	ia64-libunwind-tdep.h.
+	(ia64_gdb2uw_regnum, ia64_uw2gdb_regnum, ia64_is_fpreg)
+	(ia64_libunwind_descr): Rename libunwind-frame to
+	ia64-libunwind-tdep in these function comments.
+	* ia64-tdep.h: Rename libunwind-frame.h #include to
+	ia64-libunwind-tdep.h.
+	* ia64-vms-tdep.c (ia64_vms_libunwind_descr): Rename libunwind-frame to
+	ia64-libunwind-tdep in that data comment.
+@
+text
+@d3 1
+a3 1
+   Copyright (C) 2003, 2006-2012 Free Software Foundation, Inc.
+@
+

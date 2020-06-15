@@ -1,0 +1,126 @@
+head	1.1;
+access;
+symbols;
+locks; strict;
+comment	@ * @;
+
+
+1.1
+date	2013.06.19.22.29.36;	author vapier;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.1
+log
+@gdb: clean up x86 cpuid implementations
+
+We've currently got 3 files doing open coded implementations of cpuid.
+Each has its own set of workarounds and varying levels of how well
+they're written and are generally hardcoded to specific cpuid functions.
+If you try to build the latest gdb as a PIE on an i386 system, the build
+will fail because one of them lacks PIC workarounds (wrt ebx).
+
+Specifically, we have:
+common/linux-btrace.c:
+	two copies of cpuid asm w/specific args, one has no workarounds
+	while the other implicitly does to avoid memcpy
+go32-nat.c:
+	two copies of cpuid asm w/specific args, one has workarounds to
+	avoid memcpy
+gdb/testsuite/gdb.arch/i386-cpuid.h:
+	one general cpuid asm w/many workarounds copied from older gcc
+
+Fortunately, that last header there is pretty damn good -- it handles
+lots of edge cases, the code is nice & tight (uses gcc asm operands
+rather than manual movs), and is already almost a general library type
+header.  It's also the basis of what is now the public cpuid.h that is
+shipped with gcc-4.3+.
+
+So what I've done is pull that test header out and into gdb/common/
+(not sure if there's a better place), synced to the version found in
+gcc-4.8.0, put a wrapper API around it, and then cut over all the
+existing call points to this new header.
+
+Since the func already has support for "is cpuid supported on this proc",
+it makes it trivial to push the i386/x86_64 ifdefs down into this wrapper
+API too.  Now it can be safely used for all targets and gcc will elide
+the unused code for us.
+
+I've verified the gdb.arch testsuite still passes, and this code compiles
+for an armv7a host as well as x86_64.  The go32-nat code has been left
+ifdef-ed out until someone can test & verify the new stuff works (and if
+it doesn't, figure out how to make the new code work).
+
+URL: https://bugs.gentoo.org/467806
+Signed-off-by: Mike Frysinger <vapier@@gentoo.org>
+@
+text
+@/* C API for x86 cpuid insn.
+   Copyright (C) 2007-2013 Free Software Foundation, Inc.
+
+   This file is part of GDB.
+
+   This file is free software; you can redistribute it and/or modify it
+   under the terms of the GNU General Public License as published by the
+   Free Software Foundation; either version 3, or (at your option) any
+   later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+#ifndef I386_CPUID_COMMON_H
+#define I386_CPUID_COMMON_H
+
+/* Always include the header for the cpu bit defines.  */
+#include "i386-gcc-cpuid.h"
+
+#if defined(__i386__) || defined(__x86_64__)
+
+/* Return cpuid data for requested cpuid level, as found in returned
+   eax, ebx, ecx and edx registers.  The function checks if cpuid is
+   supported and returns 1 for valid cpuid information or 0 for
+   unsupported cpuid level.  Pointers may be non-null.  */
+
+static __inline int
+i386_cpuid (unsigned int __level,
+	    unsigned int *__eax, unsigned int *__ebx,
+	    unsigned int *__ecx, unsigned int *__edx)
+{
+  unsigned int __scratch;
+
+  if (!__eax)
+    __eax = &__scratch;
+  if (!__ebx)
+    __ebx = &__scratch;
+  if (!__ecx)
+    __ecx = &__scratch;
+  if (!__edx)
+    __edx = &__scratch;
+
+  return __get_cpuid (__level, __eax, __ebx, __ecx, __edx);
+}
+
+#else
+
+static __inline int
+i386_cpuid (unsigned int __level,
+	    unsigned int *__eax, unsigned int *__ebx,
+	    unsigned int *__ecx, unsigned int *__edx)
+{
+  return 0;
+}
+
+#endif /* i386 && x86_64 */
+
+#endif /* I386_CPUID_COMMON_H */
+@

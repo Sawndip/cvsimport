@@ -1,0 +1,204 @@
+head	1.4;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.4
+	gdb_7_6-2013-04-26-release:1.4
+	gdb_7_6-branch:1.4.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.4
+	gdb_7_5_1-2012-11-29-release:1.3
+	gdb_7_5-2012-08-17-release:1.3
+	gdb_7_5-branch:1.3.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.3;
+locks; strict;
+comment	@ * @;
+
+
+1.4
+date	2013.01.01.06.41.27;	author brobecke;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2012.06.28.16.34.04;	author palves;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2010.11.02.01.37.32;	author jkratoch;	state dead;
+branches;
+next	1.1;
+
+1.1
+date	2010.10.17.18.24.47;	author jkratoch;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.4
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@/* This testcase is part of GDB, the GNU debugger.
+
+   Copyright 2010-2013 Free Software Foundation, Inc.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+#include <pthread.h>
+#include <assert.h>
+#include <signal.h>
+
+#include <asm/unistd.h>
+#include <unistd.h>
+#define tgkill(tgid, tid, sig) syscall (__NR_tgkill, (tgid), (tid), (sig))
+#define gettid() syscall (__NR_gettid)
+
+static volatile int var;
+
+static void
+handler (int signo)	/* step-0 */
+{			/* step-0 */
+  var++;		/* step-1 */
+  tgkill (getpid (), gettid (), SIGUSR1);	/* step-2 */
+}
+
+static void *
+start (void *arg)
+{
+  tgkill (getpid (), gettid (), SIGUSR1);
+  assert (0);
+  return NULL;
+}
+
+int
+main (void)
+{
+  pthread_t thread;
+
+  signal (SIGUSR1, handler);
+
+  pthread_create (&thread, NULL, start, NULL);
+  start (NULL);	/* main-start */
+  return 0;
+}
+@
+
+
+1.3
+log
+@gdb/
+2012-06-28  Jan Kratochvil  <jan.kratochvil@@redhat.com>
+	    Pedro Alves  <palves@@redhat.com>
+
+	* gdbthread.h (ALL_THREADS): New macro.
+	(thread_list): Declare.
+	* infrun.c (handle_inferior_event) <spurious signal>: Don't keep
+	going, but instead fall through to the stepping handling.
+	* linux-nat.c (resume_lwp): New parameter 'signo'.  Resume with
+	the passed in signal.  Adjust debug output.
+	(resume_callback): Rename to ...
+	(linux_nat_resume_callback): ... this.  Pass the thread's last
+	stop signal, if in "pass" state.
+	(linux_nat_resume): Adjust to rename.
+	(stop_wait_callback): New assertion.  Don't respawn signals;
+	instead let the LWP remain with SIGNALLED set.
+	(linux_nat_wait_1): Remove flushing of pending SIGSTOPs.
+	* remote.c (append_pending_thread_resumptions): New.
+	(remote_vcont_resume): Call it.
+	* target.h (target_resume): Extend comment.
+
+gdb/testsuite/
+2012-06-28  Jan Kratochvil  <jan.kratochvil@@redhat.com>
+	    Pedro Alves  <palves@@redhat.com>
+
+	* gdb.threads/siginfo-threads.exp: New file.
+	* gdb.threads/siginfo-threads.c: New file.
+	* gdb.threads/sigstep-threads.exp: New file.
+	* gdb.threads/sigstep-threads.c: New file.
+@
+text
+@d3 1
+a3 1
+   Copyright 2010-2012 Free Software Foundation, Inc.
+@
+
+
+1.2
+log
+@gdb/
+	Revert:
+	2010-10-17  Jan Kratochvil  <jan.kratochvil@@redhat.com>
+		    Pedro Alves  <pedro@@codesourcery.com>
+	* gdbthread.h (currently_stepping): New declaration.
+	* infrun.c (currently_stepping): Remove the forward declaration.
+	(currently_stepping): Make it global.
+	* linux-nat.c (resume_callback) <lp->stopped && lp->status == 0>: New
+	variables tp and step, initialized them.  Pass STEP to to_resume.
+	Print also possibly "PTRACE_SINGLESTEP" if STEP.  Initialize LP->STEP.
+	* remote.c (currently_stepping_callback): New.
+	(remote_vcont_resume)
+	<ptid_equal (ptid, minus_one_ptid) || ptid_is_pid (ptid)>:
+	New variable tp.  Call currently_stepping_callback and step such
+	thread.
+
+gdb/testsuite/
+	Revert:
+	2010-10-17  Jan Kratochvil  <jan.kratochvil@@redhat.com>
+	* gdb.threads/sigstep-threads.exp: New file.
+	* gdb.threads/sigstep-threads.c: New file.
+@
+text
+@d3 1
+a3 1
+   Copyright 2010 Free Software Foundation, Inc.
+a38 1
+  signal (SIGUSR1, handler);
+a40 1
+
+d49 2
+@
+
+
+1.1
+log
+@gdb/
+	* gdbthread.h (currently_stepping): New declaration.
+	* infrun.c (currently_stepping): Remove the forward declaration.
+	(currently_stepping): Make it global.
+	* linux-nat.c (resume_callback) <lp->stopped && lp->status == 0>: New
+	variables tp and step, initialized them.  Pass STEP to to_resume.
+	Print also possibly "PTRACE_SINGLESTEP" if STEP.  Initialize LP->STEP.
+	* remote.c (currently_stepping_callback): New.
+	(remote_vcont_resume)
+	<ptid_equal (ptid, minus_one_ptid) || ptid_is_pid (ptid)>:
+	New variable tp.  Call currently_stepping_callback and step such
+	thread.
+
+gdb/testsuite/
+	* gdb.threads/sigstep-threads.exp: New file.
+	* gdb.threads/sigstep-threads.c: New file.
+@
+text
+@@
+

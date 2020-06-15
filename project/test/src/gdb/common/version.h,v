@@ -1,0 +1,96 @@
+head	1.1;
+access;
+symbols;
+locks; strict;
+comment	@ * @;
+
+
+1.1
+date	2013.06.24.15.06.27;	author tromey;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.1
+log
+@don't keep a gdb-specific date
+
+Right now there are two nightly commits to update a file in the tree
+with the current date.  One commit is for BFD, one is for gdb.
+
+It seems unnecessary to me to do this twice.  We can make do with a
+single such commit.
+
+This patch changes gdb in a minimal way to reuse the BFD date -- it
+extracts it from bfd/version.h and changes version.in to use the
+placeholder string "DATE" for those times when a date is wanted.
+
+I propose removing the cron job that updates the version on trunk, and
+then check in this patch.
+
+For release branches, we can keep the cron job, but just tell it to
+rewrite bfd/version.h.  I believe this is a simple change in the
+crontab -- the script will work just fine on this file.
+
+This also moves version.in and version.h into common/, to reflect
+their shared status; and updates gdbserver to use version.h besides.
+
+	* common/create-version.sh: New file.
+	* Makefile.in (version.c): Use bfd/version.h, common/version.in,
+	create-version.sh.
+	(HFILES_NO_SRCDIR): Use common/version.h.
+	* version.in: Move to ...
+	* common/version.in: ... here.  Replace date with "DATE".
+	* version.h: Move to ...
+	* common/version.h: ... here.
+gdbserver:
+	* Makefile.in (version.c): Use bfd/version.h, common/version.in,
+	create-version.sh.
+	(version.o): Remove.
+	* gdbreplay.c: Include version.h.
+	(version, host_name): Don't declare.
+	* server.h: Include version.h.
+	(version, host_name): Don't declare.
+doc:
+	* Makefile.in (POD2MAN1, POD2MAN5): Use version.subst.
+	(GDBvn.texi): Use version.subst.
+	(version.subst): New target.
+	(mostlyclean): Remove version.subst.
+@
+text
+@/* Version information for GDB.
+   Copyright (C) 1999-2013 Free Software Foundation, Inc.
+
+   This file is part of GDB.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+#ifndef VERSION_H
+#define VERSION_H
+
+/* Version number of GDB, as a string.  */
+extern const char version[];
+
+/* Canonical host name as a string.  */
+extern const char host_name[];
+
+/* Canonical target name as a string.  */
+extern const char target_name[];
+
+#endif /* #ifndef VERSION_H */
+@

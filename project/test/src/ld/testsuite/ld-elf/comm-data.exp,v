@@ -1,0 +1,701 @@
+head	1.9;
+access;
+symbols
+	binutils-2_24-branch:1.9.0.2
+	binutils-2_24-branchpoint:1.9
+	binutils-2_23_2:1.3.2.2
+	binutils-2_23_1:1.3.2.1
+	binutils-2_23:1.3.2.1
+	binutils-2_23-branch:1.3.0.2
+	binutils-2_23-branchpoint:1.3
+	binutils_latest_snapshot:1.9;
+locks; strict;
+comment	@# @;
+
+
+1.9
+date	2013.08.24.22.37.18;	author macro;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2013.02.19.01.09.58;	author macro;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2012.12.07.06.00.06;	author amodra;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2012.12.06.00.10.41;	author amodra;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2012.11.21.19.31.24;	author roland;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2012.09.19.00.53.30;	author hjl;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2012.04.03.16.01.35;	author roland;	state Exp;
+branches
+	1.3.2.1;
+next	1.2;
+
+1.2
+date	2012.02.20.01.51.52;	author amodra;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2011.11.29.12.42.10;	author macro;	state Exp;
+branches;
+next	;
+
+1.3.2.1
+date	2012.09.24.12.22.48;	author gingold;	state Exp;
+branches;
+next	1.3.2.2;
+
+1.3.2.2
+date	2012.11.21.19.32.32;	author roland;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.9
+log
+@	* ld-elf/comm-data.exp: Use check_shared_lib_support rather than
+	explicit patterns for test target qualification.  Define extra
+	tool flags for *-*-hpux* and tic6x-*-* targets.  Link with a
+	linker script.  Use alternative patterns for targets that do not
+	eliminate copy relocs, currently mn10300-*-* and vax-*-*.
+	* ld-elf/comm-data2.s: Handle HPUX's `.comm' syntax.
+	* ld-elf/comm-data2.ld: New test linker script.
+	* ld-elf/comm-data2.xd: Match section's VMA too.  Ignore ASCII
+	data dump.
+	* ld-elf/comm-data2r.rd: New test pattern.
+	* ld-elf/comm-data2r.sd: New test pattern.
+	* ld-elf/comm-data2r.xd: New test pattern.
+	* ld-mips-elf/comm-data.exp: Use check_shared_lib_support rather
+	than an explicit pattern for test target qualification.  Link
+	with a linker script.
+@
+text
+@# Expect script for common symbol override.
+#
+# Copyright 2011, 2012 Free Software Foundation, Inc.
+#
+# This file is part of the GNU Binutils.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+# MA 02110-1301, USA.
+#
+
+#
+# Written by Maciej W. Rozycki <macro@@codesourcery.com>
+#
+
+# This test is for ELF shared-library targets.
+if { ![is_elf_format] || ![check_shared_lib_support] } {
+    return
+}
+
+# This target requires extra GAS options when building code for shared
+# libraries.
+set AFLAGS_PIC ""
+if [istarget "tic6x-*-*"] {
+    append AFLAGS_PIC " -mpic -mpid=near"
+}
+# This target requires a non-default emulation for successful shared
+# library/executable builds.
+set LFLAGS ""
+if [istarget "tic6x-*-*"] {
+    append LFLAGS " -melf32_tic6x_le"
+}
+
+set testname "Common symbol override test"
+
+# Define a global symbol.
+run_ld_link_tests [list \
+    [list \
+	"$testname (auxiliary shared object build)" \
+	"$LFLAGS -shared" "" \
+	"$AFLAGS_PIC" \
+	{ comm-data1.s } \
+	{ \
+	    { readelf -s comm-data1.sd } \
+	} \
+	"libcomm-data.so" \
+    ] \
+]
+
+# Set the pointer size according to the ELF flavor.
+set AFLAGS ""
+if [is_elf64 "tmpdir/libcomm-data.so"] {
+    append AFLAGS " --defsym ELF64=1"
+}
+# HPUX targets use a different .comm syntax.
+if [istarget "*-*-hpux*"] {
+    append AFLAGS " --defsym HPUX=1"
+}
+
+setup_xfail "arm*-*-*" "ld/13802"
+
+# List targets here that keep copy relocs rather than eliminating
+# them where possible in favour to dynamic relocs in the relevant
+# loadable sections; see also the "-z nocopyreloc" command-line
+# option and the ELIMINATE_COPY_RELOCS macro some backends use.
+set copy_reloc [expr [istarget mn10300-*-*] || [istarget vax-*-*]]
+
+# Verify that a common symbol has been converted to an undefined
+# reference to the global symbol of the same name defined above
+# and that the debug reference has been dropped.
+run_ld_link_tests [list \
+    [list \
+	"$testname" \
+	"$LFLAGS -T comm-data2.ld -Ltmpdir -lcomm-data" "" \
+	"$AFLAGS" \
+	{ comm-data2.s } \
+	[list \
+	    [list readelf -s \
+		[expr { $copy_reloc ? "comm-data2r.sd" : "comm-data2.sd"}]] \
+	    [list readelf -r \
+		[expr { $copy_reloc ? "comm-data2r.rd" : "comm-data2.rd"}]] \
+	    [list readelf "-x .debug_foo" \
+		[expr { $copy_reloc ? "comm-data2r.xd" : "comm-data2.xd"}]]] \
+	"comm-data" \
+    ] \
+    [list \
+	"$testname 3a" \
+	"-static" "" \
+	"" \
+	{ comm-data3a.s comm-data3b.s } \
+	{ \
+	    { readelf -s comm-data3.sd } \
+	} \
+	"comm-data3a" \
+    ] \
+    [list \
+	"$testname 3b" \
+	"-static" "" \
+	"" \
+	{ comm-data3b.s comm-data3a.s } \
+	{ \
+	    { readelf -s comm-data3.sd } \
+	} \
+	"comm-data3b" \
+    ] \
+]
+@
+
+
+1.8
+log
+@	* lib/ld-lib.exp (run_ld_link_tests): Add another argument, pass
+	its contents to ar_simple_create and ld_simple_link after
+	objfiles.
+	* ld-aarch64/aarch64-elf.exp: Adjust accordingly.
+	* ld-alpha/alpha.exp: Likewise.
+	* ld-arm/arm-elf.exp: Likewise.
+	* ld-arm/export-class.exp: Likewise.
+	* ld-elf/comm-data.exp: Likewise.
+	* ld-elf/eh-group.exp: Likewise.
+	* ld-elf/elf.exp: Likewise.
+	* ld-elf/export-class.exp: Likewise.
+	* ld-elfvers/vers.exp: Likewise.
+	* ld-frv/tls.exp: Likewise.
+	* ld-i386/export-class.exp: Likewise.
+	* ld-i386/i386.exp: Likewise.
+	* ld-ia64/ia64.exp: Likewise.
+	* ld-libs/libs.exp: Likewise.
+	* ld-m68k/m68k.exp: Likewise.
+	* ld-metag/metag.exp: Likewise.
+	* ld-mips-elf/comm-data.exp: Likewise.
+	* ld-mips-elf/export-class.exp: Likewise.
+	* ld-mips-elf/mips-elf.exp: Likewise.
+	* ld-mn10300/mn10300.exp: Likewise.
+	* ld-pe/pe-compile.exp: Likewise.
+	* ld-pe/pe.exp: Likewise.
+	* ld-plugin/plugin.exp: Likewise.
+	* ld-powerpc/aix52.exp: Likewise.
+	* ld-powerpc/export-class.exp: Likewise.
+	* ld-powerpc/powerpc.exp: Likewise.
+	* ld-s390/s390.exp: Likewise.
+	* ld-sh/sh-vxworks.exp: Likewise.
+	* ld-sh/sh64/sh64.exp: Likewise.
+	* ld-sparc/sparc.exp: Likewise.
+	* ld-tic6x/tic6x.exp: Likewise.
+	* ld-tilegx/tilegx.exp: Likewise.
+	* ld-tilepro/tilepro.exp: Likewise.
+	* ld-undefined/entry.exp: Likewise.
+	* ld-vax-elf/vax-elf.exp: Likewise.
+	* ld-x86-64/dwarfreloc.exp: Likewise.
+	* ld-x86-64/export-class.exp: Likewise.
+	* ld-x86-64/x86-64.exp: Likewise.
+	* ld-xc16x/xc16x.exp: Likewise.
+	* ld-xstormy16/xstormy16.exp: Likewise.
+	* ld-xtensa/xtensa.exp: Likewise.
+@
+text
+@d27 2
+a28 2
+# Exclude non-ELF targets.
+if ![is_elf_format] {
+d32 11
+a42 6
+# Exclude some more targets; feel free to include your favorite one
+# if you like.
+if { ![istarget *-*-linux*]
+     && ![istarget *-*-nacl*]
+     && ![istarget *-*-gnu*] } {
+    return
+d51 2
+a52 2
+	"-shared" "" \
+	"" \
+d66 4
+d73 6
+d85 1
+a85 1
+	"-Ltmpdir -lcomm-data" "" \
+d88 7
+a94 5
+	{ \
+	    { readelf -s comm-data2.sd } \
+	    { readelf -r comm-data2.rd } \
+	    { readelf "-x .debug_foo" comm-data2.xd } \
+	} \
+@
+
+
+1.7
+log
+@	* ld-elf/comm-data.exp: Revert last change.
+	* ld-elf/comm-data5.d: xfail frv-linux.
+@
+text
+@d46 1
+a46 1
+	"-shared" \
+d70 1
+a70 1
+	"-Ltmpdir -lcomm-data" \
+d82 1
+a82 1
+	"-static" \
+d92 1
+a92 1
+	"-static" \
+@
+
+
+1.6
+log
+@	* ld-elf/comm-data4.d, ld-elf/comm-data4.s: New test.
+	* ld-elf/comm-data5.d, ld-elf/comm-data5.s: New test.
+	* ld-elf/comm-data.exp: Run them.
+@
+text
+@a100 3
+
+run_dump_test comm-data4
+run_dump_test comm-data5
+@
+
+
+1.5
+log
+@* ld-elf/comm-data.exp: Add XFAIL for arm*-*-* targets, referring
+to PR ld/13802.
+@
+text
+@d101 3
+@
+
+
+1.4
+log
+@Properly handle common symbol and weak function
+
+bfd/
+
+	PR ld/14591
+	* elf-bfd.h (_bfd_elf_merge_symbol): Add an argument to return
+	if the old symbol is weak.
+
+	* elf32-sh-symbian.c (sh_symbian_relocate_section): Update
+	_bfd_elf_merge_symbol call.
+
+	* elflink.c (_bfd_elf_merge_symbol): Add an argument to return
+	if the old symbol is weak.
+	(_bfd_elf_add_default_symbol): Update _bfd_elf_merge_symbol
+	call.
+	(elf_link_add_object_symbols): Don't update symbol type from a
+	weak definition.  Update symbol type from a common symbol when
+	overriding a weak symbol.
+
+ld/testsuite/
+
+	PR ld/14591
+	* ld-elf/comm-data.exp (run_ld_link_tests): Add comm-data3a and
+	comm-data3b tests.
+
+	* ld-ifunc/ifunc.exp (run_ld_link_exec_tests): New.
+
+	* ld-elf/comm-data3.sd: New file.
+	* ld-elf/comm-data3a.s: Likewise.
+	* ld-elf/comm-data3b.s: Likewise.
+	* ld-ifunc/ifunc-17a-i386.d: Likewise.
+	* ld-ifunc/ifunc-17a-x86-64.d: Likewise.
+	* ld-ifunc/ifunc-17a.s: Likewise.
+	* ld-ifunc/ifunc-17b-i386.d: Likewise.
+	* ld-ifunc/ifunc-17b-x86-64.d: Likewise.
+	* ld-ifunc/ifunc-17b.s: Likewise.
+	* ld-ifunc/ifunc-common-1.out: Likewise.
+	* ld-ifunc/ifunc-common-1a.c: Likewise.
+	* ld-ifunc/ifunc-common-1b.c: Likewise.
+@
+text
+@d62 2
+@
+
+
+1.3
+log
+@bfd/
+2012-04-03  Roland McGrath  <mcgrathr@@google.com>
+
+	* elf-nacl.c: New file.
+	* elf-nacl.h: New file.
+	* elf32-i386.c (elf_backend_modify_segment_map): Define for
+	bfd_elf32_i386_nacl_vec.
+	(elf_backend_modify_program_headers): Likewise.
+	* elf64-x86-64.c (elf_backend_modify_segment_map): Define for
+	bfd_elf64_x86_64_nacl_vec and bfd_elf32_x86_64_nacl_vec.
+	(elf_backend_modify_program_headers): Likewise.
+	* Makefile.am (BFD32_BACKENDS, BFD64_BACKENDS): Add elf-nacl.lo here.
+	(BFD32_BACKENDS_CFILES, BFD64_BACKENDS_CFILES): Add elf-nacl.c here.
+	* Makefile.in: Regenerated.
+	* configure.in (bfd_elf64_x86_64_nacl_vec): Add elf-nacl.o to tb here.
+	(bfd_elf32_x86_64_nacl_vec): Likewise.
+	(bfd_elf64_x86_64_vec, bfd_elf32_x86_64_vec): Likewise.
+	(bfd_elf64_x86_64_freebsd_vec, bfd_elf64_x86_64_sol2_vec): Likewise.
+	(bfd_elf64_l1om_vec, bfd_elf64_l1om_freebsd_vec): Likewise.
+	(bfd_elf64_k1om_vec, bfd_elf64_k1om_freebsd_vec): Likewise.
+	(bfd_elf32_i386_nacl_vec): Likewise.
+	(bfd_elf32_i386_sol2_vec, bfd_elf32_i386_freebsd_vec): Likewise.
+	(bfd_elf32_i386_vxworks_vec, bfd_elf32_i386_vec): Likewise.
+	* configure: Regenerated.
+
+binutils/testsuite/
+2012-04-03  Roland McGrath  <mcgrathr@@google.com>
+
+	* lib/binutils-common.exp (is_elf_format): Consider *-*-nacl* to
+	be ELF too.
+
+	* binutils-all/elfedit-4.d: Add "#as: --64" option.
+
+	* binutils-all/i386/i386.exp: Accept nacl targets too.
+	* binutils-all/x86-64/x86-64.exp: Likewise.
+
+gas/testsuite/
+2012-04-03  Roland McGrath  <mcgrathr@@google.com>
+
+	* gas/i386/k1om.d: Add not-target match for *-*-nacl*.
+	* gas/i386/l1om.d: Likewise.
+
+ld/
+2012-04-03  Roland McGrath  <mcgrathr@@google.com>
+
+	* configure.tgt (i[3-7]86-*-nacl*, x86_64-*-nacl*): Handle them.
+	* emulparams/elf_nacl.sh: New file.
+	* emulparams/elf_i386_nacl.sh: New file.
+	* emulparams/elf32_x86_64_nacl.sh: New file.
+	* emulparams/elf_x86_64_nacl.sh: New file.
+	* Makefile.am (ALL_EMULATION_SOURCES): Add eelf_i386_nacl.c here.
+	(ALL_64_EMULATION_SOURCES): Add eelf32_x86_64_nacl.c and
+	eelf_x86_64_nacl.c here.
+	(eelf_i386_nacl.c, eelf32_x86_64_nacl.c, eelf_x86_64_nacl.c):
+	New targets.
+	* Makefile.in: Regenerated.
+
+	* scripttempl/elf.sc: Handle SEPARATE_CODE cases.
+
+ld/testsuite/
+2012-04-03  Roland McGrath  <mcgrathr@@google.com>
+
+	* ld-x86-64/ilp32-4-nacl.d: New file.
+	* ld-x86-64/x86-64.exp: Run it.
+
+	* ld-discard/discard.exp: Accept nacl targets too.
+	* ld-elf/binutils.exp: Likewise.
+	* ld-elf/comm-data.exp: Likewise.
+	* ld-elf/elf.exp: Likewise.
+	* ld-elf/tls_common.exp: Likewise.
+	* ld-elfvers/vers.exp: Likewise.
+	* ld-elfvsb/elfvsb.exp: Likewise.
+	* ld-elfweak/elfweak.exp: Likewise.
+	* ld-gc/gc.exp: Likewise.
+	* ld-ifunc/binutils.exp: Likewise.
+	* ld-ifunc/ifunc.exp: Likewise.
+	* ld-linkonce/linkonce.exp:Likewise.
+	* ld-pie/pie.exp: Likewise.
+	* ld-shared/shared.exp: Likewise.
+	* ld-undefined/weak-undef.exp: Likewise.
+	* ld-unique/unique.exp: Likewise.
+	* ld-x86-64/dwarfreloc.exp: Likewise.
+	* ld-x86-64/line.exp: Likewise.
+
+	* lib/ld-lib.exp (slurp_options): Support global array
+	options_regsub to apply substitutions to the contents
+	of options lines read from the file.
+	* ld-i386/emit-relocs.d: Renamed to ...
+	* ld-i386/emit-relocs.rd: ... this.
+	* ld-i386/i386.exp: Accept nacl targets too.
+	For them, use options_regsub to replace elf_i386 with
+	elf_i386_nacl in run_dump_test cases; apply the same
+	substitution in $i386tests; replace foo.rd expectations
+	files with foo-nacl.rd in $i386tests.
+	(i386tests): Change emit-relocs.d to emit-relocs.rd here.
+	* ld-i386/emit-relocs-nacl.rd: New file.
+	* ld-i386/plt-nacl.pd: New file.
+	* ld-i386/plt-pic-nacl.pd: New file.
+	* ld-i386/tlsbin-nacl.rd: New file.
+	* ld-i386/tlsbindesc-nacl.rd: New file.
+	* ld-i386/tlsdesc-nacl.rd: New file.
+	* ld-i386/tlsgdesc-nacl.rd: New file.
+	* ld-i386/tlsnopic-nacl.rd: New file.
+	* ld-i386/tlspic-nacl.rd: New file.
+	* ld-x86-64/x86-64.exp: Accept nacl targets too.
+	For them, use options_regsub to replace elf_x86_64 with
+	elf_x86_64_nacl in run_dump_test cases; apply the same
+	substitution in $x86_64tests; replace foo.rd expectations
+	files with foo-nacl.rd in $x86_64tests.
+	Add explicit -melf_x86_64 to ld options in tests that need it,
+	in case the default emulation is x32 (as it is for x86_64-nacl).
+	* ld/testsuite/ld-x86-64/plt-nacl.pd: New file.
+	* ld/testsuite/ld-x86-64/split-by-file-nacl.rd: New file.
+	* ld/testsuite/ld-x86-64/tlsbin-nacl.rd: New file.
+	* ld/testsuite/ld-x86-64/tlsbindesc-nacl.rd: New file.
+	* ld/testsuite/ld-x86-64/tlsdesc-nacl.pd: New file.
+	* ld/testsuite/ld-x86-64/tlsdesc-nacl.rd: New file.
+	* ld/testsuite/ld-x86-64/tlsgdesc-nacl.rd: New file.
+	* ld/testsuite/ld-x86-64/tlspic-nacl.rd: New file.
+
+	* ld-i386/hidden2.d: Loosen regexps to match any file format variant,
+	and not to depend on exact addresses, displacements, etc. where
+	they are irrelevant.
+	* ld-i386/pcrel16.d: Likewise.
+	* ld-i386/pcrel16abs.d: Likewise.
+	* ld-i386/pr12718.d: Likewise.
+	* ld-i386/pr12921.d: Likewise.
+	* ld-i386/reloc.d: Likewise.
+	* ld-i386/tlsbin.dd: Likewise.
+	* ld-i386/tlsbin.sd: Likewise.
+	* ld-i386/tlsbin.td: Likewise.
+	* ld-i386/tlsbindesc.dd: Likewise.
+	* ld-i386/tlsbindesc.sd: Likewise.
+	* ld-i386/tlsbindesc.td: Likewise.
+	* ld-i386/tlsdesc.dd: Likewise.
+	* ld-i386/tlsdesc.sd: Likewise.
+	* ld-i386/tlsdesc.td: Likewise.
+	* ld-i386/tlsg.sd: Likewise.
+	* ld-i386/tlsgdesc.dd: Likewise.
+	* ld-i386/tlsindntpoff.dd: Likewise.
+	* ld-i386/tlsnopic.dd: Likewise.
+	* ld-i386/tlsnopic.sd: Likewise.
+	* ld-i386/tlspic.dd: Likewise.
+	* ld-i386/tlspic.sd: Likewise.
+	* ld-i386/tlspic.td: Likewise.
+	* ld-i386/tlspie2.d: Likewise.
+	* ld-x86-64/hidden2.d: Likewise.
+	* ld-x86-64/pcrel16.d: Likewise.
+	* ld-x86-64/pr12718.d: Likewise.
+	* ld-x86-64/pr12921.d: Likewise.
+	* ld-x86-64/protected3.d: Likewise.
+	* ld-x86-64/tlsbin.dd: Likewise.
+	* ld-x86-64/tlsbin.sd: Likewise.
+	* ld-x86-64/tlsbin.td: Likewise.
+	* ld-x86-64/tlsbindesc.dd: Likewise.
+	* ld-x86-64/tlsbindesc.sd: Likewise.
+	* ld-x86-64/tlsbindesc.td: Likewise.
+	* ld-x86-64/tlsdesc.dd: Likewise.
+	* ld-x86-64/tlsdesc.sd: Likewise.
+	* ld-x86-64/tlsdesc.td: Likewise.
+	* ld-x86-64/tlsg.sd: Likewise.
+	* ld-x86-64/tlsgd5.dd: Likewise.
+	* ld-x86-64/tlsgd6.dd: Likewise.
+	* ld-x86-64/tlsgdesc.dd: Likewise.
+	* ld-x86-64/tlspic.dd: Likewise.
+	* ld-x86-64/tlspic.sd: Likewise.
+	* ld-x86-64/tlspic.td: Likewise.
+
+	* ld-x86-64/ilp32-8.d: Match any file format variant.
+	Use a -Ttext and adjust expected results, to handle variant layouts.
+	* ld-x86-64/ilp32-9.d: Likewise.
+
+	* ld-i386/alloc.t: Remove superfluous OUTPUT_FORMAT statement.
+	* ld-i386/pr12627.t: Likewise.
+
+	* ld-x86-64/abs-l1om.d: Add target: constraint.
+	* ld-x86-64/protected2-l1om.d: Likewise.
+	* ld-x86-64/protected3-l1om.d: Likewise.
+	* ld-x86-64/ilp32-4.d: Likewise.
+
+	* ld-x86-64/plt.s: New file.
+	* ld-x86-64/pltlib.s: New file.
+	* ld-x86-64/plt.pd: New file.
+	* ld-x86-64/x86-64.exp (x86_64tests): Add them.
+
+	* ld-i386/plt.s: New file.
+	* ld-i386/pltlib.s: New file.
+	* ld-i386/plt.pd: New file.
+	* ld-i386/plt-pic.s: New file.
+	* ld-i386/plt-pic.pd: New file.
+	* ld-i386/i386.exp (i386tests): Add them.
+@
+text
+@d78 20
+@
+
+
+1.3.2.1
+log
+@bfd/
+2012-09-18  H.J. Lu  <hongjiu.lu@@intel.com>
+
+	PR ld/14591
+	* elf-bfd.h (_bfd_elf_merge_symbol): Add an argument to return
+	if the old symbol is weak.
+
+	* elf32-sh-symbian.c (sh_symbian_relocate_section): Update
+	_bfd_elf_merge_symbol call.
+
+	* elflink.c (_bfd_elf_merge_symbol): Add an argument to return
+	if the old symbol is weak.
+	(_bfd_elf_add_default_symbol): Update _bfd_elf_merge_symbol
+	call.
+	(elf_link_add_object_symbols): Don't update symbol type from a
+	weak definition.  Update symbol type from a common symbol when
+	overriding a weak symbol.
+
+ld/testsuite/
+2012-09-18  H.J. Lu  <hongjiu.lu@@intel.com>
+
+	PR ld/14591
+	* ld-elf/comm-data.exp (run_ld_link_tests): Add comm-data3a and
+	comm-data3b tests.
+
+	* ld-ifunc/ifunc.exp (run_ld_link_exec_tests): New.
+
+	* ld-elf/comm-data3.sd: New file.
+	* ld-elf/comm-data3a.s: Likewise.
+	* ld-elf/comm-data3b.s: Likewise.
+	* ld-ifunc/ifunc-17a-i386.d: Likewise.
+	* ld-ifunc/ifunc-17a-x86-64.d: Likewise.
+	* ld-ifunc/ifunc-17a.s: Likewise.
+	* ld-ifunc/ifunc-17b-i386.d: Likewise.
+	* ld-ifunc/ifunc-17b-x86-64.d: Likewise.
+	* ld-ifunc/ifunc-17b.s: Likewise.
+	* ld-ifunc/ifunc-common-1.out: Likewise.
+	* ld-ifunc/ifunc-common-1a.c: Likewise.
+	* ld-ifunc/ifunc-common-1b.c: Likewise.
+@
+text
+@a77 20
+    [list \
+	"$testname 3a" \
+	"-static" \
+	"" \
+	{ comm-data3a.s comm-data3b.s } \
+	{ \
+	    { readelf -s comm-data3.sd } \
+	} \
+	"comm-data3a" \
+    ] \
+    [list \
+	"$testname 3b" \
+	"-static" \
+	"" \
+	{ comm-data3b.s comm-data3a.s } \
+	{ \
+	    { readelf -s comm-data3.sd } \
+	} \
+	"comm-data3b" \
+    ] \
+@
+
+
+1.3.2.2
+log
+@* ld-elf/comm-data.exp: Add XFAIL for arm*-*-* targets, referring
+to PR ld/13802.
+@
+text
+@a61 2
+setup_xfail "arm*-*-*" "ld/13802"
+
+@
+
+
+1.2
+log
+@	* ld-elf/comm-data.exp: Run for *-*-gnu*.
+@
+text
+@d35 1
+@
+
+
+1.1
+log
+@	PR ld/10144
+	* lib/ld-lib.exp (run_ld_link_tests): Handle sources from other
+	directories.
+	(run_ld_link_exec_tests): Likewise.
+	(run_cc_link_tests): Likewise.
+	* ld-elf/comm-data1.sd: New test.
+	* ld-elf/comm-data1.s: Source for the new test.
+	* ld-elf/comm-data2.sd: New test.
+	* ld-elf/comm-data2.rd: Likewise.
+	* ld-elf/comm-data2.xd: Likewise.
+	* ld-elf/comm-data2.s: Source for the new tests.
+	* ld-elf/comm-data.exp: New file.
+	* ld-mips-elf/comm-data.exp: Likewise.
+@
+text
+@d3 1
+a3 1
+#   Copyright 2011  Free Software Foundation, Inc.
+d32 1
+a32 1
+# Exclude non-Linux targets; feel free to include your favorite one
+d34 2
+a35 1
+if ![istarget *-*-linux*] {
+@
+

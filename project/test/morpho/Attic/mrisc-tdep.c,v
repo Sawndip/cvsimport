@@ -1,0 +1,1354 @@
+head	1.2;
+access;
+symbols
+	start:1.1.1.1 morpho:1.1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.2
+date	2005.04.04.20.36.24;	author msnyder;	state dead;
+branches;
+next	1.1;
+
+1.1
+date	2004.02.27.00.23.00;	author msnyder;	state Exp;
+branches
+	1.1.1.1;
+next	;
+
+1.1.1.1
+date	2004.02.27.00.23.00;	author msnyder;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@Oops, these were never meant to be here...
+@
+text
+@/* Target-dependent code for the Morpho Technologies Mrisc processor.
+
+   Copyright 2001 Free Software Foundation, Inc.
+
+   Copyright 2002 Red Hat.
+
+   This file is part of GDB.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 2 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 59 Temple Place - Suite 330,
+   Boston, MA 02111-1307, USA.  */
+
+#include "defs.h"
+#include "inferior.h"
+#include "symfile.h"
+#include "arch-utils.h"
+#include "regcache.h"
+#include "gdbcore.h"	/* for read_memory_unsigned_integer */
+
+
+struct gdbarch_tdep {
+};
+
+struct frame_extra_info {
+  int framesize;
+  int frameless_p;
+};
+
+enum arch_constants {
+  E_MAX_STRUCT_SIZE = 16
+};
+
+enum gdb_regnum {
+  E_R0_REGNUM,			/* 32 bit regs */
+  E_R1_REGNUM,
+  E_1ST_ARGREG = E_R1_REGNUM, 
+  E_R2_REGNUM,
+  E_R3_REGNUM,
+  E_R4_REGNUM,
+  E_LAST_ARGREG = E_R4_REGNUM,
+  E_R5_REGNUM,
+  E_R6_REGNUM,
+  E_R7_REGNUM,
+  E_R8_REGNUM,
+  E_R9_REGNUM,
+  E_R10_REGNUM,
+  E_R11_REGNUM,
+  E_R12_REGNUM,
+  E_FP_REGNUM = E_R12_REGNUM, 
+  E_R13_REGNUM,
+  E_SP_REGNUM = E_R13_REGNUM,
+  E_R14_REGNUM,
+  E_RA_REGNUM = E_R14_REGNUM,
+  E_R15_REGNUM,
+  E_IRA_REGNUM = E_R15_REGNUM,
+  E_PC_REGNUM,
+
+  /*
+   * Interrupt Enable pseudo-register, exported by SID.
+   */
+
+  E_INT_ENABLE_REGNUM, 
+  
+  /*
+   * End of CPU regs.
+   */
+
+  E_NUM_CPU_REGS, 
+
+  /*
+   * Co-processor registers
+   */
+
+  E_COPRO_REGNUM = E_NUM_CPU_REGS, 	/* 16 bit regs */
+  E_CPR0_REGNUM,
+  E_CPR1_REGNUM, 
+  E_CPR2_REGNUM, 
+  E_CPR3_REGNUM, 
+  E_CPR4_REGNUM, 
+  E_CPR5_REGNUM, 
+  E_CPR6_REGNUM, 
+  E_CPR7_REGNUM, 
+  E_CPR8_REGNUM, 
+  E_CPR9_REGNUM, 
+  E_CPR10_REGNUM, 
+  E_CPR11_REGNUM, 
+  E_CPR12_REGNUM, 
+  E_CPR13_REGNUM, 
+  E_CPR14_REGNUM, 
+  E_CPR15_REGNUM, 
+  E_BYPA_REGNUM,	/* 32 bit regs */
+  E_BYPB_REGNUM,
+  E_BYPC_REGNUM,
+  E_FLAG_REGNUM,
+  E_CONTEXT_REGNUM,	/* 38 bits (treat as array of six bytes) */
+  E_MAC_REGNUM,		/* 32 bits */
+  E_Z1_REGNUM, 		/* 16 bits */
+  E_Z2_REGNUM, 		/* 16 bits */
+  E_CHANNEL_REGNUM,	/* 32 bits */
+  E_ISCRAMB_REGNUM, 	/* 32 bits */
+  E_QSCRAMB_REGNUM, 	/* 32 bits */
+  E_OUT_REGNUM, 	/* 16 bits */
+
+  E_LAST_REG = E_OUT_REGNUM,
+
+  E_NUM_REGS, 		/* number of real registers */
+
+  E_COPRO_PSEUDOREG_REGNUM = E_NUM_REGS, 
+
+  E_NUM_PSEUDO_REGS = 1	/* one pseudo-reg ('coprocessor') */
+};
+
+/*
+ * gdbarch callback functions
+ */
+
+
+/* Function: registers_info
+   Implements the "info registers" command. 
+   Use the "all" argument to print the coprocessor registers. */
+
+static void
+mrisc_registers_info (int regnum, int all)
+{
+  if (regnum == -1)
+    {
+      if (all)
+	for (regnum = 0; regnum < E_NUM_REGS; regnum++)
+	  mrisc_registers_info (regnum, all);
+      else
+	for (regnum = 0; regnum < E_NUM_CPU_REGS; regnum++)
+	  mrisc_registers_info (regnum, all);
+    }
+  else
+    {
+      if (regnum == E_CONTEXT_REGNUM)
+	{
+	  /* Special output handling for 38-bit context register. */
+	  unsigned char *buff;
+	  unsigned int  *bytes, i, regsize;
+
+	  regsize = DEPRECATED_REGISTER_VIRTUAL_SIZE (E_CONTEXT_REGNUM);
+
+	  buff = alloca (regsize);
+	  bytes = alloca (regsize * sizeof (*bytes));
+
+	  deprecated_read_register_gen (E_CONTEXT_REGNUM, buff);
+
+	  printf_filtered ("%s\t       0x", REGISTER_NAME (E_CONTEXT_REGNUM));
+	  for (i = 0; i < regsize; i++)
+	    printf_filtered ("%02x", (unsigned int)
+			     extract_unsigned_integer (buff + i, 1));
+	  printf_filtered ("\t%lld\n", 
+			   extract_unsigned_integer (buff, regsize));
+	}
+      else if (regnum == E_COPRO_REGNUM)
+	{
+	  /* Special output handling for the 'coprocessor' register. */
+	  char *buf;
+	  unsigned short copro[2];
+
+	  buf = alloca DEPRECATED_REGISTER_VIRTUAL_SIZE (E_COPRO_REGNUM);
+	  deprecated_read_register_gen (E_COPRO_REGNUM, buf);
+	  copro[0] = extract_unsigned_integer (buf, 2);
+	  copro[1] = extract_unsigned_integer (buf+2, 2);
+	  printf_filtered ("coprocessor    {%d, %d}:\n", 
+			   copro[0], copro[1]);
+	}
+      else
+	DEPRECATED_DO_REGISTERS_INFO (regnum, all);
+    }
+}
+
+/* Function: reg_virtual_type 
+   Returns the default type for register N. */
+
+static struct type *
+mrisc_reg_virtual_type (int regnum)
+{
+  static struct type *void_func_ptr = NULL;
+  static struct type *void_ptr = NULL;
+  static struct type *copro_type;
+
+  if (regnum >= 0 && regnum < E_NUM_REGS + E_NUM_PSEUDO_REGS)
+    {
+      if (void_func_ptr == NULL)
+	{
+	  struct type *temp;
+
+	  /* Borrowed from Calmrisc16.  */
+	  void_ptr = lookup_pointer_type (builtin_type_void);
+	  void_func_ptr = 
+	    lookup_pointer_type (lookup_function_type (builtin_type_void));
+	  temp = create_range_type (NULL, 
+				    builtin_type_unsigned_int, 0, 1);
+	  copro_type = create_array_type (NULL, 
+					  builtin_type_int16, 
+					  temp);
+	}
+      switch (regnum) {
+      case E_PC_REGNUM:
+      case E_RA_REGNUM:
+      case E_IRA_REGNUM:
+	return void_func_ptr;
+      case E_SP_REGNUM:
+      case E_FP_REGNUM:
+	return void_ptr;
+      case E_INT_ENABLE_REGNUM:
+      case E_MAC_REGNUM:
+      case E_CHANNEL_REGNUM:
+      case E_ISCRAMB_REGNUM:
+      case E_QSCRAMB_REGNUM:
+	return builtin_type_int32;
+      case E_BYPA_REGNUM:
+      case E_BYPB_REGNUM:
+      case E_BYPC_REGNUM:
+      case E_Z1_REGNUM:
+      case E_Z2_REGNUM:
+      case E_OUT_REGNUM:
+	return builtin_type_int16;
+      case E_CONTEXT_REGNUM:
+	return builtin_type_long_long;
+      case E_COPRO_REGNUM:
+      case E_COPRO_PSEUDOREG_REGNUM:
+	return copro_type;
+      case E_FLAG_REGNUM:
+	return builtin_type_unsigned_char;
+      default:
+	if (regnum >= E_R0_REGNUM && regnum <= E_R15_REGNUM)
+	  return builtin_type_int32;
+	else if (regnum >= E_CPR0_REGNUM && regnum <= E_CPR15_REGNUM)
+	  return builtin_type_int16;
+      }
+    }
+  internal_error (__FILE__, __LINE__, 
+		  "mrisc_reg_virtual_type: illegal register number %d",
+		  regnum);
+}
+
+/* Function: register_size
+   Implemented by using mrisc_register_virtual_size.
+   This keeps the knowledge all in one place.  */
+
+static int 
+mrisc_register_size (int regnum)
+{
+  /* Use virtual type to determine size.  */
+  return TYPE_LENGTH (mrisc_reg_virtual_type (regnum));
+}
+
+/* Function: register_byte 
+   Returns the byte position in the register cache for register N.
+   Implemented by using mrisc_register_size.
+   This keeps the knowledge about register size all in one place.  */
+
+static int
+mrisc_register_byte (int regnum)
+{
+  int i, offset = 0;
+
+  if (regnum < 0 || regnum >= E_NUM_REGS + E_NUM_PSEUDO_REGS)
+    internal_error (__FILE__, __LINE__, 
+		    "mrisc_register_byte: illegal register number %d",
+		    regnum);
+
+  if (regnum == E_COPRO_PSEUDOREG_REGNUM)
+    {
+      offset = mrisc_register_byte (E_COPRO_REGNUM);
+    }
+  else
+    {
+      /* Just use mrisc_register_size. */
+      for (i = 0; i < regnum; i++)
+	offset += mrisc_register_size (i);
+    }
+  return offset;
+}
+
+/* Function: mrisc_register_bytes 
+   Return the total number of bytes needed to store all mrisc registers. */
+
+static int
+mrisc_register_bytes (void)
+{
+  static int register_bytes = 0;
+
+  if (register_bytes == 0)
+    register_bytes = 
+      mrisc_register_byte (E_LAST_REG) + 
+      mrisc_register_size (E_LAST_REG);
+
+  /* Note: no space is required to store E_COPRO_PSEUDOREG_REGNUM, 
+     because it is an alias for E_COPRO_REGNUM.  */
+  return register_bytes;
+}
+
+/* Function: register_name
+   Returns the name of the standard mrisc register N. */
+
+static const char *
+mrisc_register_name (int regnum)
+{
+  static char *register_names[] = {
+    /* CPU regs */
+    "r0",  "r1",  "r2",  "r3",  "r4",  "r5",  "r6",  "r7",
+    "r8",  "r9",  "r10", "r11", "r12", "r13", "r14", "r15",
+    "pc", "IE", 
+    /* Co-processor regs */
+    "forbidden", /* space reserved for private use */
+    "cr0", "cr1", "cr2",  "cr3",  "cr4",  "cr5",  "cr6",  "cr7", 
+    "cr8", "cr9", "cr10", "cr11", "cr12", "cr13", "cr14", "cr15", 
+    "bypa", "bypb", "bypc",  "flag", "context", "MAC", "z1", "z2", 
+    "channel", "Iscramb", "Qscramb", "out",
+    "coprocessor"	/* coprocessor pseudo-register */
+  };
+
+  if (regnum >= 0 &&
+      regnum < sizeof (register_names) / sizeof (register_names[0]))
+    {
+      return register_names[regnum];
+    }
+  else
+    internal_error (__FILE__, __LINE__,
+		    "mrisc_register_name: illegal register number %d",
+		    regnum);
+}
+
+/* Function: push_arguments
+   Setup the function arguments for calling a function in the inferior.
+
+   For mrisc, the first four general purpose registers
+   (R0, R1, R2 and R3) are reserved for argument passing. */
+
+static CORE_ADDR
+mrisc_push_arguments (int nargs, struct value **args, CORE_ADDR sp,
+			   int struct_return, CORE_ADDR struct_addr)
+{
+  int wordsize = DEPRECATED_REGISTER_SIZE;
+  char buf[E_MAX_STRUCT_SIZE];
+  int argreg = E_1ST_ARGREG;
+  int split_param_len = 0;
+  int stack_dest = sp;
+  int slacklen;
+  int typelen;
+  char *val;
+  int i, j;
+  
+  /* First handle however many args we can fit into
+     E_1ST_ARGREG thru E_LAST_ARGREG. */
+  for (i = 0; i < nargs && argreg <= E_LAST_ARGREG; i++)
+    {
+      typelen = TYPE_LENGTH (VALUE_TYPE (args[i]));
+      switch (typelen) {
+      case 1:
+      case 2:
+      case 3:
+      case 4:
+	write_register (argreg++, 
+			extract_unsigned_integer (VALUE_CONTENTS (args[i]), 
+						  wordsize));
+	break;
+      case 8:
+      case 12:
+      case 16:
+	val = VALUE_CONTENTS (args[i]);
+	while (typelen > 0)
+	  {
+	    if (argreg <= E_LAST_ARGREG)
+	      { /* This word of the argument is passed in a register. */
+		write_register (argreg++, 
+				extract_unsigned_integer (val, wordsize));
+		typelen -= wordsize;
+		val += wordsize;
+	      }
+	    else
+	      { /* Remainder of this arg must be passed on the stack 
+		   (deferred to do later).  */
+		split_param_len = typelen;
+		memcpy (buf, val, typelen);
+		break;	/* No more args can be handled in regs. */
+	      }
+	  }
+	break;
+      default:
+	error ("UNIMP: push_arguments can't yet handle %d byte reg arg.",
+	       typelen);
+	break;
+      }
+    }
+
+  /* Next, the rest of the arguments go onto the stack, in reverse order. */
+  for (j = nargs - 1; j >= i; j--)
+    {
+      /* Right-justify the value in an aligned-length buffer.  */
+      typelen  = TYPE_LENGTH (VALUE_TYPE (args[j]));
+      slacklen = (wordsize - (typelen % wordsize)) % wordsize;
+      val = alloca (typelen + slacklen);
+      memcpy (val, VALUE_CONTENTS (args[j]), typelen);
+      memset (val + typelen, 0, slacklen);
+      /* Now write this data to the stack.  */
+      stack_dest -= typelen + slacklen;
+      write_memory (stack_dest, val, typelen + slacklen);
+    }
+
+  /* Finally, if a param needs to be split between registers and stack, 
+     write the second half to the stack now.  */
+  if (split_param_len != 0)
+    {
+      stack_dest -= split_param_len;
+      write_memory (stack_dest, buf, split_param_len);
+    }
+
+  /* And that should do it.  Return the new stack pointer,
+     less 16 bytes that are set aside for the first 4 argregs
+     to be saved by the callee.  */
+  return stack_dest - 16;
+}
+
+/* Function: push_return_address (pc)
+   Write the default dummy return address into the RA register. */
+
+CORE_ADDR
+mrisc_push_return_address (CORE_ADDR pc, CORE_ADDR sp)
+{
+  write_register (E_RA_REGNUM, DEPRECATED_CALL_DUMMY_ADDRESS ());
+  return sp;
+}
+
+/* Function: frame_saved_register
+   Returns the value that regnum had in frame fi
+   (saved in fi or in one of its children).  
+*/
+
+static CORE_ADDR
+mrisc_frame_saved_register (struct frame_info *fi, int regnum)
+{
+  char buf[4];
+
+  deprecated_generic_get_saved_register (buf, NULL, NULL, fi, regnum, NULL);
+  return (CORE_ADDR) extract_unsigned_integer (buf, 4);
+}
+
+/* Function: find_last_line_symbol
+
+   Given an address range, first find a line symbol corresponding to
+   the starting address.  Then find the last line symbol within the 
+   range that has a line number less than or equal to the first line.
+
+   For optimized code with code motion, this finds the last address
+   for the lowest-numbered line within the address range.  */
+
+struct symtab_and_line
+find_last_line_symbol (CORE_ADDR start, CORE_ADDR end, int notcurrent)
+{
+  struct symtab_and_line sal = find_pc_line (start, notcurrent);
+  struct symtab_and_line best_sal = sal;
+
+  if (sal.pc == 0 || sal.line == 0 || sal.end == 0)
+    return sal;
+
+  do {
+    if (sal.line && sal.line <= best_sal.line)
+      best_sal = sal;
+    sal = find_pc_line (sal.end, notcurrent);
+  } while (sal.pc && sal.pc < end);
+
+  return best_sal;
+}
+
+/* Function: scan_prologue
+   Decode the instructions within the given address range.
+   Decide when we must have reached the end of the function prologue.
+   If a frame_info pointer is provided, fill in its prologue information.
+
+   Returns the address of the first instruction after the prologue.  */
+
+static CORE_ADDR
+mrisc_scan_prologue (CORE_ADDR start_addr, 
+		     CORE_ADDR end_addr, 
+		     struct frame_info *fi)
+{
+  CORE_ADDR next_addr;
+  unsigned long instr, upper_half, delayed_store = 0;
+  int regnum, offset;
+  CORE_ADDR sp, fp;
+  struct symtab_and_line sal;
+
+  if (fi)
+    {
+      /* Don't do anything in a call dummy frame. */
+      if (DEPRECATED_PC_IN_CALL_DUMMY (start_addr, get_frame_base (fi), get_frame_base (fi)))
+	return start_addr;
+
+      /* Grab the frame-relative values of SP and FP, needed below. 
+         The frame_saved_register function will find them on the
+	 stack or in the registers as appropriate. */
+      sp = mrisc_frame_saved_register (fi, E_SP_REGNUM);
+      fp = mrisc_frame_saved_register (fi, E_FP_REGNUM);
+
+      /* Set all saved_regs locations to -1, because zero
+	 is a  legitimate offset.  */
+      for (regnum = 0; regnum < E_NUM_REGS; regnum++)
+	deprecated_get_frame_saved_regs (fi)[regnum] = (CORE_ADDR) -1;
+    }
+
+  if (fi)
+    {
+      sal = find_last_line_symbol (start_addr, end_addr, 0);
+    }
+
+  for (next_addr = start_addr; next_addr < end_addr; next_addr += 4)
+    {
+      instr = read_memory_unsigned_integer (next_addr, 4);
+      /*instr = mrisc1_scan_instr (next_addr, fi);*/
+
+      if (delayed_store)		/* previous instr was a push */
+	if (fi)
+	  {
+	    upper_half = delayed_store >> 16;
+	    regnum = upper_half & 0xf;
+	    offset = delayed_store & 0xffff;
+	    switch (upper_half & 0xfff0) {
+	    case 0x43c0:	/* push using frame pointer */
+	      deprecated_get_frame_saved_regs (fi)[regnum] = offset;
+	      break;
+	    case 0x43d0:	/* push using stack pointer */
+	      deprecated_get_frame_saved_regs (fi)[regnum] = offset;
+	      break;
+	    default:		/* lint */
+	    }
+	    delayed_store = 0;
+	  }
+
+      upper_half = instr >> 16;
+      if (instr == 0x12000000)		/* NO-OP */
+	{
+	  continue;
+	}
+      else if (upper_half == 0x05dd)	/* subi sp, sp, imm */
+	{
+	  if (fi)	  /* Record the frame size. */
+	    (get_frame_extra_info (fi))->framesize = instr & 0xffff;
+	  continue;
+	}
+      else if (instr == 0x12ddc000)	/* copy sp into fp */
+	{
+	  if (fi)	/* Record that the frame pointer is in use. */
+	    (get_frame_extra_info (fi))->frameless_p = 0;
+	  continue;
+	}
+      else if ((upper_half & 0xfff0) == 0x43c0 ||	/* frame push */
+	       (upper_half & 0xfff0) == 0x43d0)		/* stack push */
+	{
+	  /* Save this instruction, but don't record the 
+	     pushed register as 'saved' until we see the
+	     next instruction.  That's because of deferred stores
+	     on this target -- GDB won't be able to read the register
+	     from the stack until one instruction later.  */
+	  delayed_store = instr;
+	  continue;
+	}
+      else			/* Not a prologue instruction. */
+	{
+	  /* Is this the end of the prologue?
+	     This is the most difficult decision; when to stop scanning. 
+
+	     If we have no line symbol, then the best thing we can do
+	     is to stop scanning when we encounter an instruction that
+	     is not likely to be a part of the prologue. 
+
+	     But if we do have a line symbol, then we should 
+	     keep scanning until we reach it (or we reach end_addr).  */
+	  if (fi && sal.end && (sal.end > (next_addr + 4)))
+	    continue;	/* Keep scanning, recording saved_regs etc. */
+	  else
+	    break;	/* Quit scanning: breakpoint can be set here. */
+	}
+    }
+  
+  if (fi)
+    {
+      /* Special handling for the "saved" address of the SP:
+	 The SP is of course never saved on the stack at all, so
+	 by convention what we put here is simply the previous 
+	 _value_ of the SP (as opposed to an address where the
+	 previous value would have been pushed).  */
+
+      if (get_frame_extra_info (fi)->frameless_p)
+	{
+	  deprecated_get_frame_saved_regs (fi)[E_SP_REGNUM] = sp + get_frame_extra_info (fi)->framesize;
+	  /* Not using frame pointer, so "frame" should be stack pointer.  */
+	  get_frame_base (fi) = sp;
+	}
+      else
+	{
+	  deprecated_get_frame_saved_regs (fi)[E_SP_REGNUM] = fp + get_frame_extra_info (fi)->framesize;
+	  /* Fix up frame using $fp.  */
+	  get_frame_base (fi) = fp;
+	}
+      /* Now convert frame offsets to actual addresses. */
+      for (regnum = 0; regnum < E_NUM_REGS; regnum++)
+	if (deprecated_get_frame_saved_regs (fi)[regnum] == (CORE_ADDR) -1)
+	  deprecated_get_frame_saved_regs (fi)[regnum] = 0;	/* Register not saved. */
+	else if (regnum != E_SP_REGNUM)
+	  deprecated_get_frame_saved_regs (fi)[regnum] += get_frame_base (fi);
+    }
+
+  return next_addr;
+}
+
+/* Function: skip_prologue
+   If the input address is in a function prologue, 
+   return the address of the end of the prologue;
+   else return the input address.
+
+   Note: the input address is likely to be the function start, 
+   since this function is mainly used for advancing a breakpoint
+   to the first line, or stepping to the first line when we have
+   stepped into a function call.  */
+
+static CORE_ADDR
+mrisc_skip_prologue (CORE_ADDR pc)
+{
+  CORE_ADDR func_addr = 0, func_end = 0;
+
+  if (find_pc_partial_function (pc, NULL, &func_addr, &func_end))
+    {
+      struct symtab_and_line sal;
+      /* Found a function.  */
+      sal = find_pc_line (func_addr, 0);
+
+      if (sal.end && sal.end < func_end)
+	{
+	  /* Found a line number, use it as end of prologue.  */
+	  return sal.end;
+	}
+      else
+	{
+	  /* No useable line symbol.  Use prologue parsing method. */
+	  return mrisc_scan_prologue (func_addr, func_end, NULL);
+	}
+    }
+  /* No function symbol -- just return the PC. */
+  return (CORE_ADDR) pc;
+}
+
+/* Function: frame_init_saved_regs
+   Set up saved_regs array, call mrisc_scan_prologue to fill in addresses
+   of those registers that have been saved on the stack for this frame. */
+
+static void
+mrisc_frame_init_saved_regs (struct frame_info *fi)
+{
+  CORE_ADDR func_addr, func_end;
+
+  if (deprecated_get_frame_saved_regs (fi) == NULL)
+    {
+      frame_saved_regs_zalloc (fi);
+
+      /* Find the beginning of this function, so we can analyze its
+	 prologue. */
+      if (find_pc_partial_function (get_frame_pc (fi), NULL, &func_addr, &func_end))
+	mrisc_scan_prologue (func_addr, get_frame_pc (fi), fi);
+      /* Else we're out of luck (can't debug completely stripped code). 
+         FIXME. */
+    }
+}
+
+/* Function: frame_saved_pc
+   Returns the return address for the selected frame. */
+
+static CORE_ADDR
+mrisc_frame_saved_pc (struct frame_info *fi)
+{
+  CORE_ADDR saved_pc;
+
+  if (DEPRECATED_PC_IN_CALL_DUMMY (get_frame_pc (fi), get_frame_base (fi), get_frame_base (fi)))
+    {
+      saved_pc = deprecated_read_register_dummy (get_frame_pc (fi), 
+						 get_frame_base (fi), 
+						 PC_REGNUM);
+    }
+  else
+    {
+      if (deprecated_get_frame_saved_regs (fi)[E_RA_REGNUM])
+	saved_pc = 
+	  read_memory_unsigned_integer (deprecated_get_frame_saved_regs (fi)[E_RA_REGNUM], 4);
+      else
+	saved_pc = mrisc_frame_saved_register (fi, E_RA_REGNUM);
+    }
+
+  return saved_pc;
+}
+
+/* Function: init_extra_frame_info
+   Call this for each newly created frame. */
+
+static void
+mrisc_init_extra_frame_info (int fromleaf, struct frame_info *fi)
+{
+  if (get_frame_extra_info (fi) == NULL)
+    {
+      get_frame_extra_info (fi) = (struct frame_extra_info *)
+	frame_obstack_alloc (sizeof (struct frame_extra_info));
+      get_frame_extra_info (fi)->framesize = 0;
+      get_frame_extra_info (fi)->frameless_p = 1;	/* Default frameless, detect framed */
+
+      /* By default, the get_frame_base (fi) is set to the value of the FP reg by gdb.
+	 This may not always be right; we may be in a frameless function,
+	 or we may be in the prologue, before the FP has been set up.
+	 Unfortunately, we can't make this determination without first
+	 calling scan_prologue, and we can't do that unles we know the
+	 get_frame_pc (fi).  */
+
+      if (get_frame_pc (fi) == 0)
+	{
+	  /* Sometimes we are called from get_prev_frame without
+	     the PC being set up first.  Long history, don't ask.
+	     Fortunately this will never happen from the outermost
+	     frame, so we should be able to get the saved pc from
+	     the next frame. */
+	  if (get_next_frame (fi))
+	    get_frame_pc (fi) = mrisc_frame_saved_pc (get_next_frame (fi));
+	}
+
+      /* Take care of the saved_regs right here (non-lazy). */
+      mrisc_frame_init_saved_regs (fi);
+    }
+}
+
+/* Function: frame_chain
+   Return pointer to stack frame of caller. */
+
+static CORE_ADDR
+mrisc_frame_chain (struct frame_info *fi)
+{
+  if (DEPRECATED_PC_IN_CALL_DUMMY (get_frame_pc (fi), get_frame_base (fi), get_frame_base (fi)))
+    {
+      /* Call dummy's frame is the same as caller's.  */
+      return get_frame_base (fi);
+    }
+  else
+    {
+      /* Return computed offset from this frame's fp.  */
+      return get_frame_base (fi) + get_frame_extra_info (fi)->framesize;
+    }
+}
+
+/* Function: saved_pc_after_call
+   Returns the previous PC immediately after a function call.
+   This function is meant to bypass the regular get_saved_register
+   mechanism, ie. it is meant to work even if the frame isn't complete. */
+
+static CORE_ADDR
+mrisc_saved_pc_after_call (struct frame_info *ignore)
+{
+  return (CORE_ADDR) read_register (E_RA_REGNUM);
+}
+
+/* Function: get_saved_register
+   Find a register's saved value on the call stack. 
+   Several registers have to have special handling:
+     PC: Never pushed directly on the stack -- get thru RA (link reg).
+*/
+
+static void
+mrisc_get_saved_register (char *raw_buffer, 
+			  int *optimized, 
+			  CORE_ADDR *addrp,
+			  struct frame_info *fi, 
+			  int regnum,
+			  enum lval_type *lval)
+{
+  /* Special handling for PC register, which has an extra 
+     element to its "stack": PC is "pushed" first to the link register,
+     and after that to the stack. */
+
+  if (regnum == E_PC_REGNUM &&
+      fi && get_next_frame (fi))	/* ie. this is not the TOS frame... */
+    regnum = E_RA_REGNUM;
+
+
+  /* Default: use generic method. */
+  /* FIXME: pc and ra probably need special handling! 
+     Maybe sp and fp as well... */
+  deprecated_generic_get_saved_register (raw_buffer, optimized, addrp, 
+					 fi, regnum, lval);
+}
+
+/* Function: pop_frame
+   Destroy the innermost (TOS) stack frame, restoring
+   the machine state that was in effect before the frame was created.
+
+ */
+
+static void
+mrisc_pop_frame (void)
+{
+  struct frame_info *fi = get_current_frame ();
+  int i;
+
+  if (fi == NULL)
+    return;					/* paranoia */
+
+  if (DEPRECATED_PC_IN_CALL_DUMMY (get_frame_pc (fi), get_frame_base (fi), get_frame_base (fi)))
+    {
+      generic_pop_dummy_frame ();
+    }
+  else
+    {
+      /* Restore the saved regs. */
+      for (i = 0; i < E_NUM_REGS; i++)
+	if (deprecated_get_frame_saved_regs (fi)[i])
+	  {
+	    if (i == E_SP_REGNUM)
+	      write_register (i, deprecated_get_frame_saved_regs (fi)[i]);
+	    else
+	      write_register (i, read_memory_integer (deprecated_get_frame_saved_regs (fi)[i], 4));
+	  }
+      /* Restore the PC from the RA (Return Address) register. */
+      write_register (E_PC_REGNUM, read_register (E_RA_REGNUM));
+      flush_cached_frames ();
+    }
+  return;
+}
+
+/* Function: store_return_value
+   Copy the function return value from VALBUF into the 
+   proper location for a function return. */
+
+static void
+mrisc_store_return_value (struct type *type, char *valbuf)
+{
+  /* R11 is the default return value location. 
+     For data types of up to 4 bytes, copy the value into R11.
+     For larger data types, copy the value into memory pointed to
+     by R11. */
+
+  CORE_ADDR return_buffer;
+  char buf[4];
+
+  if (TYPE_LENGTH (type) < 4)
+    {
+      /* Add leading zeros to the value. */
+      memset (buf, 0, 4);
+      memcpy (buf + 4 - TYPE_LENGTH (type),
+	      valbuf, TYPE_LENGTH (type));
+      deprecated_write_register_gen (E_R11_REGNUM, buf);
+    }
+  else if (TYPE_LENGTH (type) == 4)
+    deprecated_write_register_bytes (mrisc_register_byte (E_R11_REGNUM), 
+				     valbuf, TYPE_LENGTH (type));
+  else
+    {
+      /* FIXME implement: types greater than 4 bytes will be 
+	 returned by reference (thru a pointer). */
+      return_buffer = read_register (E_R11_REGNUM);
+      write_memory (return_buffer, valbuf, TYPE_LENGTH (type));
+    }
+}
+
+/* Function: extract_return_value
+   Copy the function's return value into VALBUF. */
+
+static void
+mrisc_extract_return_value (struct type *type, char *regbuf, char *valbuf)
+{
+  /* FIXME flesh out (this is good for 32-bit types...) */
+  int offset = 0;
+  CORE_ADDR return_buffer;
+
+  if ((TYPE_LENGTH (type) % 4) != 0)
+    {
+      /* Remove leading zeros from the value. */
+      offset = 4 - (TYPE_LENGTH (type) % 4);
+    }
+
+  if (TYPE_LENGTH (type) <= 4)
+    {
+      /* Return values of <= 4 bytes are returned in R11. */
+      memcpy (valbuf, 
+	      &regbuf[mrisc_register_byte (E_R11_REGNUM)] + offset,
+	      TYPE_LENGTH (type));
+    }
+  else
+    {
+      /* Return values > 4 bytes are returned in memory, 
+	 pointed to by R11. */
+
+      return_buffer = 
+	extract_unsigned_integer (regbuf + mrisc_register_byte (E_R11_REGNUM), 4);
+
+      read_memory (return_buffer, valbuf, TYPE_LENGTH (type));
+    }
+}
+
+/* Function: store_struct_return
+   Copy the struct return value to its destined location. */
+
+static void
+mrisc_store_struct_return (CORE_ADDR addr, CORE_ADDR sp)
+{
+  write_register (E_R11_REGNUM, addr);
+}
+
+/* Function: extract_struct_value_address
+   Return the address in which a function should return a struct value. */
+
+static CORE_ADDR
+mrisc_extract_struct_value_address (regbuf)
+     char *regbuf;
+{
+  /* Get the value of R11 from the regbuf passed in. */
+  return extract_unsigned_integer (regbuf + DEPRECATED_REGISTER_BYTE (E_R11_REGNUM), 
+			  DEPRECATED_REGISTER_RAW_SIZE (E_R11_REGNUM));
+}
+
+/* Function: return_value_on_stack
+   Return true for things that should be returned using the
+   "struct convention" (other than structs).  */
+
+static int
+mrisc_return_value_on_stack (struct type *type)
+{
+  if (TYPE_CODE (type) == TYPE_CODE_FLT &&
+      TYPE_LENGTH (type) > 4)
+    return 1;
+  else
+    return 0;
+}
+
+/* Function: use_struct_convention 
+   Returns non-zero if the given struct type will be returned using
+   a special convention, rather than the normal function return method. */
+
+static int
+mrisc_use_struct_convention (int gcc_p, struct type *value_type)
+{
+  enum type_code code = TYPE_CODE (value_type);
+
+  switch (code) {
+  case TYPE_CODE_FLT:
+  case TYPE_CODE_STRUCT:
+  case TYPE_CODE_UNION:
+  case TYPE_CODE_ARRAY:	/* FIXME is this right? */
+    return (TYPE_LENGTH (value_type) > 4);
+  default:
+    return 0;
+  }
+}
+
+/* Function: reg_struct_has_addr
+   Returns non-zero if struct will be passed by address instead of value. */
+
+static int
+mrisc_reg_struct_has_addr (int gcc_p, struct type *type)
+{
+  if (TYPE_LENGTH (type) > E_MAX_STRUCT_SIZE)
+    {
+      switch (TYPE_CODE (type)) {
+      case TYPE_CODE_STRUCT:
+      case TYPE_CODE_UNION:
+	return 1;
+      default:
+      }
+    }
+  return 0;
+}
+
+/* Function: read_pc
+   Convert insn pointer to address before returning it. */
+
+static CORE_ADDR
+mrisc_read_pc (ptid_t ptid)
+{
+  return read_register_pid (E_PC_REGNUM, ptid);
+}
+
+/* Function: write_pc
+   Convert address to insn pointer before writing it. */
+
+static void
+mrisc_write_pc (CORE_ADDR new_pc, ptid_t ptid)
+{
+  write_register_pid (E_PC_REGNUM, new_pc, ptid);
+}
+
+/* Function: fetch_pseudoreg
+
+   There is only one pseudo-register, the 'coprocessor'
+   pseudo-register (which mirrors the "real" coprocessor register sent
+   by the target).  */
+
+static void
+mrisc_pseudo_register_read (struct gdbarch *gdbarch,
+			    struct regcache *regcache,
+			    int regno, void *buf)
+{
+#error "This function is broken"
+  /* There is only one pseudo-register ('coprocessor'). */
+  if (!register_cached (E_COPRO_REGNUM))
+    {
+      target_fetch_registers (E_COPRO_REGNUM);
+    }
+  set_register_cached (E_COPRO_PSEUDOREG_REGNUM, 1);
+}
+
+/* Function: store_pseudoreg
+
+   Mrisc pseudo-registers are stored directly to the target.  The
+   'coprocessor' register is special, because when it is modified, all
+   the other coprocessor regs must be flushed from the reg cache.  */
+
+static void
+mrisc_pseudo_register_write (struct gdbarch *gdbarch,
+			     struct regcache *regcache,
+			     int regno, const void *buf)
+{
+#error "This function is broken"
+  /* There is only one pseudo-register ('coprocessor'). */
+  int i;
+
+  for (i = E_NUM_CPU_REGS; i <= E_LAST_REG; i++)
+    set_register_cached (i, 0);
+
+  /*  target_store_registers (E_COPRO_REGNUM);*/
+}
+
+/* Function: register_convertible
+   Return true if register requires conversion between
+   raw and virtual format.  */
+
+static int
+mrisc_register_convertible (int regnum)
+{
+  return (regnum == E_CONTEXT_REGNUM);
+}
+
+/* Function: register_convert_to_raw
+   Convert register from virtual representation to raw representation.  */
+
+static void
+mrisc_convert_to_raw (struct type *type, int regnum, 
+		      const char *from, char *to)
+{
+  /* Truncate the virtual object to 38 bits before storing. */
+  long long val;
+
+  val = extract_unsigned_integer (from, 
+				  DEPRECATED_REGISTER_VIRTUAL_SIZE (regnum));
+  if ((val >> 38) != 0)
+    {
+      warning ("Value too large for context register: truncated to 38 bits");
+      val &= 0x3fffffffffLL;
+    }
+  store_unsigned_integer (to, DEPRECATED_REGISTER_VIRTUAL_SIZE (regnum), val);
+}
+
+/* Function: register_convert_to_virtual
+   Convert register from raw representation to virtual representation.  */
+
+static void
+mrisc_convert_to_virtual (int regnum, struct type *type, 
+				   char *from, char *to)
+{
+  /* Trust the target -- perform no conversion. */
+  memcpy (to, from, DEPRECATED_REGISTER_RAW_SIZE (regnum));
+}
+
+/* Function: mrisc_breakpoint_from_pc
+
+   The breakpoint instruction must be the same size as the smallest
+   instruction in the instruction set.
+
+   The BP for mrisc1 is defined as 0x68000000.  */
+
+static const unsigned char *
+mrisc_breakpoint_from_pc (CORE_ADDR *bp_addr, int *bp_size)
+{
+  static char breakpoint[] = {0x68, 0, 0, 0};
+
+  *bp_size = 4;
+  return breakpoint;
+}
+
+
+
+/* Function: mrisc1_gdbarch_init
+   Initializer function for the Morpho mrisc1 gdbarch vector.
+   Called by gdbarch. */
+
+static struct gdbarch *
+mrisc1_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
+{
+  struct gdbarch_tdep *tdep;
+  struct gdbarch      *gdbarch;
+  static LONGEST call_dummy_words[1] = {0};
+
+  /* Find a candidate among the list of pre-declared architectures. */
+  arches = gdbarch_list_lookup_by_info (arches, &info);
+  if (arches != NULL)
+    return arches->gdbarch;
+
+  /* None found, create a new architecture from the information
+     provided. */
+  tdep = (struct gdbarch_tdep *) xmalloc (sizeof (struct gdbarch_tdep));
+  gdbarch = gdbarch_alloc (&info, tdep);
+
+  /* The usual suspects... */
+
+  /*
+   * Target builtin data types.
+   */
+  set_gdbarch_short_bit       (gdbarch, 2 * TARGET_CHAR_BIT);
+  set_gdbarch_int_bit         (gdbarch, 4 * TARGET_CHAR_BIT);
+  set_gdbarch_long_bit        (gdbarch, 4 * TARGET_CHAR_BIT);
+  set_gdbarch_long_long_bit   (gdbarch, 8 * TARGET_CHAR_BIT);
+  set_gdbarch_float_bit       (gdbarch, 4 * TARGET_CHAR_BIT);
+  set_gdbarch_double_bit      (gdbarch, 8 * TARGET_CHAR_BIT);
+  set_gdbarch_long_double_bit (gdbarch, 8 * TARGET_CHAR_BIT);
+  /* Harvard architecture -- ptr_bit and addr_bit are not the same. */
+  set_gdbarch_ptr_bit         (gdbarch, 4 * TARGET_CHAR_BIT);
+  set_gdbarch_addr_bit        (gdbarch, 4 * TARGET_CHAR_BIT);
+  /* set_gdbarch_addr_bit */
+  /* set_gdbarch_bfd_vma_bit */
+
+  /* set_gdbarch_ieee_float */
+
+  /*
+   * Target read/write pc, sp, fp. 
+   */
+  set_gdbarch_read_pc  (gdbarch, mrisc_read_pc);
+  set_gdbarch_write_pc (gdbarch, mrisc_write_pc);
+#if 0
+  set_gdbarch_deprecated_target_read_fp  (gdbarch, generic_target_read_fp);
+  set_gdbarch_deprecated_target_write_fp (gdbarch, generic_target_write_fp);
+  set_gdbarch_read_sp  (gdbarch, generic_target_read_sp);
+  set_gdbarch_write_sp (gdbarch, generic_target_write_sp);
+#endif
+
+  /*
+   * Target register set parameters.
+   */
+  set_gdbarch_num_regs        (gdbarch, E_NUM_REGS);
+  set_gdbarch_num_pseudo_regs (gdbarch, E_NUM_PSEUDO_REGS);
+  set_gdbarch_pseudo_register_read (gdbarch, mrisc_pseudo_register_read);
+  set_gdbarch_pseudo_register_write (gdbarch, mrisc_pseudo_register_write);
+  set_gdbarch_sp_regnum (gdbarch, E_SP_REGNUM);
+  set_gdbarch_deprecated_fp_regnum (gdbarch, E_FP_REGNUM);
+  set_gdbarch_pc_regnum (gdbarch, E_PC_REGNUM);
+  set_gdbarch_register_name         (gdbarch, mrisc_register_name);
+  set_gdbarch_deprecated_register_size         (gdbarch, 4);
+#if 0
+  set_gdbarch_register_bytes        (gdbarch, E_NUM_REGS * 4);
+#else
+  set_gdbarch_deprecated_register_bytes (gdbarch, mrisc_register_bytes ());
+#endif
+  set_gdbarch_deprecated_register_byte (gdbarch, mrisc_register_byte);
+  /*set_gdbarch_cannot_store_register (gdbarch, mrisc_cannot_store_register);*/
+  set_gdbarch_deprecated_register_raw_size     (gdbarch, mrisc_register_size);
+  set_gdbarch_deprecated_max_register_raw_size (gdbarch, 4);
+  set_gdbarch_deprecated_register_virtual_size (gdbarch, mrisc_register_size);
+  set_gdbarch_deprecated_max_register_virtual_size (gdbarch, 4);
+  set_gdbarch_deprecated_register_virtual_type (gdbarch, 
+						mrisc_reg_virtual_type);
+  set_gdbarch_deprecated_do_registers_info (gdbarch, mrisc_registers_info);
+  /* set_gdbarch_register_sim_regno */
+
+  /*
+   * Call Dummies
+   */
+  set_gdbarch_call_dummy_location (gdbarch, AT_ENTRY_POINT);
+  set_gdbarch_deprecated_call_dummy_address (gdbarch, entry_point_address);
+#if 0
+  set_gdbarch_deprecated_use_generic_dummy_frames (gdbarch, 1);
+  set_gdbarch_deprecated_call_dummy_start_offset (gdbarch, 0);
+  set_gdbarch_deprecated_call_dummy_breakpoint_offset (gdbarch, 0);
+  set_gdbarch_deprecated_call_dummy_breakpoint_offset_p (gdbarch, 1);
+  set_gdbarch_deprecated_call_dummy_length (gdbarch, 0);
+  set_gdbarch_deprecated_call_dummy_words (gdbarch, call_dummy_words);
+  set_gdbarch_deprecated_call_dummy_p (gdbarch, 1);
+#endif
+  set_gdbarch_deprecated_pc_in_call_dummy (gdbarch, generic_pc_in_call_dummy);
+  set_gdbarch_deprecated_sizeof_call_dummy_words (gdbarch, 0);
+#if 0
+  /* set_gdbarch_call_dummy_stack_adjust */
+  set_gdbarch_deprecated_call_dummy_stack_adjust_p (gdbarch, 0);
+  set_gdbarch_deprecated_fix_call_dummy (gdbarch, generic_fix_call_dummy);
+  /* set_gdbarch_believe_pcc_promotion, believe_pcc_promotion_type */
+
+  set_gdbarch_coerce_float_to_double (gdbarch, 
+				      standard_coerce_float_to_double);
+#endif
+  set_gdbarch_deprecated_get_saved_register (gdbarch, 
+					     mrisc_get_saved_register);
+  set_gdbarch_deprecated_register_convertible (gdbarch, 
+					       mrisc_register_convertible);
+  set_gdbarch_deprecated_register_convert_to_virtual (gdbarch, 
+						      mrisc_convert_to_virtual);
+  set_gdbarch_deprecated_register_convert_to_raw (gdbarch, 
+						  mrisc_convert_to_raw);
+
+  /*
+   * frames and prologues etc.
+   */
+  set_gdbarch_return_value_on_stack (gdbarch, mrisc_return_value_on_stack);
+  set_gdbarch_deprecated_extract_return_value (gdbarch, 
+					       mrisc_extract_return_value);
+  set_gdbarch_deprecated_push_arguments (gdbarch, mrisc_push_arguments);
+
+  set_gdbarch_deprecated_push_dummy_frame (gdbarch, generic_push_dummy_frame);
+  set_gdbarch_deprecated_push_return_address (gdbarch, 
+					      mrisc_push_return_address);
+  set_gdbarch_deprecated_pop_frame (gdbarch, mrisc_pop_frame);
+
+  set_gdbarch_deprecated_store_struct_return (gdbarch, 
+					      mrisc_store_struct_return);
+
+  set_gdbarch_deprecated_store_return_value (gdbarch, 
+					     mrisc_store_return_value);
+
+  set_gdbarch_extract_struct_value_address (gdbarch, 
+					    mrisc_extract_struct_value_address);
+
+  set_gdbarch_use_struct_convention (gdbarch, 
+				     mrisc_use_struct_convention);
+
+  set_gdbarch_deprecated_frame_init_saved_regs (gdbarch, 
+						mrisc_frame_init_saved_regs);
+  set_gdbarch_deprecated_init_extra_frame_info (gdbarch, 
+						mrisc_init_extra_frame_info);
+  set_gdbarch_skip_prologue (gdbarch, mrisc_skip_prologue);
+  /* set_gdbarch_prologue_frameless_p */
+  set_gdbarch_inner_than (gdbarch, core_addr_lessthan);
+
+  set_gdbarch_breakpoint_from_pc (gdbarch, mrisc_breakpoint_from_pc);
+  /* set_gdbarch_memory_insert_breakpoint */
+  /* set_gdbarch_memory_remove_breakpoint */
+  set_gdbarch_decr_pc_after_break (gdbarch, 0);
+  /* Offset from address of function to start of its code.  */
+  set_gdbarch_function_start_offset (gdbarch, 0);
+  /* set_gdbarch_remote_translate_xfer_address */
+/* Return number of bytes at start of arglist that are not really args.  */
+  /* set_gdbarch_frame_args_skip */
+  set_gdbarch_frame_args_skip (gdbarch, 0);
+
+  /* set_gdbarch_frameless_function_invocation */
+  set_gdbarch_deprecated_frame_chain (gdbarch, mrisc_frame_chain);
+#if 0
+  set_gdbarch_deprecated_frame_chain_valid (gdbarch, file_frame_chain_valid);
+#endif
+  set_gdbarch_deprecated_frame_saved_pc (gdbarch, mrisc_frame_saved_pc);
+#if 0
+  set_gdbarch_deprecated_frame_args_address (gdbarch, default_frame_address);
+  set_gdbarch_deprecated_frame_locals_address (gdbarch, default_frame_address);
+  set_gdbarch_frame_num_args (gdbarch, frame_num_args_unknown);
+#endif
+  set_gdbarch_deprecated_saved_pc_after_call (gdbarch, 
+					      mrisc_saved_pc_after_call);
+  /* set_gdbarch_stack_align */
+  /* set_gdbarch_extra_stack_alignment_needed */
+
+  set_gdbarch_deprecated_reg_struct_has_addr (gdbarch, 
+					      mrisc_reg_struct_has_addr);
+
+  /* set_gdbarch_save_dummy_frame_tos */
+  /* set_gdbarch_float_format */
+  /* set_gdbarch_double_format */
+  /* set_gdbarch_long_double_format */
+  /* set_gdbarch_convert_from_func_ptr_addr */
+  
+  set_gdbarch_deprecated_save_dummy_frame_tos (gdbarch, generic_save_dummy_frame_tos);
+#if 0
+  set_gdbarch_print_insn (gdbarch, print_insn_mrisc1);
+#endif
+  return gdbarch;
+}
+
+/* Function: _initialize_mrisc_tdep
+   Initializer function for the Morpho mrisc module.
+   Called by gdb at start-up. */
+
+void 
+_initialize_mrisc_tdep (void)
+{
+  extern int print_insn_mrisc1 (/* bfd_vma, disassemble_info * */);
+
+  /* For now there is only one architecture (mrisc1).  
+     Maybe more later. */
+
+  register_gdbarch_init (bfd_arch_mrisc1, mrisc1_gdbarch_init);
+}
+@
+
+
+1.1
+log
+@Initial revision
+@
+text
+@@
+
+
+1.1.1.1
+log
+@New morpho repository
+@
+text
+@@

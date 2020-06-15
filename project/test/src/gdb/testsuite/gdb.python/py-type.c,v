@@ -1,0 +1,339 @@
+head	1.9;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.9
+	gdb_7_6-2013-04-26-release:1.9
+	gdb_7_6-branch:1.9.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.9
+	gdb_7_5_1-2012-11-29-release:1.7
+	gdb_7_5-2012-08-17-release:1.7
+	gdb_7_5-branch:1.7.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.7
+	gdb_7_4_1-2012-04-26-release:1.6.2.1
+	gdb_7_4-2012-01-24-release:1.6.2.1
+	gdb_7_4-branch:1.6.0.2
+	gdb_7_4-2011-12-13-branchpoint:1.6
+	gdb_7_3_1-2011-09-04-release:1.4
+	gdb_7_3-2011-07-26-release:1.4
+	gdb_7_3-branch:1.4.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.4
+	gdb_7_2-2010-09-02-release:1.2
+	gdb_7_2-branch:1.2.0.4
+	gdb_7_2-2010-07-07-branchpoint:1.2
+	gdb_7_1-2010-03-18-release:1.2
+	gdb_7_1-branch:1.2.0.2
+	gdb_7_1-2010-02-18-branchpoint:1.2;
+locks; strict;
+comment	@ * @;
+
+
+1.9
+date	2013.01.25.17.16.43;	author aburgess;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2013.01.01.06.41.26;	author brobecke;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2012.01.04.08.27.49;	author brobecke;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2011.11.10.19.15.10;	author devans;	state Exp;
+branches
+	1.6.2.1;
+next	1.5;
+
+1.5
+date	2011.09.28.20.06.01;	author pkoning;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2011.01.01.15.33.49;	author brobecke;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2010.07.28.20.50.17;	author tromey;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2010.01.01.07.32.06;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2009.12.03.21.19.49;	author pmuldoon;	state Exp;
+branches;
+next	;
+
+1.6.2.1
+date	2012.01.06.04.54.27;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.9
+log
+@http://sourceware.org/ml/gdb-patches/2012-11/msg00312.html
+
+gdb/ChangeLog
+        * valarith.c (value_vector_widen): New function for replicating a
+        scalar into a vector.
+        (value_binop): Use value_vector_widen to widen scalar to vector
+        rather than casting, this better matches gcc C behaviour.
+        * valops.c (value_casst): Update logic for casting between vector
+        types, and for casting from scalar to vector, try to match gcc C
+        behaviour.
+        * value.h (value_vector_widen): Declare.
+        * opencl-lang.c (opencl_value_cast): New opencl specific casting
+        function, handle special case for casting scalar to vector.
+        (opencl_relop): Use opencl_value_cast.
+        (evaluate_subexp_opencl): Use opencl_value_cast instead of
+        value_cast, and handle BINOP_ASSIGN, UNOP_CAST, and UNOP_CAST_TYPE
+        in order to use opencl_value_cast.
+
+gdb/testsuite/ChangeLog
+        * gdb.base/gnu_vector.c: New variable for use in tests.
+        * gdb.base/gnu_vector.exp: Update and extend tests to reflect
+        changes in scalar to vector casting and widening.
+        * gdb.python/py-type.c: New variables for use in tests.
+        * gdb.python/py-type.exp: Update vector related tests to reflect
+        changes in scalar to vector casting and widening.
+@
+text
+@/* This testcase is part of GDB, the GNU debugger.
+
+   Copyright 2009-2013 Free Software Foundation, Inc.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+struct s
+{
+  int a;
+  int b;
+};
+
+typedef struct s TS;
+TS ts;
+
+#ifdef __cplusplus
+struct C
+{
+  int c;
+  int d;
+};
+
+struct D : C
+{
+  int e;
+  int f;
+};
+
+template<typename T, int I, int C::*MP>
+struct Temargs
+{
+};
+
+Temargs<D, 23, &C::c> temvar;
+
+#endif
+
+enum E
+{ v1, v2, v3
+};
+
+struct s vec_data_1 = {1, 1};
+struct s vec_data_2 = {1, 2};
+
+int
+main ()
+{
+  int ar[2] = {1,2};
+  struct s st;
+#ifdef __cplusplus
+  C c;
+  c.c = 1;
+  c.d = 2;
+  D d;
+  d.e = 3;
+  d.f = 4;
+#endif
+  enum E e;
+  
+  st.a = 3;
+  st.b = 5;
+
+  e = v2;
+  
+  return 0;      /* break to inspect struct and array.  */
+}
+@
+
+
+1.8
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@d53 3
+@
+
+
+1.7
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d3 1
+a3 1
+   Copyright 2009-2012 Free Software Foundation, Inc.
+@
+
+
+1.6
+log
+@	* python/py-type.c (typy_fields_items): Call check_typedef.
+
+	testsuite/
+	* gdb.python/py-type.c (TS): New typedef.
+	(ts): New global.
+	* gdb.python/py-type.exp: Test field list of typedef.
+@
+text
+@d3 1
+a3 1
+   Copyright 2009, 2010, 2011 Free Software Foundation, Inc.
+@
+
+
+1.6.2.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d3 1
+a3 1
+   Copyright 2009-2012 Free Software Foundation, Inc.
+@
+
+
+1.5
+log
+@* gdb.python/py-type.c (enum E): New.
+* gdb.python/py-type.exp (test_fields): Add tests for Python
+mapping access to fields.
+(test_enums): New test for field access on enums.
+@
+text
+@d24 3
+@
+
+
+1.4
+log
+@run copyright.sh for 2011.
+@
+text
+@d46 4
+d63 2
+a64 1
+
+d68 2
+@
+
+
+1.3
+log
+@gdb
+	PR python/11060:
+	* python/py-type.c (typy_legacy_template_argument): New function,
+	extracted from typy_template_argument.
+	(typy_template_argument): Use TYPE_TEMPLATE_ARGUMENT.  Return a
+	value when needed.
+gdb/testsuite
+	PR python/11060:
+	* gdb.python/py-type.c (Temargs): New template.
+	(temvar): New variable.
+	* gdb.python/py-type.exp (test_template): New proc.
+@
+text
+@d3 1
+a3 1
+   Copyright 2009, 2010 Free Software Foundation, Inc.
+@
+
+
+1.2
+log
+@Update copyright year in most headers.
+
+Automatic update by copyright.sh.
+@
+text
+@d36 8
+@
+
+
+1.1
+log
+@2009-12-03  Richard Ward  <richard.j.ward1@@googlemail.com>
+
+	* python/py-type.c (convert_field): New attribute "is_base_class".
+
+doc/
+
+2009-12-03  Richard Ward  <richard.j.ward1@@googlemail.com>
+
+	* gdb.texinfo (Types In Python): Describe "is_base_class".
+
+testsuite/
+
+2009-12-03  Phil Muldoon <pmuldoon@@redhat.com>
+
+	PR python/10805
+
+	* gdb.python/py-type.exp: New file.
+	* gdb.python/py-type.c: New file.
+	* Makefile.in: Add py-type.
+@
+text
+@d3 1
+a3 1
+   Copyright 2009 Free Software Foundation, Inc.
+@
+

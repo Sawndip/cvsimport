@@ -1,0 +1,2710 @@
+head	1.15;
+access;
+symbols
+	msnyder-fork-checkpoint-branch:1.10.0.2
+	msnyder-fork-checkpoint-branchpoint:1.10
+	msnyder-tracepoint-checkpoint-branch:1.8.0.2
+	msnyder-tracepoint-checkpoint-branchpoint:1.8
+	jimb-rda-nptl-branch:1.7.0.2
+	jimb-rda-nptl-branchpoint:1.7;
+locks; strict;
+comment	@ * @;
+
+
+1.15
+date	2009.11.23.20.13.32;	author kevinb;	state Exp;
+branches;
+next	1.14;
+
+1.14
+date	2006.10.03.22.49.05;	author kevinb;	state Exp;
+branches;
+next	1.13;
+
+1.13
+date	2005.12.07.18.16.48;	author kevinb;	state Exp;
+branches;
+next	1.12;
+
+1.12
+date	2005.12.07.17.51.48;	author kevinb;	state Exp;
+branches;
+next	1.11;
+
+1.11
+date	2005.12.02.20.52.04;	author kevinb;	state Exp;
+branches;
+next	1.10;
+
+1.10
+date	2005.08.24.01.14.35;	author kevinb;	state Exp;
+branches;
+next	1.9;
+
+1.9
+date	2005.06.30.03.24.18;	author jimb;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2005.03.10.23.50.47;	author jimb;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2004.10.19.21.16.45;	author jimb;	state Exp;
+branches
+	1.7.2.1;
+next	1.6;
+
+1.6
+date	2004.03.19.18.26.08;	author kevinb;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2004.03.10.17.56.43;	author kevinb;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2003.02.07.23.03.09;	author kevinb;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2002.12.18.20.25.11;	author kevinb;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2002.11.19.22.24.31;	author msnyder;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2002.08.28.01.22.28;	author kevinb;	state Exp;
+branches;
+next	;
+
+1.7.2.1
+date	2004.10.26.23.04.44;	author jimb;	state Exp;
+branches;
+next	1.7.2.2;
+
+1.7.2.2
+date	2004.10.29.23.49.55;	author jimb;	state Exp;
+branches;
+next	1.7.2.3;
+
+1.7.2.3
+date	2004.11.01.04.23.02;	author jimb;	state Exp;
+branches;
+next	1.7.2.4;
+
+1.7.2.4
+date	2004.11.01.21.43.51;	author jimb;	state Exp;
+branches;
+next	1.7.2.5;
+
+1.7.2.5
+date	2004.11.23.06.02.19;	author jimb;	state Exp;
+branches;
+next	1.7.2.6;
+
+1.7.2.6
+date	2004.12.02.23.50.08;	author jimb;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.15
+log
+@	* ptrace-target.c (syscall.h): Include.
+@
+text
+@/* ptrace-target.c
+
+   Copyright 2000, 2001, 2002 Red Hat, Inc.
+
+   This file is part of RDA, the Red Hat Debug Agent (and library).
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 2 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 59 Temple Place - Suite 330,
+   Boston, MA 02111-1307, USA.
+   
+   Alternative licenses for RDA may be arranged by contacting Red Hat,
+   Inc.  */
+
+#include "config.h"
+
+#define _GNU_SOURCE
+
+#include <stdio.h>
+#include <assert.h>
+#include <stdlib.h>
+
+#include <sys/wait.h>
+#include <string.h>
+#include <errno.h>
+#include <signal.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <linux/unistd.h>
+
+#include "gdbserv.h" 
+#include "gdbserv-target.h" 
+#include "gdbserv-utils.h"
+#include "gdb_proc_service.h"
+#include "gdbserv-thread-db.h"
+
+#include "server.h"
+#include "ptrace-target.h"
+#include "lwp-ctrl.h"
+#include "diagnostics.h"
+
+#include <syscall.h>
+
+/* This is unix ptrace gdbserv target that uses the RDA library to implement
+   a remote gdbserver on a unix ptrace host.  It controls the process
+   to be debugged on the linux host, allowing GDB to pull the strings
+   from any host on the network (or on a serial port).  */
+
+/* Track sole connection to a remote gdb client. */
+/* FIXME: needed? */
+static struct gdbserv* ptrace_connect_lock = NULL;
+
+/* Close all open file descriptors except for stdin, stdout, and
+   stderr.  */
+
+static void
+close_open_files (void)
+{
+  long max_open_files = sysconf (_SC_OPEN_MAX);
+  int fd;
+
+  for (fd = 3; fd < max_open_files; fd++)
+    {
+      close (fd);
+    }
+}
+
+/* ptrace_create_child:
+
+   Either attach to an existing process or fork a child and capture
+   it via PTRACE_TRACEME.
+
+   The single argument PROCESS is a struct containing either the
+   process id to attach to or the file name and arguments to execute.
+   
+*/
+
+/* Local Functions: */
+
+static int
+ptrace_create_child (struct child_process *process)
+{
+  int pid;
+
+  if (process->pid > 0)
+    {
+      pid = process->pid;
+
+      errno = 0;
+      ptrace (PTRACE_ATTACH, pid, 0L, 0L);
+      if (errno != 0)
+	{
+	  fprintf (stderr, "Could not attach to process id %d\n", pid);
+	  exit (1);
+	}
+    }
+  else
+    {
+      pid = vfork ();
+      if (pid < 0)
+	{
+	  fprintf (stderr, "PTRACE: vfork failed!\n");
+	  return 0;
+	}
+
+      if (pid == 0)
+	{
+	  close_open_files ();
+	  if (process->debug_backend)
+	    fprintf (stderr, "PTRACE_TRACEME\n");
+	  errno = 0;
+	  ptrace (PTRACE_TRACEME, 0L, 0L, 0L);
+	  if (errno != 0)
+	    {
+	      fprintf (stderr, "PTRACE: child cannot be traced!\n");
+	      goto fail;
+	    }
+	  if (process->executable != NULL && process->argv != NULL)
+	    execv (process->executable, process->argv);
+	  else
+	    sleep (-1);	/* FIXME ??? */
+
+	  fprintf (stderr, "Cannot exec %s: %s.\n", process->executable,
+		   strerror (errno));
+	fail:
+	  fflush (stderr);
+	  _exit (0177);
+	}
+    }
+
+  return pid;
+}
+
+/* Decode the waitstatus returned by waitpid, and return the appropriate
+   stop status and stop_signal to gdb.  FIXME: this is not specific to 
+   ptrace, but there's no better place to put it (server.c?) */
+
+extern int
+handle_waitstatus (struct child_process *process, union wait w)
+{
+  if (WIFEXITED (w))
+    {
+      if (process->debug_informational)
+	fprintf (stderr, "\nChild %d exited with retcode = %d\n", 
+		 process->pid, WEXITSTATUS (w));
+      process->stop_status = 'W';
+      return (process->stop_signal = WEXITSTATUS (w));
+    }
+  else if (!WIFSTOPPED (w))
+    {
+      if (process->debug_informational)
+	fprintf (stderr, "\nChild %d terminated with signal = %d\n", 
+		 process->pid, WTERMSIG (w));
+      process->stop_status = 'X';
+      return (process->stop_signal = WTERMSIG (w));
+    }
+
+#if defined(_MIPSEL) || defined(_MIPSEB) || defined(AM33_2_0_LINUX_TARGET)
+  /*
+   * If we were single_stepping, restore the opcodes hoisted
+   * for the breakpoint[s].
+   */
+  if (process->is_ss)
+    {
+      int i;
+      for (i = 0; i < 2; i++)
+	if (process->ss_info[i].in_use)
+	  {
+	    ptrace_set_mem (process->serv,
+	                    &process->ss_info[i].ss_addr,
+			    process->ss_info[i].ss_val,
+			    process->ss_info[i].ss_size);
+
+	    /* Perform additional actions associated with this breakpoint.  */
+	    if (process->ss_info[i].restore_action)
+	      process->ss_info[i].restore_action (process->serv,
+	                                          &process->ss_info[i]);
+
+	    process->ss_info[i].in_use = 0;
+
+	    if (process->debug_backend)
+	      {
+		long addr;
+		gdbserv_host_bytes_from_reg (process->serv, &addr,
+		                             sizeof (addr),
+		                             &process->ss_info[i].ss_addr, 0);
+		fprintf (stderr,
+		         "Singlestep breakpoint %d cleared at location %lx\n",
+			 i, addr);
+	      }
+	  }
+      process->is_ss = 0;
+    }
+#endif /* _MIPSEL */
+
+  process->stop_status = 'T';
+  process->stop_signal = WSTOPSIG (w);
+  return process->stop_signal;
+}
+
+static void
+ptrace_kill_program (struct child_process *process, int signum)
+{
+  if (process->debug_backend)
+    fprintf (stderr, "KILL %d, %d\n", process->pid, signum);
+  kill (process->pid, signum);
+}
+
+/*
+ * Exported functions
+ */
+
+/* Read user memory
+ *
+ * Returns 0 for success, errno for failure
+ */
+
+extern int
+ptrace_read_user (struct gdbserv *serv,
+		  int pid, 
+		  ptrace_arg3_type addr, 
+		  int len, 
+		  void *buff)
+{
+  int i;
+
+  /* Require: addr is on the proper boundary, and 
+     len is a proper multiple of PTRACE_XFER_SIZE.  
+     Caller's responsibility.  */
+
+  for (i = 0; i < len; i+= PTRACE_XFER_SIZE)
+    {
+      errno = 0;
+      *(ptrace_xfer_type *) &((char *)buff)[i] =
+	ptrace (PTRACE_PEEKUSER, pid, addr + i, 0);
+#if 0 /* too noisy!  */
+      if (process->debug_backend)
+	fprintf (stderr, "PTRACE_PEEKUSER 0x%08llx in %d, 0x%08llx\n", 
+		 (long long) addr + i, pid,
+	         (long long) * (ptrace_xfer_type *) &((char *)buff)[i]);
+#endif
+      if (errno != 0)
+	return errno;
+    }
+  return 0;
+}
+
+/* Write user memory
+ *
+ * Returns 0 for success, errno for failure
+ */
+
+extern int
+ptrace_write_user (struct gdbserv *serv,
+		   int pid, 
+		   ptrace_arg3_type addr, 
+		   int len, 
+		   const void *buff)
+{
+  struct child_process *process = gdbserv_target_data (serv);
+  int i;
+
+  /* Require: addr is on the proper boundary, and 
+     len is a proper multiple of PTRACE_XFER_SIZE.  
+     Caller's responsibility.  */
+
+  for (i = 0; i < len; i+= PTRACE_XFER_SIZE)
+    {
+#ifdef X86_LINUX_TARGET
+      if (addr + i == 44)
+	continue;	/* Forbidden address/register, not writable. */
+#endif
+      errno = 0;
+      ptrace (PTRACE_POKEUSER, pid, addr + i, 
+	      * (ptrace_xfer_type *) &((char *)buff)[i]);
+      if (process->debug_backend)
+	fprintf (stderr, "PTRACE_POKEUSER 0x%08llx in %d, 0x%08llx\n", 
+		 (long long) addr + i, pid,
+	         (long long) * (ptrace_xfer_type *) &((char *)buff)[i]);
+#if defined(_MIPSEL) || defined(MIPS_LINUX_TARGET)
+      /* mips linux kernel 2.4 has a bug where PTRACE_POKEUSER
+        returns -ESRCH even when it succeeds */
+      if (errno == ESRCH)
+	errno = 0;
+#endif
+      if (errno != 0)
+	return errno;
+    }
+  return 0;
+}
+
+#if defined (PTRACE_GETREGS) || defined (PT_GETREGS)
+
+/* get general regs */
+
+int
+ptrace_get_gregs (struct gdbserv *serv, int alt_pid, void *buff)
+{
+  struct child_process *process = gdbserv_target_data (serv);
+  int pid = alt_pid == 0 ? process->pid : alt_pid;
+
+  /* Require: buff is of the appropriate size for the target arch. */
+
+  errno = 0;
+  ptrace (PTRACE_GETREGS, pid, 0, (ptrace_arg4_type) buff);
+  return errno;
+}
+#endif
+
+#if defined (PTRACE_SETREGS) || defined (PT_SETREGS)
+/* set general regs */
+
+int
+ptrace_set_gregs (struct gdbserv *serv, int alt_pid, const void *buff)
+{
+  struct child_process *process = gdbserv_target_data (serv);
+  int pid = alt_pid == 0 ? process->pid : alt_pid;
+
+  /* Require: buff is of the appropriate size for the target arch. */
+
+  errno = 0;
+  ptrace (PTRACE_SETREGS, pid, 0, (ptrace_arg4_type) buff);
+  return errno;
+}
+#endif
+
+
+/* get floating point regs */
+
+extern int
+ptrace_get_fpregs (struct gdbserv *serv, int alt_pid, void *buff)
+{
+#if defined (PTRACE_GETFPREGS) || defined (PT_GETFPREGS)
+  struct child_process *process = gdbserv_target_data (serv);
+  int pid = alt_pid == 0 ? process->pid : alt_pid;
+
+  /* Require: buff is of the appropriate size for the target arch. */
+
+  errno = 0;
+  ptrace (PTRACE_GETFPREGS, pid, 0, (ptrace_arg4_type) buff);
+  return errno;
+#else
+  return -1;
+#endif
+}
+
+
+/* set floating point regs */
+
+extern int
+ptrace_set_fpregs (struct gdbserv *serv, int alt_pid, const void *buff)
+{
+#if defined (PTRACE_SETFPREGS) || defined (PT_SETFPREGS)
+  struct child_process *process = gdbserv_target_data (serv);
+  int pid = alt_pid == 0 ? process->pid : alt_pid;
+
+  /* Require: buff is of the appropriate size for the target arch. */
+
+  errno = 0;
+  ptrace (PTRACE_SETFPREGS, pid, 0, (ptrace_arg4_type) buff);
+  return errno;
+#else
+  return -1;
+#endif
+}
+
+
+/* get extended floating point regs */
+
+int
+ptrace_get_fpxregs (struct gdbserv *serv, int alt_pid, void *buff)
+{
+#if defined (PTRACE_GETFPXREGS) || defined (PT_GETFPXREGS)
+  struct child_process *process = gdbserv_target_data (serv);
+  int pid = alt_pid == 0 ? process->pid : alt_pid;
+
+  /* Require: buff is of the appropriate size for the target arch. */
+
+  errno = 0;
+  ptrace (PTRACE_GETFPXREGS, pid, 0, (ptrace_arg4_type) buff);
+  return errno;
+#else
+  return -1;
+#endif
+}
+
+
+/* set extended floating point regs */
+
+int
+ptrace_set_fpxregs (struct gdbserv *serv, int alt_pid, const void *buff)
+{
+#if defined (PTRACE_SETFPXREGS) || defined (PT_SETFPXREGS)
+  struct child_process *process = gdbserv_target_data (serv);
+  int pid = alt_pid == 0 ? process->pid : alt_pid;
+
+  /* Require: buff is of the appropriate size for the target arch. */
+
+  errno = 0;
+  ptrace (PTRACE_SETFPXREGS, pid, 0, (ptrace_arg4_type) buff);
+  return errno;
+#else
+  return -1;
+#endif
+}
+
+/* target vector: */
+
+static void
+ptrace_flush_i_cache (struct gdbserv *serv)
+{
+  /* Calls to ptrace() take care of this for us automatically when
+     needed.  I.e, nothing to do...  */
+  return;
+}
+
+/* sigkill vector
+ */
+
+static void
+ptrace_sigkill_program (struct gdbserv *serv)
+{
+  struct child_process *process = gdbserv_target_data (serv);
+
+  ptrace_kill_program (process, SIGKILL);
+}
+
+/* exit program vector
+ */
+static void
+ptrace_exit_program (struct gdbserv *serv)
+{
+  ptrace_sigkill_program (serv);
+  gdbserv_fromtarget_exit (serv, GDBSERV_SIGKILL);
+  /* Quit out of main loop.  */
+  server_quit_p = 1;
+}
+
+/* break program vector
+ */
+
+static void
+ptrace_break_program (struct gdbserv *serv)
+{
+  struct child_process *process = gdbserv_target_data (serv);
+
+  /* We send SIGSTOP (rather than some other signal such as SIGINT)
+     because SIGSTOP cannot be blocked or ignored.  */
+  if (process->debug_backend)
+    fprintf (stderr, " -- send SIGSTOP to child %d\n", process->pid);
+  print_sigstop_message (serv);
+  kill (process->pid, SIGSTOP);
+}
+
+/* get_trap_number vector
+ */
+
+static unsigned long
+ptrace_get_trap_number (struct gdbserv *serv)
+{
+  struct child_process *process = gdbserv_target_data (serv);
+
+  return process->stop_signal;
+}
+
+/* compute signal vector
+ * No translation necessary -- using unix native signals .
+ */
+
+static unsigned long
+ptrace_compute_signal (struct gdbserv *serv, unsigned long tgtsig)
+{
+  if (tgtsig == 0)
+    return GDBSERV_SIGNONE;
+#ifdef SIGHUP
+  if (tgtsig == SIGHUP)
+    return GDBSERV_SIGHUP;
+#endif
+#ifdef SIGINT
+  if (tgtsig == SIGINT)
+    return GDBSERV_SIGINT;
+#endif
+#ifdef SIGQUIT
+  if (tgtsig == SIGQUIT)
+    return GDBSERV_SIGQUIT;
+#endif
+#ifdef SIGILL
+  if (tgtsig == SIGILL)
+    return GDBSERV_SIGILL;
+#endif
+#ifdef SIGTRAP
+  if (tgtsig == SIGTRAP)
+    return GDBSERV_SIGTRAP;
+#endif
+#ifdef SIGABRT
+  if (tgtsig == SIGABRT)
+    return GDBSERV_SIGABRT;
+#endif
+#ifdef SIGIOT
+  if (tgtsig == SIGIOT)
+    return GDBSERV_SIGABRT;
+#endif
+#ifdef SIGEMT
+  if (tgtsig == SIGEMT)
+    return GDBSERV_SIGEMT;
+#endif
+#ifdef SIGFPE
+  if (tgtsig == SIGFPE)
+    return GDBSERV_SIGFPE;
+#endif
+#ifdef SIGKILL
+  if (tgtsig == SIGKILL)
+    return GDBSERV_SIGKILL;
+#endif
+#ifdef SIGBUS
+  if (tgtsig == SIGBUS)
+    return GDBSERV_SIGBUS;
+#endif
+#ifdef SIGSEGV
+  if (tgtsig == SIGSEGV)
+    return GDBSERV_SIGSEGV;
+#endif
+#ifdef SIGSYS
+  if (tgtsig == SIGSYS)
+    return GDBSERV_SIGSYS;
+#endif
+#ifdef SIGPIPE
+  if (tgtsig == SIGPIPE)
+    return GDBSERV_SIGPIPE;
+#endif
+#ifdef SIGALRM
+  if (tgtsig == SIGALRM)
+    return GDBSERV_SIGALRM;
+#endif
+#ifdef SIGTERM
+  if (tgtsig == SIGTERM)
+    return GDBSERV_SIGTERM;
+#endif
+#ifdef SIGURG
+  if (tgtsig == SIGURG)
+    return GDBSERV_SIGURG;
+#endif
+#ifdef SIGSTOP
+  if (tgtsig == SIGSTOP)
+    return GDBSERV_SIGSTOP;
+#endif
+#ifdef SIGTSTP
+  if (tgtsig == SIGTSTP)
+    return GDBSERV_SIGTSTP;
+#endif
+#ifdef SIGCONT
+  if (tgtsig == SIGCONT)
+    return GDBSERV_SIGCONT;
+#endif
+#ifdef SIGCHLD
+  if (tgtsig == SIGCHLD)
+    return GDBSERV_SIGCHLD;
+#endif
+#ifdef SIGCLD
+  if (tgtsig == SIGCLD)
+    return GDBSERV_SIGCHLD;
+#endif
+#ifdef SIGTTIN
+  if (tgtsig == SIGTTIN)
+    return GDBSERV_SIGTTIN;
+#endif
+#ifdef SIGTTOU
+  if (tgtsig == SIGTTOU)
+    return GDBSERV_SIGTTOU;
+#endif
+#ifdef SIGIO
+  if (tgtsig == SIGIO)
+    return GDBSERV_SIGIO;
+#endif
+#ifdef SIGXCPU
+  if (tgtsig == SIGXCPU)
+    return GDBSERV_SIGXCPU;
+#endif
+#ifdef SIGXFSZ
+  if (tgtsig == SIGXFSZ)
+    return GDBSERV_SIGXFSZ;
+#endif
+#ifdef SIGVTALRM
+  if (tgtsig == SIGVTALRM)
+    return GDBSERV_SIGVTALRM;
+#endif
+#ifdef SIGPROF
+  if (tgtsig == SIGPROF)
+    return GDBSERV_SIGPROF;
+#endif
+#ifdef SIGWINCH
+  if (tgtsig == SIGWINCH)
+    return GDBSERV_SIGWINCH;
+#endif
+#ifdef SIGLOST
+  if (tgtsig == SIGLOST)
+    return GDBSERV_SIGLOST;
+#endif
+#ifdef SIGUSR1
+  if (tgtsig == SIGUSR1)
+    return GDBSERV_SIGUSR1;
+#endif
+#ifdef SIGUSR2
+  if (tgtsig == SIGUSR2)
+    return GDBSERV_SIGUSR2;
+#endif
+#ifdef SIGPWR
+  if (tgtsig == SIGPWR)
+    return GDBSERV_SIGPWR;
+#endif
+#ifdef SIGPOLL
+  if (tgtsig == SIGPOLL)
+    return GDBSERV_SIGPOLL;
+#endif
+#ifdef SIGWIND
+  if (tgtsig == SIGWIND)
+    return GDBSERV_SIGWIND;
+#endif
+#ifdef SIGPHONE
+  if (tgtsig == SIGPHONE)
+    return GDBSERV_SIGPHONE;
+#endif
+#ifdef SIGWAITING
+  if (tgtsig == SIGWAITING)
+    return GDBSERV_SIGWAITING;
+#endif
+#ifdef SIGLWP
+  if (tgtsig == SIGLWP)
+    return GDBSERV_SIGLWP;
+#endif
+#ifdef SIGDANGER
+  if (tgtsig == SIGDANGER)
+    return GDBSERV_SIGDANGER;
+#endif
+#ifdef SIGGRANT
+  if (tgtsig == SIGGRANT)
+    return GDBSERV_SIGGRANT;
+#endif
+#ifdef SIGRETRACT
+  if (tgtsig == SIGRETRACT)
+    return GDBSERV_SIGRETRACT;
+#endif
+#ifdef SIGMSG
+  if (tgtsig == SIGMSG)
+    return GDBSERV_SIGMSG;
+#endif
+#ifdef SIGSOUND
+  if (tgtsig == SIGSOUND)
+    return GDBSERV_SIGSOUND;
+#endif
+#ifdef SIGSAC
+  if (tgtsig == SIGSAC)
+    return GDBSERV_SIGSAC;
+#endif
+#ifdef SIGPRIO
+  if (tgtsig == SIGPRIO)
+    return GDBSERV_SIGPRIO;
+#endif
+#ifdef SIGSTKFLT
+  if (tgtsig == SIGSTKFLT)
+    return GDBSERV_SIGSEGV;	/* ? */
+#endif
+#ifdef SIGPWR
+  if (tgtsig == SIGPWR)
+    return GDBSERV_SIGPWR;
+#endif
+#if defined (__SIGRTMIN) && defined (__SIGRTMAX)
+    if (tgtsig >= __SIGRTMIN && tgtsig <  __SIGRTMAX)
+      return GDBSERV_SIGRT32 + tgtsig - __SIGRTMIN;
+    return GDBSERV_SIGNONE;	/* ? */
+#endif
+}
+
+/* singlestep vector
+ */
+
+static void
+ptrace_singlestep_program (struct gdbserv *serv)
+{
+  struct child_process *process = gdbserv_target_data (serv);
+
+  /* FIXME: handle signals! */
+  if (process->debug_backend)
+    fprintf (stderr, "PTRACE_SINGLESTEP %d signal %ld\n", 
+	     process->pid, process->signal_to_send);
+  process->stop_signal = 0;
+  process->stop_status = 0;
+
+  errno = 0;
+  ptrace (PTRACE_SINGLESTEP, process->pid, 1L, process->signal_to_send);
+  if (errno)
+    fprintf (stderr, "singlestep: ptrace error %s in %d\n",
+	     strerror (errno), process->pid);
+  process->signal_to_send = 0;
+}
+
+/*
+ * Continue vector
+ */
+
+static void 
+ptrace_continue_program (struct gdbserv *serv)
+{
+  struct child_process *process = gdbserv_target_data (serv);
+
+  /* FIXME: handle signals! */
+  if (process->debug_backend)
+    fprintf (stderr, "PTRACE_CONT %d signal %ld\n", 
+	     process->pid, process->signal_to_send);
+  process->stop_signal = 0;
+  process->stop_status = 0;
+
+  errno = 0;
+  ptrace (PTRACE_CONT, process->pid, 1L, process->signal_to_send);
+  if (errno)
+    fprintf (stderr, "continue: ptrace error %s in %d\n", 
+	     strerror (errno), process->pid);
+  process->signal_to_send = 0;
+}
+
+/* Set continue-signal vector 
+ */
+
+static int
+ptrace_process_signal (struct gdbserv *serv, int sig)
+{
+  struct child_process *process = gdbserv_target_data (serv);
+
+  /* Save the signal value for later use by continue/singlestep.  */
+  switch (sig) {
+  case GDBSERV_SIGNONE:
+    process->signal_to_send = 0;		break;
+#ifdef SIGHUP
+  case GDBSERV_SIGHUP:
+    process->signal_to_send = SIGHUP;		break;
+#endif
+#ifdef SIGINT
+  case GDBSERV_SIGINT:
+    process->signal_to_send = SIGINT;		break;
+#endif
+#ifdef SIGQUIT
+  case GDBSERV_SIGQUIT:
+    process->signal_to_send = SIGQUIT;		break;
+#endif
+#ifdef SIGILL
+  case GDBSERV_SIGILL:
+    process->signal_to_send = SIGILL;		break;
+#endif
+#ifdef SIGTRAP
+  case GDBSERV_SIGTRAP:
+    process->signal_to_send = SIGTRAP;		break;
+#endif
+#ifdef SIGABRT
+  case GDBSERV_SIGABRT:
+    process->signal_to_send = SIGABRT;		break;
+#endif
+#ifdef SIGEMT
+  case GDBSERV_SIGEMT:
+    process->signal_to_send = SIGEMT;		break;
+#endif
+#ifdef SIGFPE
+  case GDBSERV_SIGFPE:
+    process->signal_to_send = SIGFPE;		break;
+#endif
+#ifdef SIGKILL
+  case GDBSERV_SIGKILL:
+    process->signal_to_send = SIGKILL;		break;
+#endif
+#ifdef SIGBUS
+  case GDBSERV_SIGBUS:
+    process->signal_to_send = SIGBUS;		break;
+#endif
+#ifdef SIGSEGV
+  case GDBSERV_SIGSEGV:
+    process->signal_to_send = SIGSEGV;		break;
+#endif
+#ifdef SIGSYS
+  case GDBSERV_SIGSYS:
+    process->signal_to_send = SIGSYS;		break;
+#endif
+#ifdef SIGPIPE
+  case GDBSERV_SIGPIPE:
+    process->signal_to_send = SIGPIPE;		break;
+#endif
+#ifdef SIGALRM
+  case GDBSERV_SIGALRM:
+    process->signal_to_send = SIGALRM;		break;
+#endif
+#ifdef SIGTERM
+  case GDBSERV_SIGTERM:
+    process->signal_to_send = SIGTERM;		break;
+#endif
+#ifdef SIGURG
+  case GDBSERV_SIGURG:
+    process->signal_to_send = SIGURG;		break;
+#endif
+#ifdef SIGSTOP
+  case GDBSERV_SIGSTOP:
+    process->signal_to_send = SIGSTOP;		break;
+#endif
+#ifdef SIGTSTP
+  case GDBSERV_SIGTSTP:
+    process->signal_to_send = SIGTSTP;		break;
+#endif
+#ifdef SIGCONT
+  case GDBSERV_SIGCONT:
+    process->signal_to_send = SIGCONT;		break;
+#endif
+#ifdef SIGCHLD
+  case GDBSERV_SIGCHLD:
+    process->signal_to_send = SIGCHLD;		break;
+#endif
+#if defined (SIGCLD) && !defined (SIGCHLD)
+  case GDBSERV_SIGCHLD:
+    process->signal_to_send = SIGCLD;		break;
+#endif
+#ifdef SIGTTIN
+  case GDBSERV_SIGTTIN:
+    process->signal_to_send = SIGTTIN;		break;
+#endif
+#ifdef SIGTTOU
+  case GDBSERV_SIGTTOU:
+    process->signal_to_send = SIGTTOU;		break;
+#endif
+#ifdef SIGIO
+  case GDBSERV_SIGIO:
+    process->signal_to_send = SIGIO;		break;
+#endif
+#ifdef SIGXCPU
+  case GDBSERV_SIGXCPU:
+    process->signal_to_send = SIGXCPU;		break;
+#endif
+#ifdef SIGXFSZ
+  case GDBSERV_SIGXFSZ:
+    process->signal_to_send = SIGXFSZ;		break;
+#endif
+#ifdef SIGVTALRM
+  case GDBSERV_SIGVTALRM:
+    process->signal_to_send = SIGVTALRM;	break;
+#endif
+#ifdef SIGPROF
+  case GDBSERV_SIGPROF:
+    process->signal_to_send = SIGPROF;		break;
+#endif
+#ifdef SIGWINCH
+  case GDBSERV_SIGWINCH:
+    process->signal_to_send = SIGWINCH;		break;
+#endif
+#ifdef SIGLOST
+  case GDBSERV_SIGLOST:
+    process->signal_to_send = SIGLOST;		break;
+#endif
+#ifdef SIGUSR1
+  case GDBSERV_SIGUSR1:
+    process->signal_to_send = SIGUSR1;		break;
+#endif
+#ifdef SIGUSR2
+  case GDBSERV_SIGUSR2:
+    process->signal_to_send = SIGUSR2;		break;
+#endif
+#ifdef SIGPWR
+  case GDBSERV_SIGPWR:
+    process->signal_to_send = SIGPWR;		break;
+#endif
+#ifdef SIGPOLL
+  case GDBSERV_SIGPOLL:
+    process->signal_to_send = SIGPOLL;		break;
+#endif
+#ifdef SIGWIND
+  case GDBSERV_SIGWIND:
+    process->signal_to_send = SIGWIND;		break;
+#endif
+#ifdef SIGPHONE
+  case GDBSERV_SIGPHONE:
+    process->signal_to_send = SIGPHONE;		break;
+#endif
+#ifdef SIGWAITING
+  case GDBSERV_SIGWAITING:
+    process->signal_to_send = SIGWAITING;	break;
+#endif
+#ifdef SIGLWP
+  case GDBSERV_SIGLWP:
+    process->signal_to_send = SIGLWP;		break;
+#endif
+#ifdef SIGDANGER
+  case GDBSERV_SIGDANGER:
+    process->signal_to_send = SIGDANGER;	break;
+#endif
+#ifdef SIGGRANT
+  case GDBSERV_SIGGRANT:
+    process->signal_to_send = SIGGRANT;		break;
+#endif
+#ifdef SIGRETRACT
+  case GDBSERV_SIGRETRACT:
+    process->signal_to_send = SIGRETRACT;	break;
+#endif
+#ifdef SIGMSG
+  case GDBSERV_SIGMSG:
+    process->signal_to_send = SIGMSG;		break;
+#endif
+#ifdef SIGSOUND
+  case GDBSERV_SIGSOUND:
+    process->signal_to_send = SIGSOUND;		break;
+#endif
+#ifdef SIGSAK
+  case GDBSERV_SIGSAK:
+    process->signal_to_send = SIGSAK;		break;
+#endif
+#ifdef SIGPRIO
+  case GDBSERV_SIGPRIO:
+    process->signal_to_send = SIGPRIO;		break;
+#endif
+#if defined (__SIGRTMIN) && defined (__SIGRTMAX)
+  case GDBSERV_SIGRT32:
+    process->signal_to_send = __SIGRTMIN;	break;
+  case GDBSERV_SIGRT33:
+    process->signal_to_send = __SIGRTMIN+1;	break;
+  case GDBSERV_SIGRT34:
+    process->signal_to_send = __SIGRTMIN+2;	break;
+  case GDBSERV_SIGRT35:
+    process->signal_to_send = __SIGRTMIN+3;	break;
+  case GDBSERV_SIGRT36:
+    process->signal_to_send = __SIGRTMIN+4;	break;
+  case GDBSERV_SIGRT37:
+    process->signal_to_send = __SIGRTMIN+5;	break;
+  case GDBSERV_SIGRT38:
+    process->signal_to_send = __SIGRTMIN+6;	break;
+  case GDBSERV_SIGRT39:
+    process->signal_to_send = __SIGRTMIN+7;	break;
+  case GDBSERV_SIGRT40:
+    process->signal_to_send = __SIGRTMIN+8;	break;
+  case GDBSERV_SIGRT41:
+    process->signal_to_send = __SIGRTMIN+9;	break;
+  case GDBSERV_SIGRT42:
+    process->signal_to_send = __SIGRTMIN+10;	break;
+  case GDBSERV_SIGRT43:
+    process->signal_to_send = __SIGRTMIN+11;	break;
+  case GDBSERV_SIGRT44:
+    process->signal_to_send = __SIGRTMIN+12;	break;
+  case GDBSERV_SIGRT45:
+    process->signal_to_send = __SIGRTMIN+13;	break;
+  case GDBSERV_SIGRT46:
+    process->signal_to_send = __SIGRTMIN+14;	break;
+  case GDBSERV_SIGRT47:
+    process->signal_to_send = __SIGRTMIN+15;	break;
+  case GDBSERV_SIGRT48:
+    process->signal_to_send = __SIGRTMIN+16;	break;
+  case GDBSERV_SIGRT49:
+    process->signal_to_send = __SIGRTMIN+17;	break;
+  case GDBSERV_SIGRT50:
+    process->signal_to_send = __SIGRTMIN+18;	break;
+  case GDBSERV_SIGRT51:
+    process->signal_to_send = __SIGRTMIN+19;	break;
+  case GDBSERV_SIGRT52:
+    process->signal_to_send = __SIGRTMIN+20;	break;
+  case GDBSERV_SIGRT53:
+    process->signal_to_send = __SIGRTMIN+21;	break;
+  case GDBSERV_SIGRT54:
+    process->signal_to_send = __SIGRTMIN+22;	break;
+  case GDBSERV_SIGRT55:
+    process->signal_to_send = __SIGRTMIN+23;	break;
+  case GDBSERV_SIGRT56:
+    process->signal_to_send = __SIGRTMIN+24;	break;
+  case GDBSERV_SIGRT57:
+    process->signal_to_send = __SIGRTMIN+25;	break;
+  case GDBSERV_SIGRT58:
+    process->signal_to_send = __SIGRTMIN+26;	break;
+  case GDBSERV_SIGRT59:
+    process->signal_to_send = __SIGRTMIN+27;	break;
+  case GDBSERV_SIGRT60:
+    process->signal_to_send = __SIGRTMIN+28;	break;
+  case GDBSERV_SIGRT61:
+    process->signal_to_send = __SIGRTMIN+29;	break;
+  case GDBSERV_SIGRT62:
+    process->signal_to_send = __SIGRTMIN+30;	break;
+  case GDBSERV_SIGRT63:
+    process->signal_to_send = __SIGRTMIN+31;	break;
+  case GDBSERV_SIGRT64:
+    process->signal_to_send = __SIGRTMIN+32;	break;
+#endif
+  }
+  /* Since we will handle the signal, we don't want gdbserv
+     to handle it by calling kill!  Return zero.  */
+  return 0;
+}
+
+/* Read memory vector
+ */
+
+static long
+ptrace_xfer_mem (struct gdbserv *serv, 
+		 struct gdbserv_reg *addr, 
+		 void *data, 
+		 long len, 
+		 int read)
+{
+  struct child_process *process = gdbserv_target_data (serv);
+  ptrace_arg3_type request_base;
+  ptrace_arg3_type xfer_base;
+  ptrace_arg3_type temp_addr;
+  ptrace_xfer_type *buf;
+  long xfer_count;
+  int i;
+
+  /* Get request address.  */
+  gdbserv_host_bytes_from_reg (serv, &request_base, sizeof (request_base),
+                               addr, 0);
+  /* Round down to a PTRACE word boundary. */
+  xfer_base = request_base & - PTRACE_XFER_SIZE;
+  /* Round length up to a PTRACE word boundary. */
+  xfer_count = (((request_base + len) - xfer_base) + PTRACE_XFER_SIZE - 1)
+    / PTRACE_XFER_SIZE;
+
+  /* Allocate space for xfer.  */
+  buf = (ptrace_xfer_type *) alloca (xfer_count * PTRACE_XFER_SIZE);
+
+  /* Perform memory xfer.  */
+  if (read)
+    {
+      for (i = 0; i < xfer_count; i++)
+	{
+	  temp_addr = xfer_base + i * PTRACE_XFER_SIZE;
+
+	  errno = 0;
+	  buf[i] = ptrace (PTRACE_PEEKTEXT, process->pid, temp_addr, 0L);
+
+	  if (process->debug_backend)
+	    fprintf (stderr, "PTRACE_PEEKTEXT-1 0x%08llx in %d, 0x%08llx\n", 
+		     (long long) temp_addr, process->pid, (long long) buf[i]);
+	  if (errno)
+	    {
+	      if (errno != EIO)
+		fprintf (stderr, 
+			 "xfer_mem(1): ptrace error at 0x%08lx in %d: %s\n", 
+			 (long) temp_addr, process->pid, strerror (errno));
+	      return -1;
+	    }
+	}
+  
+      /* Copy results to caller's buffer space.  */
+      memcpy (data, (char *) buf + (request_base - xfer_base), len);
+    }
+  else /* write */
+    {
+      /* If the xfer buffer overlaps the write-request buffer, 
+	 we must first read the values that are there before 
+	 replacing with the desired values (otherwise these bytes
+	 would be uninitialized).  */
+      if ((unsigned long long) xfer_base < 
+	  (unsigned long long) request_base)
+	{
+	  errno = 0;
+	  buf[0] = ptrace (PTRACE_PEEKTEXT, 
+			   process->pid, xfer_base, 0L);
+	  if (process->debug_backend)
+	    fprintf (stderr, "PTRACE_PEEKTEXT-2 0x%08llx in %d, 0x%08llx\n", 
+		     (long long) xfer_base, process->pid, (long long) buf[0]);
+
+	  if (errno)
+	    {
+	      if (errno != EIO)
+		fprintf (stderr, 
+			 "xfer_mem(2): ptrace error at 0x%08llx in %d: %s\n", 
+			 (long long) xfer_base, process->pid, strerror (errno));
+	      return -1;
+	    }
+	}
+      if ((xfer_count > 0) &&
+	  ((unsigned long long) (xfer_base + xfer_count * PTRACE_XFER_SIZE) > 
+	   (unsigned long long) (request_base + len)))
+	{
+	  temp_addr = xfer_base + (xfer_count - 1) * PTRACE_XFER_SIZE;
+	  errno = 0;
+	  buf[xfer_count - 1] =
+	    ptrace (PTRACE_PEEKTEXT, process->pid, temp_addr, 0L);
+	  if (process->debug_backend)
+	    fprintf (stderr, "PTRACE_PEEKTEXT-3 0x%08llx in %d, 0x%08llx\n", 
+		     (long long) temp_addr, process->pid, 
+		     (long long) buf[xfer_count - 1]);
+
+	  if (errno)
+	    {
+	      if (errno != EIO)
+		fprintf (stderr, 
+			 "xfer_mem(3): ptrace error at 0x%08lx in %d: %s\n", 
+			 (long) temp_addr, process->pid, strerror (errno));
+	      return -1;
+	    }
+	}
+
+      /* Now copy user buffer to xfer buffer.  */
+      memcpy ((char *) buf + (request_base - xfer_base), data, len);
+      /* Now write out the data.  */
+      for (i = 0; i < xfer_count; i++)
+	{
+	  temp_addr = xfer_base + i * PTRACE_XFER_SIZE;
+
+	  errno = 0;
+	  ptrace (PTRACE_POKETEXT, process->pid, temp_addr, buf[i]);
+
+	  if (process->debug_backend)
+	    fprintf (stderr, "PTRACE_POKETEXT 0x%08llx in %d, 0x%08llx\n", 
+		     (long long) temp_addr, process->pid, (long long) buf[i]);
+
+	  if (errno)
+	    {
+	      if (errno != EIO)
+		fprintf (stderr, 
+			 "xfer_mem(4): ptrace error at 0x%08llx in %d: %s\n", 
+			 (long long) temp_addr, process->pid, strerror (errno));
+	      return -1;
+	    }
+	}
+    }
+
+  return len;
+}
+
+long
+ptrace_set_mem (struct gdbserv *serv, 
+		struct gdbserv_reg *addr, 
+		void *data, 
+		long len)
+{
+  return ptrace_xfer_mem (serv, addr, data, len, 0);
+}
+
+long
+ptrace_get_mem (struct gdbserv *serv, 
+		struct gdbserv_reg *addr, 
+		void *data, 
+		long len)
+{
+  return ptrace_xfer_mem (serv, addr, data, len, 1);
+}
+
+
+
+
+/* Detach vector -- shut down this target connection.
+ */
+
+static void
+ptrace_detach (struct gdbserv *serv, struct gdbserv_target *target)
+{
+  struct child_process *process = gdbserv_target_data (serv);
+
+  assert (ptrace_connect_lock == serv);
+
+  if (process->debug_informational)
+    fprintf (stderr, "ptrace - detached.\n");
+  ptrace_connect_lock = NULL;
+
+  /* Quit out of main loop for this demo.  In general, this is not
+     necessary, as the next incoming connection could again be handled
+     by ptrace_attach() above.  */
+  server_quit_p = 1;
+}
+
+/* This function is called from gdbloop_poll when a new incoming
+   connection is attempted.  It may return NULL if the new connection
+   is to be refused, or a gdbserv_target vector if the connection is
+   accepted.  */
+
+struct gdbserv_target* 
+ptrace_attach (struct gdbserv *serv, void *data)
+{
+  struct gdbserv_target *ptrace_target;
+  struct child_process *process = data;
+  union wait w;
+  int pid;
+
+
+  /* Enable server tracing. */
+  /*  gdbserv_state_trace = stderr;*/
+
+  if (ptrace_connect_lock != NULL)
+    {
+      fprintf (stderr, "ptrace: rejected duplicate connection.\n");
+      return NULL;
+    }
+
+  if (process->debug_informational)
+    fprintf (stderr, "ptrace: accepted gdb connection.\n");
+  ptrace_connect_lock = serv;
+
+  process->pid = ptrace_create_child (process);
+
+  do {
+    pid = wait (&w);
+  } while (pid != process->pid);
+
+  handle_waitstatus (process, w);
+
+  if (process->pid > 0)
+    {
+      if (process->debug_informational)
+	fprintf (stderr, "ptrace: created child process %d, %s\n", 
+		 process->pid, process->executable);
+    }
+  else
+    {
+      fprintf (stderr, "PTRACE: failed to create child process %s!\n",
+	       process->executable);
+      return NULL;
+    }
+
+  ptrace_target = malloc (sizeof (struct gdbserv_target));
+  memset (ptrace_target, 0, sizeof (*ptrace_target));
+
+  /* Callback structure for function pointers that handle processed
+     control packets.  See gdbserv-target.h for docs on the individual
+     functions. */
+
+  ptrace_target->process_get_gen       = NULL;
+  ptrace_target->process_set_gen       = NULL;
+  ptrace_target->process_rcmd          = NULL;
+  ptrace_target->process_set_args      = NULL;
+  ptrace_target->process_set_reg       = NULL;
+  ptrace_target->process_get_reg       = NULL;
+  ptrace_target->process_set_regs      = NULL;
+  ptrace_target->process_get_regs      = NULL;
+  ptrace_target->input_reg             = NULL;
+  ptrace_target->output_reg            = NULL;
+  ptrace_target->gg_reg_nr             = NULL;
+  ptrace_target->expedited_reg_nr      = NULL;
+  ptrace_target->sizeof_reg            = NULL;
+  ptrace_target->set_reg               = NULL;
+  ptrace_target->get_reg               = NULL;
+  ptrace_target->get_mem               = ptrace_get_mem;
+  ptrace_target->set_mem               = ptrace_set_mem;
+  ptrace_target->process_set_pc        = NULL;
+  ptrace_target->flush_i_cache         = ptrace_flush_i_cache;
+  ptrace_target->process_signal        = ptrace_process_signal;
+  ptrace_target->compute_signal        = ptrace_compute_signal;
+  ptrace_target->get_trap_number       = ptrace_get_trap_number;
+  ptrace_target->exit_program          = ptrace_exit_program;
+  ptrace_target->break_program         = ptrace_break_program;
+  ptrace_target->reset_program         = NULL;
+  ptrace_target->restart_program       = NULL;
+  ptrace_target->singlestep_program    = ptrace_singlestep_program;
+  ptrace_target->cyclestep_program     = NULL;
+  ptrace_target->sigkill_program       = ptrace_sigkill_program;
+  ptrace_target->continue_program      = ptrace_continue_program;
+  ptrace_target->remove_breakpoint     = NULL;
+  ptrace_target->set_breakpoint        = NULL;
+  ptrace_target->process_target_packet = NULL;
+  ptrace_target->detach                = ptrace_detach;
+
+  ptrace_target->data = data;	/* Save ptr to child_process struct.  */
+
+#if defined(_MIPSEL) || defined(_MIPSEB) || defined(AM33_2_0_LINUX_TARGET)
+  process->is_ss = 0;
+#endif
+
+  return ptrace_target;
+}
+
+/* This function is called from the main loop, and waits for an event
+   (such as a signal or exception) from the running child process. */
+
+int
+ptrace_check_child_state (struct child_process *process)
+{
+  int ret;
+  union wait w;
+
+  ret = waitpid (process->pid, (int *) &w, WNOHANG);
+
+  if (ret > 0)	/* found an event */
+    {
+      ret = handle_waitstatus (process, w);
+      if (process->debug_backend)
+	fprintf (stderr, "wait returned %d\n", ret);
+      return 1;
+    }
+  return 0;
+}
+
+/* Exported service functions; see "lwp-ctrl.h".  */
+
+int
+continue_lwp (pid_t lwp, int signal)
+{
+  if (thread_db_noisy)
+    fprintf (stderr, "<ptrace (PTRACE_CONT, %d, 0, %d)>\n", lwp, signal);
+
+  if (ptrace (PTRACE_CONT, lwp, 0, signal) < 0)
+    {
+      fprintf (stderr, "<<< ERROR: PTRACE_CONT %d failed: %s >>>\n", 
+	       lwp, strerror (errno));
+      return -1;
+    }
+  return 0;
+}
+
+int
+singlestep_lwp (struct gdbserv *serv, pid_t lwp, int signal)
+{
+
+#if defined (AM33_2_0_LINUX_TARGET)
+  if (thread_db_noisy)
+    fprintf (stderr, "<singlestep_lwp lwpid=%d signal=%d>\n", lwp, signal);
+  am33_singlestep (serv, lwp, signal);
+  return 0;
+#elif defined (MIPS_LINUX_TARGET) || defined (MIPS64_LINUX_TARGET)
+  if (thread_db_noisy)
+    fprintf (stderr, "<singlestep_lwp lwpid=%d signal=%d>\n", lwp, signal);
+  mips_singlestep (serv, lwp, signal);
+#else
+  if (thread_db_noisy)
+    fprintf (stderr, "<ptrace (PTRACE_SINGLESTEP, %d, 0, %d)>\n", lwp, signal);
+
+  if (ptrace (PTRACE_SINGLESTEP, lwp, 0, signal) < 0)
+    {
+      int saved_errno = errno;
+
+      fprintf (stderr, "<<< ERROR: PTRACE_SINGLESTEP %d failed: %s >>>\n",
+	       lwp, strerror (errno));
+      
+      errno = saved_errno;
+      return -1;
+    }
+#endif
+  return 0;
+}
+
+int
+attach_lwp (pid_t lwp)
+{
+  errno = 0;
+  if (ptrace (PTRACE_ATTACH, lwp, 0, 0) == 0)
+    {
+      if (thread_db_noisy)
+	fprintf (stderr, "<ptrace (PTRACE_ATTACH, %d, 0, 0)>\n", lwp);
+      return 0;
+    }
+  else
+    {
+      int saved_errno = errno;
+
+      fprintf (stderr, "<<< ERROR ptrace attach %d failed, %s >>>\n",
+	       lwp, strerror (errno));
+
+      errno = saved_errno;
+      return -1;
+    }
+}
+
+
+int
+kill_lwp (pid_t lwp, int signal)
+{
+  int result;
+
+  if (thread_db_noisy)
+    fprintf (stderr, "kill_lwp (%d, %d)\n", (int) lwp, signal);
+
+  /* Under NPTL, signals sent via kill get delivered to whatever
+     thread in the group can handle them; they don't necessarily go to
+     the thread whose PID you passed.  This makes kill useless for
+     kill_lwp's purposes: it's trying to send a signal to a particular
+     thread.
+
+     The tkill system call lets you direct a signal at a particular
+     thread.  Use that if it's available (as it is on all systems
+     where it's necessary); otherwise, fall back to kill.  */
+#ifdef SYS_tkill
+  {
+    /* This is true if we don't know for a fact that this kernel
+       doesn't support tkill.  */
+    static int could_have_tkill = 1;
+
+    if (could_have_tkill)
+      {
+	errno = 0;
+	result = syscall (SYS_tkill, lwp, signal);
+	if (errno == 0)
+	  return result;
+	else if (errno == ENOSYS)
+	  /* Fall through to kill, below, and don't try tkill again.  */
+	  could_have_tkill = 0;
+	else
+	  {
+	    int saved_errno = errno;
+
+	    fprintf (stderr,
+		     "<<< ERROR -- tkill (%d, %s) failed: %s >>>\n",
+		     lwp, strsignal (signal), strerror (errno));
+
+	    errno = saved_errno;
+	    return -1;
+	  }
+      }
+  }
+#endif
+
+  result = kill (lwp, signal);
+  if (result != 0)
+    {
+      int saved_errno = errno;
+
+      fprintf (stderr, "<<< ERROR -- kill (%d, %s) failed >>>\n", 
+	       lwp, strsignal (signal));
+
+      errno = saved_errno;
+      return -1;
+    }
+
+  return 0;
+}
+
+/* proc_service callback functions */
+
+ps_err_e
+ps_pstop (gdb_ps_prochandle_t ph)		/* Process stop */
+{
+  fprintf (stderr, "<ps_pstop [UN-IMPLEMENTED]>\n");
+  return PS_ERR; /* unimplemented. */
+}
+
+ps_err_e
+ps_pcontinue (gdb_ps_prochandle_t ph)		/* Process continue */
+{
+  fprintf (stderr, "<ps_pcontinue [UN-IMPLEMENTED]>\n");
+  return PS_ERR; /* unimplemented. */
+}
+
+ps_err_e
+ps_lstop (gdb_ps_prochandle_t ph,		/* LWP stop */
+	  lwpid_t lwpid)
+{
+  fprintf (stderr, "<ps_lstop [UN-IMPLEMENTED]>\n");
+  return PS_ERR; /* unimplemented. */
+}
+
+ps_err_e
+ps_lcontinue (gdb_ps_prochandle_t ph,		/* LWP continue */
+	      lwpid_t lwpid)
+{
+  if (continue_lwp (lwpid, 0) < 0)
+    return PS_OK;
+  else
+    return PS_ERR;
+}
+
+ps_err_e
+ps_pdread (gdb_ps_prochandle_t ph, 	/* read from data segment */
+	   paddr_t             addr,
+	   gdb_ps_read_buf_t   buf,
+	   gdb_ps_size_t       size)
+{
+  long bytes_read;
+  struct gdbserv_reg addr_reg;
+
+  /* Use unsigned long long for maximum portability. */
+  gdbserv_ulonglong_to_reg (ph->serv, (unsigned long long) addr, &addr_reg);
+
+  bytes_read = ptrace_get_mem (ph->serv, &addr_reg, buf, (long) size);
+
+  if (bytes_read == (long) size)
+    return PS_OK;
+  else
+    return PS_ERR;
+}
+
+ps_err_e
+ps_pdwrite (gdb_ps_prochandle_t ph,	/* write to data segment */
+	    paddr_t             addr,
+	    gdb_ps_write_buf_t  buf,
+	    gdb_ps_size_t       size)
+{
+  long bytes_written;
+  struct gdbserv_reg addr_reg;
+
+  /* Use unsigned long long for maximum portability. */
+  gdbserv_ulonglong_to_reg (ph->serv, (unsigned long long) addr, &addr_reg);
+
+  bytes_written = ptrace_set_mem (ph->serv, &addr_reg, buf, (long) size);
+
+  if (bytes_written == (long) size)
+    return PS_OK;
+  else
+    return PS_ERR;
+}
+
+ps_err_e
+ps_ptread (gdb_ps_prochandle_t ph,	/* read from text segment */
+	   paddr_t             addr,
+	   gdb_ps_read_buf_t   buf,
+	   gdb_ps_size_t       size)
+{
+  long bytes_read;
+  struct gdbserv_reg addr_reg;
+
+  /* Use unsigned long long for maximum portability. */
+  gdbserv_ulonglong_to_reg (ph->serv, (unsigned long long) addr, &addr_reg);
+
+  bytes_read = ptrace_get_mem (ph->serv, &addr_reg, buf, (long) size);
+
+  if (bytes_read == (long) size)
+    return PS_OK;
+  else
+    return PS_ERR;
+}
+
+ps_err_e
+ps_ptwrite (gdb_ps_prochandle_t ph,	/* write to text segment */
+	    paddr_t             addr,
+	    gdb_ps_write_buf_t  buf,
+	    gdb_ps_size_t       size)
+{
+  long bytes_written;
+  struct gdbserv_reg addr_reg;
+
+  /* Use unsigned long long for maximum portability. */
+  gdbserv_ulonglong_to_reg (ph->serv, (unsigned long long) addr, &addr_reg);
+
+  bytes_written = ptrace_set_mem (ph->serv, &addr_reg, buf, (long) size);
+
+  if (bytes_written == (long) size)
+    return PS_OK;
+  else
+    return PS_ERR;
+}
+
+@
+
+
+1.14
+log
+@Add code for software singlestep of AM33 LIW instructions.  Revise code
+for handling am33's SETLB and Lcc instructions.
+@
+text
+@d52 2
+@
+
+
+1.13
+log
+@	* ptrace-target.c (ptrace_compute_signal, ptrace_process_signal):
+	Use __SIGRTMIN in place of SIGRTMIN.  Use __SIGRTMAX in place of
+	SIGRTMAX.
+	(ptrace_compute_signal): Consolidate logic which computes return
+	value.
+@
+text
+@d181 6
+d188 1
+@
+
+
+1.12
+log
+@	* Makefile.am (EXTRA_rda_SOURCES): Add diagnostics.c.
+	* configure.in (TARGET_MODULES): Add diagnostics.o.
+	* Makefile.in, configure: Regenerate.
+	* diagnostics.c: New file.
+	* diagnostics.h (output_O_packet, print_sigstop_message): New
+	functions.
+	* ptrace-target.c (diagnostics.h): Include.
+	(ptrace_break_program): Call print_sigstop_message().
+	* thread_db.c (thread_db_break_program): Likewise.
+@
+text
+@d668 3
+a670 7
+#if defined (SIGRTMIN) && defined (SIGRTMAX)
+    if (tgtsig == SIGRTMIN)
+      return GDBSERV_SIGRT32;
+    if (tgtsig == SIGRTMIN + 32)
+      return GDBSERV_SIGRT64;
+    if (tgtsig > SIGRTMIN && tgtsig <  SIGRTMAX)
+      return GDBSERV_SIGRT33 + tgtsig - 1;
+d914 1
+a914 1
+#if defined (SIGRTMIN) && defined (SIGRTMAX)
+d916 1
+a916 1
+    process->signal_to_send = SIGRTMIN;		break;
+d918 1
+a918 1
+    process->signal_to_send = SIGRTMIN+1;	break;
+d920 1
+a920 1
+    process->signal_to_send = SIGRTMIN+2;	break;
+d922 1
+a922 1
+    process->signal_to_send = SIGRTMIN+3;	break;
+d924 1
+a924 1
+    process->signal_to_send = SIGRTMIN+4;	break;
+d926 1
+a926 1
+    process->signal_to_send = SIGRTMIN+5;	break;
+d928 1
+a928 1
+    process->signal_to_send = SIGRTMIN+6;	break;
+d930 1
+a930 1
+    process->signal_to_send = SIGRTMIN+7;	break;
+d932 1
+a932 1
+    process->signal_to_send = SIGRTMIN+8;	break;
+d934 1
+a934 1
+    process->signal_to_send = SIGRTMIN+9;	break;
+d936 1
+a936 1
+    process->signal_to_send = SIGRTMIN+10;	break;
+d938 1
+a938 1
+    process->signal_to_send = SIGRTMIN+11;	break;
+d940 1
+a940 1
+    process->signal_to_send = SIGRTMIN+12;	break;
+d942 1
+a942 1
+    process->signal_to_send = SIGRTMIN+13;	break;
+d944 1
+a944 1
+    process->signal_to_send = SIGRTMIN+14;	break;
+d946 1
+a946 1
+    process->signal_to_send = SIGRTMIN+15;	break;
+d948 1
+a948 1
+    process->signal_to_send = SIGRTMIN+16;	break;
+d950 1
+a950 1
+    process->signal_to_send = SIGRTMIN+17;	break;
+d952 1
+a952 1
+    process->signal_to_send = SIGRTMIN+18;	break;
+d954 1
+a954 1
+    process->signal_to_send = SIGRTMIN+19;	break;
+d956 1
+a956 1
+    process->signal_to_send = SIGRTMIN+20;	break;
+d958 1
+a958 1
+    process->signal_to_send = SIGRTMIN+21;	break;
+d960 1
+a960 1
+    process->signal_to_send = SIGRTMIN+22;	break;
+d962 1
+a962 1
+    process->signal_to_send = SIGRTMIN+23;	break;
+d964 1
+a964 1
+    process->signal_to_send = SIGRTMIN+24;	break;
+d966 1
+a966 1
+    process->signal_to_send = SIGRTMIN+25;	break;
+d968 1
+a968 1
+    process->signal_to_send = SIGRTMIN+26;	break;
+d970 1
+a970 1
+    process->signal_to_send = SIGRTMIN+27;	break;
+d972 1
+a972 1
+    process->signal_to_send = SIGRTMIN+28;	break;
+d974 1
+a974 1
+    process->signal_to_send = SIGRTMIN+29;	break;
+d976 1
+a976 1
+    process->signal_to_send = SIGRTMIN+30;	break;
+d978 1
+a978 1
+    process->signal_to_send = SIGRTMIN+31;	break;
+d980 1
+a980 1
+    process->signal_to_send = SIGRTMIN+32;	break;
+@
+
+
+1.11
+log
+@	* ptrace-target.c (ptrace_break_program): Use SIGSTOP instead of
+	SIGINT to interrupt inferior process.
+	* thread-db.c (thread_db_break_program): Likewise.
+@
+text
+@d50 2
+d452 1
+@
+
+
+1.10
+log
+@Add support for am33 linux.
+@
+text
+@d446 2
+d449 2
+a450 2
+    fprintf (stderr, " -- send SIGINT to child %d\n", process->pid);
+  kill (process->pid, SIGINT);
+@
+
+
+1.9
+log
+@Add support for the Linux NPTL (New POSIX Thread Library) thread
+implementation.
+* arch.h, lwp-pool.c, lwp-pool.h, stock-breakpoints.c:
+* stock-breakpoints.h: New files.
+* gdbserv-thread-db.h (continue_lwp, singlestep_lwp, attach_lwp)
+(stop_lwp): Move these ...
+* lwp-ctrl.h: ... to here (new file).
+* server.h (struct child_process): Include a pointer to the
+architecture object, a breakpoint table, and a pointer to the
+"focus thread".
+* linux-target.c: Create architecture objects for the i386 and
+FRV, and describe breakpoints for those architectures.
+#include "arch.h".
+[STOCK_BREAKPOINTS]: #include "stock-breakpoints.h".
+(allocate_empty_arch): New function.
+[X86_LINUX_TARGET] (stock_table_to_x86, x86_table_to_stock)
+(stock_bp_to_x86, x86_bp_to_stock, x86_make_bp_table, x86_set_bp)
+(x86_delete_bp, x86_bp_hit_p, x86_make_arch): New functions.
+(MAKE_ARCH): #define to call x86_make_arch.
+[X86_LINUX_TARGET] (stock_table_to_frv, frv_table_to_stock)
+(stock_bp_to_frv, frv_bp_to_stock, frv_make_bp_table, frv_set_bp)
+(frv_delete_bp, frv_bp_hit_p, frv_make_arch): New functions.
+(MAKE_ARCH): #define to call frv_make_arch.
+(linux_attach): If MAKE_ARCH is #defined, create an architecture
+object for this process.  And if we have an architecture object,
+make a breakpoint table.
+* thread-db.c: #include <assert.h>, "arch.h", "lwp-ctrl.h", and
+"lwp-pool.h".
+(struct gdbserv_thread): Remove state-tracking flags 'attached',
+'stopped', 'waited', and 'stepping'; all that state is handled
+inside lwp-pool.c now.
+(add_thread_to_list): Zero the entire newly allocated thread
+structure.
+(thread_list_lookup_by_lid): Prefer threads whose ti_lid values
+are different from that of the main process.
+(thread_db_state_str, thread_db_type_str): Don't include
+formatting spaces here.
+(thread_db_event_str): New function.
+(thread_debug_name): New function.
+(get_thread_signals): Return a value indicating success or failure.
+(ignore_thread_signal): New function.
+(using_thread_db_events, create_notification, death_notification)
+(get_event_notification, set_event_breakpoint)
+(insert_thread_db_event_breakpoints)
+(delete_thread_db_event_breakpoints, request_thread_db_events)
+(hit_thread_db_event_breakpoint, handle_thread_db_event): New
+variables and functions, for using libthread_db's event interface.
+(thread_db_open): Gather error-handling code next to the operation
+that might fail.  Decide here whether to use the signal-based
+debugging interface, or the event-based debugging interface.
+(stop_thread, stop_all_threads, struct event_list, pending_events)
+(pending_events_listsize, pending_events_top, add_pending_event)
+(select_pending_event, send_pending_signals, wait_all_threads):
+Deleted; we now use lwp-pool.c for all this.
+(attach_thread, continue_thread, continue_all_threads)
+(singlestep_thread, thread_db_singlestep_program)
+(thread_db_continue_thread, thread_db_singlestep_thread): Use the
+lwp-pool.c functions, instead of calling the lwp manipulation
+functions directly and managing state here.  Keep track of the
+focus thread.
+(find_new_threads_callback): Always call attach_thread.  If we're
+using libthread_db events, enable event reporting for the new
+thread.
+(update_thread_list): Take the current child process as an
+argument; if the current focus thread disappears, clear the
+process's focus_thread pointer.
+(thread_db_thread_next): Pass the current child process to
+update_thread_list.
+(thread_db_thread_info): Reformat thread descriptions.  Mark
+threads whose pid is equal to the process ID.
+(thread_db_check_child_state): Use the lwp-pool functions, instead
+of calling waitpid and the old stop-all-threads functions.  If we
+have a focus thread, only check for a status on that thread.
+Check for libthread_db events.  Use ignore_thread_signal, instead
+of writing it out.
+(thread_db_break_program): New function.
+(thread_db_attach): Register it as the target's 'break_program'
+method.  Always preload the symbol list with the names we'll need
+for the signal-based interface, even if we have td_symbol_list.
+Use lwp_pool_new_stopped to register the initial thread.  Clear
+the focus thread.
+* ptrace-target.c: #define _GNU_SOURCE and #include <sys/types.h>
+and <linux/unistd.h>, to get declarations for the functions we
+need.
+#include "lwp-ctrl.h".
+(continue_lwp, singlestep_lwp, attach_lwp): Remove
+unnecessary 'extern' keywords.  Move pre-function comments to
+lwp-ctrl.h.  Take an ordinary 'pid_t', not an 'lwpid_t', since
+we're calling ptrace / tkill, and that's what they expect; rename
+arguments accordingly.  Preserve value of errno across calls to
+fprintf when reporting errors.
+(kill_lwp): All the above, and use tkill system call if available.
+* configure.in: Whenever we include thread-db.o in TARGET_MODULES,
+also include lwp-pool.o.
+On i386 and FRV Linux, use the stock-breakpoints module.
+* config.in: Add template for STOCK_BREAKPOINTS.
+* Makefile.am (EXTRA_rda_SOURCES): Include stock-breakpoints.c.
+* Makefile.in, aclocal.m4, configure: Regenerated.
+@
+text
+@d164 1
+a164 1
+#if defined(_MIPSEL) || defined(_MIPSEB)
+d177 2
+a178 2
+			    &process->ss_info[i].ss_val,
+			    sizeof (process->ss_info[i].ss_val));
+d180 10
+d1252 1
+a1252 1
+#if defined(_MIPSEL) || defined(_MIPSEB)
+d1301 9
+a1309 7
+#if defined (MIPS_LINUX_TARGET) || defined (MIPS64_LINUX_TARGET)
+  {
+    if (thread_db_noisy)
+      fprintf (stderr, "<singlestep_lwp lwp=%d signal=%d>\n", lwp, signal);
+    mips_singlestep (serv, lwp, signal);
+    return 0;
+  }
+@
+
+
+1.8
+log
+@Compile with no warnings.
+* Makefile.am (AM_CFLAGS): Compile with -Wall.
+* Makefile.in: Regenerated.
+* gdbserv-thread-db.h (stop_lwp, handle_waitstatus, ps_pdread,
+ps_pdwrite): Add declarations for these functions to
+gdbserv-thread-db.h.
+* linux-target.c: #include <string.h>, <sys/types.h>, and
+<sys/wait.h> to get declarations for system functions used in this
+file.
+(linux_get_reg): When register REGNO doesn't exist, provide zeros
+for its value; don't use an uninitialized pointer.
+(linux_set_reg): Delete unused variables.
+(decr_pc_after_break): Fix printf format directive to match
+arguments.
+* ptrace-target.c (ptrace_read_user, ptrace_check_child_state,
+ptrace_attach): Delete unused variables.
+(ptrace_singlestep_program, ptrace_continue_program): Fix printf
+format directive to match arguments.
+* server.c (invalid_speed): Same.
+(main): Initialize infd, outfd, and speed.
+(tty_raw): Use proper name for speed_t "zero baud" value.
+* thread-db.c: #include <string.h> and "gdbserv-utils.h", to get
+declarations for functions used in this file.
+(thread_db_open, wait_all_threads)
+(thread_db_check_child_state, thread_db_get_thread_reg)
+(thread_db_set_thread_reg): Fix printf format directive to match
+arguments.
+(continue_thread, thread_db_get_thread_reg, continue_all_threads,
+thread_db_attach): Delete unused variables.
+@
+text
+@d27 2
+d38 2
+d49 1
+d1270 1
+a1270 1
+/* Exported service functions */
+d1272 2
+a1273 6
+/* Function: continue_lwp
+   Send PTRACE_CONT to an lwp. 
+   Returns -1 for failure, zero for success. */
+
+extern int
+continue_lwp (lwpid_t lwpid, int signal)
+d1276 1
+a1276 1
+    fprintf (stderr, "<ptrace (PTRACE_CONT, %d, 0, %d)>\n", lwpid, signal);
+d1278 1
+a1278 1
+  if (ptrace (PTRACE_CONT, lwpid, 0, signal) < 0)
+d1280 2
+a1281 1
+      fprintf (stderr, "<<< ERROR: PTRACE_CONT %d failed >>>\n", lwpid);
+a1286 4
+/* Function: singlestep_lwp
+   Send PTRACE_SINGLESTEP to an lwp.
+   Returns -1 for failure, zero for success. */
+
+d1288 1
+a1288 1
+singlestep_lwp (struct gdbserv *serv, lwpid_t lwpid, int signal)
+d1294 2
+a1295 2
+      fprintf (stderr, "<singlestep_lwp lwpid=%d signal=%d>\n", lwpid, signal);
+    mips_singlestep (serv, lwpid, signal);
+d1300 1
+a1300 1
+    fprintf (stderr, "<ptrace (PTRACE_SINGLESTEP, %d, 0, %d)>\n", lwpid, signal);
+d1302 1
+a1302 1
+  if (ptrace (PTRACE_SINGLESTEP, lwpid, 0, signal) < 0)
+d1304 6
+a1309 1
+      fprintf (stderr, "<<< ERROR: PTRACE_SINGLESTEP %d failed >>>\n", lwpid);
+d1316 2
+a1317 6
+/* Function: attach_lwp
+   Send PTRACE_ATTACH to an lwp.
+   Returns -1 for failure, zero for success. */
+
+extern int
+attach_lwp (lwpid_t lwpid)
+d1320 1
+a1320 1
+  if (ptrace (PTRACE_ATTACH, lwpid, 0, 0) == 0)
+d1323 1
+a1323 1
+	fprintf (stderr, "<ptrace (PTRACE_ATTACH, %d, 0, 0)>\n", lwpid);
+d1328 2
+d1331 3
+a1333 1
+	       lwpid, strerror (errno));
+a1337 3
+/* Function: stop_lwp
+   Use SIGSTOP to force an lwp to stop. 
+   Returns -1 for failure, zero for success. */
+d1339 2
+a1340 2
+extern int
+stop_lwp (lwpid_t lwpid)
+d1342 42
+a1383 5
+  if (kill (lwpid, SIGSTOP) == 0)
+    {
+#if 0 /* Too noisy! */
+      if (thread_db_noisy)
+	fprintf (stderr, "<kill (%d, SIGSTOP)>\n", lwpid);
+d1385 3
+a1387 3
+      return 0;
+    }
+  else
+d1389 6
+a1394 1
+      fprintf (stderr, "<<< ERROR -- kill (%d, SIGSTOP) failed >>>\n", lwpid);
+d1397 2
+@
+
+
+1.7
+log
+@	* ptrace-target.c (ptrace_create_child): Don't use sys_nerr to
+	check that errno is in a valid range.  The use sys_nerr is
+	deprecated on GNU/Linux, and according to the ISO C standard and
+	POSIX, strerror always returns a valid string, even for invalid
+	errno codes.
+@
+text
+@a208 1
+  struct child_process *process = gdbserv_target_data (serv);
+d669 1
+a669 1
+    fprintf (stderr, "PTRACE_SINGLESTEP %d signal %d\n", 
+d693 1
+a693 1
+    fprintf (stderr, "PTRACE_CONT %d signal %d\n", 
+a1249 1
+  struct gdbserv *serv = process->serv;
+@
+
+
+1.7.2.1
+log
+@Add an architecture object to the Unix server.
+* arch.h: New header file.
+* server.h (struct arch): New forward struct declaration.
+(struct child_process): Add an 'arch' member to the process.
+* thread-db.c: #include arch.h.
+* linux-target.c: #include arch.h.
+(allocate_empty_arch): New function.
+(x86_make_arch): New function.
+(MAKE_ARCH): New #definition.
+(linux_attach): Initialize process's architecture.
+
+Provide arch-independent framework for breakpoints.
+* server.h (struct arch_bp_table): New forward struct declaration.
+(struct child_process): New member: 'breakpoint_table'.
+* linux-target.c (linux_attach): Initialize process's breakpoint
+table, if the architecture defines a breakpoint table constructor.
+* arch.h (struct arch): Add fields pointing to breakpoint functions.
+
+Provide a module implementing breakpoints for architectures that
+support a simple software breakpoint model ("patch these bytes
+into the instruction stream").
+* stock-breakpoints.h, stock-breakpoints.c: New files.
+* linux-target.c: If STOCK_BREAKPOINTS is #defined, then #include
+"stock-breakpoints.h".
+* Makefile.am (EXTRA_rda_SOURCES): Add stock-breakpoints.c.
+* Makefile.in: Updated.
+
+Define x86 breakpoint functions using the stock-breakpoints.c
+model.
+* configure.in: When configuring for an x86 target, include
+stock-breakpoints.o in the mix, and #define STOCK_BREAKPOINTS.
+* configure: Regenerated.
+* config.in (STOCK_BREAKPOINTS): Provide #definition template.
+* linux-target.c (stock_table_to_x86, x86_table_to_stock,
+stock_bp_to_x86, x86_bp_to_stock, x86_make_bp_table, x86_set_bp,
+x86_delete_bp, x86_bp_hit_p): New functions.
+(x86_make_arch): Register the latter four as our breakpoint
+methods.
+
+Use the libthread_db event interface to communicate with the
+thread library, if the old signal-based interface is not
+supported.
+* thread-db.c: #include <assert.h>.
+(thread_db_event_str): New function.
+(get_target_int_by_name, set_target_int_by_name, get_thread_signals)
+(cancel_signal, restart_signal, debug_signal): Move these to just
+before thread_db_dlopen; get_thread_signals is a subroutine of that.
+(using_thread_db_events, create_notification, death_notification,
+create_event_breakpoint, death_event_breakpoint): New global vars.
+(get_event_notification, set_event_breakpoint)
+(insert_thread_db_event_breakpoints)
+(delete_thread_db_event_breakpoints, request_thread_db_events)
+(hit_thread_db_event_breakpoint): New functions.
+(thread_db_open): Call get_thread_signals, and if that fails, call
+request_thread_db_events.
+(struct event_list): Add 'thread_db_event' member.
+(add_pending_event): Initialize it.
+(delete_pending_event, handle_thread_db_events): New functions.
+(find_new_threads_callback): If we're using the event interface,
+enable event reporting on each new thread we find.
+(select_pending_event): Return a value to indicate whether we
+selected any event at all.
+(continue_all_threads): Send a restart signal only if we're using
+the signal-based interface.
+(thread_db_check_child_state): If we're using the libthread_db
+event interface to communicate with the inferior thread library,
+check for those events here.  If select_pending_event says it
+didn't find anything interesting, that means we consumed all the
+reportable events; continue the program silently.
+* ptrace-target.c: #include <sys/types.h> and <linux/unistd.h>.
+(tkill): Generate code for this syscall.
+(stop_lwp): Use tkill instead of kill.
+
+* thread-db.c (thread_db_check_child_state): Call stop_all_threads
+before calling update_thread_list, so RDA will have to compete for
+CPU with fewer running threads.
+
+* thread-db.c (wait_all_threads): Move calls to
+select_pending_event and send_pending_signals from here...
+(thread_db_check_child_state): To here.
+
+* thread-db.c (ignore_thread_signal): New function.
+(thread_db_check_child_state): Call it, instead of writing it out.
+
+* thread-db.c (thread_db_open): Return 0 on success, -1 on
+failure, like most of the other int-valued functions in this file,
+and like most system calls.
+
+* thread-db.c (struct gdbserv_thread): Doc fixes.
+
+* thread-db.c: #include "gdbserv-utils.h", to get prototypes for
+the 'struct gdbserv_reg' manipulation functions.
+
+* thread-db.c (thread_db_noisy): Initialize to 1.
+
+* thread-db.c (thread_debug_name): New function.
+(find_new_threads_callback): If noisy, report new threads.
+(stop_thread): If noisy, report stopping threads.
+(select_pending_event): If noisy, report what we selected.
+(wait_all_threads): If noisy, report before each thread we wait
+for.
+
+* thread-db.c (stop_all_threads): Doc fixes.
+
+* aclocal.m4: Regenerated.
+@
+text
+@a35 2
+#include <sys/types.h>
+#include <linux/unistd.h>
+a1336 5
+
+/* Generate code for the tkill system call.  */
+_syscall2(int, tkill, pid_t, tid, int, sig)
+
+
+d1344 1
+a1344 1
+  if (tkill (lwpid, SIGSTOP) == 0)
+d1348 1
+a1348 1
+	fprintf (stderr, "<tkill (%d, SIGSTOP)>\n", lwpid);
+d1354 1
+a1354 1
+      fprintf (stderr, "<<< ERROR -- tkill (%d, SIGSTOP) failed >>>\n", lwpid);
+@
+
+
+1.7.2.2
+log
+@* linux-target.c (linux_set_reg): Delete unused variables.
+* ptrace-target.c (ptrace_read_user, ptrace_check_child_state):
+Same.
+* thread-db.c (continue_all_threads, thread_db_attach): Same.
+@
+text
+@d211 1
+d1253 1
+@
+
+
+1.7.2.3
+log
+@* linux-target.c (decr_pc_after_break): Fix printf format
+directive to match arguments.
+* ptrace-target.c (ptrace_singlestep_program): Same.
+(ptrace_continue_program): Same.
+* server.c (invalid_speed): Same.
+* thread-db.c (thread_db_open, wait_all_threads)
+(thread_db_check_child_state, thread_db_get_thread_reg)
+(thread_db_set_thread_reg): Same.
+@
+text
+@d671 1
+a671 1
+    fprintf (stderr, "PTRACE_SINGLESTEP %d signal %ld\n", 
+d695 1
+a695 1
+    fprintf (stderr, "PTRACE_CONT %d signal %ld\n", 
+@
+
+
+1.7.2.4
+log
+@* ptrace-target.c (stop_lwp): Use tkill when possible; otherwise,
+fall back gracefully to using kill.
+@
+text
+@d1338 4
+d1349 5
+a1353 33
+  int result;
+
+  /* Under NPTL, signals sent via kill get delivered to whatever
+     thread in the group can handle them; they don't necessarily go to
+     the thread whose PID you passed.  This makes kill useless for
+     stop_lwp's purposes: it's trying to stop a particular thread.
+
+     The tkill system call lets you direct a signal at a particular
+     thread.  Use that if it's available (as it is on all systems
+     where it's necessary); otherwise, fall back to kill.  */
+#ifdef SYS_tkill
+  {
+    /* This is true if we don't know for a fact that this kernel
+       doesn't support tkill.  */
+    static int could_have_tkill = 1;
+
+    if (could_have_tkill)
+      {
+	errno = 0;
+	result = syscall (SYS_tkill, lwpid, SIGSTOP);
+	if (errno == 0)
+	  return result;
+	else if (errno == ENOSYS)
+	  /* Fall through to kill, below, and don't try tkill again.  */
+	  could_have_tkill = 0;
+	else
+	  {
+	    fprintf (stderr, "<<< ERROR -- tkill (%d, SIGSTOP) failed >>>\n",
+		     lwpid);
+	    return -1;
+	  }
+      }
+  }
+d1355 3
+a1357 3
+
+  result = kill (lwpid, SIGSTOP);
+  if (result != 0)
+d1359 1
+a1359 1
+      fprintf (stderr, "<<< ERROR -- kill (%d, SIGSTOP) failed >>>\n", lwpid);
+a1361 2
+
+  return 0;
+@
+
+
+1.7.2.5
+log
+@Separate management of kernel-level LWPs from that of libpthread /
+libthread_db-level threads.
+* lwp-pool.c, lwp-pool.h: New files.
+* thread-db.c: #include "lwp-ctrl.h" and "lwp-pool.h".
+(struct gdbserv_thread): Delete members 'attached', 'stopped',
+'waited', and 'stepping'.  This structure is now just a
+'td_thrinfo_t' and a list link.  Describe some quirks in the
+meanings of certain 'ti' fields.
+(thread_list_lookup_by_lid): Move later in file, so we can use
+information directly from our proc handle.  Be skeptical of ZOMBIE
+or UNKNOWN threads whose LWP ID is equal to the PID in the proc
+handle.
+(thread_debug_name): Move later in file, so we can use
+thread_db_state_str.
+(attach_thread): Use lwp pool functions to attach.  Attach to
+zombies.  When using signal-based communication, send the thread
+the restart signal immediately.
+(find_new_threads_callback): Go ahead and attach to all threads.
+The LWP pool functions tolerate attaching to a given LWP more than
+once.
+(update_thread_list): Take the process as an argument.  If the
+focus thread has disappeared, set process->focus_thread to NULL.
+(thread_db_thread_next): Pass the process to update_thread_list.
+(stop_thread, stop_all_threads, add_pending_event,
+delete_pending_event, select_pending_event, send_pending_signals,
+wait_all_threads, continue_all_threads): Deleted.
+(handle_thread_db_event): Renamed from handle_thread_db_events.
+Take the process structure as an argument, and check only for a
+thread-db event notification from process->event_thread.  Use LWP
+pool functions.
+(continue_thread, singlestep_thread): Use LWP pool functions.
+(thread_db_continue_program, thread_db_singlestep_program,
+thread_db_continue_thread, thread_db_singlestep_thread): Use LWP
+pool functions, and update process->focus_thread appropriately.
+(thread_db_check_child_state): Use the LWP pool functions.  Rather
+than stopping all LWP's, choosing the most interesting events, and
+then arranging to re-create all the other wait statuses we got,
+just pick the first event we get from lwp_pool_waitpid (either on
+the focus thread, if there is one, or on any thread) and report
+that.  Use the new handle_thread_db_event function.
+(struct event_list, pending_events, pending_events_listsize,
+pending_events_top): Deleted; replaced by LWP pool code.
+(thread_db_attach): Tell the LWP pool about the PID we're
+attaching to.  Clear the focus thread.
+* server.h (struct process): New member: 'focus_thread'.
+* gdbserv-thread-db.h (continue_lwp, singlestep_lwp, attach_lwp,
+stop_lwp): Move declarations from here...
+* lwp-ctrl.h: ... to here.  New file.
+(kill_lwp): Renamed from stop_lwp; allow caller to specify any
+signal.
+* ptrace-target.c: #include "lwp-ctrl.h".
+(continue_lwp, singlestep_lwp, attach_lwp, stop_lwp): Move
+function comments to lwp-ctrl.h, and expand.
+* configure.in: Whenever we select 'thread-db.o', select
+'lwp-pool.o' as well.
+* configure: Regenerated.
+
+* thread-db.c (thread_db_check_child_state): Remove extraneous
+call to handle_waitstatus.  Remove extra check for exited main
+thread.
+
+* thread-db.c (thread_db_thread_info): List the type and state
+before the PID, and mention whether the LWP's PID is equal to that
+of the main thread, since ZOMBIE and UNKNOWN threads whose LWP's
+PID is equal are probably actually exited threads.
+
+* thread-db.c (add_thread_to_list): Zero out entire structure.
+
+* thread-db.c (thread_db_state_str, thread_db_type_str): Remove
+spaces from names; we don't always want them, and the caller can
+use printf formatting directives to arrange things as they please.
+
+* ptrace-target.c (continue_lwp, singlestep_lwp, attach_lwp,
+stop_lwp): Change arguments from 'lwpid_t' to 'pid_t'.  lwpid_t is
+strictly a thread-db type; these are functions that use system
+calls, which all expect pid_t.  Rename arguments from 'lwpid' to
+'pid'.
+
+* ptrace-target.c: #define _GNU_SOURCE to get declaration for
+strsignal.
+(kill_lwp): Enhance error reporting.
+@
+text
+@a26 2
+#define _GNU_SOURCE
+
+a46 1
+#include "lwp-ctrl.h"
+d1267 5
+a1271 1
+/* Exported service functions; see "lwp-ctrl.h".  */
+d1273 2
+a1274 2
+int
+continue_lwp (pid_t lwp, int signal)
+d1277 1
+a1277 1
+    fprintf (stderr, "<ptrace (PTRACE_CONT, %d, 0, %d)>\n", lwp, signal);
+d1279 1
+a1279 1
+  if (ptrace (PTRACE_CONT, lwp, 0, signal) < 0)
+d1281 1
+a1281 2
+      fprintf (stderr, "<<< ERROR: PTRACE_CONT %d failed: %s >>>\n", 
+	       lwp, strerror (errno));
+d1287 4
+d1292 1
+a1292 1
+singlestep_lwp (struct gdbserv *serv, pid_t lwp, int signal)
+d1298 2
+a1299 2
+      fprintf (stderr, "<singlestep_lwp lwp=%d signal=%d>\n", lwp, signal);
+    mips_singlestep (serv, lwp, signal);
+d1304 1
+a1304 1
+    fprintf (stderr, "<ptrace (PTRACE_SINGLESTEP, %d, 0, %d)>\n", lwp, signal);
+d1306 1
+a1306 1
+  if (ptrace (PTRACE_SINGLESTEP, lwp, 0, signal) < 0)
+d1308 1
+a1308 6
+      int saved_errno = errno;
+
+      fprintf (stderr, "<<< ERROR: PTRACE_SINGLESTEP %d failed: %s >>>\n",
+	       lwp, strerror (errno));
+      
+      errno = saved_errno;
+d1315 6
+a1320 2
+int
+attach_lwp (pid_t lwp)
+d1323 1
+a1323 1
+  if (ptrace (PTRACE_ATTACH, lwp, 0, 0) == 0)
+d1326 1
+a1326 1
+	fprintf (stderr, "<ptrace (PTRACE_ATTACH, %d, 0, 0)>\n", lwp);
+a1330 2
+      int saved_errno = errno;
+
+d1332 1
+a1332 3
+	       lwp, strerror (errno));
+
+      errno = saved_errno;
+d1338 6
+a1343 2
+int
+kill_lwp (pid_t lwp, int signal)
+d1350 1
+a1350 2
+     kill_lwp's purposes: it's trying to send a signal to a particular
+     thread.
+d1364 1
+a1364 1
+	result = syscall (SYS_tkill, lwp, signal);
+d1372 2
+a1373 7
+	    int saved_errno = errno;
+
+	    fprintf (stderr,
+		     "<<< ERROR -- tkill (%d, %s) failed: %s >>>\n",
+		     lwp, strsignal (signal), strerror (errno));
+
+	    errno = saved_errno;
+d1380 1
+a1380 1
+  result = kill (lwp, signal);
+d1383 1
+a1383 6
+      int saved_errno = errno;
+
+      fprintf (stderr, "<<< ERROR -- kill (%d, %s) failed >>>\n", 
+	       lwp, strsignal (signal));
+
+      errno = saved_errno;
+@
+
+
+1.7.2.6
+log
+@* ptrace-target.c (kill_lwp): Produce debugging output.
+@
+text
+@a1343 3
+  if (thread_db_noisy)
+    fprintf (stderr, "kill_lwp (%d, %d)\n", (int) lwp, signal);
+
+@
+
+
+1.6
+log
+@	* ptrace-target.c (ptrace_exit_program): Cause main loop to exit.
+	* server.c (sys/types.h, sys/stat.h, fcntl.h, string.h, unistd.h)
+	(ctype.h, termios.h): Include.
+	(close_device, tty_raw, invalid_speed, parse_speed): New functions.
+	(speed_table): New static global.
+	(usage): Update usage message.
+	(main): Add support for connecting to serial devices.
+@
+text
+@d125 1
+a125 2
+		   errno > 0 && errno < sys_nerr ? 
+		   strerror (errno) : "unknown error");
+@
+
+
+1.5
+log
+@	* ptrace-target.c (ptrace_create_child): Use vfork() instead of
+	fork().  Use PTRACE_ATTACH to attach to an existing process.
+	* server.c (usage): Update to include text about "-a".
+	(main): Allow use of -a switch to attach to an existing process.
+@
+text
+@d420 3
+a422 1
+  gdbserv_fromtarget_exit (serv, GDBSERV_SIGQUIT);
+@
+
+
+1.4
+log
+@Fix mips single step code for mips64 n32 and n64 targets.  Adjust register
+information.
+@
+text
+@d71 5
+a75 1
+   Fork the child process and capture it via ptrace.
+a76 2
+   Args: char *exec_path;	\* path to executable file *\
+	 char **all_args;	\* argv array for child.   *\
+d86 1
+a86 2
+  pid = fork ();
+  if (pid < 0)
+d88 1
+a88 4
+      /*perror_with_name ("fork");*/
+      fprintf (stderr, "PTRACE: fork failed!\n");
+      return 0;
+    }
+a89 5
+  if (pid == 0)
+    {
+      close_open_files ();
+      if (process->debug_backend)
+	fprintf (stderr, "PTRACE_TRACEME\n");
+d91 1
+a91 1
+      ptrace (PTRACE_TRACEME, 0L, 0L, 0L);
+d94 36
+a129 2
+	  fprintf (stderr, "PTRACE: child cannot be traced!\n");
+	  goto fail;
+a130 11
+      if (process->executable != NULL && process->argv != NULL)
+	execv (process->executable, process->argv);
+      else
+	sleep (-1);	/* FIXME ??? */
+
+      fprintf (stderr, "Cannot exec %s: %s.\n", process->executable,
+	       errno > 0 && errno < sys_nerr ? 
+	       strerror (errno) : "unknown error");
+    fail:
+      fflush (stderr);
+      _exit (0177);
+@
+
+
+1.3
+log
+@	* ptrace-target.h, ptrace-target.c (ptrace_write_user)
+	(ptrace_read_user): Add struct gdbserv argument.
+	* linux-target.c: Fix all callers (and callers of callers).
+	* ptrace-target.c (ptrace_write_user, ptrace_read_user): Add
+	debugging printf()s.
+	(ptrace_xfer_mem): Fix debugging printf()s so that they'll print
+	useful results when sizeof (long long) is the same as
+	sizeof (ptrace_xfer_type).
+	(ptrace_xfer_mem): Decode address using gdbserv_host_bytes_from_reg()
+	instead of gdbserv_reg_to_ulong().
+@
+text
+@a30 3
+#include "server.h"
+#include "ptrace-target.h"
+
+d43 2
+d151 10
+a160 7
+      ptrace (PTRACE_POKETEXT, process->pid, process->ss_info[0].ss_addr, process->ss_info[0].ss_val);
+      process->ss_info[0].ss_addr = 0;
+      
+      if (process->ss_info[1].ss_addr) {
+	ptrace (PTRACE_POKETEXT, process->pid, process->ss_info[1].ss_addr, process->ss_info[1].ss_val);
+	process->ss_info[1].ss_addr = 0;
+      }
+d1088 1
+a1088 1
+static long
+d1097 1
+a1097 1
+static long
+d1274 2
+a1275 2
+extern int
+singlestep_lwp (lwpid_t lwpid, int signal)
+d1277 9
+d1294 1
+@
+
+
+1.2
+log
+@2002-11-19  Michael Snyder  <msnyder@@redhat.com>
+
+	* ptrace-target.c: Fix typo in copyright.
+@
+text
+@d186 2
+a187 1
+ptrace_read_user (int pid, 
+d192 1
+d204 6
+d222 2
+a223 1
+ptrace_write_user (int pid, 
+d228 1
+d244 4
+d973 2
+a974 1
+  gdbserv_reg_to_ulong (serv, addr, &request_base);
+d980 1
+d995 2
+a996 2
+	    fprintf (stderr, "PTRACE_PEEKTEXT-1 0x%08lx in %d, 0x%08lx\n", 
+		     (long) temp_addr, process->pid, (long) buf[i]);
+d1023 2
+a1024 2
+	    fprintf (stderr, "PTRACE_PEEKTEXT-2 0x%08lx in %d, 0x%08lx\n", 
+		     (long) xfer_base, process->pid, (long) buf[0]);
+d1030 2
+a1031 2
+			 "xfer_mem(2): ptrace error at 0x%08lx in %d: %s\n", 
+			 (long) xfer_base, process->pid, strerror (errno));
+d1044 3
+a1046 3
+	    fprintf (stderr, "PTRACE_PEEKTEXT-3 0x%08lx in %d, 0x%08lx\n", 
+		     (long) temp_addr, process->pid, 
+		     (long) buf[xfer_count - 1]);
+d1069 2
+a1070 2
+	    fprintf (stderr, "PTRACE_POKETEXT 0x%08lx in %d, 0x%08lx\n", 
+		     (long) temp_addr, process->pid, (long) buf[i]);
+d1076 2
+a1077 2
+			 "xfer_mem(4): ptrace error at 0x%08lx in %d: %s\n", 
+			 (long) temp_addr, process->pid, strerror (errno));
+@
+
+
+1.1
+log
+@Added files comprising RDA.
+@
+text
+@d3 1
+a3 1
+   Copyright 200, 2001, 2002 Red Hat, Inc.
+@
+

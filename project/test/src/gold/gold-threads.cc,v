@@ -1,0 +1,1296 @@
+head	1.14;
+access;
+symbols
+	binutils-2_24-branch:1.13.0.8
+	binutils-2_24-branchpoint:1.13
+	binutils-2_21_1:1.12
+	binutils-2_23_2:1.13
+	binutils-2_23_1:1.13
+	binutils-2_23:1.13
+	binutils-2_23-branch:1.13.0.6
+	binutils-2_23-branchpoint:1.13
+	binutils-2_22_branch:1.13.0.4
+	binutils-2_22:1.13
+	binutils-2_22-branch:1.13.0.2
+	binutils-2_22-branchpoint:1.13
+	binutils-2_21:1.12
+	binutils-2_21-branch:1.12.0.2
+	binutils-2_21-branchpoint:1.12
+	binutils-2_20_1:1.9
+	binutils-2_20:1.9
+	binutils-arc-20081103-branch:1.7.0.6
+	binutils-arc-20081103-branchpoint:1.7
+	binutils-2_20-branch:1.9.0.4
+	binutils-2_20-branchpoint:1.9
+	dje-cgen-play1-branch:1.9.0.2
+	dje-cgen-play1-branchpoint:1.9
+	arc-20081103-branch:1.7.0.4
+	arc-20081103-branchpoint:1.7
+	binutils-2_19_1:1.7
+	binutils-2_19:1.7
+	binutils-2_19-branch:1.7.0.2
+	binutils-2_19-branchpoint:1.7
+	binutils_latest_snapshot:1.14
+	added-to-binutils:1.7;
+locks; strict;
+comment	@// @;
+
+
+1.14
+date	2013.10.11.21.02.42;	author roland;	state Exp;
+branches;
+next	1.13;
+
+1.13
+date	2010.12.14.19.03.29;	author rwild;	state Exp;
+branches
+	1.13.8.1;
+next	1.12;
+
+1.12
+date	2010.08.25.08.36.54;	author nickc;	state Exp;
+branches;
+next	1.11;
+
+1.11
+date	2010.06.07.15.00.44;	author ian;	state Exp;
+branches;
+next	1.10;
+
+1.10
+date	2010.02.12.03.23.26;	author ian;	state Exp;
+branches;
+next	1.9;
+
+1.9
+date	2009.03.24.17.32.43;	author ian;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2009.03.24.04.50.32;	author ian;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2008.03.13.21.04.21;	author iant;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2008.02.28.00.18.24;	author iant;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2007.11.22.00.05.51;	author iant;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2007.10.17.06.24.50;	author iant;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2007.09.22.21.02.10;	author iant;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2006.11.29.17.56.40;	author iant;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2006.08.04.23.10.59;	author iant;	state Exp;
+branches;
+next	;
+
+1.13.8.1
+date	2013.10.11.21.03.28;	author roland;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.14
+log
+@gold/
+	* gold-threads.h (Once): Conditionalize member was_run_lock_ on
+	[ENABLE_THREADS && __GCC_HAVE_SYNC_COMPARE_AND_SWAP_4], matching
+	its only use.
+	* gold-threads.cc (Once::Once): Likewise conditionalize initializer.
+@
+text
+@// gold-threads.cc -- thread support for gold
+
+// Copyright 2006, 2007, 2008, 2009, 2010, 2013 Free Software Foundation, Inc.
+// Written by Ian Lance Taylor <iant@@google.com>.
+
+// This file is part of gold.
+
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 3 of the License, or
+// (at your option) any later version.
+
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+// MA 02110-1301, USA.
+
+#include "gold.h"
+
+#include <cstring>
+
+#ifdef ENABLE_THREADS
+#include <pthread.h>
+#endif
+
+#include "options.h"
+#include "parameters.h"
+#include "gold-threads.h"
+
+namespace gold
+{
+
+class Condvar_impl_nothreads;
+
+// The non-threaded version of Lock_impl.
+
+class Lock_impl_nothreads : public Lock_impl
+{
+ public:
+  Lock_impl_nothreads()
+    : acquired_(false)
+  { }
+
+  ~Lock_impl_nothreads()
+  { gold_assert(!this->acquired_); }
+
+  void
+  acquire()
+  {
+    gold_assert(!this->acquired_);
+    this->acquired_ = true;
+  }
+
+  void
+  release()
+  {
+    gold_assert(this->acquired_);
+    this->acquired_ = false;
+  }
+
+ private:
+  friend class Condvar_impl_nothreads;
+
+  bool acquired_;
+};
+
+#ifdef ENABLE_THREADS
+
+class Condvar_impl_threads;
+
+// The threaded version of Lock_impl.
+
+class Lock_impl_threads : public Lock_impl
+{
+ public:
+  Lock_impl_threads();
+  ~Lock_impl_threads();
+
+  void acquire();
+
+  void release();
+
+private:
+  // This class can not be copied.
+  Lock_impl_threads(const Lock_impl_threads&);
+  Lock_impl_threads& operator=(const Lock_impl_threads&);
+
+  friend class Condvar_impl_threads;
+
+  pthread_mutex_t mutex_;
+};
+
+Lock_impl_threads::Lock_impl_threads()
+{
+  pthread_mutexattr_t attr;
+  int err = pthread_mutexattr_init(&attr);
+  if (err != 0)
+    gold_fatal(_("pthead_mutextattr_init failed: %s"), strerror(err));
+#ifdef PTHREAD_MUTEX_ADAPTIVE_NP
+  err = pthread_mutextattr_settype(&attr, PTHREAD_MUTEX_ADAPTIVE_NP);
+  if (err != 0)
+    gold_fatal(_("pthread_mutextattr_settype failed: %s"), strerror(err));
+#endif
+
+  err = pthread_mutex_init(&this->mutex_, &attr);
+  if (err != 0)
+    gold_fatal(_("pthread_mutex_init failed: %s"), strerror(err));
+
+  err = pthread_mutexattr_destroy(&attr);
+  if (err != 0)
+    gold_fatal(_("pthread_mutexattr_destroy failed: %s"), strerror(err));
+}
+
+Lock_impl_threads::~Lock_impl_threads()
+{
+  int err = pthread_mutex_destroy(&this->mutex_);
+  if (err != 0)
+    gold_fatal(_("pthread_mutex_destroy failed: %s"), strerror(err));
+}
+
+void
+Lock_impl_threads::acquire()
+{
+  int err = pthread_mutex_lock(&this->mutex_);
+  if (err != 0)
+    gold_fatal(_("pthread_mutex_lock failed: %s"), strerror(err));
+}
+
+void
+Lock_impl_threads::release()
+{
+  int err = pthread_mutex_unlock(&this->mutex_);
+  if (err != 0)
+    gold_fatal(_("pthread_mutex_unlock failed: %s"), strerror(err));
+}
+
+#endif // defined(ENABLE_THREADS)
+
+// Class Lock.
+
+Lock::Lock()
+{
+  if (!parameters->options().threads())
+    this->lock_ = new Lock_impl_nothreads;
+  else
+    {
+#ifdef ENABLE_THREADS
+      this->lock_ = new Lock_impl_threads;
+#else
+      gold_unreachable();
+#endif
+    }
+}
+
+Lock::~Lock()
+{
+  delete this->lock_;
+}
+
+// The non-threaded version of Condvar_impl.
+
+class Condvar_impl_nothreads : public Condvar_impl
+{
+ public:
+  Condvar_impl_nothreads()
+  { }
+
+  ~Condvar_impl_nothreads()
+  { }
+
+  void
+  wait(Lock_impl* li)
+  { gold_assert(static_cast<Lock_impl_nothreads*>(li)->acquired_); }
+
+  void
+  signal()
+  { }
+
+  void
+  broadcast()
+  { }
+};
+
+#ifdef ENABLE_THREADS
+
+// The threaded version of Condvar_impl.
+
+class Condvar_impl_threads : public Condvar_impl
+{
+ public:
+  Condvar_impl_threads();
+  ~Condvar_impl_threads();
+
+  void
+  wait(Lock_impl*);
+
+  void
+  signal();
+
+  void
+  broadcast();
+
+ private:
+  // This class can not be copied.
+  Condvar_impl_threads(const Condvar_impl_threads&);
+  Condvar_impl_threads& operator=(const Condvar_impl_threads&);
+
+  pthread_cond_t cond_;
+};
+
+Condvar_impl_threads::Condvar_impl_threads()
+{
+  int err = pthread_cond_init(&this->cond_, NULL);
+  if (err != 0)
+    gold_fatal(_("pthread_cond_init failed: %s"), strerror(err));
+}
+
+Condvar_impl_threads::~Condvar_impl_threads()
+{
+  int err = pthread_cond_destroy(&this->cond_);
+  if (err != 0)
+    gold_fatal(_("pthread_cond_destroy failed: %s"), strerror(err));
+}
+
+void
+Condvar_impl_threads::wait(Lock_impl* li)
+{
+  Lock_impl_threads* lit = static_cast<Lock_impl_threads*>(li);
+  int err = pthread_cond_wait(&this->cond_, &lit->mutex_);
+  if (err != 0)
+    gold_fatal(_("pthread_cond_wait failed: %s"), strerror(err));
+}
+
+void
+Condvar_impl_threads::signal()
+{
+  int err = pthread_cond_signal(&this->cond_);
+  if (err != 0)
+    gold_fatal(_("pthread_cond_signal failed: %s"), strerror(err));
+}
+
+void
+Condvar_impl_threads::broadcast()
+{
+  int err = pthread_cond_broadcast(&this->cond_);
+  if (err != 0)
+    gold_fatal(_("pthread_cond_broadcast failed: %s"), strerror(err));
+}
+
+#endif // defined(ENABLE_THREADS)
+
+// Methods for Condvar class.
+
+Condvar::Condvar(Lock& lock)
+  : lock_(lock)
+{
+  if (!parameters->options().threads())
+    this->condvar_ = new Condvar_impl_nothreads;
+  else
+    {
+#ifdef ENABLE_THREADS
+      this->condvar_ = new Condvar_impl_threads;
+#else
+      gold_unreachable();
+#endif
+    }
+}
+
+Condvar::~Condvar()
+{
+  delete this->condvar_;
+}
+
+#ifdef ENABLE_THREADS
+
+// Class Once_initialize.  This exists to hold a pthread_once_t
+// structure for Once.
+
+class Once_initialize
+{
+ public:
+  Once_initialize()
+    : once_(PTHREAD_ONCE_INIT)
+  { }
+
+  // Return a pointer to the pthread_once_t variable.
+  pthread_once_t*
+  once_control()
+  { return &this->once_; }
+
+ private:
+  pthread_once_t once_;
+};
+
+#endif // defined(ENABLE_THREADS)
+
+#ifdef ENABLE_THREADS
+
+// A single lock which controls access to once_pointer.  This is used
+// because we can't pass parameters to functions passed to
+// pthread_once.
+
+static pthread_mutex_t once_pointer_control = PTHREAD_MUTEX_INITIALIZER;
+
+// A pointer to Once structure we want to run.  Access to this is
+// controlled by once_pointer_control.
+
+static Once* once_pointer;
+
+// The argument to pass to the Once structure.  Access to this is
+// controlled by once_pointer_control.
+
+static void* once_arg;
+
+// A routine passed to pthread_once which runs the Once pointer.
+
+extern "C"
+{
+
+static void
+c_run_once(void)
+{
+  once_pointer->internal_run(once_arg);
+}
+
+}
+
+#endif // defined(ENABLE_THREADS)
+
+// Class Once.
+
+Once::Once()
+  : was_run_(false)
+#if defined(ENABLE_THREADS) && defined(__GCC_HAVE_SYNC_COMPARE_AND_SWAP_4)
+    , was_run_lock_(0)
+#endif
+{
+#ifndef ENABLE_THREADS
+  this->once_ = NULL;
+#else
+  this->once_ = new Once_initialize();
+#endif
+}
+
+// Run the function once.
+
+void
+Once::run_once(void* arg)
+{
+#ifndef ENABLE_THREADS
+
+  // If there is no threads support, we don't need to use pthread_once.
+  if (!this->was_run_)
+    this->internal_run(arg);
+
+#else // defined(ENABLE_THREADS)
+
+  if (parameters->options_valid() && !parameters->options().threads())
+    {
+      // If we are not using threads, we don't need to lock.
+      if (!this->was_run_)
+	this->internal_run(arg);
+      return;
+    }
+
+  // If we have the sync builtins, use them to skip the lock if the
+  // value has already been initialized.
+#ifdef __GCC_HAVE_SYNC_COMPARE_AND_SWAP_4
+  while (true)
+    {
+      if (__sync_bool_compare_and_swap(&this->was_run_lock_, 0, 1))
+	break;
+    }
+  bool was_run = this->was_run_;
+  while (true)
+    {
+      if (__sync_bool_compare_and_swap(&this->was_run_lock_, 1, 0))
+	break;
+    }
+  if (was_run)
+    return;
+#endif
+
+  // Since we can't pass parameters to routines called by
+  // pthread_once, we use a static variable: once_pointer.  This in
+  // turns means that we need to use a mutex to control access to
+  // once_pointer.
+
+  int err = pthread_mutex_lock(&once_pointer_control);
+  if (err != 0)
+    gold_fatal(_("pthread_mutex_lock failed: %s"), strerror(err));
+
+  once_pointer = this;
+  once_arg = arg;
+
+  err = pthread_once(this->once_->once_control(), c_run_once);
+  if (err != 0)
+    gold_fatal(_("pthread_once failed: %s"), strerror(err));
+
+  once_pointer = NULL;
+  once_arg = NULL;
+
+  err = pthread_mutex_unlock(&once_pointer_control);
+  if (err != 0)
+    gold_fatal(_("pthread_mutex_unlock failed: %s"), strerror(err));
+
+#endif // defined(ENABLE_THREADS)
+}
+
+// Actually run the function in the child class.  This function will
+// be run only once.
+
+void
+Once::internal_run(void* arg)
+{
+  this->do_run_once(arg);
+  this->was_run_ = true;
+}
+
+// Class Initialize_lock.
+
+// Initialize the lock.
+
+bool
+Initialize_lock::initialize()
+{
+  // We can't initialize the lock until we have read the options.
+  if (!parameters->options_valid())
+    return false;
+  else
+    {
+      this->run_once(NULL);
+      return true;
+    }
+}
+
+// Initialize the lock exactly once.
+
+void
+Initialize_lock::do_run_once(void*)
+{
+  *this->pplock_ = new Lock();
+}
+
+} // End namespace gold.
+@
+
+
+1.13
+log
+@Fix typos in gold.
+
+gold/:
+	* dwarf_reader.cc: Remove outdated comment.
+	* gold-threads.cc: Fix typo in error message.
+	* archive.cc: Fix typos in comments.
+	* archive.h: Likewise.
+	* arm-reloc-property.cc: Likewise.
+	* arm-reloc-property.h: Likewise.
+	* arm-reloc.def: Likewise.
+	* arm.cc: Likewise.
+	* attributes.h: Likewise.
+	* cref.cc: Likewise.
+	* ehframe.cc: Likewise.
+	* fileread.h: Likewise.
+	* gold.h: Likewise.
+	* i386.cc: Likewise.
+	* icf.cc: Likewise.
+	* incremental.h: Likewise.
+	* int_encoding.cc: Likewise.
+	* layout.h: Likewise.
+	* main.cc: Likewise.
+	* merge.h: Likewise.
+	* object.cc: Likewise.
+	* object.h: Likewise.
+	* options.cc: Likewise.
+	* readsyms.cc: Likewise.
+	* reduced_debug_output.cc: Likewise.
+	* reloc.cc: Likewise.
+	* script-sections.cc: Likewise.
+	* sparc.cc: Likewise.
+	* symtab.h: Likewise.
+	* target-reloc.h: Likewise.
+	* target.cc: Likewise.
+	* target.h: Likewise.
+	* timer.cc: Likewise.
+	* timer.h: Likewise.
+	* x86_64.cc: Likewise.
+@
+text
+@d3 1
+a3 1
+// Copyright 2006, 2007, 2008, 2009, 2010 Free Software Foundation, Inc.
+d338 4
+a341 1
+  : was_run_(false), was_run_lock_(0)
+@
+
+
+1.13.8.1
+log
+@gold/
+	* gold-threads.h (Once): Conditionalize member was_run_lock_ on
+	[ENABLE_THREADS && __GCC_HAVE_SYNC_COMPARE_AND_SWAP_4], matching
+	its only use.
+	* gold-threads.cc (Once::Once): Likewise conditionalize initializer.
+@
+text
+@d3 1
+a3 1
+// Copyright 2006, 2007, 2008, 2009, 2010, 2013 Free Software Foundation, Inc.
+d338 1
+a338 4
+  : was_run_(false)
+#if defined(ENABLE_THREADS) && defined(__GCC_HAVE_SYNC_COMPARE_AND_SWAP_4)
+    , was_run_lock_(0)
+#endif
+@
+
+
+1.12
+log
+@        * archive.cc: Formatting fixes: Remove whitespace between
+        typename and following asterisk.  Remove whitespace between
+        function name and opening parenthesis.
+        * archive.h: Likewise.
+        * arm.cc: Likewise.
+        * attributes.cc: Likewise.
+        * attributes.h: Likewise.
+        * common.cc: Likewise.
+        * copy-relocs.cc: Likewise.
+        * dirsearch.h: Likewise.
+        * dynobj.cc: Likewise.
+        * ehframe.cc: Likewise.
+        * ehframe.h: Likewise.
+        * expression.cc: Likewise.
+        * fileread.cc: Likewise.
+        * fileread.h: Likewise.
+        * gc.h: Likewise.
+        * gold-threads.cc: Likewise.
+        * gold.cc: Likewise.
+        * i386.cc: Likewise.
+        * icf.h: Likewise.
+        * incremental-dump.cc: Likewise.
+        * incremental.cc: Likewise.
+        * layout.cc: Likewise.
+        * layout.h: Likewise.
+        * main.cc: Likewise.
+        * merge.cc: Likewise.
+        * merge.h: Likewise.
+        * object.cc: Likewise.
+        * object.h: Likewise.
+        * options.cc: Likewise.
+        * options.h: Likewise.
+        * output.cc: Likewise.
+        * output.h: Likewise.
+        * plugin.cc: Likewise.
+        * plugin.h: Likewise.
+        * powerpc.cc: Likewise.
+        * reloc.cc: Likewise.
+        * script-c.h: Likewise.
+        * script-sections.cc: Likewise.
+        * script.cc: Likewise.
+        * stringpool.cc: Likewise.
+        * symtab.cc: Likewise.
+        * symtab.h: Likewise.
+        * target.cc: Likewise.
+        * timer.cc: Likewise.
+        * timer.h: Likewise.
+        * version.cc: Likewise.
+        * x86_64.cc: Likewise.
+@
+text
+@d407 1
+a407 1
+    gold_fatal(_("pthread_mutex_unlock falied: %s"), strerror(err));
+@
+
+
+1.11
+log
+@	* gold-threads.cc (Lock_impl_threads::Lock_impl_threads): Correct
+	#ifdef typo.
+@
+text
+@d110 1
+a110 1
+  err = pthread_mutex_init (&this->mutex_, &attr);
+@
+
+
+1.10
+log
+@	* gold-threads.h (class Once): Define.
+	(class Initialize_lock): Rewrite as child of Once.
+	* gold-threads.cc (class Once_initialize): Define.
+	(once_pointer_control): New static variable.
+	(once_pointer, once_arg): New static variables.
+	(c_run_once): New static function.
+	(Once::Once, Once::run_once, Once::internal_run): New functions.
+	(class Initialize_lock_once): Remove.
+	(initialize_lock_control): Remove.
+	(initialize_lock_pointer): Remove.
+	(initialize_lock_once): Remove.
+	(Initialize_lock::Initialize_lock): Move to gold-threads.h.
+	(Initialize_lock::initialize): Rewrite.
+	(Initialize_lock::do_run_once): New function.
+	* archive.cc (Archive::interpret_header): Only clear name if it is
+	not already empty.
+	* fileread.cc: Include "gold-threads.h"
+	(file_counts_lock): New static variable.
+	(file_counts_initialize_lock): Likewise.
+	(File_read::release): Only increment counts when using --stats.
+	Use a lock around the increment.
+	* parameters.cc (class Set_parameters_target_once): Define.
+	(set_parameters_target_once): New static variable.
+	(Parameters::Parameters): Move here from parameters.h.
+	(Parameters::set_target): Rewrite.
+	(Parameters::set_target_once): New function.
+	(Parameters::clear_target): Move here and rewrite.
+	* parameters.h (class Parameters): Update declarations.  Add
+	set_parameters_target_once_ field.
+	(Parameters::Parameters): Move to parameters.cc.
+	(Parameters::clear_target): Likewise.
+	* readsyms.cc (Read_symbols::do_group): Create a Start_group
+	task.
+	(Start_group::~Start_group): New function.
+	(Start_group::is_runnable): New function.
+	(Start_group::locks, Start_group::run): New functions.
+	(Finish_group::run): Change saw_undefined to size_t.
+	* readsyms.h (class Start_group): Define.
+	(class Finish_group): Change saw_undefined_ field to size_t.
+	(Finish_group::Finish_group): Remove saw_undefined and
+	this_blocker parameters.  Change all callers.
+	(Finish_group::set_saw_undefined): New function.
+	(Finish_group::set_blocker): New function.
+	* symtab.h (class Symbol_table): Change saw_undefined to return
+	size_t.  Change saw_undefined_ field to size_t.
+	* target-select.cc (Set_target_once::do_run_once): New function.
+	(Target_selector::Target_selector): Initialize set_target_once_
+	field.  Don't initialize lock_ and initialize_lock_ fields.
+	(Target_selector::instantiate_target): Rewrite.
+	(Target_selector::set_target): New function.
+	* target-select.h (class Set_target_once): Define.
+	(class Target_selector): Update declarations.  Make
+	Set_target_once a friend.  Remove lock_ and initialize_lock_
+	fields.  Add set_target_once_ field.
+@
+text
+@d104 1
+a104 1
+#ifdef PTHREAD_MUTEXT_ADAPTIVE_NP
+@
+
+
+1.9
+log
+@	* target-select.cc (instantiate_target): Don't acquire the lock if
+	the instantiated_target_ field has already been set.
+@
+text
+@d3 1
+a3 1
+// Copyright 2006, 2007, 2008 Free Software Foundation, Inc.
+d281 2
+a282 2
+// Class Initialize_lock_once.  This exists to hold a pthread_once_t
+// structure for Initialize_lock.
+d284 1
+a284 1
+class Initialize_lock_once
+d287 1
+a287 1
+  Initialize_lock_once()
+d300 1
+a300 1
+#endif // !defined(ENABLE_THREADS)
+d304 5
+a308 3
+// A single lock which controls access to initialize_lock_pointer.
+// This is used because we can't pass parameters to functions passed
+// to pthread_once.
+d310 2
+a311 1
+static pthread_mutex_t initialize_lock_control = PTHREAD_MUTEX_INITIALIZER;
+d313 1
+a313 2
+// A pointer to a pointer to the lock which we need to initialize
+// once.  Access to this is controlled by initialize_lock_control.
+d315 2
+a316 1
+static Lock** initialize_lock_pointer;
+d318 3
+a320 2
+// A routine passed to pthread_once which initializes the lock which
+// initialize_lock_pointer points to.
+d326 1
+a326 1
+initialize_lock_once()
+d328 1
+a328 1
+  *initialize_lock_pointer = new Lock();
+d333 1
+a333 1
+#endif // !defined(ENABLE_THREADS)
+d335 1
+a335 1
+// Class Initialize_lock.
+d337 2
+a338 2
+Initialize_lock::Initialize_lock(Lock** pplock)
+  : pplock_(pplock)
+d343 1
+a343 1
+  this->once_ = new Initialize_lock_once();
+d347 1
+a347 1
+// Initialize the lock.
+d349 2
+a350 2
+bool
+Initialize_lock::initialize()
+d352 1
+a352 6
+  // If the lock has already been initialized, we don't need to do
+  // anything.  Note that this assumes that the pointer value will be
+  // set completely or not at all.  I hope this is always safe.  We
+  // want to do this for efficiency.
+  if (*this->pplock_ != NULL)
+    return true;
+d354 5
+a358 3
+  // We can't initialize the lock until we have read the options.
+  if (!parameters->options_valid())
+    return false;
+d360 1
+a360 3
+  // If the user did not use --threads, then we can initialize
+  // directly.
+  if (!parameters->options().threads())
+d362 4
+a365 2
+      *this->pplock_ = new Lock();
+      return true;
+d368 17
+a384 7
+#ifndef ENABLE_THREADS
+
+  // If there is no threads support, we don't need to use
+  // pthread_once.
+  *this->pplock_ = new Lock();
+
+#else // !defined(ENABLE_THREADS)
+d387 3
+a389 3
+  // pthread_once, we use a static variable: initialize_lock_pointer.
+  // That in turns means that we need to use a mutex to control access
+  // to initialize_lock_pointer.
+d391 1
+a391 1
+  int err = pthread_mutex_lock(&initialize_lock_control);
+d395 2
+a396 1
+  initialize_lock_pointer = this->pplock_;
+d398 1
+a398 1
+  err = pthread_once(this->once_->once_control(), initialize_lock_once);
+d402 2
+a403 1
+  initialize_lock_pointer = NULL;
+d405 1
+a405 1
+  err = pthread_mutex_unlock(&initialize_lock_control);
+d407 18
+a424 1
+    gold_fatal(_("pthread_mutex_unlock failed: %s"), strerror(err));
+d426 12
+a437 1
+  gold_assert(*this->pplock_ != NULL);
+d439 1
+a439 1
+#endif // !defined(ENABLE_THREADS)
+d441 4
+a444 1
+  return true;
+@
+
+
+1.8
+log
+@2009-03-23  Ian Lance Taylor  <iant@@google.com>
+
+	* gold-threads.h (class Initialize_lock): Define.
+	* gold-threads.cc (class Initialize_lock_once): Define.
+	(initialize_lock_control): New static variable.
+	(initialize_lock_pointer): New static variable.
+	(initialize_lock_once): New static function.
+	(Initialize_lock::Initialize_lock): Define.
+	(Initialize_lock::initialize): Define.
+	* target-select.h: Include "gold-threads.h".
+	(class Target_selector): Add lock_ and initialize_lock_ fields.
+	Don't define instantiate_target, just declare it.
+	* target-select.cc (Target_selector::Target_selector): Initialize
+	new fields.
+	(Target_selector::instantiate_target): Define.
+	* descriptors.h: Include "gold-threads.h".
+	(class Descriptors): Add initialize_lock_ field.
+	* descriptors.cc (Descriptors::Descriptors): Initialize new
+	field.
+	(Descriptors::open): Use initialize_lock_ field
+	* errors.h (class Errors): Add initialize_lock_ field.
+	* errors.cc (Errors::Errors): Initialize new field.
+	(Errors::initialize_lock): Use initialize_lock_ field.
+	* powerpc.cc (class Target_selector_powerpc): Remove
+	instantiated_target_ field.  In do_recognize call
+	instantiate_target rather than do_instantiate_target.  In
+	do_instantiate_target just allocate a new target.
+	* sparc.cc (class Target_selector_sparc): Likewise.
+@
+text
+@d311 1
+a311 1
+// once.  Access to this is controlled by initialize_lock_pointer.
+@
+
+
+1.7
+log
+@Update copyright years.  Update language files.
+@
+text
+@d279 124
+@
+
+
+1.6
+log
+@From Craig Silverstein: Have Parameters point to General_options.
+@
+text
+@d3 1
+a3 1
+// Copyright 2006, 2007 Free Software Foundation, Inc.
+@
+
+
+1.5
+log
+@Add threading support.
+@
+text
+@d31 1
+d148 1
+a148 1
+  if (!parameters->threads())
+d262 1
+a262 1
+  if (!parameters->threads())
+@
+
+
+1.4
+log
+@Add infrastructure for threading support.
+@
+text
+@a24 1
+#include <cerrno>
+d31 1
+d37 1
+a37 1
+// Class Lock_impl. 
+d39 3
+a41 1
+class Lock_impl
+d44 38
+a81 2
+  Lock_impl();
+  ~Lock_impl();
+d89 2
+a90 2
+  Lock_impl(const Lock_impl&);
+  Lock_impl& operator=(const Lock_impl&);
+d92 1
+a92 1
+  friend class Condvar_impl;
+a93 1
+#ifdef ENABLE_THREADS
+a94 3
+#else
+  bool acquired_;
+#endif
+d97 1
+a97 3
+#ifdef ENABLE_THREADS
+
+Lock_impl::Lock_impl()
+d100 3
+a102 2
+  if (pthread_mutexattr_init(&attr) != 0)
+    gold_fatal(_("pthead_mutextattr_init failed: %s"), strerror(errno));
+d104 3
+a106 2
+  if (pthread_mutextattr_settype(&attr, PTHREAD_MUTEX_ADAPTIVE_NP) != 0)
+    gold_fatal(_("pthread_mutextattr_settype failed: %s"), strerror(errno));
+d109 3
+a111 2
+  if (pthread_mutex_init (&this->mutex_, &attr) != 0)
+    gold_fatal(_("pthread_mutex_init failed: %s"), strerror(errno));
+d113 3
+a115 2
+  if (pthread_mutexattr_destroy(&attr) != 0)
+    gold_fatal(_("pthread_mutexattr_destroy failed: %s"), strerror(errno));
+d118 1
+a118 1
+Lock_impl::~Lock_impl()
+d120 3
+a122 2
+  if (pthread_mutex_destroy(&this->mutex_) != 0)
+    gold_fatal(_("pthread_mutex_destroy failed: %s"), strerror(errno));
+d126 1
+a126 1
+Lock_impl::acquire()
+d128 3
+a130 2
+  if (pthread_mutex_lock(&this->mutex_) != 0)
+    gold_fatal(_("pthread_mutex_lock failed: %s"), strerror(errno));
+d134 1
+a134 1
+Lock_impl::release()
+d136 3
+a138 2
+  if (pthread_mutex_unlock(&this->mutex_) != 0)
+    gold_fatal(_("pthread_mutex_unlock failed: %s"), strerror(errno));
+d141 1
+a141 1
+#else // !defined(ENABLE_THREADS)
+d143 3
+a145 2
+Lock_impl::Lock_impl()
+  : acquired_(false)
+d147 10
+d159 1
+a159 1
+Lock_impl::~Lock_impl()
+d161 1
+a161 1
+  gold_assert(!this->acquired_);
+d164 1
+a164 6
+void
+Lock_impl::acquire()
+{
+  gold_assert(!this->acquired_);
+  this->acquired_ = true;
+}
+d166 1
+a166 2
+void
+Lock_impl::release()
+d168 3
+a170 3
+  gold_assert(this->acquired_);
+  this->acquired_ = false;
+}
+d172 2
+a173 1
+#endif // !defined(ENABLE_THREADS)
+d175 12
+a186 1
+// Methods for Lock class.
+d188 1
+a188 9
+Lock::Lock()
+{
+  this->lock_ = new Lock_impl;
+}
+
+Lock::~Lock()
+{
+  delete this->lock_;
+}
+d190 1
+a190 5
+void
+Lock::acquire()
+{
+  this->lock_->acquire();
+}
+d192 1
+a192 2
+void
+Lock::release()
+d194 3
+a196 2
+  this->lock_->release();
+}
+d198 2
+a199 1
+// Class Condvar_impl.
+d201 2
+a202 5
+class Condvar_impl
+{
+ public:
+  Condvar_impl();
+  ~Condvar_impl();
+d204 2
+a205 2
+  void wait(Lock_impl*);
+  void signal();
+d209 2
+a210 2
+  Condvar_impl(const Condvar_impl&);
+  Condvar_impl& operator=(const Condvar_impl&);
+a211 1
+#ifdef ENABLE_THREADS
+a212 1
+#endif
+d215 1
+a215 9
+#ifdef ENABLE_THREADS
+
+Condvar_impl::Condvar_impl()
+{
+  if (pthread_cond_init(&this->cond_, NULL) != 0)
+    gold_fatal(_("pthread_cond_init failed: %s"), strerror(errno));
+}
+
+Condvar_impl::~Condvar_impl()
+d217 3
+a219 2
+  if (pthread_cond_destroy(&this->cond_) != 0)
+    gold_fatal(_("pthread_cond_destroy failed: %s"), strerror(errno));
+d222 1
+a222 2
+void
+Condvar_impl::wait(Lock_impl* li)
+d224 3
+a226 2
+  if (pthread_cond_wait(&this->cond_, &li->mutex_) != 0)
+    gold_fatal(_("pthread_cond_wait failed: %s"), strerror(errno));
+d230 1
+a230 13
+Condvar_impl::signal()
+{
+  if (pthread_cond_signal(&this->cond_) != 0)
+    gold_fatal(_("pthread_cond_signal failed: %s"), strerror(errno));
+}
+
+#else // !defined(ENABLE_THREADS)
+
+Condvar_impl::Condvar_impl()
+{
+}
+
+Condvar_impl::~Condvar_impl()
+d232 4
+d239 1
+a239 1
+Condvar_impl::wait(Lock_impl* li)
+d241 3
+a243 1
+  gold_assert(li->acquired_);
+d247 1
+a247 1
+Condvar_impl::signal()
+d249 3
+d254 1
+a254 1
+#endif // !defined(ENABLE_THREADS)
+d261 10
+a270 1
+  this->condvar_ = new Condvar_impl;
+a275 12
+}
+
+void
+Condvar::wait()
+{
+  this->condvar_->wait(this->lock_.get_impl());
+}
+
+void
+Condvar::signal()
+{
+  this->condvar_->signal();
+@
+
+
+1.3
+log
+@Add licensing text to every source file.
+@
+text
+@d25 3
+d69 1
+a69 1
+    gold_fatal(_("pthead_mutextattr_init failed"), true);
+d72 1
+a72 1
+    gold_fatal(_("pthread_mutextattr_settype failed"), true);
+d76 1
+a76 1
+    gold_fatal(_("pthread_mutex_init failed"), true);
+d79 1
+a79 1
+    gold_fatal(_("pthread_mutexattr_destroy failed"), true);
+d85 1
+a85 1
+    gold_fatal(_("pthread_mutex_destroy failed"), true);
+d92 1
+a92 1
+    gold_fatal(_("pthread_mutex_lock failed"), true);
+d99 1
+a99 1
+    gold_fatal(_("pthread_mutex_unlock failed"), true);
+d180 1
+a180 1
+    gold_fatal(_("pthread_cond_init failed"), true);
+d186 1
+a186 1
+    gold_fatal(_("pthread_cond_destroy failed"), true);
+d193 1
+a193 1
+    gold_fatal(_("pthread_cond_wait failed"), true);
+d200 1
+a200 1
+    gold_fatal(_("pthread_cond_signal failed"), true);
+@
+
+
+1.2
+log
+@Hash tables, dynamic section, i386 PLT, gold_assert.
+@
+text
+@d3 20
+@
+
+
+1.1
+log
+@Initial CVS checkin of gold
+@
+text
+@a2 2
+#include <cassert>
+
+d88 1
+a88 1
+  assert(!this->acquired_);
+d94 1
+a94 1
+  assert(!this->acquired_);
+d101 1
+a101 1
+  assert(this->acquired_);
+d193 1
+a193 1
+  assert(li->acquired_);
+@
+

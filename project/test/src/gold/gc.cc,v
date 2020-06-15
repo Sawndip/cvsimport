@@ -1,0 +1,188 @@
+head	1.1;
+access;
+symbols
+	binutils-2_24-branch:1.1.0.14
+	binutils-2_24-branchpoint:1.1
+	binutils-2_21_1:1.1
+	binutils-2_23_2:1.1
+	binutils-2_23_1:1.1
+	binutils-2_23:1.1
+	binutils-2_23-branch:1.1.0.12
+	binutils-2_23-branchpoint:1.1
+	binutils-2_22_branch:1.1.0.10
+	binutils-2_22:1.1
+	binutils-2_22-branch:1.1.0.8
+	binutils-2_22-branchpoint:1.1
+	binutils-2_21:1.1
+	binutils-2_21-branch:1.1.0.6
+	binutils-2_21-branchpoint:1.1
+	binutils-2_20_1:1.1
+	binutils-2_20:1.1
+	binutils-2_20-branch:1.1.0.4
+	binutils-2_20-branchpoint:1.1
+	dje-cgen-play1-branch:1.1.0.2
+	dje-cgen-play1-branchpoint:1.1
+	binutils_latest_snapshot:1.1;
+locks; strict;
+comment	@// @;
+
+
+1.1
+date	2009.01.28.02.25.33;	author tmsriram;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.1
+log
+@2009-01-20  Sriraman Tallam <tmsriram@@google.com>
+
+	* Makefile.am (CCFILES): Add gc.cc.
+	(HFILES): Add gc.h.
+	* Makefile.in: Regenerate.
+	* gold.cc (Gc_runner): New class.
+	(queue_initial_tasks): Call garbage collection related tasks
+	when corresponding options are invoked.
+	(queue_middle_gc_tasks): New function.
+	(queue_middle_tasks): Reorder tasks to allow relocs to be read and
+	processed early before laying out sections during garbage collection.
+	* gold.h (queue_middle_gc_tasks): New function.
+	(is_prefix_of): Move from "layout.cc".
+	* i386.cc (Target_i386::gc_process_relocs): New function.
+	* layout.cc (is_prefix_of): Remove. Move to "gold.h"
+	* main.cc (main): Create object of class "Garbage_collection".
+	* object.cc (Relobj::copy_symbols_data): New function.
+	(Relobj::is_section_name_included): New function.
+	(Sized_relobj::do_layout): Allow this function to be called twice
+	during garbage collection and defer layout of section during the
+	first call.
+	* object.h (Relobj::get_symbols_data): New function.
+	(Relobj::is_section_name_included): New function.
+	(Relobj::copy_symbols_data): New function.
+	(Relobj::set_symbols_data): New function.
+	(Relobj::get_relocs_data): New function.
+	(Relobj::set_relocs_data): New function.
+	(Relobj::is_output_section_offset_invalid): New pure virtual function.
+	(Relobj::gc_process_relocs): New function.
+	(Relobj::do_gc_process_relocs): New pure virtual function.
+	(Relobj::sd_): New data member.
+	(Sized_relobj::is_output_section_offset_invalid): New function.
+	(Sized_relobj::do_gc_process_relocs): New function.
+	* options.h (General_options::gc_sections): Modify to not be a no-op.
+	(General_options::print_gc_sections): New option.
+	* plugin.cc (Plugin_finish::run): Remove function call to
+	Plugin_manager::layout_deferred_objects.  Move it to "gold.cc".
+	* powerpc.cc (Target_powerpc::gc_process_relocs): New function.
+	* reloc.cc (Read_relocs::run): Add task to process relocs and
+	determine unreferenced sections when doing garbage collection.
+	(Gc_process_relocs): New class.
+	(Sized_relobj::do_gc_process_relocs): New function.
+	(Sized_relobj::do_scan_relocs): Don't try to scan the relocs for
+	sections that are garbage collected.
+	* reloc.h (Gc_process_relocs): New class.
+	* sparc.cc (Target_sparc::gc_process_relocs): New function.
+	* symtab.cc (Symbol::should_add_dynsym_entry): Do not add entries for
+	symbols whose corresponding sections are garbage collected.
+	(Symbol_table::Symbol_table): Add new parameter for the garbage
+	collection object.
+	(Symbol_table::gc_mark_undef_symbols): New function.
+	(Symbol_table::gc_mark_symbol_for_shlib): New function.
+	(Symbol_table::gc_mark_dyn_syms): New function.
+	(Symbol_table::resolve): Do not treat symbols seen in dynamic objects
+	as garbage.
+	(Symbol_table::add_from_object): Likewise.
+	(Symbol_table::add_from_relobj): When building shared objects, do not
+	treat externally visible symbols as garbage.
+	(Symbol_table::sized_finalize_symbol): Do not check dynamic symbol
+	table information for static and relocatable links.
+	* symtab.h (Symbol_table::set_gc): New function.
+	(Symbol_table::gc): New function.
+	(Symbol_table::gc_mark_undef_symbols): New function.
+	(Symbol_table::gc_mark_symbol_for_shlib): New function.
+	(Symbol_table::gc_mark_dyn_syms): New function.
+	(Symbol_table::gc_): New data member.
+	* target.h (Sized_target::gc_process_relocs): New pure virtual
+	function.
+	* x86_64.cc (Target_x86_64::gc_process_relocs): New function.
+	* testsuite/testfile.cc (Target_test::gc_process_relocs): New function.
+@
+text
+@// gc.cc -- garbage collection of unused sections
+
+// Copyright 2009 Free Software Foundation, Inc.
+// Written by Sriraman Tallam <tmsriram@@google.com>.
+
+// This file is part of gold.
+
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 3 of the License, or
+// (at your option) any later version.
+
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+// MA 02110-1301, USA.
+
+
+#include "gold.h"
+#include "object.h"
+#include "gc.h"
+#include "symtab.h"
+
+namespace gold
+{
+
+// Garbage collection uses a worklist style algorithm to determine the 
+// transitive closure of all referenced sections.
+void 
+Garbage_collection::do_transitive_closure()
+{
+  while (!this->worklist().empty())
+    {
+      // Add elements from the work list to the referenced list
+      // one by one.
+      Section_id entry = this->worklist().front();
+      this->worklist().pop();
+      if (this->referenced_list().find(entry)
+          == this->referenced_list().end()) 
+        {
+          this->referenced_list().insert(entry);
+        }
+      else
+        {
+          continue;
+        }
+      Garbage_collection::Section_ref::iterator find_it = 
+                this->section_reloc_map().find(entry);
+      if (find_it == this->section_reloc_map().end()) 
+          continue;
+      Garbage_collection::Sections_reachable v = find_it->second;
+      // Scan the vector of references for each work_list entry. 
+      for (Garbage_collection::Sections_reachable::iterator it_v = v.begin();
+           it_v != v.end();
+           ++it_v)
+        {
+          // Do not add already processed sections to the work_list. 
+          if (this->referenced_list().find(*it_v)
+              == this->referenced_list().end())
+            {
+              this->worklist().push(*it_v);   
+            }
+        }
+    }
+  this->worklist_ready();
+}
+
+} // End namespace gold.
+
+@

@@ -1,0 +1,644 @@
+head	1.3;
+access;
+symbols
+	newlib-2_2_0:1.3.0.6
+	newlib-2_1_0:1.3
+	newlib-2_0_0:1.3
+	newlib-1_20_0:1.3
+	newlib-1_19_0:1.3
+	newlib-1_18_0:1.3
+	newlib-1_17_0-arc:1.3.0.4
+	binutils-arc-20080908-branch:1.3.0.2
+	binutils-arc-20080908-branchpoint:1.3
+	newlib-1_17_0:1.3
+	newlib-1_16_0:1.3
+	newlib-1_15_0:1.2
+	newlib-csl-coldfire-4_1-32:1.1.2.1
+	newlib-csl-sourcerygxx-4_1-32:1.1.2.1
+	newlib-csl-innovasic-fido-3_4_4-33:1.1.2.1
+	newlib-csl-coldfire-4_1-30:1.1.2.1
+	newlib-csl-sourcerygxx-4_1-30:1.1.2.1
+	newlib-csl-coldfire-4_1-28:1.1.2.1
+	newlib-csl-sourcerygxx-4_1-28:1.1.2.1
+	newlib-csl-arm-2006q3-27:1.1.2.1
+	newlib-csl-sourcerygxx-4_1-27:1.1.2.1
+	newlib-csl-arm-2006q3-26:1.1.2.1
+	newlib-csl-sourcerygxx-4_1-26:1.1.2.1
+	newlib-csl-20060320-branch:1.1.0.2;
+locks; strict;
+comment	@# @;
+
+
+1.3
+date	2007.01.04.18.05.56;	author jjohnstn;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2006.12.11.19.58.01;	author jjohnstn;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2006.10.23.19.28.29;	author nathan;	state dead;
+branches
+	1.1.2.1;
+next	;
+
+1.1.2.1
+date	2006.10.23.19.28.29;	author nathan;	state Exp;
+branches;
+next	1.1.2.2;
+
+1.1.2.2
+date	2006.12.22.07.47.30;	author nathan;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.3
+log
+@
+2007-01-04  Kazu Hirata  <kazu@@codesourcery.com>
+
+        Merge from newlib-csl-20060320-branch:
+        2006-12-22  Nathan Sidwell  <nathan@@codesourcery.com>
+
+        libgloss/
+        * m68k/Makefile.in (CF_ISRS): Remove now shared routines.
+        * m68k/cf-crt0.S (__reset): Define here.
+        * m68k/cf-isrs.c: Share some ISRS.  Add aliases for each IRQ slot.
+        * m68k/cf-isv.S: Move to .interrupt_vector section.  Make each
+        slot a unique routine.
+        * m68k/cf.sc: Adjust for .interrupt_vector section.
+
+        libgloss/
+        * m68k/Makefile.in (m5273c3): Rename to ...
+        (m5272c3): ... here to fix typo.
+        (m5249c3): New.
+        (CF_BOARDS): Add it.
+@
+text
+@/* The interrupt table.
+ *
+ * Copyright (c) 2006 CodeSourcery Inc
+ *
+ * The authors hereby grant permission to use, copy, modify, distribute,
+ * and license this software and its documentation for any purpose, provided
+ * that existing copyright notices are retained in all copies and that this
+ * notice is included verbatim in any distributions. No written agreement,
+ * license, or royalty fee is required for any of the authorized uses.
+ * Modifications to this software may be copyrighted by their authors
+ * and need not follow the licensing terms described here, provided that
+ * the new terms are clearly indicated on the first page of each file where
+ * they apply.
+ */
+
+	.macro SLOT,n,prefix=,suffix=
+	.long __\prefix\n\suffix
+	.endm
+
+	.macro ISR n
+	SLOT \n,interrupt,
+	.endm
+
+	.macro TRAP n
+	SLOT \n,trap,
+	.endm
+
+	.macro FP n
+	SLOT \n,fp_,
+	.endm
+
+	.macro UNIMP_OPCODE n
+	SLOT \n,unimplemented_,_opcode
+	.endm
+
+	.macro BREAKPOINT_DEBUG n
+	SLOT \n,,_breakpoint_debug_interrupt
+	.endm
+
+	.section .interrupt_vector,"a"
+
+	.globl __interrupt_vector
+__interrupt_vector:
+	
+	.long __stack 				/* 0 */
+	.long __reset				/* 1 */
+	.long __access_error			/* 2 */
+	.long __address_error			/* 3 */
+	.long __illegal_instruction		/* 4 */
+	.long __divide_by_zero			/* 5 */
+	ISR 6
+	ISR 7
+	.long __privilege_violation		/* 8 */
+	.long __trace				/* 9 */
+	UNIMP_OPCODE line_a			/* 10 */
+	UNIMP_OPCODE line_f			/* 11 */
+	BREAKPOINT_DEBUG non_pc			/* 12 */
+	BREAKPOINT_DEBUG pc			/* 13 */
+	.long __format_error			/* 14 */
+	.irp N,15,16,17,18,19,20,21,22,23
+	ISR \N					/* [15,24) */
+	.endr
+	.long __spurious_interrupt		/* 24 */
+	.irp N,25,26,27,28,29,30,31
+	ISR \N					/* [25,32) */
+	.endr
+	.irp N,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15
+	TRAP \N					/* [32,48) */
+	.endr
+	FP branch_unordered			/* 48 */
+	FP inexact_result			/* 49 */
+	FP divide_by_zero			/* 50 */
+	FP underflow				/* 51 */
+	FP operand_error			/* 52 */
+	FP overflow				/* 53 */
+	FP input_not_a_number			/* 54 */
+	FP input_denormalized_number		/* 55 */
+	.irp N,56,57,58,59,60
+	ISR \N					/* [56,61) */
+	.endr
+	.long __unsupported_instruction		/* 61 */
+	.irp N,62,63
+	ISR \N					/* [62,64) */
+	.endr
+	.irp N,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79
+	ISR \N			/* [64,80) */
+	.endr
+	.irp N,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95
+	ISR \N			/* [80,96) */
+	.endr
+	.irp N,96,97,98,99,100,101,102,103,104,105,106,107,108,109,110,111
+	ISR \N			/* [96,112) */
+	.endr
+	.irp N,112,113,114,115,116,117,118,119,120,121,122,123,124,125,126,127
+	ISR \N			/* [112,128) */
+	.endr
+	.irp N,128,129,130,131,132,133,134,135,136,137,138,139,140,141,142,143
+	ISR \N			/* [128,144) */
+	.endr
+	.irp N,144,145,146,147,148,149,150,151,152,153,154,155,156,157,158,159
+	ISR \N			/* [144,160) */
+	.endr
+	.irp N,160,161,162,163,164,165,166,167,168,169,170,171,172,173,174,175
+	ISR \N			/* [160,176) */
+	.endr
+	.irp N,176,177,178,179,180,181,182,183,184,185,186,187,188,189,190,191
+	ISR \N			/* [176,192) */
+	.endr
+	.irp N,192,193,194,195,196,197,198,199,200,201,202,203,204,205,206,207
+	ISR \N			/* [192,208) */
+	.endr
+	.irp N,208,209,210,211,212,213,214,215,216,217,218,219,220,221,222,223
+	ISR \N			/* [208,224) */
+	.endr
+	.irp N,224,225,226,227,228,229,230,231,232,233,234,235,236,237,238,239
+	ISR \N			/* [224,240) */
+	.endr
+	.irp N,240,241,242,243,244,245,246,247,248,249,250,251,252,253,254,255
+	ISR \N			/* [240,256) */
+	.endr
+@
+
+
+1.2
+log
+@
+2006-12-11 Kazu Hirata <kazu@@codesourcery.com>
+
+	Merge from newlib-csl-20060320-branch:
+	2006-12-01  Nathan Sidwell  <nathan@@codesourcery.com>
+		    Kazu Hirata  <kazu@@codesourcery.com>
+
+	* m68k/Makefile.in (CF_ISRS): Use addprefix.
+
+	2006-11-01 Nathan Sidwell <nathan@@codesourcery.com>
+
+	* m68k/Makefile.in (CFLAGS): Do not clear.  Add to all compilations.
+	(ARFLAGS): Remove commented out definition.
+
+
+	* m68k/configure.in (DO) Set to list of target cpu families.
+	* m68k/configure: Rebuilt.
+	* m68k/Makefile.in (DO): New.
+	(UNHOSTED_BSP, UNHOSTED_OBJS, HOSTED_BSP, HOSTED_OBJS): Move
+	later.
+	(m5208evb, m5213evb, m52235evb, m5235evb, m5273c3, m5275evb,
+	m5282evb, m5329evb, m5485evb): Move earlier.
+	(all): Add all_$DO dependencies.
+	(all_cf, all_m68k): New targets, depend on cf & m68k bsps as
+	appropriate.
+	(m%-ram.ld, m%-rom.ld, m%-ram-hosted.ld, m%-rom-hosted.ld): Add
+	'm' prefix.
+	(install): Add install_$DO dependencies.
+	(install_cf, install_m68k): New targets.  Perform cf and m68k
+	installs as appropriate.
+	(install_io): New, install the io libraries.
+
+
+	2006-10-23 Nathan Sidwell <nathan@@codesourcery.com>
+
+	* m68k/Makefile.in (CF_CRT0): Rename to CF_CRT0S, separate hosted
+	& unhosted versions.
+	(CF_OBJS): Add cf-isv.o.
+	(CF_SOURCES): Add cf-isv.S.
+	(cf-hosted-crt0.o, cf-unhosted-crt0.o): New targets.
+	* m68k/cf-isv.S: New, broken out of ...
+	* m68k/cf-crt0.S: ... here.  Add HOSTED & UNHOSTED differences.
+	* m68k/cf-crt1.c (__start1): Add heap_limit argument.
+	(__heap_limit): Define.
+	* m68k/cf-sbrk.c (__heap_limit): Declare.
+	(sbrk): Adjust for __heap_limit.
+	* m68k/cf.sc: Use different crt0's for hosted & unhosted.
+	Install a separate isv.o file.
+	* m68k/io.h (HOSTED_PUTCHAR): Replace with ...
+	(HOSTED_INIT_SIM): ... this.
+
+
+	2006-10-20 Nathan Sidwell <nathan@@codesourcery.com>
+
+	* m68k/Makefile.in (CF_BOARDS): Add m5275evb.
+	(m5275evb): New board.
+
+
+	2006-10-20 Vladimir Prus <vladimir@@codesourcery.com>
+
+	* m68k/cf.sc: Add linkonce sections and
+	DWARF sections.
+
+
+	2006-10-07 Nathan Sidwell <nathan@@codesourcery.com>
+
+	* m68k/Makefile.in: Adjust Coldfire rules.
+	(BDM_CRT0, BDM_BSP, BDM_OBJS, BDM_ISRS): Rename	to ...
+	(CF_CRT0, CF_BSP, CF_OBJS, CF_ISRS): ... here.  Adjust.
+	(BDM_OTHER_OBJS): Remove.
+	(BDM_SYSOBJS): Rename to ...
+	(UNHOSTED_OBJS): ... here.  Adjust.
+	(UNHOSTED_BSP, HOSTED_OBJS, HOSTED_BSP): New.
+	(CF_HOSTED_SCRIPTS): New.
+	(CF_SCRIPTS, CF_SOURCES): Adjust.
+	* m68k/cf.sc: Add IO library variable.
+	* m68k/bdm-crt0.S, m68k/bdm-crt1.c, m68k/bdm-isrs.c,
+	m68k/bdm-sbrk.c, m68k/bdm-semihost.S: Rename to ...
+	* m68k/cf-crt0.S, m68k/cf-crt1.c, m68k/cf-isrs.c, m68k/cf-sbrk.c,
+	m68k/cf-hosted.S: ... here.
+	* m68k/cf-exit.c: New.
+	* m68k/bdm-gdb.h, m68k/bdm-semihost.h: Merge into ...
+	* m68k/io.h: ... here.  Add unhosted support.  Adjust conversion
+	function names.
+	* m68k/bdm-gdb.c: Rename to ...
+	* m68k/io-gdb.c: ... here.  Adjust names of conversion functions.
+	* m68k/bdm-close.c, m68k/bdm-exit.c, m68k/bdm-fstat.c,
+	m68k/bdm-gettimeofday.c, m68k/bdm-isatty.c, m68k/bdm-lseek.c,
+	m68k/bdm-open.c, m68k/bdm-read.c, m68k/bdm-rename.c,
+	m68k/bdm-stat.c, m68k/bdm-system.c, m68k/bdm-time.c,
+	m68k/bdm-unlink.c, m68k/bdm-write.c: Rename to ...
+	* m68k/io-close.c, m68k/io-exit.c, m68k/io-fstat.c,
+	m68k/io-gettimeofday.c, m68k/io-isatty.c, m68k/io-lseek.c,
+	m68k/io-open.c, m68k/io-read.c, m68k/io-rename.c, m68k/io-stat.c,
+	m68k/io-system.c, m68k/io-time.c, m68k/io-unlink.c,
+	m68k/io-write.c: ... here.  Include io.h. Adjust for hosted &
+	unhosted libraries.  Adjust names of gdb conversion functions.
+
+
+	2006-09-29 Nathan Sidwell <nathan@@codesourcery.com>
+
+	* m68k/bdm-semihost.S: Add more comments. Make instruction weirder.
+
+	2006-09-22 Nathan Sidwell <nathan@@codesourcery.com>
+
+	* m68k/bdm-crt1.c (hardware_init_hook): Use #defines for CACR bits.
+
+	2006-09-18 Nathan Sidwell <nathan@@codesourcery.com>
+
+	* m68k/Makefile.in: Don't force a frame pointer on the ISRs.
+	* m68k/bdm-crt1.c (__start1): Don't set the VBR here.
+	(hardeare_init_hook): Define weakly.  Set VBR here, enable caching
+	if supported.
+
+
+	* m68k/Makefile.in (bdm-semihost.o): Build from bdm-semihost.S.
+	* m68k/bdm-semihost.c: Remove.
+	* m68k/bdm-semihost.S: New.
+	* m68k/bdm-crt0.S: Don't install semihosting trap handler.
+	* m68k/bdm-close.c, bdm-exit.c, bdm-fstat.c, bdm-gettimeofday.c,
+	bdm-isatty.c, bdm-lseek.c, bdm-open.c, bdm-read.c, bdm-rename.c,
+	bdm-stat.c, bdm-system.c, bdm-unlink.c, bdm-write.c): Update.
+	* m68k/bdm-isrs.c: Update comment.
+	* m68k/bdm-semihost.h (BDM_TRAPNUM, BDM_FUNC_REG, BDM_ARG_REG,
+	BDM_TRAP): Remove.
+	(__bdm_semihost): Declare.
+
+
+	2006-09-15 Nathan Sidwell <nathan@@codesourcery.com>
+
+	* m68k/Makefile.in (BDM_OTHER_OBJS): Remove sbrk.o.
+	(BDM_SYSOBJS): Add bdm-sbrk.o.
+	* m68k/bdm-sbrk.c: New.
+
+
+	2006-09-06 Nathan Sidwell <nathan@@codesourcery.com>
+
+	* m68k/Makefile.in (CF_SOURCES): New.
+	(install): Install them.
+
+
+	2006-09-01 Nathan Sidwell <nathan@@codesourcery.com>
+
+	* m68k/cf.sc: Add .jcr section to .text.
+@
+text
+@d16 25
+a40 1
+	.text
+d44 1
+d51 2
+a52 2
+	.long __other_interrupt			/* 6 */
+	.long __other_interrupt			/* 7 */
+d55 4
+a58 4
+	.long __unimplemented_line_a_opcode	/* 10 */
+	.long __unimplemented_line_f_opcode	/* 11 */
+	.long __non_pc_breakpoint_debug_interrupt /* 12 */
+	.long __pc_breakpoint_debug_interrupt	/* 13 */
+d60 2
+a61 2
+	.rept 24 - 15
+	.long __other_interrupt			/* [15,24) */
+d64 5
+a68 2
+	.rept 32 - 25
+	.long __other_interrupt			/* [25,32) */
+d70 10
+a79 26
+	.long __trap0				/* 32 */
+	.long __trap1				/* 33 */
+	.long __trap2				/* 34 */
+	.long __trap3				/* 35 */
+	.long __trap4				/* 36 */
+	.long __trap5				/* 37 */
+	.long __trap6				/* 38 */
+	.long __trap7				/* 39 */
+	.long __trap8				/* 40 */
+	.long __trap9				/* 41 */
+	.long __trap10				/* 42 */
+	.long __trap11				/* 43 */
+	.long __trap12				/* 44 */
+	.long __trap13				/* 45 */
+	.long __trap14				/* 46 */
+	.long __trap15				/* 47 */
+	.long __fp_branch_unordered		/* 48 */
+	.long __fp_inexact_result		/* 49 */
+	.long __fp_divide_by_zero		/* 50 */
+	.long __fp_underflow			/* 51 */
+	.long __fp_operand_error		/* 52 */
+	.long __fp_overflow			/* 53 */
+	.long __fp_input_not_a_number		/* 54 */
+	.long __fp_input_denormalized_number	/* 55 */
+	.rept 61 - 56
+	.long __other_interrupt			/* [56,61) */
+d82 35
+a116 2
+	.rept 64 - 62
+	.long __other_interrupt			/* [62,64) */
+d118 2
+a119 2
+	.rept 256-64
+	.long __other_interrupt			/* [64,256) */
+@
+
+
+1.1
+log
+@file cf-isv.S was initially added on branch newlib-csl-20060320-branch.
+@
+text
+@d1 75
+@
+
+
+1.1.2.1
+log
+@	libgloss/
+	* m68k/Makefile.in (CF_CRT0): Rename to CF_CRT0S, separate hosted
+	& unhosted versions.
+	(CF_OBJS): Add cf-isv.o.
+	(CF_SOURCES): Add cf-isv.S.
+	(cf-hosted-crt0.o, cf-unhosted-crt0.o): New targets.
+	* m68k/cf-isv.S: New, broken out of ...
+	* m68k/cf-crt0.S: ... here.  Add HOSTED & UNHOSTED differences.
+	* m68k/cf-crt1.c (__start1): Add heap_limit argument.
+	(__heap_limit): Define.
+	* m68k/cf-sbrk.c (__heap_limit): Declare.
+	(sbrk): Adjust for __heap_limit.
+	* m68k/cf.sc: Use different crt0's for hosted & unhosted.
+	Install a separate isv.o file.
+	* m68k/io.h (HOSTED_PUTCHAR): Replace with ...
+	(HOSTED_INIT_SIM): ... this.
+@
+text
+@a0 75
+/* The interrupt table.
+ *
+ * Copyright (c) 2006 CodeSourcery Inc
+ *
+ * The authors hereby grant permission to use, copy, modify, distribute,
+ * and license this software and its documentation for any purpose, provided
+ * that existing copyright notices are retained in all copies and that this
+ * notice is included verbatim in any distributions. No written agreement,
+ * license, or royalty fee is required for any of the authorized uses.
+ * Modifications to this software may be copyrighted by their authors
+ * and need not follow the licensing terms described here, provided that
+ * the new terms are clearly indicated on the first page of each file where
+ * they apply.
+ */
+
+	.text
+
+	.globl __interrupt_vector
+__interrupt_vector:
+	.long __stack 				/* 0 */
+	.long __reset				/* 1 */
+	.long __access_error			/* 2 */
+	.long __address_error			/* 3 */
+	.long __illegal_instruction		/* 4 */
+	.long __divide_by_zero			/* 5 */
+	.long __other_interrupt			/* 6 */
+	.long __other_interrupt			/* 7 */
+	.long __privilege_violation		/* 8 */
+	.long __trace				/* 9 */
+	.long __unimplemented_line_a_opcode	/* 10 */
+	.long __unimplemented_line_f_opcode	/* 11 */
+	.long __non_pc_breakpoint_debug_interrupt /* 12 */
+	.long __pc_breakpoint_debug_interrupt	/* 13 */
+	.long __format_error			/* 14 */
+	.rept 24 - 15
+	.long __other_interrupt			/* [15,24) */
+	.endr
+	.long __spurious_interrupt		/* 24 */
+	.rept 32 - 25
+	.long __other_interrupt			/* [25,32) */
+	.endr
+	.long __trap0				/* 32 */
+	.long __trap1				/* 33 */
+	.long __trap2				/* 34 */
+	.long __trap3				/* 35 */
+	.long __trap4				/* 36 */
+	.long __trap5				/* 37 */
+	.long __trap6				/* 38 */
+	.long __trap7				/* 39 */
+	.long __trap8				/* 40 */
+	.long __trap9				/* 41 */
+	.long __trap10				/* 42 */
+	.long __trap11				/* 43 */
+	.long __trap12				/* 44 */
+	.long __trap13				/* 45 */
+	.long __trap14				/* 46 */
+	.long __trap15				/* 47 */
+	.long __fp_branch_unordered		/* 48 */
+	.long __fp_inexact_result		/* 49 */
+	.long __fp_divide_by_zero		/* 50 */
+	.long __fp_underflow			/* 51 */
+	.long __fp_operand_error		/* 52 */
+	.long __fp_overflow			/* 53 */
+	.long __fp_input_not_a_number		/* 54 */
+	.long __fp_input_denormalized_number	/* 55 */
+	.rept 61 - 56
+	.long __other_interrupt			/* [56,61) */
+	.endr
+	.long __unsupported_instruction		/* 61 */
+	.rept 64 - 62
+	.long __other_interrupt			/* [62,64) */
+	.endr
+	.rept 256-64
+	.long __other_interrupt			/* [64,256) */
+	.endr
+@
+
+
+1.1.2.2
+log
+@	libgloss/
+	* m68k/Makefile.in (CF_ISRS): Remove now shared routines.
+	* m68k/cf-crt0.S (__reset): Define here.
+	(__start): Adjust semihosting.
+	* m68k/cf-hosted.S (__hosted): Adjust semihosting.
+	* m68k/cf-isrs.c: Share some ISRS.  Add aliases for each IRQ slot.
+	* m68k/cf-isv.S: Move to .interrupt_vector section.  Make each
+	slot a unique routine.
+	* m68k/cf.sc: Adjust for .interrupt_vector section.
+@
+text
+@d16 1
+a16 25
+	.macro SLOT,n,prefix=,suffix=
+	.long __\prefix\n\suffix
+	.endm
+
+	.macro ISR n
+	SLOT \n,interrupt,
+	.endm
+
+	.macro TRAP n
+	SLOT \n,trap,
+	.endm
+
+	.macro FP n
+	SLOT \n,fp_,
+	.endm
+
+	.macro UNIMP_OPCODE n
+	SLOT \n,unimplemented_,_opcode
+	.endm
+
+	.macro BREAKPOINT_DEBUG n
+	SLOT \n,,_breakpoint_debug_interrupt
+	.endm
+
+	.section .interrupt_vector,"a"
+a19 1
+	
+d26 2
+a27 2
+	ISR 6
+	ISR 7
+d30 4
+a33 4
+	UNIMP_OPCODE line_a			/* 10 */
+	UNIMP_OPCODE line_f			/* 11 */
+	BREAKPOINT_DEBUG non_pc			/* 12 */
+	BREAKPOINT_DEBUG pc			/* 13 */
+d35 2
+a36 2
+	.irp N,15,16,17,18,19,20,21,22,23
+	ISR \N					/* [15,24) */
+d39 2
+a40 5
+	.irp N,25,26,27,28,29,30,31
+	ISR \N					/* [25,32) */
+	.endr
+	.irp N,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15
+	TRAP \N					/* [32,48) */
+d42 26
+a67 10
+	FP branch_unordered			/* 48 */
+	FP inexact_result			/* 49 */
+	FP divide_by_zero			/* 50 */
+	FP underflow				/* 51 */
+	FP operand_error			/* 52 */
+	FP overflow				/* 53 */
+	FP input_not_a_number			/* 54 */
+	FP input_denormalized_number		/* 55 */
+	.irp N,56,57,58,59,60
+	ISR \N					/* [56,61) */
+d70 2
+a71 35
+	.irp N,62,63
+	ISR \N					/* [62,64) */
+	.endr
+	.irp N,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79
+	ISR \N			/* [64,80) */
+	.endr
+	.irp N,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95
+	ISR \N			/* [80,96) */
+	.endr
+	.irp N,96,97,98,99,100,101,102,103,104,105,106,107,108,109,110,111
+	ISR \N			/* [96,112) */
+	.endr
+	.irp N,112,113,114,115,116,117,118,119,120,121,122,123,124,125,126,127
+	ISR \N			/* [112,128) */
+	.endr
+	.irp N,128,129,130,131,132,133,134,135,136,137,138,139,140,141,142,143
+	ISR \N			/* [128,144) */
+	.endr
+	.irp N,144,145,146,147,148,149,150,151,152,153,154,155,156,157,158,159
+	ISR \N			/* [144,160) */
+	.endr
+	.irp N,160,161,162,163,164,165,166,167,168,169,170,171,172,173,174,175
+	ISR \N			/* [160,176) */
+	.endr
+	.irp N,176,177,178,179,180,181,182,183,184,185,186,187,188,189,190,191
+	ISR \N			/* [176,192) */
+	.endr
+	.irp N,192,193,194,195,196,197,198,199,200,201,202,203,204,205,206,207
+	ISR \N			/* [192,208) */
+	.endr
+	.irp N,208,209,210,211,212,213,214,215,216,217,218,219,220,221,222,223
+	ISR \N			/* [208,224) */
+	.endr
+	.irp N,224,225,226,227,228,229,230,231,232,233,234,235,236,237,238,239
+	ISR \N			/* [224,240) */
+d73 2
+a74 2
+	.irp N,240,241,242,243,244,245,246,247,248,249,250,251,252,253,254,255
+	ISR \N			/* [240,256) */
+@
+
+

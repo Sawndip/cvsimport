@@ -1,0 +1,241 @@
+head	1.3;
+access;
+symbols
+	cygwin-1_7_35-release:1.3
+	cygwin-1_7_34-release:1.3
+	newlib-2_2_0:1.3.0.6
+	cygwin-1_7_33-release:1.3
+	cygwin-1_7_32-release:1.3
+	cygwin-1_7_31-release:1.3
+	cygwin-1_7_30-release:1.3
+	cygwin-1_7_29-release:1.3
+	cygwin-1_7_28-release:1.3
+	newlib-2_1_0:1.3
+	cygwin-1_7_27-release:1.3
+	cygwin-1_7_26-release:1.3
+	cygwin-1_7_25-release:1.3
+	cygwin-1_7_24-release:1.3
+	cygwin-1_7_23-release:1.3
+	cygwin-1_7_22-release:1.3
+	cygwin-1_7_21-release:1.3
+	cygwin-1_7_20-release:1.3
+	cygwin-1_7_19-release:1.3
+	cygwin-64bit-postmerge:1.3
+	cygwin-64bit-premerge-branch:1.3.0.4
+	cygwin-64bit-premerge:1.3
+	cygwin-1_7_18-release:1.3
+	newlib-2_0_0:1.3
+	cygwin-1_7_17-release:1.3
+	cygwin-64bit-branch:1.3.0.2
+	cygwin-1_7_16-release:1.3
+	cygwin-1_7_15-release:1.2
+	cygwin-1_7_14_2-release:1.2
+	cygwin-1_7_14-release:1.2
+	cygwin-1_7_12-release:1.2
+	cygwin-1_7_11-release:1.2
+	cygwin-1_7_10-release:1.2
+	newlib-1_20_0:1.2
+	cygwin-1_7_9-release:1.1
+	cygwin-1_7_8-release:1.1
+	newlib-1_19_0:1.1
+	cygwin-1_7_7-release:1.1
+	cygwin-1_7_5-release:1.1
+	cygwin-1_7_4-release:1.1
+	cygwin-1_7_3-release:1.1
+	cygwin-1_7_2-release:1.1
+	newlib-1_18_0:1.1
+	cygwin-1_7_1-release:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.3
+date	2012.05.30.08.58.42;	author corinna;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2011.05.19.07.21.42;	author yselkowitz;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2009.07.03.11.58.04;	author ericb;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.3
+log
+@	* libc/stdio/local.h (_newlib_flockfile_start): New macro to
+	secure stream related critical section against thread cancellation.
+	(_newlib_flockfile_exit): Ditto.
+	(_newlib_sfp_lock_end): Ditto.
+	(_newlib_sfp_lock_start): Ditto for the list of streams.
+	(_newlib_sfp_lock_exit): Ditto.
+	(_newlib_sfp_lock_end): Ditto.
+	Use aforementioned macros in place of _flockfile/_funlockfile
+	and __sfp_lock_acquire/__sfp_lock_release throughout the code.
+	* libc/stdio/fclose.c: Explicitely disable and re-enable thread
+	cancellation.  Explain why.
+	* libc/stdio/freopen.c: Ditto.
+	* libc/stdio64/freopen64.c: Ditto.
+@
+text
+@/* Copyright (C) 2009 Eric Blake
+ * Permission to use, copy, modify, and distribute this software
+ * is freely granted, provided that this notice is preserved.
+ */
+
+/*
+FUNCTION
+<<fpurge>>---discard pending file I/O
+
+INDEX
+	fpurge
+INDEX
+	_fpurge_r
+INDEX
+	__fpurge
+
+ANSI_SYNOPSIS
+	#include <stdio.h>
+	int fpurge(FILE *<[fp]>);
+
+	int _fpurge_r(struct _reent *<[reent]>, FILE *<[fp]>);
+
+	#include <stdio.h>
+	#include <stdio_ext.h>
+	void  __fpurge(FILE *<[fp]>);
+
+
+DESCRIPTION
+Use <<fpurge>> to clear all buffers of the given stream.  For output
+streams, this discards data not yet written to disk.  For input streams,
+this discards any data from <<ungetc>> and any data retrieved from disk
+but not yet read via <<getc>>.  This is more severe than <<fflush>>,
+and generally is only needed when manually altering the underlying file
+descriptor of a stream.
+
+<<__fpurge>> behaves exactly like <<fpurge>> but does not return a value.
+
+The alternate function <<_fpurge_r>> is a reentrant version, where the
+extra argument <[reent]> is a pointer to a reentrancy structure, and
+<[fp]> must not be NULL.
+
+RETURNS
+<<fpurge>> returns <<0>> unless <[fp]> is not valid, in which case it
+returns <<EOF>> and sets <<errno>>.
+
+PORTABILITY
+These functions are not portable to any standard.
+
+No supporting OS subroutines are required.
+*/
+
+#include <_ansi.h>
+#include <stdio.h>
+#ifndef __rtems__
+#include <stdio_ext.h>
+#endif
+#include <errno.h>
+#include "local.h"
+
+/* Discard I/O from a single file.  */
+
+int
+_DEFUN(_fpurge_r, (ptr, fp),
+       struct _reent *ptr _AND
+       register FILE * fp)
+{
+  int t;
+
+  CHECK_INIT (ptr, fp);
+
+  _newlib_flockfile_start (fp);
+
+  t = fp->_flags;
+  if (!t)
+    {
+      ptr->_errno = EBADF;
+      _newlib_flockfile_exit (fp);
+      return EOF;
+    }
+  fp->_p = fp->_bf._base;
+  if ((t & __SWR) == 0)
+    {
+      fp->_r = 0;
+      if (HASUB (fp))
+	FREEUB (ptr, fp);
+    }
+  else
+    fp->_w = t & (__SLBF | __SNBF) ? 0 : fp->_bf._size;
+  _newlib_flockfile_end (fp);
+  return 0;
+}
+
+#ifndef _REENT_ONLY
+
+int
+_DEFUN(fpurge, (fp),
+       register FILE * fp)
+{
+  return _fpurge_r (_REENT, fp);
+}
+
+#ifndef __rtems__
+
+void
+_DEFUN(__fpurge, (fp),
+       register FILE * fp)
+{
+  _fpurge_r (_REENT, fp);
+}
+
+#endif
+
+#endif /* _REENT_ONLY */
+@
+
+
+1.2
+log
+@* libc/include/stdio_ext.h: New header.
+* libc/stdio/fpurge.c [!__rtems__] (__fpurge): New function.
+@
+text
+@d71 1
+a71 1
+  _flockfile (fp);
+d77 1
+a77 1
+      _funlockfile (fp);
+d89 1
+a89 1
+  _funlockfile (fp);
+@
+
+
+1.1
+log
+@Add fpurge.
+
+* libc/stdio/fpurge.c (fpurge, _fpurge_r): New file.
+* libc/stdio/Makefile.am (ELIX_4_SOURCES, CHEWOUT_FILES, fpurge):
+Build it.
+* libc/stdio/Makefile.in: Regenerated.
+* libc/include/stdio.h (fpurge, _fpurge_r): New declarations.
+* libc/stdio/stdio.tex: Build documentation.
+@
+text
+@d14 2
+d23 5
+d36 2
+d54 3
+d102 11
+@
+

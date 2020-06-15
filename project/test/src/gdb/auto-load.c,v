@@ -1,0 +1,2814 @@
+head	1.23;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.20
+	gdb_7_6-2013-04-26-release:1.20
+	gdb_7_6-branch:1.20.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.20
+	gdb_7_5_1-2012-11-29-release:1.13.2.2
+	gdb_7_5-2012-08-17-release:1.13
+	gdb_7_5-branch:1.13.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.13;
+locks; strict;
+comment	@ * @;
+
+
+1.23
+date	2013.10.09.13.22.35;	author jkratoch;	state Exp;
+branches;
+next	1.22;
+
+1.22
+date	2013.09.24.13.57.36;	author jkratoch;	state Exp;
+branches;
+next	1.21;
+
+1.21
+date	2013.04.22.16.46.14;	author tromey;	state Exp;
+branches;
+next	1.20;
+
+1.20
+date	2013.01.31.16.27.50;	author aristovski;	state Exp;
+branches;
+next	1.19;
+
+1.19
+date	2013.01.01.06.32.39;	author brobecke;	state Exp;
+branches;
+next	1.18;
+
+1.18
+date	2012.09.17.18.26.05;	author jkratoch;	state Exp;
+branches;
+next	1.17;
+
+1.17
+date	2012.08.27.16.50.53;	author jkratoch;	state Exp;
+branches;
+next	1.16;
+
+1.16
+date	2012.08.22.15.17.20;	author tromey;	state Exp;
+branches;
+next	1.15;
+
+1.15
+date	2012.08.09.12.53.43;	author qiyao;	state Exp;
+branches;
+next	1.14;
+
+1.14
+date	2012.07.26.18.21.50;	author jkratoch;	state Exp;
+branches;
+next	1.13;
+
+1.13
+date	2012.07.02.10.57.33;	author jkratoch;	state Exp;
+branches
+	1.13.2.1;
+next	1.12;
+
+1.12
+date	2012.05.20.20.35.18;	author jkratoch;	state Exp;
+branches;
+next	1.11;
+
+1.11
+date	2012.05.18.17.47.28;	author jkratoch;	state Exp;
+branches;
+next	1.10;
+
+1.10
+date	2012.05.18.17.44.37;	author jkratoch;	state Exp;
+branches;
+next	1.9;
+
+1.9
+date	2012.05.11.18.20.25;	author jkratoch;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2012.05.11.18.13.23;	author jkratoch;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2012.05.11.18.06.28;	author jkratoch;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2012.05.06.15.31.02;	author jkratoch;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2012.05.02.20.00.36;	author jkratoch;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2012.04.17.15.56.21;	author jkratoch;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2012.04.17.15.54.31;	author jkratoch;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2012.04.17.15.51.43;	author jkratoch;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2012.04.17.15.49.13;	author jkratoch;	state Exp;
+branches;
+next	;
+
+1.13.2.1
+date	2012.08.27.16.52.06;	author jkratoch;	state Exp;
+branches;
+next	1.13.2.2;
+
+1.13.2.2
+date	2012.09.17.18.27.23;	author jkratoch;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.23
+log
+@New flag OBJF_NOT_FILENAME
+
+gdb/
+2013-10-09  Jan Kratochvil  <jan.kratochvil@@redhat.com>
+
+	New flag OBJF_NOT_FILENAME.
+	* auto-load.c (auto_load_objfile_script): Check also OBJF_NOT_FILENAME.
+	* jit.c (jit_object_close_impl): Use OBJF_NOT_FILENAME for
+	allocate_objfile.
+	(jit_bfd_try_read_symtab): Use OBJF_NOT_FILENAME for
+	symbol_file_add_from_bfd.
+	* jv-lang.c (get_dynamics_objfile): Use OBJF_NOT_FILENAME for
+	allocate_objfile.
+	* objfiles.c (allocate_objfile): Assert OBJF_NOT_FILENAME if NAME is
+	NULL.
+	* objfiles.h (OBJF_NOT_FILENAME): New.
+@
+text
+@/* GDB routines for supporting auto-loaded scripts.
+
+   Copyright (C) 2012-2013 Free Software Foundation, Inc.
+
+   This file is part of GDB.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+#include "defs.h"
+#include "auto-load.h"
+#include "progspace.h"
+#include "python/python.h"
+#include "gdb_regex.h"
+#include "ui-out.h"
+#include "filenames.h"
+#include "command.h"
+#include "observer.h"
+#include "objfiles.h"
+#include "exceptions.h"
+#include "cli/cli-script.h"
+#include "gdbcmd.h"
+#include "cli/cli-decode.h"
+#include "cli/cli-setshow.h"
+#include "gdb_vecs.h"
+#include "readline/tilde.h"
+#include "completer.h"
+#include "observer.h"
+#include "fnmatch.h"
+#include "top.h"
+#include "filestuff.h"
+
+/* The suffix of per-objfile scripts to auto-load as non-Python command files.
+   E.g. When the program loads libfoo.so, look for libfoo-gdb.gdb.  */
+#define GDB_AUTO_FILE_NAME "-gdb.gdb"
+
+static void source_gdb_script_for_objfile (struct objfile *objfile, FILE *file,
+					   const char *filename);
+
+/* Value of the 'set debug auto-load' configuration variable.  */
+static int debug_auto_load = 0;
+
+/* "show" command for the debug_auto_load configuration variable.  */
+
+static void
+show_debug_auto_load (struct ui_file *file, int from_tty,
+		      struct cmd_list_element *c, const char *value)
+{
+  fprintf_filtered (file, _("Debugging output for files "
+			    "of 'set auto-load ...' is %s.\n"),
+		    value);
+}
+
+/* User-settable option to enable/disable auto-loading of GDB_AUTO_FILE_NAME
+   scripts:
+   set auto-load gdb-scripts on|off
+   This is true if we should auto-load associated scripts when an objfile
+   is opened, false otherwise.  */
+static int auto_load_gdb_scripts = 1;
+
+/* "show" command for the auto_load_gdb_scripts configuration variable.  */
+
+static void
+show_auto_load_gdb_scripts (struct ui_file *file, int from_tty,
+			    struct cmd_list_element *c, const char *value)
+{
+  fprintf_filtered (file, _("Auto-loading of canned sequences of commands "
+			    "scripts is %s.\n"),
+		    value);
+}
+
+/* Internal-use flag to enable/disable auto-loading.
+   This is true if we should auto-load python code when an objfile is opened,
+   false otherwise.
+
+   Both auto_load_scripts && global_auto_load must be true to enable
+   auto-loading.
+
+   This flag exists to facilitate deferring auto-loading during start-up
+   until after ./.gdbinit has been read; it may augment the search directories
+   used to find the scripts.  */
+int global_auto_load = 1;
+
+/* Auto-load .gdbinit file from the current directory?  */
+int auto_load_local_gdbinit = 1;
+
+/* Absolute pathname to the current directory .gdbinit, if it exists.  */
+char *auto_load_local_gdbinit_pathname = NULL;
+
+/* Boolean value if AUTO_LOAD_LOCAL_GDBINIT_PATHNAME has been loaded.  */
+int auto_load_local_gdbinit_loaded = 0;
+
+/* "show" command for the auto_load_local_gdbinit configuration variable.  */
+
+static void
+show_auto_load_local_gdbinit (struct ui_file *file, int from_tty,
+			      struct cmd_list_element *c, const char *value)
+{
+  fprintf_filtered (file, _("Auto-loading of .gdbinit script from current "
+			    "directory is %s.\n"),
+		    value);
+}
+
+/* Directory list from which to load auto-loaded scripts.  It is not checked
+   for absolute paths but they are strongly recommended.  It is initialized by
+   _initialize_auto_load.  */
+static char *auto_load_dir;
+
+/* "set" command for the auto_load_dir configuration variable.  */
+
+static void
+set_auto_load_dir (char *args, int from_tty, struct cmd_list_element *c)
+{
+  /* Setting the variable to "" resets it to the compile time defaults.  */
+  if (auto_load_dir[0] == '\0')
+    {
+      xfree (auto_load_dir);
+      auto_load_dir = xstrdup (AUTO_LOAD_DIR);
+    }
+}
+
+/* "show" command for the auto_load_dir configuration variable.  */
+
+static void
+show_auto_load_dir (struct ui_file *file, int from_tty,
+		    struct cmd_list_element *c, const char *value)
+{
+  fprintf_filtered (file, _("List of directories from which to load "
+			    "auto-loaded scripts is %s.\n"),
+		    value);
+}
+
+/* Directory list safe to hold auto-loaded files.  It is not checked for
+   absolute paths but they are strongly recommended.  It is initialized by
+   _initialize_auto_load.  */
+static char *auto_load_safe_path;
+
+/* Vector of directory elements of AUTO_LOAD_SAFE_PATH with each one normalized
+   by tilde_expand and possibly each entries has added its gdb_realpath
+   counterpart.  */
+static VEC (char_ptr) *auto_load_safe_path_vec;
+
+/* Expand $datadir and $debugdir in STRING according to the rules of
+   substitute_path_component.  Return vector from dirnames_to_char_ptr_vec,
+   this vector must be freed by free_char_ptr_vec by the caller.  */
+
+static VEC (char_ptr) *
+auto_load_expand_dir_vars (const char *string)
+{
+  VEC (char_ptr) *dir_vec;
+  char *s;
+
+  s = xstrdup (string);
+  substitute_path_component (&s, "$datadir", gdb_datadir);
+  substitute_path_component (&s, "$debugdir", debug_file_directory);
+
+  if (debug_auto_load && strcmp (s, string) != 0)
+    fprintf_unfiltered (gdb_stdlog,
+			_("auto-load: Expanded $-variables to \"%s\".\n"), s);
+
+  dir_vec = dirnames_to_char_ptr_vec (s);
+  xfree(s);
+
+  return dir_vec;
+}
+
+/* Update auto_load_safe_path_vec from current AUTO_LOAD_SAFE_PATH.  */
+
+static void
+auto_load_safe_path_vec_update (void)
+{
+  unsigned len;
+  int ix;
+
+  if (debug_auto_load)
+    fprintf_unfiltered (gdb_stdlog,
+			_("auto-load: Updating directories of \"%s\".\n"),
+			auto_load_safe_path);
+
+  free_char_ptr_vec (auto_load_safe_path_vec);
+
+  auto_load_safe_path_vec = auto_load_expand_dir_vars (auto_load_safe_path);
+  len = VEC_length (char_ptr, auto_load_safe_path_vec);
+
+  /* Apply tilde_expand and gdb_realpath to each AUTO_LOAD_SAFE_PATH_VEC
+     element.  */
+  for (ix = 0; ix < len; ix++)
+    {
+      char *dir = VEC_index (char_ptr, auto_load_safe_path_vec, ix);
+      char *expanded = tilde_expand (dir);
+      char *real_path = gdb_realpath (expanded);
+
+      /* Ensure the current entry is at least tilde_expand-ed.  */
+      VEC_replace (char_ptr, auto_load_safe_path_vec, ix, expanded);
+
+      if (debug_auto_load)
+	{
+	  if (strcmp (expanded, dir) == 0)
+	    fprintf_unfiltered (gdb_stdlog,
+				_("auto-load: Using directory \"%s\".\n"),
+				expanded);
+	  else
+	    fprintf_unfiltered (gdb_stdlog,
+				_("auto-load: Resolved directory \"%s\" "
+				  "as \"%s\".\n"),
+				dir, expanded);
+	}
+      xfree (dir);
+
+      /* If gdb_realpath returns a different content, append it.  */
+      if (strcmp (real_path, expanded) == 0)
+	xfree (real_path);
+      else
+	{
+	  VEC_safe_push (char_ptr, auto_load_safe_path_vec, real_path);
+
+	  if (debug_auto_load)
+	    fprintf_unfiltered (gdb_stdlog,
+				_("auto-load: And canonicalized as \"%s\".\n"),
+				real_path);
+	}
+    }
+}
+
+/* Variable gdb_datadir has been set.  Update content depending on $datadir.  */
+
+static void
+auto_load_gdb_datadir_changed (void)
+{
+  auto_load_safe_path_vec_update ();
+}
+
+/* "set" command for the auto_load_safe_path configuration variable.  */
+
+static void
+set_auto_load_safe_path (char *args, int from_tty, struct cmd_list_element *c)
+{
+  /* Setting the variable to "" resets it to the compile time defaults.  */
+  if (auto_load_safe_path[0] == '\0')
+    {
+      xfree (auto_load_safe_path);
+      auto_load_safe_path = xstrdup (AUTO_LOAD_SAFE_PATH);
+    }
+
+  auto_load_safe_path_vec_update ();
+}
+
+/* "show" command for the auto_load_safe_path configuration variable.  */
+
+static void
+show_auto_load_safe_path (struct ui_file *file, int from_tty,
+			  struct cmd_list_element *c, const char *value)
+{
+  const char *cs;
+
+  /* Check if user has entered either "/" or for example ":".
+     But while more complicate content like ":/foo" would still also
+     permit any location do not hide those.  */
+
+  for (cs = value; *cs && (*cs == DIRNAME_SEPARATOR || IS_DIR_SEPARATOR (*cs));
+       cs++);
+  if (*cs == 0)
+    fprintf_filtered (file, _("Auto-load files are safe to load from any "
+			      "directory.\n"));
+  else
+    fprintf_filtered (file, _("List of directories from which it is safe to "
+			      "auto-load files is %s.\n"),
+		      value);
+}
+
+/* "add-auto-load-safe-path" command for the auto_load_safe_path configuration
+   variable.  */
+
+static void
+add_auto_load_safe_path (char *args, int from_tty)
+{
+  char *s;
+
+  if (args == NULL || *args == 0)
+    error (_("\
+Directory argument required.\n\
+Use 'set auto-load safe-path /' for disabling the auto-load safe-path security.\
+"));
+
+  s = xstrprintf ("%s%c%s", auto_load_safe_path, DIRNAME_SEPARATOR, args);
+  xfree (auto_load_safe_path);
+  auto_load_safe_path = s;
+
+  auto_load_safe_path_vec_update ();
+}
+
+/* Implementation for filename_is_in_pattern overwriting the caller's FILENAME
+   and PATTERN.  */
+
+static int
+filename_is_in_pattern_1 (char *filename, char *pattern)
+{
+  size_t pattern_len = strlen (pattern);
+  size_t filename_len = strlen (filename);
+
+  if (debug_auto_load)
+    fprintf_unfiltered (gdb_stdlog, _("auto-load: Matching file \"%s\" "
+				      "to pattern \"%s\"\n"),
+			filename, pattern);
+
+  /* Trim trailing slashes ("/") from PATTERN.  Even for "d:\" paths as
+     trailing slashes are trimmed also from FILENAME it still matches
+     correctly.  */
+  while (pattern_len && IS_DIR_SEPARATOR (pattern[pattern_len - 1]))
+    pattern_len--;
+  pattern[pattern_len] = '\0';
+
+  /* Ensure auto_load_safe_path "/" matches any FILENAME.  On MS-Windows
+     platform FILENAME even after gdb_realpath does not have to start with
+     IS_DIR_SEPARATOR character, such as the 'C:\x.exe' filename.  */
+  if (pattern_len == 0)
+    {
+      if (debug_auto_load)
+	fprintf_unfiltered (gdb_stdlog,
+			    _("auto-load: Matched - empty pattern\n"));
+      return 1;
+    }
+
+  for (;;)
+    {
+      /* Trim trailing slashes ("/").  PATTERN also has slashes trimmed the
+         same way so they will match.  */
+      while (filename_len && IS_DIR_SEPARATOR (filename[filename_len - 1]))
+	filename_len--;
+      filename[filename_len] = '\0';
+      if (filename_len == 0)
+	{
+	  if (debug_auto_load)
+	    fprintf_unfiltered (gdb_stdlog,
+				_("auto-load: Not matched - pattern \"%s\".\n"),
+				pattern);
+	  return 0;
+	}
+
+      if (gdb_filename_fnmatch (pattern, filename, FNM_FILE_NAME | FNM_NOESCAPE)
+	  == 0)
+	{
+	  if (debug_auto_load)
+	    fprintf_unfiltered (gdb_stdlog, _("auto-load: Matched - file "
+					      "\"%s\" to pattern \"%s\".\n"),
+				filename, pattern);
+	  return 1;
+	}
+
+      /* Trim trailing FILENAME component.  */
+      while (filename_len > 0 && !IS_DIR_SEPARATOR (filename[filename_len - 1]))
+	filename_len--;
+    }
+}
+
+/* Return 1 if FILENAME matches PATTERN or if FILENAME resides in
+   a subdirectory of a directory that matches PATTERN.  Return 0 otherwise.
+   gdb_realpath normalization is never done here.  */
+
+static ATTRIBUTE_PURE int
+filename_is_in_pattern (const char *filename, const char *pattern)
+{
+  char *filename_copy, *pattern_copy;
+
+  filename_copy = alloca (strlen (filename) + 1);
+  strcpy (filename_copy, filename);
+  pattern_copy = alloca (strlen (pattern) + 1);
+  strcpy (pattern_copy, pattern);
+
+  return filename_is_in_pattern_1 (filename_copy, pattern_copy);
+}
+
+/* Return 1 if FILENAME belongs to one of directory components of
+   AUTO_LOAD_SAFE_PATH_VEC.  Return 0 otherwise.
+   auto_load_safe_path_vec_update is never called.
+   *FILENAME_REALP may be updated by gdb_realpath of FILENAME - it has to be
+   freed by the caller.  */
+
+static int
+filename_is_in_auto_load_safe_path_vec (const char *filename,
+					char **filename_realp)
+{
+  char *pattern;
+  int ix;
+
+  for (ix = 0; VEC_iterate (char_ptr, auto_load_safe_path_vec, ix, pattern);
+       ++ix)
+    if (*filename_realp == NULL && filename_is_in_pattern (filename, pattern))
+      break;
+  
+  if (pattern == NULL)
+    {
+      if (*filename_realp == NULL)
+	{
+	  *filename_realp = gdb_realpath (filename);
+	  if (debug_auto_load && strcmp (*filename_realp, filename) != 0)
+	    fprintf_unfiltered (gdb_stdlog,
+				_("auto-load: Resolved "
+				  "file \"%s\" as \"%s\".\n"),
+				filename, *filename_realp);
+	}
+
+      if (strcmp (*filename_realp, filename) != 0)
+	for (ix = 0;
+	     VEC_iterate (char_ptr, auto_load_safe_path_vec, ix, pattern); ++ix)
+	  if (filename_is_in_pattern (*filename_realp, pattern))
+	    break;
+    }
+
+  if (pattern != NULL)
+    {
+      if (debug_auto_load)
+	fprintf_unfiltered (gdb_stdlog, _("auto-load: File \"%s\" matches "
+					  "directory \"%s\".\n"),
+			    filename, pattern);
+      return 1;
+    }
+
+  return 0;
+}
+
+/* Return 1 if FILENAME is located in one of the directories of
+   AUTO_LOAD_SAFE_PATH.  Otherwise call warning and return 0.  FILENAME does
+   not have to be an absolute path.
+
+   Existence of FILENAME is not checked.  Function will still give a warning
+   even if the caller would quietly skip non-existing file in unsafe
+   directory.  */
+
+int
+file_is_auto_load_safe (const char *filename, const char *debug_fmt, ...)
+{
+  char *filename_real = NULL;
+  struct cleanup *back_to;
+  static int advice_printed = 0;
+
+  if (debug_auto_load)
+    {
+      va_list debug_args;
+
+      va_start (debug_args, debug_fmt);
+      vfprintf_unfiltered (gdb_stdlog, debug_fmt, debug_args);
+      va_end (debug_args);
+    }
+
+  back_to = make_cleanup (free_current_contents, &filename_real);
+
+  if (filename_is_in_auto_load_safe_path_vec (filename, &filename_real))
+    {
+      do_cleanups (back_to);
+      return 1;
+    }
+
+  auto_load_safe_path_vec_update ();
+  if (filename_is_in_auto_load_safe_path_vec (filename, &filename_real))
+    {
+      do_cleanups (back_to);
+      return 1;
+    }
+
+  warning (_("File \"%s\" auto-loading has been declined by your "
+	     "`auto-load safe-path' set to \"%s\"."),
+	   filename_real, auto_load_safe_path);
+
+  if (!advice_printed)
+    {
+      const char *homedir = getenv ("HOME");
+      char *homeinit;
+
+      if (homedir == NULL)
+	homedir = "$HOME";
+      homeinit = xstrprintf ("%s/%s", homedir, gdbinit);
+      make_cleanup (xfree, homeinit);
+
+      printf_filtered (_("\
+To enable execution of this file add\n\
+\tadd-auto-load-safe-path %s\n\
+line to your configuration file \"%s\".\n\
+To completely disable this security protection add\n\
+\tset auto-load safe-path /\n\
+line to your configuration file \"%s\".\n\
+For more information about this security protection see the\n\
+\"Auto-loading safe path\" section in the GDB manual.  E.g., run from the shell:\n\
+\tinfo \"(gdb)Auto-loading safe path\"\n"),
+		       filename_real, homeinit, homeinit);
+      advice_printed = 1;
+    }
+
+  do_cleanups (back_to);
+  return 0;
+}
+
+/* Definition of script language for GDB canned sequences of commands.  */
+
+static const struct script_language script_language_gdb
+  = { GDB_AUTO_FILE_NAME, source_gdb_script_for_objfile };
+
+static void
+source_gdb_script_for_objfile (struct objfile *objfile, FILE *file,
+			       const char *filename)
+{
+  int is_safe;
+  struct auto_load_pspace_info *pspace_info;
+  volatile struct gdb_exception e;
+
+  is_safe = file_is_auto_load_safe (filename, _("auto-load: Loading canned "
+						"sequences of commands script "
+						"\"%s\" for objfile \"%s\".\n"),
+				    filename, objfile_name (objfile));
+
+  /* Add this script to the hash table too so "info auto-load gdb-scripts"
+     can print it.  */
+  pspace_info = get_auto_load_pspace_data_for_loading (current_program_space);
+  maybe_add_script (pspace_info, is_safe, filename, filename,
+		    &script_language_gdb);
+
+  if (!is_safe)
+    return;
+
+  TRY_CATCH (e, RETURN_MASK_ALL)
+    {
+      script_from_file (file, filename);
+    }
+  exception_print (gdb_stderr, e);
+}
+
+/* For scripts specified in .debug_gdb_scripts, multiple objfiles may load
+   the same script.  There's no point in loading the script multiple times,
+   and there can be a lot of objfiles and scripts, so we keep track of scripts
+   loaded this way.  */
+
+struct auto_load_pspace_info
+{
+  /* For each program space we keep track of loaded scripts.  */
+  struct htab *loaded_scripts;
+
+  /* Non-zero if we've issued the warning about an auto-load script not being
+     found.  We only want to issue this warning once.  */
+  int script_not_found_warning_printed;
+};
+
+/* Objects of this type are stored in the loaded script hash table.  */
+
+struct loaded_script
+{
+  /* Name as provided by the objfile.  */
+  const char *name;
+
+  /* Full path name or NULL if script wasn't found (or was otherwise
+     inaccessible).  */
+  const char *full_path;
+
+  /* Non-zero if this script has been loaded.  */
+  int loaded;
+
+  const struct script_language *language;
+};
+
+/* Per-program-space data key.  */
+static const struct program_space_data *auto_load_pspace_data;
+
+static void
+auto_load_pspace_data_cleanup (struct program_space *pspace, void *arg)
+{
+  struct auto_load_pspace_info *info;
+
+  info = program_space_data (pspace, auto_load_pspace_data);
+  if (info != NULL)
+    {
+      if (info->loaded_scripts)
+	htab_delete (info->loaded_scripts);
+      xfree (info);
+    }
+}
+
+/* Get the current autoload data.  If none is found yet, add it now.  This
+   function always returns a valid object.  */
+
+static struct auto_load_pspace_info *
+get_auto_load_pspace_data (struct program_space *pspace)
+{
+  struct auto_load_pspace_info *info;
+
+  info = program_space_data (pspace, auto_load_pspace_data);
+  if (info == NULL)
+    {
+      info = XZALLOC (struct auto_load_pspace_info);
+      set_program_space_data (pspace, auto_load_pspace_data, info);
+    }
+
+  return info;
+}
+
+/* Hash function for the loaded script hash.  */
+
+static hashval_t
+hash_loaded_script_entry (const void *data)
+{
+  const struct loaded_script *e = data;
+
+  return htab_hash_string (e->name) ^ htab_hash_pointer (e->language);
+}
+
+/* Equality function for the loaded script hash.  */
+
+static int
+eq_loaded_script_entry (const void *a, const void *b)
+{
+  const struct loaded_script *ea = a;
+  const struct loaded_script *eb = b;
+
+  return strcmp (ea->name, eb->name) == 0 && ea->language == eb->language;
+}
+
+/* Initialize the table to track loaded scripts.
+   Each entry is hashed by the full path name.  */
+
+static void
+init_loaded_scripts_info (struct auto_load_pspace_info *pspace_info)
+{
+  /* Choose 31 as the starting size of the hash table, somewhat arbitrarily.
+     Space for each entry is obtained with one malloc so we can free them
+     easily.  */
+
+  pspace_info->loaded_scripts = htab_create (31,
+					     hash_loaded_script_entry,
+					     eq_loaded_script_entry,
+					     xfree);
+
+  pspace_info->script_not_found_warning_printed = FALSE;
+}
+
+/* Wrapper on get_auto_load_pspace_data to also allocate the hash table
+   for loading scripts.  */
+
+struct auto_load_pspace_info *
+get_auto_load_pspace_data_for_loading (struct program_space *pspace)
+{
+  struct auto_load_pspace_info *info;
+
+  info = get_auto_load_pspace_data (pspace);
+  if (info->loaded_scripts == NULL)
+    init_loaded_scripts_info (info);
+
+  return info;
+}
+
+/* Add script NAME in LANGUAGE to hash table of PSPACE_INFO.  LOADED 1 if the
+   script has been (is going to) be loaded, 0 otherwise (such as if it has not
+   been found).  FULL_PATH is NULL if the script wasn't found.  The result is
+   true if the script was already in the hash table.  */
+
+int
+maybe_add_script (struct auto_load_pspace_info *pspace_info, int loaded,
+		  const char *name, const char *full_path,
+		  const struct script_language *language)
+{
+  struct htab *htab = pspace_info->loaded_scripts;
+  struct loaded_script **slot, entry;
+  int in_hash_table;
+
+  entry.name = name;
+  entry.language = language;
+  slot = (struct loaded_script **) htab_find_slot (htab, &entry, INSERT);
+  in_hash_table = *slot != NULL;
+
+  /* If this script is not in the hash table, add it.  */
+
+  if (! in_hash_table)
+    {
+      char *p;
+
+      /* Allocate all space in one chunk so it's easier to free.  */
+      *slot = xmalloc (sizeof (**slot)
+		       + strlen (name) + 1
+		       + (full_path != NULL ? (strlen (full_path) + 1) : 0));
+      p = ((char*) *slot) + sizeof (**slot);
+      strcpy (p, name);
+      (*slot)->name = p;
+      if (full_path != NULL)
+	{
+	  p += strlen (p) + 1;
+	  strcpy (p, full_path);
+	  (*slot)->full_path = p;
+	}
+      else
+	(*slot)->full_path = NULL;
+      (*slot)->loaded = loaded;
+      (*slot)->language = language;
+    }
+
+  return in_hash_table;
+}
+
+/* Clear the table of loaded section scripts.  */
+
+static void
+clear_section_scripts (void)
+{
+  struct program_space *pspace = current_program_space;
+  struct auto_load_pspace_info *info;
+
+  info = program_space_data (pspace, auto_load_pspace_data);
+  if (info != NULL && info->loaded_scripts != NULL)
+    {
+      htab_delete (info->loaded_scripts);
+      info->loaded_scripts = NULL;
+      info->script_not_found_warning_printed = FALSE;
+    }
+}
+
+/* Look for the auto-load script in LANGUAGE associated with OBJFILE where
+   OBJFILE's gdb_realpath is REALNAME and load it.  Return 1 if we found any
+   matching script, return 0 otherwise.  */
+
+static int
+auto_load_objfile_script_1 (struct objfile *objfile, const char *realname,
+			    const struct script_language *language)
+{
+  char *filename, *debugfile;
+  int len, retval;
+  FILE *input;
+  struct cleanup *cleanups;
+
+  len = strlen (realname);
+  filename = xmalloc (len + strlen (language->suffix) + 1);
+  memcpy (filename, realname, len);
+  strcpy (filename + len, language->suffix);
+
+  cleanups = make_cleanup (xfree, filename);
+
+  input = gdb_fopen_cloexec (filename, "r");
+  debugfile = filename;
+  if (debug_auto_load)
+    fprintf_unfiltered (gdb_stdlog, _("auto-load: Attempted file \"%s\" %s.\n"),
+			debugfile, input ? _("exists") : _("does not exist"));
+
+  if (!input)
+    {
+      VEC (char_ptr) *vec;
+      int ix;
+      char *dir;
+
+      /* Also try the same file in a subdirectory of gdb's data
+	 directory.  */
+
+      vec = auto_load_expand_dir_vars (auto_load_dir);
+      make_cleanup_free_char_ptr_vec (vec);
+
+      if (debug_auto_load)
+	fprintf_unfiltered (gdb_stdlog, _("auto-load: Searching 'set auto-load "
+					  "scripts-directory' path \"%s\".\n"),
+			    auto_load_dir);
+
+      for (ix = 0; VEC_iterate (char_ptr, vec, ix, dir); ++ix)
+	{
+	  debugfile = xmalloc (strlen (dir) + strlen (filename) + 1);
+	  strcpy (debugfile, dir);
+
+	  /* FILENAME is absolute, so we don't need a "/" here.  */
+	  strcat (debugfile, filename);
+
+	  make_cleanup (xfree, debugfile);
+	  input = gdb_fopen_cloexec (debugfile, "r");
+	  if (debug_auto_load)
+	    fprintf_unfiltered (gdb_stdlog, _("auto-load: Attempted file "
+					      "\"%s\" %s.\n"),
+				debugfile,
+				input ? _("exists") : _("does not exist"));
+	  if (input != NULL)
+	    break;
+	}
+    }
+
+  if (input)
+    {
+      make_cleanup_fclose (input);
+
+      /* To preserve existing behaviour we don't check for whether the
+	 script was already in the table, and always load it.
+	 It's highly unlikely that we'd ever load it twice,
+	 and these scripts are required to be idempotent under multiple
+	 loads anyway.  */
+      language->source_script_for_objfile (objfile, input, debugfile);
+
+      retval = 1;
+    }
+  else
+    retval = 0;
+
+  do_cleanups (cleanups);
+  return retval;
+}
+
+/* Look for the auto-load script in LANGUAGE associated with OBJFILE and load
+   it.  */
+
+void
+auto_load_objfile_script (struct objfile *objfile,
+			  const struct script_language *language)
+{
+  char *realname = gdb_realpath (objfile_name (objfile));
+  struct cleanup *cleanups = make_cleanup (xfree, realname);
+
+  if (!auto_load_objfile_script_1 (objfile, realname, language))
+    {
+      /* For Windows/DOS .exe executables, strip the .exe suffix, so that
+	 FOO-gdb.gdb could be used for FOO.exe, and try again.  */
+
+      size_t len = strlen (realname);
+      const size_t lexe = sizeof (".exe") - 1;
+
+      if (len > lexe && strcasecmp (realname + len - lexe, ".exe") == 0)
+	{
+	  len -= lexe;
+	  realname[len] = '\0';
+	  if (debug_auto_load)
+	    fprintf_unfiltered (gdb_stdlog, _("auto-load: Stripped .exe suffix, "
+					      "retrying with \"%s\".\n"),
+				realname);
+	  auto_load_objfile_script_1 (objfile, realname, language);
+	}
+    }
+
+  do_cleanups (cleanups);
+}
+
+/* Load any auto-loaded scripts for OBJFILE.  */
+
+void
+load_auto_scripts_for_objfile (struct objfile *objfile)
+{
+  if (!global_auto_load || (objfile->flags & OBJF_NOT_FILENAME) != 0)
+    return;
+
+  if (auto_load_gdb_scripts)
+    auto_load_objfile_script (objfile, &script_language_gdb);
+
+  gdbpy_load_auto_scripts_for_objfile (objfile);
+}
+
+/* This is a new_objfile observer callback to auto-load scripts.
+
+   Two flavors of auto-loaded scripts are supported.
+   1) based on the path to the objfile
+   2) from .debug_gdb_scripts section  */
+
+static void
+auto_load_new_objfile (struct objfile *objfile)
+{
+  if (!objfile)
+    {
+      /* OBJFILE is NULL when loading a new "main" symbol-file.  */
+      clear_section_scripts ();
+      return;
+    }
+
+  load_auto_scripts_for_objfile (objfile);
+}
+
+/* Collect scripts to be printed in a vec.  */
+
+typedef struct loaded_script *loaded_script_ptr;
+DEF_VEC_P (loaded_script_ptr);
+
+struct collect_matching_scripts_data
+{
+  VEC (loaded_script_ptr) **scripts_p;
+
+  const struct script_language *language;
+};
+
+/* Traversal function for htab_traverse.
+   Collect the entry if it matches the regexp.  */
+
+static int
+collect_matching_scripts (void **slot, void *info)
+{
+  struct loaded_script *script = *slot;
+  struct collect_matching_scripts_data *data = info;
+
+  if (script->language == data->language && re_exec (script->name))
+    VEC_safe_push (loaded_script_ptr, *data->scripts_p, script);
+
+  return 1;
+}
+
+/* Print SCRIPT.  */
+
+static void
+print_script (struct loaded_script *script)
+{
+  struct ui_out *uiout = current_uiout;
+  struct cleanup *chain;
+
+  chain = make_cleanup_ui_out_tuple_begin_end (uiout, NULL);
+
+  ui_out_field_string (uiout, "loaded", script->loaded ? "Yes" : "No");
+  ui_out_field_string (uiout, "script", script->name);
+  ui_out_text (uiout, "\n");
+
+  /* If the name isn't the full path, print it too.  */
+  if (script->full_path != NULL
+      && strcmp (script->name, script->full_path) != 0)
+    {
+      ui_out_text (uiout, "\tfull name: ");
+      ui_out_field_string (uiout, "full_path", script->full_path);
+      ui_out_text (uiout, "\n");
+    }
+
+  do_cleanups (chain);
+}
+
+/* Helper for info_auto_load_scripts to sort the scripts by name.  */
+
+static int
+sort_scripts_by_name (const void *ap, const void *bp)
+{
+  const struct loaded_script *a = *(const struct loaded_script **) ap;
+  const struct loaded_script *b = *(const struct loaded_script **) bp;
+
+  return FILENAME_CMP (a->name, b->name);
+}
+
+/* Special internal GDB value of auto_load_info_scripts's PATTERN identify
+   the "info auto-load XXX" command has been executed through the general
+   "info auto-load" invocation.  Extra newline will be printed if needed.  */
+char auto_load_info_scripts_pattern_nl[] = "";
+
+/* Implementation for "info auto-load gdb-scripts"
+   (and "info auto-load python-scripts").  List scripts in LANGUAGE matching
+   PATTERN.  FROM_TTY is the usual GDB boolean for user interactivity.  */
+
+void
+auto_load_info_scripts (char *pattern, int from_tty,
+			const struct script_language *language)
+{
+  struct ui_out *uiout = current_uiout;
+  struct auto_load_pspace_info *pspace_info;
+  struct cleanup *script_chain;
+  VEC (loaded_script_ptr) *scripts;
+  int nr_scripts;
+
+  dont_repeat ();
+
+  pspace_info = get_auto_load_pspace_data (current_program_space);
+
+  if (pattern && *pattern)
+    {
+      char *re_err = re_comp (pattern);
+
+      if (re_err)
+	error (_("Invalid regexp: %s"), re_err);
+    }
+  else
+    {
+      re_comp ("");
+    }
+
+  /* We need to know the number of rows before we build the table.
+     Plus we want to sort the scripts by name.
+     So first traverse the hash table collecting the matching scripts.  */
+
+  scripts = VEC_alloc (loaded_script_ptr, 10);
+  script_chain = make_cleanup (VEC_cleanup (loaded_script_ptr), &scripts);
+
+  if (pspace_info != NULL && pspace_info->loaded_scripts != NULL)
+    {
+      struct collect_matching_scripts_data data = { &scripts, language };
+
+      /* Pass a pointer to scripts as VEC_safe_push can realloc space.  */
+      htab_traverse_noresize (pspace_info->loaded_scripts,
+			      collect_matching_scripts, &data);
+    }
+
+  nr_scripts = VEC_length (loaded_script_ptr, scripts);
+
+  /* Table header shifted right by preceding "gdb-scripts:  " would not match
+     its columns.  */
+  if (nr_scripts > 0 && pattern == auto_load_info_scripts_pattern_nl)
+    ui_out_text (uiout, "\n");
+
+  make_cleanup_ui_out_table_begin_end (uiout, 2, nr_scripts,
+				       "AutoLoadedScriptsTable");
+
+  ui_out_table_header (uiout, 7, ui_left, "loaded", "Loaded");
+  ui_out_table_header (uiout, 70, ui_left, "script", "Script");
+  ui_out_table_body (uiout);
+
+  if (nr_scripts > 0)
+    {
+      int i;
+      loaded_script_ptr script;
+
+      qsort (VEC_address (loaded_script_ptr, scripts),
+	     VEC_length (loaded_script_ptr, scripts),
+	     sizeof (loaded_script_ptr), sort_scripts_by_name);
+      for (i = 0; VEC_iterate (loaded_script_ptr, scripts, i, script); ++i)
+	print_script (script);
+    }
+
+  do_cleanups (script_chain);
+
+  if (nr_scripts == 0)
+    {
+      if (pattern && *pattern)
+	ui_out_message (uiout, 0, "No auto-load scripts matching %s.\n",
+			pattern);
+      else
+	ui_out_message (uiout, 0, "No auto-load scripts.\n");
+    }
+}
+
+/* Wrapper for "info auto-load gdb-scripts".  */
+
+static void
+info_auto_load_gdb_scripts (char *pattern, int from_tty)
+{
+  auto_load_info_scripts (pattern, from_tty, &script_language_gdb);
+}
+
+/* Implement 'info auto-load local-gdbinit'.  */
+
+static void
+info_auto_load_local_gdbinit (char *args, int from_tty)
+{
+  if (auto_load_local_gdbinit_pathname == NULL)
+    printf_filtered (_("Local .gdbinit file was not found.\n"));
+  else if (auto_load_local_gdbinit_loaded)
+    printf_filtered (_("Local .gdbinit file \"%s\" has been loaded.\n"),
+		     auto_load_local_gdbinit_pathname);
+  else
+    printf_filtered (_("Local .gdbinit file \"%s\" has not been loaded.\n"),
+		     auto_load_local_gdbinit_pathname);
+}
+
+/* Return non-zero if SCRIPT_NOT_FOUND_WARNING_PRINTED of PSPACE_INFO was unset
+   before calling this function.  Always set SCRIPT_NOT_FOUND_WARNING_PRINTED
+   of PSPACE_INFO.  */
+
+int
+script_not_found_warning_print (struct auto_load_pspace_info *pspace_info)
+{
+  int retval = !pspace_info->script_not_found_warning_printed;
+
+  pspace_info->script_not_found_warning_printed = 1;
+
+  return retval;
+}
+
+/* The only valid "set auto-load" argument is off|0|no|disable.  */
+
+static void
+set_auto_load_cmd (char *args, int from_tty)
+{
+  struct cmd_list_element *list;
+  size_t length;
+
+  /* See parse_binary_operation in use by the sub-commands.  */
+
+  length = args ? strlen (args) : 0;
+
+  while (length > 0 && (args[length - 1] == ' ' || args[length - 1] == '\t'))
+    length--;
+
+  if (length == 0 || (strncmp (args, "off", length) != 0
+		      && strncmp (args, "0", length) != 0
+		      && strncmp (args, "no", length) != 0
+		      && strncmp (args, "disable", length) != 0))
+    error (_("Valid is only global 'set auto-load no'; "
+	     "otherwise check the auto-load sub-commands."));
+
+  for (list = *auto_load_set_cmdlist_get (); list != NULL; list = list->next)
+    if (list->var_type == var_boolean)
+      {
+	gdb_assert (list->type == set_cmd);
+	do_set_command (args, from_tty, list);
+      }
+}
+
+/* Initialize "set auto-load " commands prefix and return it.  */
+
+struct cmd_list_element **
+auto_load_set_cmdlist_get (void)
+{
+  static struct cmd_list_element *retval;
+
+  if (retval == NULL)
+    add_prefix_cmd ("auto-load", class_maintenance, set_auto_load_cmd, _("\
+Auto-loading specific settings.\n\
+Configure various auto-load-specific variables such as\n\
+automatic loading of Python scripts."),
+		    &retval, "set auto-load ",
+		    1/*allow-unknown*/, &setlist);
+
+  return &retval;
+}
+
+/* Command "show auto-load" displays summary of all the current
+   "show auto-load " settings.  */
+
+static void
+show_auto_load_cmd (char *args, int from_tty)
+{
+  cmd_show_list (*auto_load_show_cmdlist_get (), from_tty, "");
+}
+
+/* Initialize "show auto-load " commands prefix and return it.  */
+
+struct cmd_list_element **
+auto_load_show_cmdlist_get (void)
+{
+  static struct cmd_list_element *retval;
+
+  if (retval == NULL)
+    add_prefix_cmd ("auto-load", class_maintenance, show_auto_load_cmd, _("\
+Show auto-loading specific settings.\n\
+Show configuration of various auto-load-specific variables such as\n\
+automatic loading of Python scripts."),
+		    &retval, "show auto-load ",
+		    0/*allow-unknown*/, &showlist);
+
+  return &retval;
+}
+
+/* Command "info auto-load" displays whether the various auto-load files have
+   been loaded.  This is reimplementation of cmd_show_list which inserts
+   newlines at proper places.  */
+
+static void
+info_auto_load_cmd (char *args, int from_tty)
+{
+  struct cmd_list_element *list;
+  struct cleanup *infolist_chain;
+  struct ui_out *uiout = current_uiout;
+
+  infolist_chain = make_cleanup_ui_out_tuple_begin_end (uiout, "infolist");
+
+  for (list = *auto_load_info_cmdlist_get (); list != NULL; list = list->next)
+    {
+      struct cleanup *option_chain
+	= make_cleanup_ui_out_tuple_begin_end (uiout, "option");
+
+      gdb_assert (!list->prefixlist);
+      gdb_assert (list->type == not_set_cmd);
+
+      ui_out_field_string (uiout, "name", list->name);
+      ui_out_text (uiout, ":  ");
+      cmd_func (list, auto_load_info_scripts_pattern_nl, from_tty);
+
+      /* Close the tuple.  */
+      do_cleanups (option_chain);
+    }
+
+  /* Close the tuple.  */
+  do_cleanups (infolist_chain);
+}
+
+/* Initialize "info auto-load " commands prefix and return it.  */
+
+struct cmd_list_element **
+auto_load_info_cmdlist_get (void)
+{
+  static struct cmd_list_element *retval;
+
+  if (retval == NULL)
+    add_prefix_cmd ("auto-load", class_info, info_auto_load_cmd, _("\
+Print current status of auto-loaded files.\n\
+Print whether various files like Python scripts or .gdbinit files have been\n\
+found and/or loaded."),
+		    &retval, "info auto-load ",
+		    0/*allow-unknown*/, &infolist);
+
+  return &retval;
+}
+
+void _initialize_auto_load (void);
+
+void
+_initialize_auto_load (void)
+{
+  struct cmd_list_element *cmd;
+  char *scripts_directory_help;
+
+  auto_load_pspace_data
+    = register_program_space_data_with_cleanup (NULL,
+						auto_load_pspace_data_cleanup);
+
+  observer_attach_new_objfile (auto_load_new_objfile);
+
+  add_setshow_boolean_cmd ("gdb-scripts", class_support,
+			   &auto_load_gdb_scripts, _("\
+Enable or disable auto-loading of canned sequences of commands scripts."), _("\
+Show whether auto-loading of canned sequences of commands scripts is enabled."),
+			   _("\
+If enabled, canned sequences of commands are loaded when the debugger reads\n\
+an executable or shared library.\n\
+This options has security implications for untrusted inferiors."),
+			   NULL, show_auto_load_gdb_scripts,
+			   auto_load_set_cmdlist_get (),
+			   auto_load_show_cmdlist_get ());
+
+  add_cmd ("gdb-scripts", class_info, info_auto_load_gdb_scripts,
+	   _("Print the list of automatically loaded sequences of commands.\n\
+Usage: info auto-load gdb-scripts [REGEXP]"),
+	   auto_load_info_cmdlist_get ());
+
+  add_setshow_boolean_cmd ("local-gdbinit", class_support,
+			   &auto_load_local_gdbinit, _("\
+Enable or disable auto-loading of .gdbinit script in current directory."), _("\
+Show whether auto-loading .gdbinit script in current directory is enabled."),
+			   _("\
+If enabled, canned sequences of commands are loaded when debugger starts\n\
+from .gdbinit file in current directory.  Such files are deprecated,\n\
+use a script associated with inferior executable file instead.\n\
+This options has security implications for untrusted inferiors."),
+			   NULL, show_auto_load_local_gdbinit,
+			   auto_load_set_cmdlist_get (),
+			   auto_load_show_cmdlist_get ());
+
+  add_cmd ("local-gdbinit", class_info, info_auto_load_local_gdbinit,
+	   _("Print whether current directory .gdbinit file has been loaded.\n\
+Usage: info auto-load local-gdbinit"),
+	   auto_load_info_cmdlist_get ());
+
+  auto_load_dir = xstrdup (AUTO_LOAD_DIR);
+  scripts_directory_help = xstrprintf (
+#ifdef HAVE_PYTHON
+				       _("\
+Automatically loaded Python scripts (named OBJFILE%s) and GDB scripts\n\
+(named OBJFILE%s) are located in one of the directories listed by this\n\
+option.\n\
+%s"),
+				       GDBPY_AUTO_FILE_NAME,
+#else
+				       _("\
+Automatically loaded GDB scripts (named OBJFILE%s) are located in one\n\
+of the directories listed by this option.\n\
+%s"),
+#endif
+				       GDB_AUTO_FILE_NAME,
+				       _("\
+This option is ignored for the kinds of scripts \
+having 'set auto-load ... off'.\n\
+Directories listed here need to be present also \
+in the 'set auto-load safe-path'\n\
+option."));
+  add_setshow_optional_filename_cmd ("scripts-directory", class_support,
+				     &auto_load_dir, _("\
+Set the list of directories from which to load auto-loaded scripts."), _("\
+Show the list of directories from which to load auto-loaded scripts."),
+				     scripts_directory_help,
+				     set_auto_load_dir, show_auto_load_dir,
+				     auto_load_set_cmdlist_get (),
+				     auto_load_show_cmdlist_get ());
+  xfree (scripts_directory_help);
+
+  auto_load_safe_path = xstrdup (AUTO_LOAD_SAFE_PATH);
+  auto_load_safe_path_vec_update ();
+  add_setshow_optional_filename_cmd ("safe-path", class_support,
+				     &auto_load_safe_path, _("\
+Set the list of files and directories that are safe for auto-loading."), _("\
+Show the list of files and directories that are safe for auto-loading."), _("\
+Various files loaded automatically for the 'set auto-load ...' options must\n\
+be located in one of the directories listed by this option.  Warning will be\n\
+printed and file will not be used otherwise.\n\
+You can mix both directory and filename entries.\n\
+Setting this parameter to an empty list resets it to its default value.\n\
+Setting this parameter to '/' (without the quotes) allows any file\n\
+for the 'set auto-load ...' options.  Each path entry can be also shell\n\
+wildcard pattern; '*' does not match directory separator.\n\
+This option is ignored for the kinds of files having 'set auto-load ... off'.\n\
+This options has security implications for untrusted inferiors."),
+				     set_auto_load_safe_path,
+				     show_auto_load_safe_path,
+				     auto_load_set_cmdlist_get (),
+				     auto_load_show_cmdlist_get ());
+  observer_attach_gdb_datadir_changed (auto_load_gdb_datadir_changed);
+
+  cmd = add_cmd ("add-auto-load-safe-path", class_support,
+		 add_auto_load_safe_path,
+		 _("Add entries to the list of directories from which it is safe "
+		   "to auto-load files.\n\
+See the commands 'set auto-load safe-path' and 'show auto-load safe-path' to\n\
+access the current full list setting."),
+		 &cmdlist);
+  set_cmd_completer (cmd, filename_completer);
+
+  add_setshow_boolean_cmd ("auto-load", class_maintenance,
+			   &debug_auto_load, _("\
+Set auto-load verifications debugging."), _("\
+Show auto-load verifications debugging."), _("\
+When non-zero, debugging output for files of 'set auto-load ...'\n\
+is displayed."),
+			    NULL, show_debug_auto_load,
+			    &setdebuglist, &showdebuglist);
+}
+@
+
+
+1.22
+log
+@Code cleanup: Add objfile_name accessor
+
+gdb/
+2013-09-24  Jan Kratochvil  <jan.kratochvil@@redhat.com>
+
+	Code cleanup: Add objfile_name accessor function.
+	* ada-lang.c (is_known_support_routine): Use objfile_name.
+	* auto-load.c (source_gdb_script_for_objfile)
+	(auto_load_objfile_script): Likewise.
+	* coffread.c (coff_symtab_read, read_one_sym): Likewise.
+	* dbxread.c (dbx_symfile_read): Likewise.
+	* dwarf2-frame.c (dwarf2_build_frame_info): Likewise.
+	* dwarf2loc.c (locexpr_describe_location_piece): Likewise.
+	* dwarf2read.c (dwarf2_get_dwz_file, dwarf2_read_index)
+	(dw2_symtab_iter_next, dw2_expand_symtabs_matching)
+	(lookup_dwp_signatured_type, lookup_dwo_unit)
+	(dwarf2_build_psymtabs_hard, scan_partial_symbols, process_queue)
+	(fixup_go_packaging, process_imported_unit_die, dwarf2_physname)
+	(read_import_statement, create_dwo_cu, open_and_init_dwp_file)
+	(lookup_dwo_cutu, read_call_site_scope, dwarf2_ranges_read)
+	(dwarf2_record_block_ranges, read_common_block, read_typedef)
+	(read_subrange_type, load_partial_dies, read_partial_die)
+	(read_addr_index_1, read_str_index, dwarf_decode_lines_1)
+	(die_containing_type, build_error_marker_type, lookup_die_type)
+	(follow_die_ref_or_sig, follow_die_ref, dwarf2_fetch_die_loc_sect_off)
+	(dwarf2_fetch_constant_bytes, follow_die_sig, get_signatured_type)
+	(get_DW_AT_signature_type, write_psymtabs_to_index)
+	(save_gdb_index_command): Likewise.
+	* elfread.c (find_separate_debug_file_by_buildid, elf_symfile_read):
+	Likewise.
+	* expprint.c (dump_subexp_body_standard): Likewise.
+	* gdbtypes.c (type_name_no_tag_or_error): Likewise.
+	* jit.c (jit_object_close_impl): Use the objfile field name renamed to
+	original_name.
+	* linux-thread-db.c (try_thread_db_load_from_pdir_1): New variable
+	obj_name, use objfile_name for it, use the variable.
+	(try_thread_db_load_from_pdir, has_libpthread, thread_db_new_objfile):
+	Use objfile_name.
+	* machoread.c (macho_symtab_read, macho_check_dsym)
+	(macho_symfile_relocate): Likewise.
+	* maint.c (maintenance_translate_address): Likewise.
+	* minidebug.c (find_separate_debug_file_in_section): Likewise.
+	* minsyms.c (install_minimal_symbols): Likewise.
+	* objfiles.c (allocate_objfile): Use the objfile field name renamed to
+	original_name.
+	(filter_overlapping_sections): Use objfile_name.
+	(objfile_name): New function.
+	* objfiles.h (struct objfile): Rename field name to original_name.
+	(objfile_name): New prototype.
+	* printcmd.c (sym_info, address_info): Use objfile_name.
+	* probe.c (parse_probes, collect_probes, compare_probes)
+	(info_probes_for_ops): Likewise.
+	* progspace.c (clone_program_space): Likewise.
+	* psymtab.c (require_partial_symbols, dump_psymtab, allocate_psymtab)
+	(maintenance_info_psymtabs): Likewise.
+	* python/py-auto-load.c (gdbpy_load_auto_script_for_objfile)
+	(source_section_scripts): Likewise.
+	* python/py-objfile.c (objfpy_get_filename): Likewise.
+	* python/py-progspace.c (pspy_get_filename): Likewise.
+	* solib-aix.c (solib_aix_get_toc_value): Likewise.
+	* solib-som.c (match_main, som_solib_section_offsets): Likewise.
+	* solib.c (solib_read_symbols): Likewise.
+	* stabsread.c (scan_file_globals): Likewise.
+	* stap-probe.c (handle_stap_probe): Likewise.
+	* symfile.c (symbol_file_clear, separate_debug_file_exists)
+	(find_separate_debug_file_by_debuglink): Likewise.
+	(reread_symbols): Likewise.  Use the objfile field name renamed to
+	original_name.
+	(allocate_symtab): Use objfile_name.
+	* symmisc.c (print_symbol_bcache_statistics, print_objfile_statistics)
+	(dump_objfile, dump_msymbols, dump_symtab_1)
+	(maintenance_print_msymbols, maintenance_print_objfiles)
+	(maintenance_info_symtabs, maintenance_check_symtabs): Likewise.
+	* target.c (target_translate_tls_address, target_info): Likewise.
+	* xcoffread.c (xcoff_initial_scan): Make variable name const.  Use
+	objfile_name.
+@
+text
+@d843 1
+a843 1
+  if (!global_auto_load)
+@
+
+
+1.21
+log
+@	PR gdb/7912:
+	* Makefile.in (SFILES): Add filestuff.c
+	(COMMON_OBS): Add filestuff.o.
+	(filestuff.o): New target.
+	* auto-load.c (auto_load_objfile_script_1): Use
+	gdb_fopen_cloexec.
+	* auxv.c (procfs_xfer_auxv): Use gdb_open_cloexec.
+	* cli/cli-cmds.c (shell_escape): Call close_most_fds.
+	* cli/cli-dump.c (fopen_with_cleanup): Use gdb_fopen_cloexec.
+	* common/agent.c (gdb_connect_sync_socket): Use
+	gdb_socket_cloexec.
+	* common/filestuff.c: New file.
+	* common/filestuff.h: New file.
+	* common/linux-osdata.c (linux_common_core_of_thread)
+	(command_from_pid, commandline_from_pid, print_source_lines)
+	(linux_xfer_osdata_shm, linux_xfer_osdata_sem)
+	(linux_xfer_osdata_msg, linux_xfer_osdata_modules): Use
+	gdb_fopen_cloexec.
+	* common/linux-procfs.c (linux_proc_get_int)
+	(linux_proc_pid_has_state): Use gdb_fopen_cloexec.
+	* config.in, configure: Rebuild.
+	* configure.ac: Don't check for sys/socket.h.  Check for
+	fdwalk, pipe2.
+	* corelow.c (core_open): Use gdb_open_cloexec.
+	* dwarf2read.c (write_psymtabs_to_index): Use gdb_fopen_cloexec.
+	* fork-child.c (fork_inferior): Call close_most_fds.
+	* gdb_bfd.c (gdb_bfd_open): Use gdb_open_cloexec.
+	* inf-child.c (inf_child_fileio_readlink): Use gdb_open_cloexec.
+	* linux-nat.c (linux_nat_thread_name, linux_proc_pending_signals):
+	Use gdb_fopen_cloexec.
+	(linux_proc_xfer_partial, linux_proc_xfer_spu): Use
+	gdb_open_cloexec.
+	(linux_async_pipe): Use gdb_pipe_cloexec.
+	* remote-fileio.c (remote_fileio_func_open): Use
+	gdb_open_cloexec.
+	* remote.c (remote_file_put, remote_file_get): Use
+	gdb_fopen_cloexec.
+	* ser-pipe.c (pipe_open): Use gdb_socketpair_cloexec,
+	close_most_fds.
+	* ser-tcp.c (net_open): Use gdb_socket_cloexec.
+	* ser-unix.c (hardwire_open): Use gdb_open_cloexec.
+	* solib.c (solib_find): Use gdb_open_cloexec.
+	* source.c (openp, find_and_open_source): Use gdb_open_cloexec.
+	* tracepoint.c (tfile_start): Use gdb_fopen_cloexec.
+	(tfile_open): Use gdb_open_cloexec.
+	* tui/tui-io.c (tui_initialize_io): Use gdb_pipe_cloexec.
+	* ui-file.c (gdb_fopen): Use gdb_fopen_cloexec.
+	* xml-support.c (xml_fetch_content_from_file): Use
+	gdb_fopen_cloexec.
+	* main.c (captured_main): Call notice_open_fds.
+gdbserver
+	* Makefile.in (SFILES): Add filestuff.c.
+	(OBS): Add filestuff.o.
+	(filestuff.o): New target.
+	* config.in, configure: Rebuild.
+	* configure.ac: Check for fdwalk, pipe2.
+@
+text
+@d519 1
+a519 1
+				    filename, objfile->name);
+d812 1
+a812 1
+  char *realname = gdb_realpath (objfile->name);
+@
+
+
+1.20
+log
+@2013-01-31  Aleksandar Ristovski  <aristovski@@qnx.com>
+
+        * auto-load.c (auto_load_expand_dir_vars): Remove unused dir_vec.
+        * ax-gdb.c (gen_printf): Remove unused expr, i, bot, fr, flen, fmt.
+        * ax-general.c (ax_print): Remove unused is_float.
+        * blockframe.c (block_innermost_frame): Remove unused start, end.
+        * break-catch-sig.c (catch_signal_command): Remove unused gdbarch.
+
+Reference: http://sourceware.org/ml/gdb-patches/2013-01/msg00752.html
+@
+text
+@d41 1
+d742 1
+a742 1
+  input = fopen (filename, "r");
+d774 1
+a774 1
+	  input = fopen (debugfile, "r");
+@
+
+
+1.19
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@a180 1
+  VEC (char_ptr) *dir_vec = NULL;
+@
+
+
+1.18
+log
+@gdb/
+	Implement auto-load user conveniences suggested by Doug Evans.
+	* auto-load.c: Include top.h.
+	(file_is_auto_load_safe): New variable advice_printed.  Print advice.
+	(_initialize_auto_load): New variable scripts_directory_help.  Mention
+	GDBPY_AUTO_FILE_NAME and GDB_AUTO_FILE_NAME for set auto-load
+	scripts-directory.  Document in online help one can use also files for
+	set auto-load safe-path.
+	* python/py-auto-load.c: (GDBPY_AUTO_FILE_NAME): Move it from here ...
+	* python/python.h (GDBPY_AUTO_FILE_NAME): ... to here.
+@
+text
+@d3 1
+a3 1
+   Copyright (C) 2012 Free Software Foundation, Inc.
+@
+
+
+1.17
+log
+@gdb/
+	* auto-load.c (auto_load_objfile_script): Rename to ...
+	(auto_load_objfile_script_1): ... here, change variable realname to
+	parameter realname, document it, add return value, add variable retval.
+	(auto_load_objfile_script): New function.
+
+gdb/doc/
+	* gdb.texinfo (objfile-gdb.py file): New paragraph for .exe stripping.
+@
+text
+@d40 1
+d445 1
+d475 24
+d1193 1
+d1237 21
+d1261 2
+a1262 5
+Show the list of directories from which to load auto-loaded scripts."), _("\
+Automatically loaded Python scripts and GDB scripts are located in one of the\n\
+directories listed by this option.  This option is ignored for the kinds of\n\
+scripts having 'set auto-load ... off'.  Directories listed here need to be\n\
+present also in the 'set auto-load safe-path' option."),
+d1266 1
+d1272 2
+a1273 2
+Set the list of directories from which it is safe to auto-load files."), _("\
+Show the list of directories from which it is safe to auto-load files."), _("\
+d1277 1
+d1280 1
+a1280 1
+for the 'set auto-load ...' options.  Each directory can be also shell\n\
+@
+
+
+1.16
+log
+@	* auto-load.c (_initialize_auto_load): Update.
+	* solib-svr4.c (_initialize_svr4_solib): Update
+	* solib-dsbt.c (_initialize_dsbt_solib): Update.
+	* solib-darwin.c (_initialize_darwin_solib): Update.
+	* registry.h: New file.
+	* python/py-progspace.c (gdbpy_initialize_pspace): Update.
+	* python/py-inferior.c (gdbpy_initialize_inferior): Update.
+	* progspace.h: Include registry.h.  Use DECLARE_REGISTRY.
+	(register_program_space_data_with_cleanup)
+	(register_program_space_data, program_space_alloc_data)
+	(clear_program_space_data, set_program_space_data)
+	(program_space_data): Don't declare.
+	* progspace.c: Use DEFINE_REGISTRY.
+	(struct program_space_data, struct
+	program_space_data_registration, struct
+	program_space_data_registry, program_space_data_registry)
+	(register_program_space_data_with_cleanup)
+	(register_program_space_data, program_space_alloc_data)
+	(program_space_free_data, clear_program_space_data)
+	(set_program_space_data, program_space_data): Remove.
+	* objfiles.h: Include registry.h.  Use DECLARE_REGISTRY.
+	(struct objfile) <data, num_data>: Replace with REGISTRY_FIELDS.
+	(register_objfile_data_with_cleanup, register_objfile_data)
+	(clear_objfile_data, set_objfile_data, objfile_data): Don't
+	declare.
+	* objfiles.c: Use DEFINE_REGISTRY.
+	(struct objfile_data, struct objfile_data_registration, struct
+	objfile_data_registry, objfile_data_registry)
+	(register_objfile_data_with_cleanup, register_objfile_data)
+	(objfile_alloc_data, objfile_free_data, clear_objfile_data)
+	(set_objfile_data, objfile_data): Remove.
+	(_initialize_objfiles): Update.
+	* jit.c (_initialize_jit): Update.
+	* inflow.c (_initialize_inflow): Update.
+	* inferior.h: Include registry.h.  Use DECLARE_REGISTRY.
+	(struct inferior) <data, num_data>: Replace with REGISTRY_FIELDS.
+	(register_inferior_data_with_cleanup, register_inferior_data)
+	(clear_inferior_data, set_inferior_data, inferior_data): Don't
+	declare.
+	* inferior.c: Use DEFINE_REGISTRY.
+	(struct inferior_data, struct inferior_data_registration, struct
+	inferior_data_registry, inferior_data_registry)
+	(register_inferior_data_with_cleanup, register_inferior_data)
+	(inferior_alloc_data, inferior_free_data  clear_inferior_data)
+	(set_inferior_data, inferior_data): Remove.
+	* auxv.c (_initialize_auxv): Update.
+	* ada-lang.c (_initialize_ada_language): Update.
+	* breakpoint.c (_initialize_breakpoint): Update.
+	* i386-nat.c (i386_use_watchpoints): Update.
+@
+text
+@d696 3
+a698 2
+/* Look for the auto-load script in LANGUAGE associated with OBJFILE and load
+   it.  */
+d700 3
+a702 3
+void
+auto_load_objfile_script (struct objfile *objfile,
+			  const struct script_language *language)
+a703 1
+  char *realname;
+d705 1
+a705 1
+  int len;
+a708 1
+  realname = gdb_realpath (objfile->name);
+a714 1
+  make_cleanup (xfree, realname);
+d769 38
+@
+
+
+1.15
+log
+@gdb/
+
+	* cli/cli-decode.c (set_cmd_prefix): New.
+	(lookup_cmd_for_prefixlist): New.
+	(add_prefix_cmd): Call set_cmd_prefix and update field 'prefix'
+	of each cmd_list_element in *prefixlist.
+	(add_setshow_cmd_full): set_cmd_prefix.
+	(add_alias_cmd): Likewise.
+	* cli/cli-decode.h (struct cmd_list_element) <prefix>: New field.
+	Declare 'auto_boolean_enums'.
+	* cli/cli-setshow.c: Include "observer.h".
+	(notify_command_param_changed_p): New.
+	(add_setshow_auto_boolean_cmd): Move auto_boolean_enums out.
+	Remove 'static'.
+	(do_setshow_command): Split it to ...
+	(do_set_command, do_show_command): ... them.  New.
+	(do_set_command): Call observer_notify_command_param_changed if
+	notify_command_param_changed_p returns true.
+	(cmd_show_list): Caller update.
+	* auto-load.c (set_auto_load_cmd): Likewise.
+	* remote.c (show_remote_cmd): Likewise.
+	* cli/cli-setshow.h: Update declarations.
+	* top.c (execute_command): Call do_set_command and do_show_command.
+
+	* NEWS: Mention new MI notification.
+	* mi/mi-interp.c: Declare mi_command_param_changed.
+	(mi_interpreter_init): Attach mi_command_param_changed to
+	observer command_param_changed.
+	(mi_command_param_changed): New.
+	Remove mi_suppress_breakpoint_notifications.
+	Define global variable mi_suppress_notification.
+	(mi_breakpoint_created): Update.
+	(mi_breakpoint_deleted): Likewise.
+	(mi_breakpoint_modified): Likewise.
+	* mi/mi-main.c (mi_cmd_execute): Likewise.  Check command
+	'gdb-set' and set mi_suppress_notification.
+	* mi/mi-main.h: (mi_suppress_notification): New struct.
+
+gdb/doc/
+
+	* observer.texi: New observer command_param_changed.
+	* gdb.texinfo (GDB/MI Async Records): Doc for '=cmd-param-changed'.
+
+gdb/testsuite/
+
+	* gdb.mi/mi-cmd-param-changed.exp: New.
+	* gdb.mi/mi-cli.exp: Update for MI notification "=cmd-param-changed".
+	* gdb.mi/mi-var-rtti.exp, gdb.mi/mi2-cli.exp: Likewise.
+	* gdb.mi/mi2-prompt.exp: Likewise.
+@
+text
+@d1133 2
+a1134 1
+    = register_program_space_data_with_cleanup (auto_load_pspace_data_cleanup);
+@
+
+
+1.14
+log
+@gdb/
+	* auto-load.c (auto_load_info_scripts): Remove immediate_quit increment
+	and decrement.
+@
+text
+@d1025 1
+a1025 1
+	do_setshow_command (args, from_tty, list);
+@
+
+
+1.13
+log
+@gdb/
+	Support shell wildcards for 'set auto-load safe-path'.
+	* auto-load.c: Include fnmatch.h.
+	(filename_is_in_dir): Rename to ...
+	(filename_is_in_pattern_1, filename_is_in_pattern): ... here and split
+	it.  Update function comment.  Rename dir_len to pattern_len.  New
+	variables filename_len, pattern and filename.  Add more DEBUG_AUTO_LOAD
+	messages.  Use gdb_filename_fnmatch.
+	(filename_is_in_auto_load_safe_path_vec): Rename variable dir to
+	pattern.
+	(_initialize_auto_load): Extend the "set auto-load safe-path" help text.
+	* defs.h (gdb_filename_fnmatch): New declaration.
+	* utils.c: Include fnmatch.h.
+	(gdb_filename_fnmatch): New function.
+
+gdb/doc/
+	* gdb.texinfo (Auto-loading safe path): Note the shell wildcard
+	possibility.
+@
+text
+@a918 1
+      immediate_quit++;
+a921 1
+      immediate_quit--;
+@
+
+
+1.13.2.1
+log
+@gdb/
+	* auto-load.c (auto_load_objfile_script): Rename to ...
+	(auto_load_objfile_script_1): ... here, change variable realname to
+	parameter realname, document it, add return value, add variable retval.
+	(auto_load_objfile_script): New function.
+
+gdb/doc/
+	* gdb.texinfo (objfile-gdb.py file): New paragraph for .exe stripping.
+@
+text
+@d696 2
+a697 3
+/* Look for the auto-load script in LANGUAGE associated with OBJFILE where
+   OBJFILE's gdb_realpath is REALNAME and load it.  Return 1 if we found any
+   matching script, return 0 otherwise.  */
+d699 3
+a701 3
+static int
+auto_load_objfile_script_1 (struct objfile *objfile, const char *realname,
+			    const struct script_language *language)
+d703 1
+d705 1
+a705 1
+  int len, retval;
+d709 1
+d716 1
+a770 38
+
+      retval = 1;
+    }
+  else
+    retval = 0;
+
+  do_cleanups (cleanups);
+  return retval;
+}
+
+/* Look for the auto-load script in LANGUAGE associated with OBJFILE and load
+   it.  */
+
+void
+auto_load_objfile_script (struct objfile *objfile,
+			  const struct script_language *language)
+{
+  char *realname = gdb_realpath (objfile->name);
+  struct cleanup *cleanups = make_cleanup (xfree, realname);
+
+  if (!auto_load_objfile_script_1 (objfile, realname, language))
+    {
+      /* For Windows/DOS .exe executables, strip the .exe suffix, so that
+	 FOO-gdb.gdb could be used for FOO.exe, and try again.  */
+
+      size_t len = strlen (realname);
+      const size_t lexe = sizeof (".exe") - 1;
+
+      if (len > lexe && strcasecmp (realname + len - lexe, ".exe") == 0)
+	{
+	  len -= lexe;
+	  realname[len] = '\0';
+	  if (debug_auto_load)
+	    fprintf_unfiltered (gdb_stdlog, _("auto-load: Stripped .exe suffix, "
+					      "retrying with \"%s\".\n"),
+				realname);
+	  auto_load_objfile_script_1 (objfile, realname, language);
+	}
+@
+
+
+1.13.2.2
+log
+@gdb/
+	Implement auto-load user conveniences suggested by Doug Evans.
+	* auto-load.c: Include top.h.
+	(file_is_auto_load_safe): New variable advice_printed.  Print advice.
+	(_initialize_auto_load): New variable scripts_directory_help.  Mention
+	GDBPY_AUTO_FILE_NAME and GDB_AUTO_FILE_NAME for set auto-load
+	scripts-directory.  Document in online help one can use also files for
+	set auto-load safe-path.
+	* python/py-auto-load.c: (GDBPY_AUTO_FILE_NAME): Move it from here ...
+	* python/python.h (GDBPY_AUTO_FILE_NAME): ... to here.
+@
+text
+@a39 1
+#include "top.h"
+a443 1
+  static int advice_printed = 0;
+a472 24
+  if (!advice_printed)
+    {
+      const char *homedir = getenv ("HOME");
+      char *homeinit;
+
+      if (homedir == NULL)
+	homedir = "$HOME";
+      homeinit = xstrprintf ("%s/%s", homedir, gdbinit);
+      make_cleanup (xfree, homeinit);
+
+      printf_filtered (_("\
+To enable execution of this file add\n\
+\tadd-auto-load-safe-path %s\n\
+line to your configuration file \"%s\".\n\
+To completely disable this security protection add\n\
+\tset auto-load safe-path /\n\
+line to your configuration file \"%s\".\n\
+For more information about this security protection see the\n\
+\"Auto-loading safe path\" section in the GDB manual.  E.g., run from the shell:\n\
+\tinfo \"(gdb)Auto-loading safe path\"\n"),
+		       filename_real, homeinit, homeinit);
+      advice_printed = 1;
+    }
+
+a1168 1
+  char *scripts_directory_help;
+a1210 21
+  scripts_directory_help = xstrprintf (
+#ifdef HAVE_PYTHON
+				       _("\
+Automatically loaded Python scripts (named OBJFILE%s) and GDB scripts\n\
+(named OBJFILE%s) are located in one of the directories listed by this\n\
+option.\n\
+%s"),
+				       GDBPY_AUTO_FILE_NAME,
+#else
+				       _("\
+Automatically loaded GDB scripts (named OBJFILE%s) are located in one\n\
+of the directories listed by this option.\n\
+%s"),
+#endif
+				       GDB_AUTO_FILE_NAME,
+				       _("\
+This option is ignored for the kinds of scripts \
+having 'set auto-load ... off'.\n\
+Directories listed here need to be present also \
+in the 'set auto-load safe-path'\n\
+option."));
+d1214 5
+a1218 2
+Show the list of directories from which to load auto-loaded scripts."),
+				     scripts_directory_help,
+a1221 1
+  xfree (scripts_directory_help);
+d1227 2
+a1228 2
+Set the list of files and directories that are safe for auto-loading."), _("\
+Show the list of files and directories that are safe for auto-loading."), _("\
+a1231 1
+You can mix both directory and filename entries.\n\
+d1234 1
+a1234 1
+for the 'set auto-load ...' options.  Each path entry can be also shell\n\
+@
+
+
+1.12
+log
+@gdb/
+	* NEWS (--with-auto-load-dir): Prepend $debugdir to the default path.
+	Describe it.
+	* auto-load.c (auto_load_expand_dir_vars): New function.
+	(auto_load_safe_path_vec_update): Use it, remove the
+	substitute_path_component call thanks to it.
+	(auto_load_objfile_script): Remove the debug_file_directory processing.
+	Use auto_load_expand_dir_vars, remove the substitute_path_component
+	call thanks to it.
+	* configure: Regenerate.
+	* configure.ac (--with-auto-load-dir): Prepend $debugdir to the default
+	path.  Escape $ also for $debugdir.
+	(--with_auto_load_safe_path): Escape $ also for $debugdir.
+	* utils.c (substitute_path_component): Accept also DIRNAME_SEPARATOR.
+
+gdb/doc/
+	* gdb.texinfo (Separate Debug Files): New anchor debug-file-directory.
+	Mention also --with-separate-debug-dir.
+	(Auto-loading): Prepend $debugdir in the sample output.
+	(Auto-loading safe path): Likewise.  Mention also $debugdir for the
+	auto-load safe-path variable.
+	(objfile-gdb.py file): Remove the extra debug-file-directory paragraph.
+	Mention also $debugdir for 'set auto-load scripts-directory'.
+@
+text
+@d39 1
+d301 2
+a302 3
+/* Return 1 if FILENAME is equal to DIR or if FILENAME belongs to the
+   subdirectory DIR.  Return 0 otherwise.  gdb_realpath normalization is never
+   done here.  */
+d304 2
+a305 2
+static ATTRIBUTE_PURE int
+filename_is_in_dir (const char *filename, const char *dir)
+d307 2
+a308 1
+  size_t dir_len = strlen (dir);
+d310 11
+a320 2
+  while (dir_len && IS_DIR_SEPARATOR (dir[dir_len - 1]))
+    dir_len--;
+d325 53
+a377 2
+  if (dir_len == 0)
+    return 1;
+d379 1
+a379 3
+  return (filename_ncmp (dir, filename, dir_len) == 0
+	  && (IS_DIR_SEPARATOR (filename[dir_len])
+	      || filename[dir_len] == '\0'));
+d392 1
+a392 1
+  char *dir;
+d395 3
+a397 2
+  for (ix = 0; VEC_iterate (char_ptr, auto_load_safe_path_vec, ix, dir); ++ix)
+    if (*filename_realp == NULL && filename_is_in_dir (filename, dir))
+d400 1
+a400 1
+  if (dir == NULL)
+d413 3
+a415 3
+	for (ix = 0; VEC_iterate (char_ptr, auto_load_safe_path_vec, ix, dir);
+	     ++ix)
+	  if (filename_is_in_dir (*filename_realp, dir))
+d419 1
+a419 1
+  if (dir != NULL)
+d424 1
+a424 1
+			    filename, dir);
+d1198 2
+a1199 1
+for the 'set auto-load ...' options.\n\
+@
+
+
+1.11
+log
+@gdb/
+	Rename $ddir to $datadir.
+	* NEWS (--with-auto-load-dir): Rename $ddir to $datadir.
+	* auto-load.c (auto_load_safe_path_vec_update)
+	(auto_load_gdb_datadir_changed, auto_load_objfile_script): Likewise.
+	* configure: Regenerate.
+	* configure.ac (--with-auto-load-dir, --with-auto-load-safe-path):
+	Likewise.  Remove the 'use $ddir' help string.
+
+gdb/doc/
+	Rename $ddir to $datadir.
+	* gdb.texinfo (Auto-loading, Auto-loading safe path)
+	(objfile-gdb.py file): Rename $ddir to $datadir.
+@
+text
+@d150 24
+d190 1
+a190 1
+  auto_load_safe_path_vec = dirnames_to_char_ptr_vec (auto_load_safe_path);
+d198 2
+a199 7
+      char *ddir_subst, *expanded, *real_path;
+
+      ddir_subst = xstrdup (dir);
+      substitute_path_component (&ddir_subst, "$datadir", gdb_datadir);
+      expanded = tilde_expand (ddir_subst);
+      xfree (ddir_subst);
+      real_path = gdb_realpath (expanded);
+d201 1
+a201 2
+      /* Ensure the current entry is at least a valid path (therefore
+	 $datadir-expanded and tilde-expanded).  */
+a665 36
+      char *debugdir;
+      VEC (char_ptr) *debugdir_vec;
+      int ix;
+
+      debugdir_vec = dirnames_to_char_ptr_vec (debug_file_directory);
+      make_cleanup_free_char_ptr_vec (debugdir_vec);
+
+      if (debug_auto_load)
+	fprintf_unfiltered (gdb_stdlog,
+			    _("auto-load: Searching 'set debug-file-directory' "
+			      "path \"%s\".\n"),
+			    debug_file_directory);
+
+      for (ix = 0; VEC_iterate (char_ptr, debugdir_vec, ix, debugdir); ++ix)
+	{
+	  /* Also try the same file in the separate debug info directory.  */
+	  debugfile = xmalloc (strlen (debugdir) + strlen (filename) + 1);
+	  strcpy (debugfile, debugdir);
+
+	  /* FILENAME is absolute, so we don't need a "/" here.  */
+	  strcat (debugfile, filename);
+
+	  make_cleanup (xfree, debugfile);
+	  input = fopen (debugfile, "r");
+	  if (debug_auto_load)
+	    fprintf_unfiltered (gdb_stdlog, _("auto-load: Attempted file "
+					      "\"%s\" %s.\n"),
+				debugfile,
+				input ? _("exists") : _("does not exist"));
+	  if (input != NULL)
+	    break;
+	}
+    }
+
+  if (!input)
+    {
+d673 1
+a673 1
+      vec = dirnames_to_char_ptr_vec (auto_load_dir);
+d683 2
+a684 4
+	  debugfile = xstrdup (dir);
+	  substitute_path_component (&debugfile, "$datadir", gdb_datadir);
+	  debugfile = xrealloc (debugfile, (strlen (debugfile)
+					    + strlen (filename) + 1));
+@
+
+
+1.10
+log
+@gdb/
+	* auto-load.c (show_auto_load_safe_path): Accept any combination of
+	DIRNAME_SEPARATOR and IS_DIR_SEPARATOR for wild-match.
+@
+text
+@d177 1
+a177 1
+      substitute_path_component (&ddir_subst, "$ddir", gdb_datadir);
+d183 1
+a183 1
+	 $ddir-expanded and tilde-expanded).  */
+d215 1
+a215 1
+/* Variable gdb_datadir has been set.  Update content depending on $ddir.  */
+d702 1
+a702 1
+	  substitute_path_component (&debugfile, "$ddir", gdb_datadir);
+@
+
+
+1.9
+log
+@gdb/
+	Implement multi-component --with-auto-load-dir.
+	* NEWS (set auto-load scripts-directory, --with-auto-load-dir): New
+	entries.
+	(--with-auto-load-safe-path): Update the default value description.
+	* auto-load.c (auto_load_dir, set_auto_load_dir, show_auto_load_dir):
+	New.
+	(auto_load_objfile_script): Add DEBUG_AUTO_LOAD output.  Remove
+	GDB_DATADIR NULL check.  Replace GDB_DATADIR/auto-load by
+	AUTO_LOAD_DIR.  Support $ddir and multiple components in it.
+	(_initialize_auto_load): Initialize also auto_load_dir.  Install new
+	"set auto-load scripts-directory".
+	* config.in: Regenerate.
+	* configure: Regenerate.
+	* configure.ac (--with-auto-load-dir): New configure option.
+	(--auto-load-safe-path): Change the default to --with-auto-load-dir.
+
+gdb/doc/
+	Implement multi-component --with-auto-load-dir.
+	* gdb.texinfo (Auto-loading): New references
+	for 'set auto-load scripts-directory'
+	and 'show auto-load scripts-directory'.
+	(Auto-loading safe path): Describe the new default.  Move $ddir
+	substituation reference to 'objfile-gdb.py file'.
+	(objfile-gdb.py file): Describe script-name alias.  Change real-name to
+	script-name.  Describe new 'set auto-load scripts-directory'
+	and 'show auto-load scripts-directory'.
+@
+text
+@d244 9
+a252 1
+  if (strcmp (value, "/") == 0)
+@
+
+
+1.8
+log
+@gdb/
+	Provide $ddir substitution for --with-auto-load-safe-path.
+	* NEWS (--with-auto-load-safe-path, --without-auto-load-safe-path): New
+	entries.
+	* auto-load.c: Include observer.h.
+	(auto_load_safe_path_vec_update): Call substitute_path_component for
+	each component.  New variable ddir_subst.
+	(auto_load_gdb_datadir_changed): New function.
+	(set_auto_load_safe_path): Rename DEFAULT_AUTO_LOAD_SAFE_PATH to
+	AUTO_LOAD_SAFE_PATH.  New comment.
+	(_initialize_auto_load): Rename DEFAULT_AUTO_LOAD_SAFE_PATH to
+	AUTO_LOAD_SAFE_PATH.  Install auto_load_gdb_datadir_changed.
+	* config.in: Regenerate.
+	* configure: Regenerate.
+	* configure.ac (--auto-load-safe-path): Rename
+	DEFAULT_AUTO_LOAD_SAFE_PATH to AUTO_LOAD_SAFE_PATH.  Default to
+	GDB_DATADIR/auto-load.
+	* defs.h (substitute_path_component): New declaration.
+	* top.c: Include observer.h.
+	(set_gdb_datadir): New function.
+	(init_main): Install it for "set data-directory".
+	* utils.c (substitute_path_component): New function.
+
+gdb/doc/
+	Provide $ddir substitution for --with-auto-load-safe-path.
+	* gdb.texinfo (Auto-loading): Replace /usr/local by $ddir/auto-load.
+	(Auto-loading safe path): Likewise.  Mention the default value,
+	$ddir substitution, --with-auto-load-safe-path and
+	--without-auto-load-safe-path.
+	* observer.texi (gdb_datadir_changed): New.
+@
+text
+@d111 29
+d634 3
+d647 6
+d664 5
+d674 1
+a674 1
+  if (!input && gdb_datadir)
+d676 4
+a681 6
+      debugfile = xmalloc (strlen (gdb_datadir) + strlen (filename)
+			   + strlen ("/auto-load") + 1);
+      strcpy (debugfile, gdb_datadir);
+      strcat (debugfile, "/auto-load");
+      /* FILENAME is absolute, so we don't need a "/" here.  */
+      strcat (debugfile, filename);
+d683 28
+a710 2
+      make_cleanup (xfree, debugfile);
+      input = fopen (debugfile, "r");
+d1126 13
+@
+
+
+1.7
+log
+@gdb/
+	Make auto-load handle multiple components of DEBUG_FILE_DIRECTORY.
+	* auto-load.c (auto_load_objfile_script): Remove check for NULL
+	DEBUG_FILE_DIRECTORY.  Handle multiple components of
+	DEBUG_FILE_DIRECTORY.
+@
+text
+@d38 1
+d145 1
+a145 2
+      char *expanded = tilde_expand (dir);
+      char *real_path = gdb_realpath (expanded);
+d147 8
+a154 1
+      /* Ensure the current entry is at least tilde_expand-ed.  */
+d186 8
+d199 1
+d203 1
+a203 1
+      auto_load_safe_path = xstrdup (DEFAULT_AUTO_LOAD_SAFE_PATH);
+d1059 1
+a1059 1
+  auto_load_safe_path = xstrdup (DEFAULT_AUTO_LOAD_SAFE_PATH);
+d1077 1
+@
+
+
+1.6
+log
+@gdb/
+	* auto-load.c (set_auto_load_safe_path): Reset AUTO_LOAD_SAFE_PATH
+	back to DEFAULT_AUTO_LOAD_SAFE_PATH if it is being set to "".
+	(show_auto_load_safe_path): Check any-directory by comparison with "/".
+	(add_auto_load_safe_path): Change the error message.
+	(_initialize_auto_load): Change the "safe-path" help text.
+	* configure: Regenerate
+	* configure.ac (--without-auto-load-safe-path): Set
+	WITH_AUTO_LOAD_SAFE_PATH to /.
+
+gdb/doc/
+	* gdb.texinfo (Auto-loading safe path): Make 'directories'
+	for 'set auto-load safe-path' optional.  Mention if it is omitted.
+	Change disabling security protection condition to "/", twice.
+@
+text
+@d590 1
+a590 1
+  if (!input && debug_file_directory)
+d592 21
+a612 9
+      /* Also try the same file in the separate debug info directory.  */
+      debugfile = xmalloc (strlen (filename)
+			   + strlen (debug_file_directory) + 1);
+      strcpy (debugfile, debug_file_directory);
+      /* FILENAME is absolute, so we don't need a "/" here.  */
+      strcat (debugfile, filename);
+
+      make_cleanup (xfree, debugfile);
+      input = fopen (debugfile, "r");
+@
+
+
+1.5
+log
+@gdb/
+	Fix --without-auto-load-safe-path for MS-Windows host platform.
+	* auto-load.c (filename_is_in_dir): Return 1 for DIR_LEN 0.
+@
+text
+@d184 6
+d199 1
+a199 1
+  if (*value == 0)
+d218 3
+a220 2
+Adding empty directory element disables the auto-load safe-path security.  \
+Use 'set auto-load safe-path' instead if you mean that."));
+d1039 4
+a1042 2
+printed and file will not be used otherwise.  Use empty string (or even\n\
+empty directory entry) to allow any file for the 'set auto-load ...' options.\n\
+@
+
+
+1.4
+log
+@gdb/
+	New option "set debug auto-load".
+	* NEWS: New commands "set debug auto-load" and "show debug auto-load".
+	* auto-load.c (debug_auto_load, show_debug_auto_load: New.
+	(auto_load_safe_path_vec_update)
+	(filename_is_in_auto_load_safe_path_vec): Call fprintf_unfiltered
+	if DEBUG_AUTO_LOAD.
+	(file_is_auto_load_safe): New parameters debug_fmt and ....
+	Call fprintf_unfiltered if DEBUG_AUTO_LOAD.
+	(source_gdb_script_for_objfile): Extend the file_is_auto_load_safe
+	caller by explanatory string.
+	(_initialize_auto_load): Register "set debug auto-load".
+	* auto-load.h (file_is_auto_load_safe): New parameters debug_fmt
+	and ....
+	* linux-thread-db.c (try_thread_db_load_from_pdir_1)
+	(try_thread_db_load_from_dir): Extend the file_is_auto_load_safe caller
+	by explanatory string.
+	* main.c (captured_main): Likewise.
+	* python/py-auto-load.c (gdbpy_load_auto_script_for_objfile)
+	(source_section_scripts): Likewise.
+
+gdb/doc/
+	New option "set debug auto-load".
+	* gdb.texinfo (Auto-loading): New menu item for auto-load verbose mode.
+	(auto-load verbose mode): New node.
+@
+text
+@d234 6
+@
+
+
+1.3
+log
+@gdb/
+	New option "set auto-load safe-path".
+	* NEWS: New commands "set auto-load safe-path"
+	and "show auto-load safe-path".
+	* auto-load.c: Include gdb_vecs.h, readline/tilde.h and completer.h.
+	(auto_load_safe_path, auto_load_safe_path_vec)
+	(auto_load_safe_path_vec_update, set_auto_load_safe_path)
+	(show_auto_load_safe_path, add_auto_load_safe_path, filename_is_in_dir)
+	(filename_is_in_auto_load_safe_path_vec, file_is_auto_load_safe): New.
+	(source_gdb_script_for_objfile): New variable is_safe.  Call
+	file_is_auto_load_safe.  Return if it is not.
+	(struct loaded_script): New field loaded.
+	(maybe_add_script): Add parameter loaded.  Initialize SLOT with it.
+	(print_script): Use LOADED indicator instead of FULL_PATH.  Change
+	output "Missing" to "No".
+	(_initialize_auto_load): New variable cmd.  Initialize
+	auto_load_safe_path.  Register "set auto-load safe-path",
+	"show auto-load safe-path" and "add-auto-load-safe-path".
+	* auto-load.h (maybe_add_script): Add parameter loaded.
+	(file_is_auto_load_safe): New declaration.
+	* config.in: Regenerate.
+	* configure: Regenerate.
+	* configure.ac: New parameters --with-auto-load-safe-path
+	and --without-auto-load-safe-path.
+	* linux-thread-db.c (try_thread_db_load_from_pdir_1)
+	(try_thread_db_load_from_dir): Check file_is_auto_load_safe first.
+	* main.c (captured_main): Check file_is_auto_load_safe for
+	LOCAL_GDBINIT.
+	* python/py-auto-load.c (gdbpy_load_auto_script_for_objfile): New
+	variable is_safe.  Call file_is_auto_load_safe.  Return if it is not.
+	(source_section_scripts): Call file_is_auto_load_safe.  Return if it is
+	not.
+
+gdb/doc/
+	New option "set auto-load safe-path".
+	* gdb.texinfo (Auto-loading): Extend the "show auto-load"
+	and "info auto-load" examples for safe-path.  Put there also references
+	for "set auto-load safe-path" and "show auto-load safe-path".
+	New menu item for Auto-loading safe path.
+	(Auto-loading safe path): New node.
+	(Python Auto-loading): Update the expected output from "Missing"
+	to "No".
+
+gdb/testsuite/
+	New option "set auto-load safe-path".
+	* gdb.python/py-objfile-script.exp (set auto-load safe-path): New.
+	* gdb.python/py-section-script.exp (set auto-load safe-path): New.
+@
+text
+@d46 14
+d129 5
+d148 14
+a162 1
+      VEC_replace (char_ptr, auto_load_safe_path_vec, ix, expanded);
+d168 8
+a175 1
+	VEC_safe_push (char_ptr, auto_load_safe_path_vec, real_path);
+d259 8
+a266 1
+	*filename_realp = gdb_realpath (filename);
+d268 5
+a272 4
+      for (ix = 0; VEC_iterate (char_ptr, auto_load_safe_path_vec, ix, dir);
+	   ++ix)
+	if (filename_is_in_dir (*filename_realp, dir))
+	  break;
+d276 7
+a282 1
+    return 1;
+d296 1
+a296 1
+file_is_auto_load_safe (const char *filename)
+d301 9
+d346 4
+a349 1
+  is_safe = file_is_auto_load_safe (filename);
+d1043 9
+@
+
+
+1.2
+log
+@gdb/
+	auto-load: Implementation.
+	* NEWS: New descriptions for "info auto-load",
+	"info auto-load gdb-scripts", "info auto-load python-scripts",
+	"info auto-load local-gdbinit" and "info auto-load libthread-db".
+	Deprecate "info auto-load-scripts", "set auto-load-scripts on|off"
+	and "show auto-load-scripts".  New description for "set auto-load",
+	"show auto-load", "set auto-load gdb-scripts",
+	"show auto-load gdb-scripts", "set auto-load python-scripts",
+	"show auto-load python-scripts", "set auto-load local-gdbinit",
+	"show auto-load local-gdbinit", "set auto-load libthread-db" and
+	"show auto-load libthread-db".
+	* auto-load.c: Remove include python/python-internal.h.  Add includes
+	exceptions.h, cli/cli-script.h, gdbcmd.h, cli/cli-decode.h and
+	cli/cli-setshow.h.
+	(GDB_AUTO_FILE_NAME, source_gdb_script_for_objfile)
+	(auto_load_gdb_scripts, show_auto_load_gdb_scripts): New.
+	(gdbpy_global_auto_load): Rename to ...
+	(global_auto_load): ... here.
+	(auto_load_local_gdbinit, auto_load_local_gdbinit_pathname)
+	(auto_load_local_gdbinit_loaded, show_auto_load_local_gdbinit)
+	(script_language_gdb, source_gdb_script_for_objfile): New.
+	(struct loaded_script): New field language.
+	(hash_loaded_script_entry, eq_loaded_script_entry): Calculate also
+	LANGUAGE.
+	(maybe_add_script): Add parameter language.  Drop redundant
+	entry.full_path initialization.  Initialize entry.language and
+	(*slot)->language.
+	(auto_load_objfile_script): Change parameter suffix to language.
+	Remove the call of maybe_add_script.
+	Call language->source_script_for_objfile.
+	(load_auto_scripts_for_objfile, struct collect_matching_scripts_data):
+	New.
+	(collect_matching_scripts): Adjust it for
+	struct collect_matching_scripts_data.
+	(auto_load_info_scripts_pattern_nl): New variable.
+	(info_auto_load_scripts): Rename to ...
+	(auto_load_info_scripts): ... here, add parameter language.  Adjust it
+	for struct collect_matching_scripts_data.
+	(info_auto_load_gdb_scripts, info_auto_load_local_gdbinit)
+	(set_auto_load_cmd, auto_load_set_cmdlist_get, show_auto_load_cmd)
+	(auto_load_show_cmdlist_get, info_auto_load_cmd)
+	(auto_load_info_cmdlist_get): New.
+	(_initialize_auto_load): Move add_info of "auto-load-scripts" to
+	python/py-auto-load.c.  New installment for "set auto-load gdb-scripts",
+	"info auto-load gdb-scripts", "set auto-load local-gdbinit" and
+	"info auto-load local-gdbinit".
+	* auto-load.h (struct script_language): New.
+	(gdbpy_global_auto_load): Rename to ...
+	(global_auto_load): ... here.
+	(auto_load_local_gdbinit, auto_load_local_gdbinit_pathname)
+	(auto_load_local_gdbinit_loaded): New declarations.
+	(maybe_add_script): New parameter language.
+	(auto_load_objfile_script): Change parameter suffix to language.
+	(load_auto_scripts_for_objfile, auto_load_info_scripts_pattern_nl)
+	(auto_load_info_scripts, auto_load_set_cmdlist_get)
+	(auto_load_show_cmdlist_get, auto_load_info_cmdlist_get): New
+	declarations.
+	* linux-thread-db.c: Include auto-load.h and ctype.h.
+	(auto_load_thread_db, show_auto_load_thread_db): New.
+	(struct thread_db_info): New field filename.
+	(delete_thread_db_info): Call xfree for FILENAME.
+	(try_thread_db_load): Initialize FILENAME.
+	(try_thread_db_load_from_pdir, try_thread_db_load_from_dir): Return
+	if !AUTO_LOAD_THREAD_DB.
+	(info_auto_load_libthread_db_compare, info_auto_load_libthread_db): New.
+	(_initialize_thread_db): Install auto_load_thread_db
+	as "set auto-load libthread-db" and install info_auto_load_libthread_db
+	as "info auto-load libthread-db".
+	* main.c (captured_main): Rename gdbpy_global_auto_load to
+	global_auto_load.  Initialize AUTO_LOAD_LOCAL_GDBINIT_PATHNAME and
+	AUTO_LOAD_LOCAL_GDBINIT_LOADED.
+	(print_gdb_help): Extend the help for 'local init file'.
+	* python/py-auto-load.c: Remove a comment about gdb scripts extension.
+	(GDBPY_AUTO_SECTION_NAME): Extend the comment it is Python specific.
+	(auto_load_scripts): Rename to ...
+	(auto_load_python_scripts): ... here, update the comment.
+	(gdbpy_load_auto_script_for_objfile): New declaration.
+	(show_auto_load_python_scripts, script_language_python)
+	(gdbpy_load_auto_script_for_objfile): New.
+	(source_section_scripts): Refactor the code.
+	(load_auto_scripts_for_objfile): Rename to ...
+	(gdbpy_load_auto_scripts_for_objfile): ... here, update the
+	auto_load_objfile_script caller, drop GDBPY_GLOBAL_AUTO_LOAD checking.
+	(info_auto_load_python_scripts): New.
+	(gdbpy_initialize_auto_load): New variables cmd and cmd_name.
+	Rename "set auto-load-scripts" to "set auto-load python-scripts".
+	Register "set auto-load-scripts" as its deprecated alias.  Register
+	"info auto-load python-scripts".  Register "info auto-load-scripts" as
+	its deprecated alias.
+	(load_auto_scripts_for_objfile): Rename to ...
+	(gdbpy_load_auto_scripts_for_objfile): ... here.
+	* python/python.h (load_auto_scripts_for_objfile): Rename to ...
+	(gdbpy_load_auto_scripts_for_objfile): ... here.
+
+gdb/doc/
+	auto-load: Implementation.
+	* gdb.texinfo (Mode Options): New anchor for -nx.
+	(Startup): New anchors for Option -init-eval-command,
+	Home Directory Init File
+	and Init File in the Current Directory during Startup.
+	Mention set auto-load local-gdbinit with a reference.
+	Change the sample code to "set auto-load python-scripts".
+	(Threads): New anchor set libthread-db-search-path.
+	Provide references to libthread_db.so.1 file.
+	(Controlling GDB): New menu item for Auto-loading.
+	(Auto-loading, Init File in the Current Directory)
+	(libthread_db.so.1 file, objfile-gdb.gdb file): New nodes.
+	(Python): Rename the menu item Auto-loading to Python Auto-loading.
+	(Writing a Pretty-Printer, Objfiles In Python): Update the renamed
+	reference.
+	(Auto-loading): Rename to ...
+	(Python Auto-loading): ... here.  Change "set auto-load-scripts" to
+	"set auto-load python-scripts", new anchor for it.  Change
+	"show auto-load-scripts" to "show auto-load python-scripts", new anchor
+	for it.  Change "info auto-load-scripts"
+	to "info auto-load python-scripts", new anchor for it.  Change "scripts"
+	to "Python scripts".
+
+gdb/testsuite/
+	auto-load: Implementation.
+	* gdb.base/help.exp (test set height): Increase the height.
+	* gdb.python/py-objfile-script.exp (info auto-load-scripts): Change
+	to ...
+	(info auto-load python-scripts): ... here.
+	* gdb.python/py-section-script.exp (info auto-load-scripts *): Change
+	to ...
+	(info auto-load python-scripts *): ... here.
+@
+text
+@d35 3
+d96 175
+d280 1
+d284 2
+d289 5
+a293 1
+  maybe_add_script (pspace_info, filename, filename, &script_language_gdb);
+d328 3
+d423 3
+a425 2
+/* Add script NAME in LANGUAGE to hash table of PSPACE_INFO.
+   FULL_PATH is NULL if the script wasn't found.  The result is
+d429 1
+a429 1
+maybe_add_script (struct auto_load_pspace_info *pspace_info,
+d463 1
+d625 1
+a625 1
+  ui_out_field_string (uiout, "loaded", script->full_path ? "Yes" : "Missing");
+d911 2
+d952 26
+@
+
+
+1.1
+log
+@gdb/
+	auto-load: Move files.
+	* Makefile.in (SFILES): Add auto-load.c.
+	(HFILES_NO_SRCDIR): Add auto-load.h.
+	(COMMON_OBS): Add auto-load.o.
+	(distclean): Change .gdbinit for gdb-gdb.gdb.
+	* auto-load.c: New file, with parts from python/py-auto-load.c.
+	* auto-load.h: New file, with parts from python/python.h.
+	* configure: Regenerate.
+	* configure.ac (AC_OUTPUT): Change .gdbinit for gdb-gdb.gdb.
+	* gdb-gdb.gdb.in: New file, renamed from gdbinit.in.
+	* gdbinit.in: Remove file, rename it to gdb-gdb.gdb.in.
+	* main.c: Include auto-load.h.
+	* python/py-auto-load.c: Move include filenames.h, gdb_regex.h,
+	command.h, observer.h and progspace.h to auto-load.c.  Add include
+	auto-load.h.
+	(gdbpy_global_auto_load, struct auto_load_pspace_info)
+	(struct loaded_script, auto_load_pspace_data)
+	(auto_load_pspace_data_cleanup, get_auto_load_pspace_data)
+	(hash_loaded_script_entry, eq_loaded_script_entry)
+	(init_loaded_scripts_info, get_auto_load_pspace_data_for_loading)
+	(maybe_add_script): Move to auto-load.c.
+	(source_section_scripts): Change maybe_add_script parameters passing,
+	use script_not_found_warning_print.
+	(clear_section_scripts, auto_load_objfile_script)
+	(auto_load_new_objfile, loaded_script_ptr)
+	(DEF_VEC_P (loaded_script_ptr), collect_matching_scripts, print_script)
+	(sort_scripts_by_name, info_auto_load_scripts): Move to auto-load.c.
+	(gdbpy_initialize_auto_load): Move auto_load_pspace_data,
+	auto_load_new_objfile and info_auto_load_scripts initizations to
+	auto-load.c.
+	* python/python.h (gdbpy_global_auto_load): Move to auto-load.h.
+@
+text
+@d30 30
+a59 1
+#include "python/python-internal.h"
+d65 1
+a65 1
+   Both auto_load_scripts && gdbpy_global_auto_load must be true to enable
+d71 45
+a115 1
+int gdbpy_global_auto_load = 1;
+d138 1
+d142 2
+d188 1
+a188 1
+  return htab_hash_string (e->name);
+d199 1
+a199 1
+  return strcmp (ea->name, eb->name) == 0;
+d235 3
+a237 3
+/* Add script NAME to hash table of PSPACE_INFO.
+   FULL_PATH is NULL if the script wasn't found.
+   The result is true if the script was already in the hash table.  */
+d240 3
+a242 2
+maybe_add_script (struct auto_load_pspace_info *pspace_info, const char *name,
+		  const char *full_path)
+d249 1
+a249 1
+  entry.full_path = full_path;
+d274 1
+d297 2
+a298 1
+/* Look for the auto-load script associated with OBJFILE and load it.  */
+d301 2
+a302 1
+auto_load_objfile_script (struct objfile *objfile, const char *suffix)
+d312 1
+a312 1
+  filename = xmalloc (len + strlen (suffix) + 1);
+d314 1
+a314 1
+  strcpy (filename + len, suffix);
+a351 2
+      struct auto_load_pspace_info *pspace_info;
+
+a353 6
+      /* Add this script to the hash table too so "info auto-load-scripts"
+	 can print it.  */
+      pspace_info =
+	get_auto_load_pspace_data_for_loading (current_program_space);
+      maybe_add_script (pspace_info, debugfile, debugfile);
+
+d359 1
+a359 1
+      source_python_script_for_objfile (objfile, input, debugfile);
+d365 14
+d403 7
+d417 1
+a417 1
+  VEC (loaded_script_ptr) **scripts_ptr = info;
+d419 2
+a420 2
+  if (re_exec (script->name))
+    VEC_safe_push (loaded_script_ptr, *scripts_ptr, script);
+d462 8
+a469 1
+/* "info auto-load-scripts" command.  */
+d471 3
+a473 2
+static void
+info_auto_load_scripts (char *pattern, int from_tty)
+d506 2
+d511 1
+a511 1
+			      collect_matching_scripts, &scripts);
+d516 6
+d553 23
+d590 126
+d726 34
+a759 4
+  add_info ("auto-load-scripts",
+	    info_auto_load_scripts,
+	    _("Print the list of automatically loaded scripts.\n\
+Usage: info auto-load-scripts [REGEXP]"));
+@
+

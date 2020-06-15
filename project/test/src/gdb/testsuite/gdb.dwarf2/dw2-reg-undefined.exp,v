@@ -1,0 +1,274 @@
+head	1.3;
+access;
+symbols;
+locks; strict;
+comment	@# @;
+
+
+1.3
+date	2013.10.02.16.15.45;	author palves;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2013.09.18.14.02.31;	author aburgess;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2013.07.04.11.11.25;	author aburgess;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.3
+log
+@Print registers not saved in the frame as "<not saved>" instead of "<optimized out>".
+
+Currently, in some scenarios, GDB prints <optimized out> when printing
+outer frame registers.  An <optimized out> register is a confusing
+concept.  What this really means is that the register is
+call-clobbered, or IOW, not saved by the callee.  This patch makes GDB
+say that instead.
+
+Before patch:
+
+ (gdb) p/x $rax $1 = <optimized out>
+ (gdb) info registers rax
+ rax            <optimized out>
+
+After patch:
+
+ (gdb) p/x $rax
+ $1 = <not saved>
+ (gdb) info registers rax
+ rax            <not saved>
+
+However, if for some reason the debug info describes a variable as
+being in such a register (**), we still want to print <optimized out>
+when printing the variable.  IOW, <not saved> is reserved for
+inspecting registers at the machine level.  The patch uses
+lval_register+optimized_out to encode the not saved registers, and
+makes it so that optimized out variables always end up in
+!lval_register values.
+
+** See <https://sourceware.org/ml/gdb-patches/2012-08/msg00787.html>.
+Current/recent enough GCC doesn't mark variables/arguments as being in
+call-clobbered registers in the ranges corresponding to function
+calls, while older GCCs did.  Newer GCCs will just not say where the
+variable is, so GDB will end up realizing the variable is optimized
+out.
+
+frame_unwind_got_optimized creates not_lval optimized out registers,
+so by default, in most cases, we'll see <optimized out>.
+
+value_of_register is the function eval.c uses for evaluating
+OP_REGISTER (again, $pc, etc.), and related bits.  It isn't used for
+anything else.  This function makes sure to return lval_register
+values.  The patch makes "info registers" and the MI equivalent use it
+too.  I think it just makes a lot of sense, as this makes it so that
+when printing machine registers ($pc, etc.), we go through a central
+function.
+
+We're likely to need a different encoding at some point, if/when we
+support partially saved registers.  Even then, I think
+value_of_register will still be the spot to tag the intention to print
+machine register values differently.
+
+value_from_register however may also return optimized out
+lval_register values, so at a couple places where we're computing a
+variable's location from a dwarf expression, we convert the resulting
+value away from lval_register to a regular optimized out value.
+
+Tested on x86_64 Fedora 17
+
+gdb/
+2013-10-02  Pedro Alves  <palves@@redhat.com>
+
+	* cp-valprint.c (cp_print_value_fields): Adjust calls to
+	val_print_optimized_out.
+	* jv-valprint.c (java_print_value_fields): Likewise.
+	* p-valprint.c (pascal_object_print_value_fields): Likewise.
+	* dwarf2loc.c (dwarf2_evaluate_loc_desc_full)
+	<DWARF_VALUE_REGISTER>: If the register was not saved, return a
+	new optimized out value.
+	* findvar.c (address_from_register): Likewise.
+	* frame.c (put_frame_register): Tweak error string to say the
+	register was not saved, rather than optimized out.
+	* infcmd.c (default_print_one_register_info): Adjust call to
+	val_print_optimized_out.  Use value_of_register instead of
+	get_frame_register_value.
+	* mi/mi-main.c (output_register): Use value_of_register instead of
+	get_frame_register_value.
+	* valprint.c (valprint_check_validity): Likewise.
+	(val_print_optimized_out): New value parameter.  If the value is
+	lval_register, print <not saved> instead.
+	(value_check_printable, val_print_scalar_formatted): Adjust calls
+	to val_print_optimized_out.
+	* valprint.h (val_print_optimized_out): New value parameter.
+	* value.c (struct value) <optimized_out>: Extend comment.
+	(error_value_optimized_out): New function.
+	(require_not_optimized_out): Use it.  Use a different string for
+	lval_register values.
+	* value.h (error_value_optimized_out): New declaration.
+	* NEWS: Mention <not saved>.
+
+gdb/testsuite/
+2013-10-02  Pedro Alves  <palves@@redhat.com>
+
+	* gdb.dwarf2/dw2-reg-undefined.exp <pattern_rax_rbx_rcx_print,
+	pattern_rax_rbx_rcx_info>: Set to "<not saved>".
+	* gdb.mi/mi-reg-undefined.exp (opt_out_pattern): Delete.
+	(not_saved_pattern): New.
+	Replace use of the former with the latter.
+
+gdb/doc/
+2013-10-02  Pedro Alves  <palves@@redhat.com>
+
+	* gdb.texinfo (Registers): Expand description of saved registers
+	in frames.  Explain <not saved>.
+@
+text
+@# Copyright 2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+load_lib dwarf.exp
+
+# This test can only be run on targets which support DWARF-2 and use gas.
+if {![dwarf2_support]} {
+    return 0
+}
+
+# This test can only be run on x86_64 targets.
+if {![istarget "x86_64-*-*"] || ![is_lp64_target]} {
+    return 0
+}
+
+standard_testfile .S
+
+if { [prepare_for_testing $testfile.exp $testfile $srcfile {nodebug}] } {
+    return -1
+}
+
+if ![runto stop_frame] {
+    perror "Failed to stop in stop_frame"
+    return -1
+}
+
+gdb_test "bt" "#0  (0x\[0-9a-f\]+ in )?stop_frame \[^\r\n\]*\r\n#1  \[^\r\n\]*first_frame \[^\r\n\]*\r\n#2  \[^\r\n\]*main\[^\r\n\]*" \
+    "backtrace from stop_frame"
+
+for {set f 0} {$f < 3} {incr f} {
+    if {${f} == 0} {
+	set pattern_rax_rbx_rcx_print "$hex"
+	set pattern_rax_rbx_rcx_info "$hex\\s+$decimal"
+	set pattern_r8_r9_print "$hex"
+	set pattern_r8_r9_info "$hex\\s+$decimal"
+    } else {
+	set pattern_rax_rbx_rcx_print "<not saved>"
+	set pattern_rax_rbx_rcx_info "<not saved>"
+	set pattern_r8_r9_print "$hex"
+	set pattern_r8_r9_info "$hex\\s+$decimal"
+    }
+
+    # Select frame.
+    gdb_test "frame ${f}" "#${f}.*" "Switch to frame ${f}"
+
+    gdb_test "p/x \$rax" ".*$pattern_rax_rbx_rcx_print.*" \
+	"print \$rax in frame ${f}"
+    gdb_test "p/x \$rbx" "$pattern_rax_rbx_rcx_print" \
+	"print \$rbx in frame ${f}"
+    gdb_test "p/x \$rcx" "$pattern_rax_rbx_rcx_print" \
+	"print \$rcx in frame ${f}"
+
+    gdb_test "p/x \$r8" "$pattern_r8_r9_print" "print \$r8 in frame ${f}"
+    gdb_test "p/x \$r9" "$pattern_r8_r9_print" "print \$r9 in frame ${f}"
+
+
+    # Display register values.
+    gdb_test "info registers rax rbx rcx r8 r9" "rax\\s+${pattern_rax_rbx_rcx_info}\\s*\r\nrbx\\s+${pattern_rax_rbx_rcx_info}\\s*\r\nrcx\\s+${pattern_rax_rbx_rcx_info}\\s*\r\nr8\\s+${pattern_r8_r9_info}\\s*\r\nr9\\s+${pattern_r8_r9_info}\\s*" \
+	"Check values of rax, rbx, rcx, r8, r9 in frame ${f}"
+}
+@
+
+
+1.2
+log
+@Consistent display of "<optimized out>" for register values.
+
+  https://sourceware.org/ml/gdb-patches/2013-08/msg00170.html
+
+gdb/ChangeLog
+
+        * infcmd.c (default_print_one_register_info): Add detection of
+        optimized out values.
+        (default_print_registers_info): Switch to using
+        get_frame_register_value.
+
+gdb/testsuite/ChangeLog
+
+        * gdb.dwarf2/dw2-reg-undefined.exp: Change pattern for info
+        register to "<optimized out>", and also print the registers.
+@
+text
+@d48 2
+a49 2
+	set pattern_rax_rbx_rcx_print "<optimized out>"
+	set pattern_rax_rbx_rcx_info "<optimized out>"
+@
+
+
+1.1
+log
+@http://sourceware.org/ml/gdb-patches/2013-07/msg00059.html
+
+gdb/ChangeLog
+
+        * stack.c (read_frame_arg): No longer fetch lazy values.
+        * value.c (value_optimized_out): If the value is not already
+        marked optimized out, and is lazy then fetch it.
+        (value_primitive_field): Move optimized out check to later in the
+        function, after we have loaded any lazy values.
+        (value_fetch_lazy): Use optimized out flag directly rather than
+        calling optimized_out method.
+
+gdb/testsuite/ChangeLog
+
+        * gdb.dwarf2/dw2-reg-undefined.exp: New file.
+        * gdb.dwarf2/dw2-reg-undefined.c: Likewise.
+        * gdb.dwarf2/dw2-reg-undefined.S: Likewise.
+@
+text
+@a40 3
+set value_pattern "0x\[0-9a-f\]+\\s+\[0-9\]+"
+set opt_out_pattern "\\*value not available\\*"
+
+d43 4
+a46 2
+	set pattern_rax_rbx_rcx ${value_pattern}
+	set pattern_r8_r9 ${value_pattern}
+d48 4
+a51 2
+	set pattern_rax_rbx_rcx ${opt_out_pattern}
+	set pattern_r8_r9 ${value_pattern}
+d57 11
+d69 1
+a69 1
+    gdb_test "info registers rax rbx rcx r8 r9" "rax\\s+${pattern_rax_rbx_rcx}\\s*\r\nrbx\\s+${pattern_rax_rbx_rcx}\\s*\r\nrcx\\s+${pattern_rax_rbx_rcx}\\s*\r\nr8\\s+${pattern_r8_r9}\\s*\r\nr9\\s+${pattern_r8_r9}\\s*" \
+@
+

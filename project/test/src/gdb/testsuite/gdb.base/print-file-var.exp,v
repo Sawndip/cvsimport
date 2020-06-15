@@ -1,0 +1,290 @@
+head	1.6;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.5
+	gdb_7_6-2013-04-26-release:1.5
+	gdb_7_6-branch:1.5.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.5
+	gdb_7_5_1-2012-11-29-release:1.2.2.1
+	gdb_7_5-2012-08-17-release:1.2.2.1
+	gdb_7_5-branch:1.2.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.2;
+locks; strict;
+comment	@# @;
+
+
+1.6
+date	2013.06.27.18.53.49;	author tromey;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2013.01.01.06.33.26;	author brobecke;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2012.10.19.07.36.19;	author xguo;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2012.08.01.13.07.50;	author uweigand;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2012.06.05.13.50.31;	author brobecke;	state Exp;
+branches
+	1.2.2.1;
+next	1.1;
+
+1.1
+date	2012.05.10.16.25.19;	author brobecke;	state Exp;
+branches;
+next	;
+
+1.2.2.1
+date	2012.08.01.13.08.42;	author uweigand;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.6
+log
+@test suite update - gdb.base/[n-r]
+
+Convert files gdb.base/[n-r]*.exp to use standard_output_file et al.
+
+	* gdb.base/nextoverexit.exp, gdb.base/nextoverexit.exp,
+	gdb.base/nodebug.exp, gdb.base/nofield.exp, gdb.base/nostdlib.exp,
+	gdb.base/opaque.exp, gdb.base/overlays.exp, gdb.base/pc-fp.exp,
+	gdb.base/pending.exp, gdb.base/permissions.exp,
+	gdb.base/pie-execl.exp, gdb.base/pointers.exp,
+	gdb.base/pr11022.exp, gdb.base/print-file-var.exp,
+	gdb.base/printcmds.exp, gdb.base/prologue.exp,
+	gdb.base/psymtab.exp, gdb.base/ptr-typedef.exp,
+	gdb.base/ptype.exp, gdb.base/randomize.exp,
+	gdb.base/readline-ask.exp, gdb.base/recpar.exp,
+	gdb.base/recurse.exp, gdb.base/relativedebug.exp,
+	gdb.base/relocate.exp, gdb.base/remote.exp, gdb.base/reread.exp,
+	gdb.base/return-nodebug.exp, gdb.base/return2.exp: Use
+	standard_testfile, standard_output_file, prepare_for_testing,
+	clean_restart.
+@
+text
+@# Copyright 2012-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+if {[skip_shlib_tests]} {
+    return -1
+}
+
+set executable print-file-var-main
+
+set lib1 "print-file-var-lib1"
+set lib2 "print-file-var-lib2"
+
+set libobj1 [standard_output_file ${lib1}.so]
+set libobj2 [standard_output_file ${lib2}.so]
+
+set lib_opts { debug additional_flags=-fPIC }
+
+if { [gdb_compile_shlib ${srcdir}/${subdir}/${lib1}.c \
+                        ${libobj1} \
+                        ${lib_opts} ] != "" } {
+    return -1
+}
+if { [gdb_compile_shlib ${srcdir}/${subdir}/${lib2}.c \
+                        ${libobj2} \
+                        ${lib_opts} ] != "" } {
+    return -1
+}
+if { [gdb_compile "${srcdir}/${subdir}/${executable}.c" \
+                  [standard_output_file ${executable}] \
+                  executable \
+                  [list debug shlib=${libobj1} shlib=${libobj2}]]
+     != ""} {
+    return -1
+}
+
+clean_restart $executable
+gdb_load_shlibs $libobj1 $libobj2
+
+if ![runto_main] {
+    untested "could not run to main"
+    return -1
+}
+
+# Try printing "this_version_num" qualified with the name of the file
+# where the variables are defined.  There are two global variables
+# with that name, and some systems such as GNU/Linux merge them
+# into one single entity, while some other systems such as Windows
+# keep them separate.  In the first situation, we have to verify
+# that GDB does not randomly select the wrong instance, even when
+# a specific filename is used to qualified the lookup.  And in the
+# second case, we have to verify that GDB does select the instance
+# defined in the given filename.
+#
+# To avoid adding target-specific code in this testcase, the program
+# sets two local variable named 'v1' and 'v2' with the value of
+# our global variables.  This allows us to compare the value that
+# GDB returns for each query against the actual value seen by
+# the program itself.
+
+# Get past the initialization of variables 'v1' and 'v2'.
+
+set bp_location \
+    [gdb_get_line_number "STOP" "${executable}.c"]
+gdb_test "break $executable.c:$bp_location" \
+         "Breakpoint \[0-9\]+ at 0x\[0-9a-fA-F\]+: .*" \
+         "breapoint past v1 & v2 initialization"
+
+gdb_test "continue" \
+         "Breakpoint \[0-9\]+, main \\(\\) at.*" \
+         "continue to STOP marker"
+
+# Now check the value of this_version_id in both print-file-var-lib1.c
+# and print-file-var-lib2.c.
+
+gdb_test "print 'print-file-var-lib1.c'::this_version_id == v1" \
+         " = 1"
+
+gdb_test "print 'print-file-var-lib2.c'::this_version_id == v2" \
+         " = 1"
+@
+
+
+1.5
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@d25 2
+a26 2
+set libobj1 "${objdir}/${subdir}/${lib1}.so"
+set libobj2 "${objdir}/${subdir}/${lib2}.so"
+d41 1
+a41 1
+                  "${objdir}/${subdir}/${executable}" \
+@
+
+
+1.4
+log
+@        * gdb.base/ctxobj.exp: Skip if skip_shlib_tests returns true.
+        * gdb.base/print-file-var.exp: Likewise.
+        * gdb.base/type-opaque.exp: Likewise.
+@
+text
+@d1 1
+a1 1
+# Copyright 2012 Free Software Foundation, Inc.
+@
+
+
+1.3
+log
+@	* gdb.base/catch-load.exp: Fix argument to gdb_load_shlibs.
+	* gdb.base/ctxobj.exp: Call gdb_load_shlibs.
+	* gdb.base/print-file-var.exp: Likewise.
+	* gdb.server/solib-list.exp: Skip on remote targets.
+@
+text
+@d16 4
+@
+
+
+1.2
+log
+@Make ctxobj.exp and print-file-var.exp work on all platforms.
+
+This patch adjusts the testing strategy used in a couple of testcases
+where we are trying to print the value of a global variable defined
+at multiple locations.  The problem is that the actual value depends
+on the platform.  So instead of hard-coding the expected value in
+the testcase script, we use local variables (in the inferior) holding
+the correct value, and we compare the global variable's value with
+the local variable's value.
+
+gdb/testsuite/ChangeLog:
+
+        * gdb.base/ctxobj-f.c (GET_VERSION): Introduce local variable
+        and add comment.
+        * gdb.base/ctxobj-m.c (main): Rewrite, and add comment.
+        * gdb.base/ctxobj.exp: Insert breakpoint in ctxobj-f.c using
+        "STOP" marker.  Adjust testing strategy to make it work on
+        all targets.
+
+        * gdb.base/print-file-var-main.c (main): Rewrite using local
+        variables and adjust get_version_2's return value check.
+        Add small comment.
+        * gdb.base/print-file-var.exp: Insert breakpoint using "STOP"
+        marker.  Adjust testing strategy to make it work on all targets.
+@
+text
+@d45 1
+@
+
+
+1.2.2.1
+log
+@	* gdb.base/catch-load.exp: Fix argument to gdb_load_shlibs.
+	* gdb.base/ctxobj.exp: Call gdb_load_shlibs.
+	* gdb.base/print-file-var.exp: Likewise.
+	* gdb.server/solib-list.exp: Skip on remote targets.
+@
+text
+@a44 1
+gdb_load_shlibs $libobj1 $libobj2
+@
+
+
+1.1
+log
+@Add print 'file'::var testcase with two libs defining the same global variable
+
+gdb/testsuite/ChangeLog:
+
+	* gdb.base/print-file-var-lib1.c, gdb.base/print-file-var-lib2.c,
+	gdb.base/print-file-var-main.c, gdb.base/print-file-var.exp:
+	New files.
+
+gdb/ChangeLog:
+
+        * config/djgpp/fnchange.lst: Add entries for print-file-var-lib1.c,
+        print-file-var-lib2.c, print-file-var-main.c and
+        print-file-var.exp (located in gdb/testsuite/gdb.base).
+@
+text
+@d51 15
+a65 2
+gdb_test "print 'print-file-var-lib1.c'::this_version_id" \
+         " = 104"
+d67 20
+a86 2
+gdb_test "print 'print-file-var-lib2.c'::this_version_id" \
+         " = 203"
+@
+

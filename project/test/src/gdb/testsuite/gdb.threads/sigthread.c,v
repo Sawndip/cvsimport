@@ -1,0 +1,201 @@
+head	1.3;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.3
+	gdb_7_6-2013-04-26-release:1.3
+	gdb_7_6-branch:1.3.0.32
+	gdb_7_6-2013-03-12-branchpoint:1.3
+	gdb_7_5_1-2012-11-29-release:1.3
+	gdb_7_5-2012-08-17-release:1.3
+	gdb_7_5-branch:1.3.0.30
+	gdb_7_5-2012-07-18-branchpoint:1.3
+	gdb_7_4_1-2012-04-26-release:1.3
+	gdb_7_4-2012-01-24-release:1.3
+	gdb_7_4-branch:1.3.0.28
+	gdb_7_4-2011-12-13-branchpoint:1.3
+	gdb_7_3_1-2011-09-04-release:1.3
+	gdb_7_3-2011-07-26-release:1.3
+	gdb_7_3-branch:1.3.0.26
+	gdb_7_3-2011-04-01-branchpoint:1.3
+	gdb_7_2-2010-09-02-release:1.3
+	gdb_7_2-branch:1.3.0.24
+	gdb_7_2-2010-07-07-branchpoint:1.3
+	gdb_7_1-2010-03-18-release:1.3
+	gdb_7_1-branch:1.3.0.22
+	gdb_7_1-2010-02-18-branchpoint:1.3
+	gdb_7_0_1-2009-12-22-release:1.3
+	gdb_7_0-2009-10-06-release:1.3
+	gdb_7_0-branch:1.3.0.20
+	gdb_7_0-2009-09-16-branchpoint:1.3
+	arc-sim-20090309:1.3
+	msnyder-checkpoint-072509-branch:1.3.0.18
+	msnyder-checkpoint-072509-branchpoint:1.3
+	arc-insight_6_8-branch:1.3.0.16
+	arc-insight_6_8-branchpoint:1.3
+	insight_6_8-branch:1.3.0.14
+	insight_6_8-branchpoint:1.3
+	reverse-20081226-branch:1.3.0.12
+	reverse-20081226-branchpoint:1.3
+	multiprocess-20081120-branch:1.3.0.10
+	multiprocess-20081120-branchpoint:1.3
+	reverse-20080930-branch:1.3.0.8
+	reverse-20080930-branchpoint:1.3
+	reverse-20080717-branch:1.3.0.6
+	reverse-20080717-branchpoint:1.3
+	msnyder-reverse-20080609-branch:1.3.0.4
+	msnyder-reverse-20080609-branchpoint:1.3
+	drow-reverse-20070409-branch:1.2.0.4
+	drow-reverse-20070409-branchpoint:1.2
+	gdb_6_8-2008-03-27-release:1.3
+	gdb_6_8-branch:1.3.0.2
+	gdb_6_8-2008-02-26-branchpoint:1.3
+	gdb_6_7_1-2007-10-29-release:1.2
+	gdb_6_7-2007-10-10-release:1.2
+	gdb_6_7-branch:1.2.0.2
+	gdb_6_7-2007-09-07-branchpoint:1.2;
+locks; strict;
+comment	@ * @;
+
+
+1.3
+date	2008.01.29.19.20.52;	author jimb;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2007.01.28.16.45.35;	author kettenis;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2007.01.08.21.09.47;	author drow;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.3
+log
+@* gdb.threads/sigthread.c: Use barriers to ensure that
+child_thread and child_thread_two are always initialized before we
+start to use them.
+@
+text
+@/* Test case for C-c sent to threads with pending signals.  Before I
+   even get there, creating a thread and sending it a signal before it
+   has a chance to run leads to an internal error in GDB.  We need to
+   record that there's a pending SIGSTOP, so that we'll ignore it
+   later, and pass the current signal back to the thread.
+
+   The fork/vfork case has similar trouble but that's even harder
+   to get around.  We may need to send a SIGCONT to cancel out the
+   SIGSTOP.  Different kernels may do different things if the thread
+   is stopped by ptrace and sent a SIGSTOP.  */
+
+#include <stdio.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <pthread.h>
+#include <signal.h>
+
+/* Loop long enough for GDB to send a few signals of its own, but
+   don't hang around eating CPU forever if something goes wrong during
+   testing.  */
+#define NSIGS 10000000
+
+pthread_barrier_t barrier;
+
+void
+handler (int sig)
+{
+  ;
+}
+
+pthread_t main_thread;
+pthread_t child_thread, child_thread_two;
+
+void *
+child_two (void *arg)
+{
+  int i;
+
+  pthread_barrier_wait (&barrier);
+
+  for (i = 0; i < NSIGS; i++)
+    pthread_kill (child_thread, SIGUSR1);
+}
+
+void *
+thread_function (void *arg)
+{
+  int i;
+
+  pthread_barrier_wait (&barrier);
+
+  for (i = 0; i < NSIGS; i++)
+    pthread_kill (child_thread_two, SIGUSR2);
+}
+
+int main()
+{
+  int i;
+
+  signal (SIGUSR1, handler);
+  signal (SIGUSR2, handler);
+
+  pthread_barrier_init (&barrier, NULL, 3);
+
+  main_thread = pthread_self ();
+  pthread_create (&child_thread, NULL, thread_function, NULL);
+  pthread_create (&child_thread_two, NULL, child_two, NULL);
+
+  pthread_barrier_wait (&barrier);
+
+  for (i = 0; i < NSIGS; i++)
+    pthread_kill (child_thread_two, SIGUSR1);
+
+  pthread_join (child_thread, NULL);
+
+  exit (0);
+}
+@
+
+
+1.2
+log
+@        * gdb.threads/sigthread.c (NSIGS): Make bigger.
+@
+text
+@d23 2
+d39 2
+d50 2
+d63 2
+d69 2
+@
+
+
+1.1
+log
+@	* linux-nat.c (struct simple_pid_list): Add status.
+	(add_to_pid_list): Record the PID's status.
+	(linux_record_stopped_pid): Likewise.  Make static.
+	(pull_pid_from_list): Return the saved status.
+	(linux_nat_handle_extended): Deleted.
+	(linux_handle_extended_wait): Combine with linux_nat_handle_extended.
+	Make static.  Handle non-SIGSTOP for a new thread's first signal.
+	(flush_callback): Handle unexpected pending signals.
+	(linux_nat_wait): Update calls to changed functions.
+	* linux-nat.h (linux_record_stopped_pid, linux_handle_extended_wait):
+	Remove prototypes for newly static functions.
+
+	* gdb.threads/sigthread.c, gdb.threads/sigthread.exp: New.
+@
+text
+@d21 1
+a21 1
+#define NSIGS 1000000
+@
+

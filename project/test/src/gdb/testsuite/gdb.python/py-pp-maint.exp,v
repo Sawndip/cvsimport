@@ -1,0 +1,580 @@
+head	1.10;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.10
+	gdb_7_6-2013-04-26-release:1.10
+	gdb_7_6-branch:1.10.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.10
+	gdb_7_5_1-2012-11-29-release:1.8
+	gdb_7_5-2012-08-17-release:1.8
+	gdb_7_5-branch:1.8.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.8
+	gdb_7_4_1-2012-04-26-release:1.4.4.1
+	gdb_7_4-2012-01-24-release:1.4.4.1
+	gdb_7_4-branch:1.4.0.4
+	gdb_7_4-2011-12-13-branchpoint:1.4
+	gdb_7_3_1-2011-09-04-release:1.4
+	gdb_7_3-2011-07-26-release:1.4
+	gdb_7_3-branch:1.4.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.4;
+locks; strict;
+comment	@# @;
+
+
+1.10
+date	2013.01.01.06.41.26;	author brobecke;	state Exp;
+branches;
+next	1.9;
+
+1.9
+date	2012.12.10.21.22.21;	author pkoning;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2012.06.22.17.59.33;	author tromey;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2012.01.16.19.44.16;	author tromey;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2012.01.16.16.21.52;	author palves;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2012.01.04.08.27.49;	author brobecke;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2011.01.01.15.33.49;	author brobecke;	state Exp;
+branches
+	1.4.4.1;
+next	1.3;
+
+1.3
+date	2010.12.07.17.26.06;	author devans;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2010.11.29.23.20.58;	author devans;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2010.11.02.22.44.13;	author devans;	state Exp;
+branches;
+next	;
+
+1.4.4.1
+date	2012.01.06.04.54.27;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.10
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@# Copyright (C) 2010-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# This file is part of the GDB testsuite.  It tests Python-based
+# pretty-printing for the CLI.
+
+if [is_remote host] {
+    untested "py-pp-maint.exp can only be run locally"
+    return -1
+}
+
+load_lib gdb-python.exp
+
+standard_testfile
+
+if {[prepare_for_testing $testfile.exp $testfile $srcfile debug]} {
+    return -1
+}
+
+# Skip all tests if Python scripting is not enabled.
+if { [skip_python_tests] } { continue }
+
+if ![runto_main ] then {
+    fail "Can't run to main"
+    return -1
+}
+
+gdb_test "b [gdb_get_line_number {break to inspect} ${testfile}.c ]" \
+    ".*Breakpoint.*"
+gdb_test "continue" ".*Breakpoint.*"
+
+set python_file ${srcdir}/${subdir}/${testfile}.py
+
+gdb_test_no_output "python exec (open ('${python_file}').read ())" ""
+
+gdb_test "info pretty-printer" \
+    {.*function_lookup_test.*pp-test.*struct ss.*}
+
+gdb_test "info pretty-printer global .*function" \
+    {.*function_lookup_test.*}
+
+gdb_test "info pretty-printer .* pp-test" \
+    {.*pp-test.*struct ss.*}
+
+gdb_test "print flt" " = x=<42> y=<43>" \
+    "print flt enabled #1"
+
+gdb_test "print ss" " = a=<a=<1> b=<$hex>> b=<a=<2> b=<$hex>>" \
+    "print ss enabled #1"
+
+set num_pp 6
+
+gdb_test "disable pretty-printer" \
+    "$num_pp printers disabled.*0 of $num_pp printers enabled"
+
+gdb_test "enable pretty-printer" \
+    "$num_pp printers enabled.*$num_pp of $num_pp printers enabled"
+
+gdb_test "disable pretty-printer global" \
+    "$num_pp printers disabled.*0 of $num_pp printers enabled"
+
+gdb_test "enable pretty-printer" \
+    "$num_pp printers enabled.*$num_pp of $num_pp printers enabled"
+
+gdb_test "disable pretty-printer global lookup_function_lookup_test" \
+    "1 printer disabled.*[expr $num_pp - 1] of $num_pp printers enabled"
+
+gdb_test "disable pretty-printer global pp-test;.*" \
+    "[expr $num_pp - 1] printers disabled.*0 of $num_pp printers enabled"
+
+gdb_test "info pretty-printer global .*function" \
+    {.*function_lookup_test \[disabled\].*}
+
+gdb_test "info pretty-printer .* pp-test" \
+    {.*pp-test.*struct ss \[disabled\].*}
+
+gdb_test "print flt" " = {x = 42, y = 43}" \
+    "print flt disabled"
+
+gdb_test "print ss" " = {a = {a = 1, b = $hex}, b = {a = 2, b = $hex}}" \
+    "print ss disabled"
+
+gdb_test "enable pretty-printer global lookup_function_lookup_test" \
+    "1 printer enabled.*1 of $num_pp printers enabled"
+
+# This doesn't enable any printers because each subprinter in the collection
+# is still individually disabled.  But this is still needed, to enable the
+# collection itself.
+gdb_test "enable pretty-printer global pp-test" \
+    "0 printers enabled.*1 of $num_pp printers enabled"
+
+gdb_test "enable pretty-printer global pp-test;.*ss.*" \
+    "2 printers enabled.*[expr $num_pp - 3] of $num_pp printers enabled"
+
+gdb_test "enable pretty-printer global pp-test;.*s.*" \
+    "2 printers enabled.*[expr $num_pp - 1] of $num_pp printers enabled"
+
+gdb_test "enable pretty-printer global pp-test;.*" \
+    "1 printer enabled.*$num_pp of $num_pp printers enabled"
+
+gdb_test "info pretty-printer" \
+    {.*function_lookup_test.*pp-test.*struct ss.*}
+
+gdb_test "print flt" " = x=<42> y=<43>" \
+    "print flt re-enabled"
+
+gdb_test "print ss" " = a=<a=<1> b=<$hex>> b=<a=<2> b=<$hex>>" \
+    "print ss re-enabled"
+
+gdb_test "print (enum flag_enum) (FLAG_1)" \
+    " = 0x1 .FLAG_1." \
+    "print FLAG_1"
+
+gdb_test "print (enum flag_enum) (FLAG_1 | FLAG_3)" \
+    " = 0x5 .FLAG_1 | FLAG_3." \
+    "print FLAG_1 | FLAG_3"
+
+gdb_test "print (enum flag_enum) (4 + 8)" \
+    " = 0xc .FLAG_1 | <unknown: 0x8>." \
+    "print FLAG_1 | 8"
+@
+
+
+1.9
+log
+@2012-12-10  Paul Koning  <paul_koning@@dell.com>
+
+	* gdb.base/charset.exp: Change print syntax for Python 3
+	compatibility.
+	* gdb.python/py-block.exp: Ditto.
+	* gdb.python/py-breakpoint.exp: Ditto.
+	* gdb.python/py-cmd.exp: Ditto.
+	* gdb.python/py-events.py: Ditto.
+	* gdb.python/py-finish-breakpoint.py: Ditto.
+	* gdb.python/py-finish-breakpoint2.exp: Ditto.
+	* gdb.python/py-finish-breakpoint2.py: Ditto.
+	* gdb.python/py-frame-inline.exp: Ditto.
+	* gdb.python/py-frame.exp: Ditto.
+	* gdb.python/py-infthread.exp: Ditto.
+	* gdb.python/py-objfile.exp: Ditto.
+	* gdb.python/py-parameter.exp: Ditto.
+	* gdb.python/py-progspace.exp: Ditto.
+	* gdb.python/py-prompt.exp: Ditto.
+	* gdb.python/py-symbol.exp: Ditto.
+	* gdb.python/py-symtab.exp: Ditto.
+	* gdb.python/py-template.exp: Ditto.
+	* gdb.python/py-value-cc.exp: Ditto.
+	* gdb.python/python.exp: Ditto.
+	* gdb.python/source2.py: Ditto.
+	* gdb.python/lib-types.exp: Change print syntax for Python 3
+	compatibility.
+	Use sorted() function rather than sort() method.
+	Accept either int or long values for enum values.
+	* gdb.python/py-events.exp: Use exec(open(...).read()) instead of
+	execfile for Python 3 compatibility.
+	* gdb.python/py-evsignal.exp: Ditto.
+	* gdb.python/py-evthreads.exp: Ditto.
+	* gdb.python/py-mi.exp: Ditto.
+	* gdb.python/py-pp-maint.exp: Ditto.
+	* gdb.python/py-prettyprint.exp: Ditto.
+	* gdb.python/py-finish-breakpoint.exp: Change print syntax for
+	Python 3 compatibility.
+	Skip tests for Python 2.4.
+	* gdb.python/py-inferior.exp: Change print syntax for
+	Python 3 compatibility.
+	Use byte string rather than character string in memory write test
+	if Python 3.
+	* gdb.python/py-pp-maint.py: Change class declarations to "new
+	class" syntax.
+	* gdb.python/py-prettyprint.py: Change iterator class to generator
+	function for Python 3 compatibility.
+	Make all classes "new style".
+	Fix indentation issue and stray semicolon.
+	* gdb.python/py-shared.expChange print syntax for Python 3
+	compatibility.
+	Define "long" if Python 3.
+	* gdb.python/py-type.exp: Change print syntax for Python 3
+	compatibility.
+	Accept either int or long values for enum values.
+	* gdb.python/py-value.exp: Change print syntax for Python 3
+	compatibility.
+	Skip "long" and "unicode" tests if Python 3.
+	Accept either "type" or "class" in type checks.
+	* lib/gdb.exp (gdb_py_is_py3k): New flag set if Python 3.
+	(gdb_py_is_py24): New flag set if Python 2.4 or 2.5.
+@
+text
+@d1 1
+a1 1
+# Copyright (C) 2010-2012 Free Software Foundation, Inc.
+@
+
+
+1.8
+log
+@	* gdb.python/lib-types.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.python/py-block.exp: Use standard_testfile.
+	* gdb.python/py-breakpoint.exp: Use standard_testfile.
+	* gdb.python/py-events.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.python/py-evsignal.exp: Use standard_testfile.
+	* gdb.python/py-evethreads.exp: Use standard_testfile.
+	* gdb.python/py-explore-cc.exp: Use standard_testfile.
+	* gdb.python/py-explore.exp: Use standard_testfile.
+	* gdb.python/py-finish-breakpoint.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.python/py-finish-breakpoint2.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.python/py-frame-inline.exp: Use standard_testfile.
+	* gdb.python/py-frame.exp: Use standard_testfile.
+	* gdb.python/py-inferior.exp: Use standard_testfile.
+	* gdb.python/py-infthread.exp: Use standard_testfile.
+	* gdb.python/py-mi.exp: Use standard_testfile.
+	* gdb.python/py-objfile-script.exp: Use standard_testfile,
+	build_executable.
+	* gdb.python/py-objfile.exp: Use standard_testfile.
+	* gdb.python/py-pp-maint.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.python/py-prettyprint.exp: Use standard_testfile.
+	* gdb.python/py-progspace.exp: Use standard_testfile,
+	build_executable.
+	* gdb.python/py-prompt.exp: Use standard_testfile,
+	build_executable.
+	* gdb.python/py-section-script.exp: Use standard_testfile,
+	build_executable.
+	* gdb.python/py-shared.exp: Use standard_testfile,
+	standard_output_file, clean_restart.
+	* gdb.python/py-symbol.exp: Use standard_output_file,
+	prepare_for_testing.
+	* gdb.python/py-symtab.exp: Use standard_output_file,
+	prepare_for_testing
+	* gdb.python/py-template.exp: Use standard_testfile.
+	* gdb.python/py-type.exp: Use standard_testfile.
+	* gdb.python/py-value-cc.exp: Use standard_testfile.
+	* gdb.python/py-value.exp: Use standard_testfile.
+	* gdb.python/python.exp: Use standard_testfile, build_executable.
+@
+text
+@d46 1
+a46 1
+gdb_test_no_output "python execfile ('${python_file}')" ""
+@
+
+
+1.7
+log
+@gdb
+	PR python/13281:
+	* gdbtypes.h (TYPE_FLAG_ENUM): New macro.
+	(struct main_type) <flag_flag_enum>: New field.
+	* dwarf2read.c (process_enumeration_scope): Detect "flag" enums.
+	* NEWS: Add entries.
+	* c-valprint.c (c_val_print) <TYPE_CODE_ENUM>: Handle "flag"
+	enums.
+	* python/lib/gdb/printing.py (_EnumInstance): New class.
+	(FlagEnumerationPrinter): Likewise.
+gdb/doc
+	* gdb.texinfo (gdb.printing): Document FlagEnumerationPrinter.
+gdb/testsuite
+	* gdb.base/printcmds.c (enum flag_enum): New.
+	(three): New global.
+	* gdb.base/printcmds.exp (test_print_enums): Add test for flag
+	enum printing.
+	* gdb.python/py-pp-maint.py (build_pretty_printer): Instantiate
+	FlagEnumerationPrinter.
+	* gdb.python/py-pp-maint.exp: Add tests for FlagEnumerationPrinter.
+	* gdb.python/py-pp-maint.c (enum flag_enum): New.
+	(fval): New global.
+@
+text
+@d26 1
+a26 7
+set testfile "py-pp-maint"
+set srcfile ${testfile}.c
+set binfile ${objdir}/${subdir}/${testfile}
+
+# Start with a fresh gdb.
+gdb_exit
+gdb_start
+d28 1
+a28 5
+# Skip all tests if Python scripting is not enabled.
+if { [skip_python_tests] } { continue }
+
+if { [gdb_compile "${srcdir}/${subdir}/${srcfile}" "${binfile}" executable "debug"] != "" } {
+    untested "Couldn't compile ${srcfile}"
+d32 2
+a33 2
+gdb_reinitialize_dir $srcdir/$subdir
+gdb_load ${binfile}
+@
+
+
+1.6
+log
+@2012-01-16  Pedro Alves  <palves@@redhat.com>
+
+	Remove all calls to strace.
+@
+text
+@d73 2
+d76 1
+a76 1
+    "5 printers disabled.*0 of 5 printers enabled"
+d79 1
+a79 1
+    "5 printers enabled.*5 of 5 printers enabled"
+d82 1
+a82 1
+    "5 printers disabled.*0 of 5 printers enabled"
+d85 1
+a85 1
+    "5 printers enabled.*5 of 5 printers enabled"
+d88 1
+a88 1
+    "1 printer disabled.*4 of 5 printers enabled"
+d91 1
+a91 1
+    "4 printers disabled.*0 of 5 printers enabled"
+d106 1
+a106 1
+    "1 printer enabled.*1 of 5 printers enabled"
+d112 1
+a112 1
+    "0 printers enabled.*1 of 5 printers enabled"
+d115 1
+a115 1
+    "2 printers enabled.*3 of 5 printers enabled"
+d118 4
+a121 1
+    "2 printers enabled.*5 of 5 printers enabled"
+d131 12
+@
+
+
+1.5
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@a18 4
+if $tracelevel then {
+    strace $tracelevel
+}
+
+@
+
+
+1.4
+log
+@run copyright.sh for 2011.
+@
+text
+@d1 1
+a1 1
+# Copyright (C) 2010, 2011 Free Software Foundation, Inc.
+@
+
+
+1.4.4.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d1 1
+a1 1
+# Copyright (C) 2010-2012 Free Software Foundation, Inc.
+@
+
+
+1.3
+log
+@	PR python/12227
+	* NEWS: Mention -data-directory.
+	* main.c (captured_main): Recognize -data-directory.
+
+	doc/
+	* gdb.texinfo (Mode Options): Document -data-directory.
+	(Data Files): Add reference to -data-directory.
+
+	testsuite/
+	* gdb.base/catch-syscall.exp (do_syscall_tests): Remove setting
+	of data-directory.
+	* lib/gdb-python.exp (gdb_check_python_config): Delete, all callers
+	updated.
+	* lib/gdb.exp (INTERNAL_GDBFLAGS): Add -data-directory.
+@
+text
+@d1 1
+a1 1
+# Copyright (C) 2010 Free Software Foundation, Inc.
+@
+
+
+1.2
+log
+@	* python/lib/gdb/printing.py (register_pretty_printer): Change
+	printer-name:subprinter-name to printer-name;subprinter-name.
+	* python/lib/gdb/command/pretty_printers.py (parse_printer_regexps):
+	Ditto.
+	(InfoPrettyPrinter, EnablePrettyPrinter, DisablePrettyPrinter): Ditto.
+
+	doc/
+	* gdb.texinfo (Pretty-Printer Introduction): Change
+	printer-name:subprinter-name to printer-name;subprinter-name.
+
+	testsuite/
+	* gdb.python/py-pp-maint.exp: Change printer-name:subprinter-name to
+	printer-name;subprinter-name.
+@
+text
+@a53 3
+# Ensure sys.path, et.al. are initialized properly.
+gdb_check_python_config
+
+@
+
+
+1.1
+log
+@	New python module gdb.printing, and new commands info pretty-printer,
+	enable pretty-printer, disable pretty-printer.
+	* NEWS: Mention them.
+	* data-directory/Makefile.in (PYTHON_FILES): Add gdb/printing.py,
+	gdb/command/__init__.py, gdb/command/pretty_printers.py.
+	* python/lib/gdb/__init__.py: Install pretty-printer commands.
+	* python/lib/gdb/printing.py: New file.
+	* python/lib/gdb/command/__init__.py: New file.
+	* python/lib/gdb/command/pretty_printers.py: New file.
+
+	doc/
+	* gdb.texinfo (Pretty Printing): Expand into three sections,
+	introduction, example, and commands.
+	(Python API): Delete section Disabling Pretty-Printers, merge into
+	Selecting Pretty-Printers.
+	(Writing a Pretty-Printer): New section.  Move the pretty-printer
+	example here, and reformat to match python coding style.  Add a second
+	example using the gdb.printing module.
+	(Python modules): Add gdb.printing.
+
+	testsuite/
+	* gdb.python/py-pp-maint.c: New file.
+	* gdb.python/py-pp-maint.exp: New file.
+	* gdb.python/py-pp-maint.py: New file.
+@
+text
+@d83 3
+d87 4
+a90 1
+    "0 printers disabled.*0 of 5 printers enabled"
+d93 1
+a93 1
+    "0 printers disabled.*0 of 5 printers enabled"
+d95 2
+a96 2
+gdb_test "disable pretty-printer global pp-test:.*" \
+    "0 printers disabled.*0 of 5 printers enabled"
+d119 1
+a119 1
+gdb_test "enable pretty-printer global pp-test:.*ss.*" \
+d122 1
+a122 1
+gdb_test "enable pretty-printer global pp-test:.*s.*" \
+@
+

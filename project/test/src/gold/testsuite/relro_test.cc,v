@@ -1,0 +1,400 @@
+head	1.5;
+access;
+symbols
+	binutils-2_24-branch:1.5.0.4
+	binutils-2_24-branchpoint:1.5
+	binutils-2_21_1:1.4
+	binutils-2_23_2:1.5
+	binutils-2_23_1:1.5
+	binutils-2_23:1.5
+	binutils-2_23-branch:1.5.0.2
+	binutils-2_23-branchpoint:1.5
+	binutils-2_22_branch:1.4.0.6
+	binutils-2_22:1.4
+	binutils-2_22-branch:1.4.0.4
+	binutils-2_22-branchpoint:1.4
+	binutils-2_21:1.4
+	binutils-2_21-branch:1.4.0.2
+	binutils-2_21-branchpoint:1.4
+	binutils-2_20_1:1.3
+	binutils-2_20:1.3
+	binutils-arc-20081103-branch:1.3.0.10
+	binutils-arc-20081103-branchpoint:1.3
+	binutils-2_20-branch:1.3.0.8
+	binutils-2_20-branchpoint:1.3
+	dje-cgen-play1-branch:1.3.0.6
+	dje-cgen-play1-branchpoint:1.3
+	arc-20081103-branch:1.3.0.4
+	arc-20081103-branchpoint:1.3
+	binutils-2_19_1:1.3
+	binutils-2_19:1.3
+	binutils-2_19-branch:1.3.0.2
+	binutils-2_19-branchpoint:1.3
+	binutils_latest_snapshot:1.5;
+locks; strict;
+comment	@// @;
+
+
+1.5
+date	2012.05.14.17.35.43;	author ccoutant;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2010.10.16.00.37.25;	author ccoutant;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2008.08.13.07.37.46;	author ian;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2008.06.09.19.12.34;	author ian;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2008.05.20.04.00.47;	author ian;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.5
+log
+@gold/
+
+	* layout.cc (Layout::make_output_section): Mark .tdata section
+	as RELRO.
+	* testsuite/relro_test.cc: Add a TLS variable.
+@
+text
+@// relro_test.cc -- test -z relro for gold
+
+// Copyright 2008 Free Software Foundation, Inc.
+// Written by Ian Lance Taylor <iant@@google.com>.
+
+// This file is part of gold.
+
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 3 of the License, or
+// (at your option) any later version.
+
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+// MA 02110-1301, USA.
+
+#include <cassert>
+#include <csignal>
+#include <cstdio>
+#include <cstdlib>
+#include <exception>
+#include <stdint.h>
+#include <unistd.h>
+
+// This tests we were linked with a script.  If we were linked with a
+// script, relro currently does not work.
+
+extern char using_script[] __attribute__ ((weak));
+
+// This code is put into a shared library linked with -z relro.
+
+// i1 and i2 are not relro variables.
+int i1 = 1;
+static int i2 = 2;
+
+// P1 is a global relro variable.
+int* const p1 __attribute__ ((aligned(64))) = &i1;
+
+// P2 is a local relro variable.
+int* const p2 __attribute__ ((aligned(64))) = &i2;
+
+// Add a TLS variable to make sure -z relro works correctly with TLS.
+__thread int i3 = 1;
+
+// Test symbol addresses.
+
+bool
+t1()
+{
+  if (using_script)
+    return true;
+
+  void* i1addr = static_cast<void*>(&i1);
+  void* i2addr = static_cast<void*>(&i2);
+  const void* p1addr = static_cast<const void*>(&p1);
+  const void* p2addr = static_cast<const void*>(&p2);
+
+  // The relro variables should precede the non-relro variables in the
+  // memory image.
+  assert(i1addr > p1addr);
+  assert(i1addr > p2addr);
+  assert(i2addr > p1addr);
+  assert(i2addr > p2addr);
+
+  // The relro variables should not be on the same page as the
+  // non-relro variables.
+  const size_t page_size = getpagesize();
+  uintptr_t i1page = reinterpret_cast<uintptr_t>(i1addr) & ~ (page_size - 1);
+  uintptr_t i2page = reinterpret_cast<uintptr_t>(i2addr) & ~ (page_size - 1);
+  uintptr_t p1page = reinterpret_cast<uintptr_t>(p1addr) & ~ (page_size - 1);
+  uintptr_t p2page = reinterpret_cast<uintptr_t>(p2addr) & ~ (page_size - 1);
+  assert(i1page != p1page);
+  assert(i1page != p2page);
+  assert(i2page != p1page);
+  assert(i2page != p2page);
+  assert(i3 == 1);
+
+  return true;
+}
+
+// Tell terminate handler that we are throwing from a signal handler.
+
+static bool throwing;
+
+// A signal handler for SIGSEGV.
+
+extern "C"
+void
+sigsegv_handler(int)
+{
+  throwing = true;
+  throw 0;
+}
+
+// The original terminate handler.
+
+std::terminate_handler orig_terminate;
+
+// Throwing an exception out of a signal handler doesn't always work
+// reliably.  When that happens the program will call terminate.  We
+// set a terminate handler to indicate that the test probably passed.
+
+void
+terminate_handler()
+{
+  if (!throwing)
+    {
+      orig_terminate();
+      ::exit(EXIT_FAILURE);
+    }
+  fprintf(stderr,
+	  "relro_test: terminate called due to failure to throw through signal handler\n");
+  fprintf(stderr, "relro_test: assuming test succeeded\n");
+  ::exit(EXIT_SUCCESS);
+}
+
+// Use a separate function to throw the exception, so that we don't
+// need to use -fnon-call-exceptions.
+
+void f2() __attribute__ ((noinline));
+void
+f2()
+{
+  int** pp1 = const_cast<int**>(&p1);
+  *pp1 = &i2;
+
+  // We shouldn't get here--the assignment to *pp1 should write to
+  // memory which the dynamic linker marked as read-only, giving us a
+  // SIGSEGV, causing sigsegv_handler to be invoked, to throw past us.
+  assert(0);
+}
+
+// Changing a relro variable should give us a SIGSEGV.
+
+bool
+t2()
+{
+  if (using_script)
+    return true;
+
+  signal(SIGSEGV, sigsegv_handler);
+  orig_terminate = std::set_terminate(terminate_handler);
+
+  try
+    {
+      f2();
+      return false;
+    }
+  catch (int i)
+    {
+      assert(i == 0);
+      return true;
+    }
+}
+@
+
+
+1.4
+log
+@	* layout.cc (Layout::set_segment_offsets): Don't try to realign data
+	segment that has been aligned for relro.
+	* output.cc (Output_segment::set_section_addresses): Change signature;
+	adjust all callers.  Account for alignment when totalling
+	size of relro sections.
+	* output.h (Output_segment::set_section_addresses): Change signature.
+	* testsuite/Makefile.am (relro_test.sh, relro_test.stdout): New
+	targets.
+	* testsuite/Makefile.in: Regenerate.
+	* testsuite/relro_test.cc: Add alignment attributes to test proper
+	alignment of relro sections when padding is necessary.
+	* testsuite/relro_test.sh: New script.
+@
+text
+@d48 3
+d82 1
+@
+
+
+1.3
+log
+@	* layout.cc (Layout::attach_allocated_section_to_segment): Don't
+	set tls_segment_ or relro_segment_.
+	(Layout::make_output_segment): Set tls_segment_ and relro_segment_
+	when appropriate.
+	* output.h (Output_section::clear_is_relro): New function.
+	* output.cc (Output_segment::add_output_section): Handle SHF_TLS
+	sections specially even when output_data_ is empty.
+	(Output_segment::maximum_alignment): When first section is relro,
+	only force alignment for PT_LOAD segments.
+	* script.cc (script_data_segment_align): New function.
+	(script_data_segment_relro_end): New function.
+	* script-c.h (script_data_segment_align): Declare.
+	(script_data_segment_relro_end): Declare.
+	* script-sections.h (class Script_sections): Declare
+	data_segment_align and data_segment_relro_end.  Add fields
+	segment_align_index_ and saw_relro_end_.
+	* script-sections.cc (class Sections_element): Add set_is_relro
+	virtual function.  Add new bool* parameter to place_orphan_here.
+	Add get_output_section virtual function.
+	(class Output_section_definition): Add set_is_relro.  Add new
+	bool* parameter to place_orphan_here.  Add get_output_section.
+	Add is_relro_ field.
+	(Output_section_definition::Output_section_definition): Initialize
+	evaluated_address_, evaluated_load_address, evaluated_addralign_,
+	and is_relro_ fields.
+	(Output_section_definition::place_orphan_here): Add is_relro
+	parameter.
+	(Output_section_definition::set_section_addresses): Set relro for
+	output section.
+	(Output_section_definition::alternate_constraint): Likewise.
+	(class Orphan_output_section): Add new bool* parameter to
+	place_orphan_here.  Add get_output_section.
+	(Orphan_output_section::place_orphan_here): Add is_relro
+	parameter.
+	(Script_sections::Script_sections): Initialize
+	data_segment_align_index_ and saw_relro_end_.
+	(Script_sections::data_segment_align): New function.
+	(Script_sections::data_segment_relro_end): New function.
+	(Script_sections::place_orphan): Set or clear is_relro.
+	(Script_sections::set_section_addresses): Force alignment of first
+	TLS section.
+	* yyscript.y (exp): Call script_data_segment_align and
+	script_data_segment_relro_end.
+	* testsuite/relro_script_test.t: New file.
+	* testsuite/relro_test.cc (using_script): Declare.
+	(t1, t2): Test using_script.
+	* testsuite/Makefile.am (check_PROGRAMS): Add relro_script_test.
+	(relro_script_test_SOURCES): Define.
+	(relro_script_test_DEPENDENCIES): Define.
+	(relro_script_test_LDFLAGS): Define.
+	(relro_script_test_LDADD): Define.
+	(relro_script_test.so): New target.
+	* testsuite/Makefile.in: Rebuild.
+@
+text
+@d43 1
+a43 1
+int* const p1 = &i1;
+d46 1
+a46 1
+int* const p2 = &i2;
+@
+
+
+1.2
+log
+@	* testsuite/relro_test.cc: Include <cstdio>, <cstdlib>, and
+	<exception>.
+	(throwing, orig_terminate): New static variables.
+	(terminate_handler): New static function.
+	(t2): Set terminate handler.
+@
+text
+@d31 5
+d53 3
+d140 3
+@
+
+
+1.1
+log
+@	* options.h (class General_options): Add -z relro.
+	* layout.cc (Layout::Layout): Initialize relro_segment_.
+	(Layout::add_output_section_data): Return the output section.
+	(Layout::make_output_section): Rcognize relro sections and mark
+	them appropriately.
+	(Layout::attach_allocated_section_to_segment): Put relro sections
+	in a PT_GNU_RELRO segment.
+	(Layout::create_initial_dynamic_sections): Mark the .dynamic
+	section as relro.
+	(Layout::segment_precedes): Sort PT_GNU_RELRO segments after
+	PT_TLS segments.
+	(Layout::linkonce_mapping): Map d.rel.ro.local to
+	.data.rel.ro.local.
+	(Layout::output_section_name): Us .data.rel.ro.local for any
+	section which begins with that.
+	* layout.h (class Layout): Update add_output_section_data
+	declaration.  Add relro_segment_ field.
+	* output.cc (Output_section::Output_section): Initialize is_relro_
+	and is_relro_local_ fields.
+	(Output_segment::add_output_section): Group relro sections.
+	(Output_segment::is_first_section_relro): New function.
+	(Output_segment::maximum_alignment): If there is a relro section,
+	align the segment to the common page size.
+	(Output_segment::set_section_addresses): Track whether we are
+	looking at relro sections.  If the last section is a relro
+	section, align to the common page size.
+	(Output_segment::set_section_list_addresses): Add in_relro
+	parameter.  Change all callers.  Align to the page size when
+	moving from relro to non-relro section.
+	(Output_segment::set_offset): Align memsz of a PT_GNU_RELRO
+	segment.
+	* output.h (class Output_section): Add is_relro_ and
+	is_relro_local_ fields.
+	(Output_section::is_relro): New function.
+	(Output_section::set_is_relro): New function.
+	(Output_section::is_relro_local): New function.
+	(Output_section::set_is_relro_local): New function.
+	(class Output_segment): Update declarations.
+	* i386.cc (Target_i386::got_section): Mark .got section as relro.
+	* sparc.cc (Target_sparc::got_section): Likewise.
+	* x86_64.cc (Target_x86_64::got_section): Likewise.
+	* testsuite/relro_test_main.cc: New file.
+	* testsuite/relro_test.cc: New file.
+	* testsuite/Makefile.am (check_PROGRAMS): Add relro_test.
+	(relro_test_SOURCES, relro_test_DEPENDENCIES): New variables.
+	(relro_test_LDFLAGS, relro_test_LDADD): New variables.
+	(relro_test.so, relro_test_pic.o): New targets.
+	* testsuite/Makefile.in: Rebuild.
+@
+text
+@d25 3
+d75 4
+d85 1
+d89 22
+d133 1
+@
+

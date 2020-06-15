@@ -1,0 +1,1165 @@
+head	1.10;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.7
+	gdb_7_6-2013-04-26-release:1.7
+	gdb_7_6-branch:1.7.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.7
+	gdb_7_5_1-2012-11-29-release:1.4.2.1
+	gdb_7_5-2012-08-17-release:1.4.2.1
+	gdb_7_5-branch:1.4.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.4;
+locks; strict;
+comment	@# @;
+
+
+1.10
+date	2013.09.20.22.43.28;	author devans;	state Exp;
+branches;
+next	1.9;
+
+1.9
+date	2013.08.22.13.39.13;	author tromey;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2013.07.19.10.01.26;	author willnewton;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2013.01.01.06.41.22;	author brobecke;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2012.09.11.16.42.09;	author devans;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2012.07.30.16.56.04;	author devans;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2012.07.15.08.34.55;	author jkratoch;	state Exp;
+branches
+	1.4.2.1;
+next	1.3;
+
+1.3
+date	2012.07.02.20.10.48;	author jkratoch;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2012.07.02.20.09.26;	author jkratoch;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2012.07.01.02.05.13;	author devans;	state Exp;
+branches;
+next	;
+
+1.4.2.1
+date	2012.07.30.16.58.11;	author devans;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.10
+log
+@	* lib/dwarf.exp (build_executable_from_fission_assembler): New proc.
+	* gdb.dwarf2/fission-base.S: Update.  Split out .dwo into separate
+	file.
+	* gdb.dwarf2/fission-loclists.S: Ditto.
+	* gdb.dwarf2/fission-reread.S: Ditto.
+	* gdb.dwarf2/fission-base.exp: Skip of remote host.  Compile with
+	build_executable_from_fission_assembler.
+	* gdb.dwarf2/fission-loclists.exp: Ditto.
+	* gdb.dwarf2/fission-reread.exp: Ditto.
+@
+text
+@/* Copyright 2012-2013 Free Software Foundation, Inc.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+/* Testcase to exercise the code path in bug 13961 for Fission.
+   http://gcc.gnu.org/wiki/DebugFission
+
+   Compiled from:
+
+   class foo
+   {
+    public:
+     int bar;
+   };
+
+   foo baz;
+
+   int
+   main ()
+   {
+     return 0;
+   }
+
+   And then manually edited to insert the necessary DW_AT_specification
+   entries to trigger the desired code path.
+   There's no real need to make this architecture-specific, so it has been
+   further hand-edited to support that.
+*/
+
+	.file	"fission-reread.cc"
+
+	.globl	baz
+	.data	/* Previously this used .bss, but it's not portable.  */
+	.align 4
+	.type	baz, %object
+	.size	baz, 4
+baz:
+	.zero	4
+
+	.text
+.Ltext0:
+	.globl	main
+	.type	main, %function
+main:
+.LFB0:
+	.file 1 "fission-reread.cc"
+	.loc 1 11 0
+	.4byte 0
+.LFE0:
+	.size	main, .-main
+.Letext0:
+
+	.section	.debug_types.dwo
+.Ltu_start_dwo:
+	.4byte	.Ltu_end_dwo - .Ltu_start_dwo - 4	/* Length of Compilation Unit Info */
+	.2byte	0x4	/* DWARF version number */
+	.4byte	.Ldebug_abbrev0	/* Offset Into Abbrev. Section */
+	.byte	0x4	/* Pointer Size (in bytes) */
+	.byte	0x19	/* Type Signature */
+	.byte	0x8b
+	.byte	0x7e
+	.byte	0xac
+	.byte	0xce
+	.byte	0xf1
+	.byte	0x22
+	.byte	0x90
+	.4byte	.Ltu_class_type - .Ltu_start_dwo	/* Offset to Type DIE */
+	.uleb128 0x1	/* (DIE (0x17) DW_TAG_type_unit) */
+	.byte	0x4	/* DW_AT_language */
+	.byte	0x73	/* DW_AT_GNU_odr_signature */
+	.byte	0xea
+	.byte	0x85
+	.byte	0x23
+	.byte	0x75
+	.byte	0x8a
+	.byte	0x7e
+	.byte	0x87
+	.4byte	.Lskeleton_debug_line0	/* DW_AT_stmt_list */
+
+	/* Manually inserted to have a DW_AT_specification refering to
+	   something and appearing ahead of it.  */
+	.uleb128 0x8	/* DW_TAG_class_type */
+	.4byte .Ltu_class_type - .Ltu_start_dwo
+	/* End of manual insertion */
+
+.Ltu_class_type:
+	.uleb128 0x2	/* (DIE (0x25) DW_TAG_class_type) */
+	.ascii "foo\0"	/* DW_AT_name */
+	.byte	0x4	/* DW_AT_byte_size */
+	.byte	0x1	/* DW_AT_decl_file (fission-reread.cc) */
+	.byte	0x1	/* DW_AT_decl_line */
+	.4byte	.Ltu_int - .Ltu_start_dwo /* DW_AT_sibling */
+	.uleb128 0x3	/* (DIE (0x31) DW_TAG_member) */
+	.ascii "bar\0"	/* DW_AT_name */
+	.byte	0x1	/* DW_AT_decl_file (fission-reread.cc) */
+	.byte	0x4	/* DW_AT_decl_line */
+	.4byte	.Ltu_int - .Ltu_start_dwo /* DW_AT_type */
+	.byte	0	/* DW_AT_data_member_location */
+	.byte	0x1	/* DW_AT_accessibility */
+	.byte	0	/* end of children of DIE 0x25 */
+.Ltu_int:
+	.uleb128 0x4	/* (DIE (0x3f) DW_TAG_base_type) */
+	.byte	0x4	/* DW_AT_byte_size */
+	.byte	0x5	/* DW_AT_encoding */
+	.ascii "int\0"	/* DW_AT_name */
+	.byte	0	/* end of children of DIE 0x17 */
+.Ltu_end_dwo:
+
+	.section	.debug_types
+.Ltu_start:
+	.4byte	.Ltu_end - .Ltu_start - 4	/* Length of Type Unit Info */
+	.2byte	0x4	/* DWARF version number */
+	.4byte	.Lskeleton_debug_abbrev0	/* Offset Into Abbrev. Section */
+	.byte	0x4	/* Pointer Size (in bytes) */
+	.byte	0x19	/* Type Signature */
+	.byte	0x8b
+	.byte	0x7e
+	.byte	0xac
+	.byte	0xce
+	.byte	0xf1
+	.byte	0x22
+	.byte	0x90
+	.4byte	0	/* Offset to Type DIE */
+	.uleb128 0x2	/* (DIE (0) DW_TAG_type_unit) */
+	.ascii "/tmp/src/gdb/testsuite\0"	/* DW_AT_comp_dir */
+	.ascii "gdb.dwarf2/fission-reread.dwo\0" /* DW_AT_GNU_dwo_name */
+	.4byte	.Ldebug_pubnames0	/* DW_AT_GNU_pubnames */
+	.4byte	.Ldebug_pubtypes0	/* DW_AT_GNU_pubtypes */
+	.4byte	.Ldebug_addr0	/* DW_AT_GNU_addr_base */
+.Ltu_end:
+
+	.section	.debug_info.dwo
+.Lcu_start_dwo:
+	.4byte	.Lcu_end_dwo - .Lcu_start_dwo - 4	/* Length of Compilation Unit Info */
+	.2byte	0x4	/* DWARF version number */
+	.4byte	.Ldebug_abbrev0	/* Offset Into Abbrev. Section */
+	.byte	0x4	/* Pointer Size (in bytes) */
+	.uleb128 0x5	/* (DIE (0xb) DW_TAG_compile_unit) */
+	.ascii "GNU C++ 4.6.x-fission\0"	/* DW_AT_producer */
+	.byte	0x4	/* DW_AT_language */
+	.ascii "gdb.dwarf2/fission-reread.cc\0"	/* DW_AT_name */
+	.ascii "/tmp/src/gdb/testsuite\0"	/* DW_AT_comp_dir */
+	.byte	1	/* DW_AT_GNU_dwo_id */
+	.byte	2
+	.byte	3
+	.byte	4
+	.byte	5
+	.byte	6
+	.byte	7
+	.byte	8
+.Lcu_int:
+	.uleb128 0x4	/* (DIE (0x7f) DW_TAG_base_type) */
+	.byte	0x4	/* DW_AT_byte_size */
+	.byte	0x5	/* DW_AT_encoding */
+	.ascii "int\0"	/* DW_AT_name */
+	.uleb128 0x6	/* (DIE (0x86) DW_TAG_subprogram) */
+			/* DW_AT_external */
+	.ascii "main\0"	/* DW_AT_name */
+	.byte	0x1	/* DW_AT_decl_file (fission-reread.cc) */
+	.byte	0xa	/* DW_AT_decl_line */
+	.4byte	.Lcu_int - .Lcu_start_dwo /* DW_AT_type */
+	.uleb128 0	/* DW_AT_low_pc */
+	.4byte	.LFE0-.LFB0	/* DW_AT_high_pc */
+	.uleb128 0x1	/* DW_AT_frame_base */
+	.byte	0x9c	/* DW_OP_call_frame_cfa */
+	.uleb128 0x7	/* (DIE (0x9d) DW_TAG_variable) */
+	.ascii "baz\0"	/* DW_AT_name */
+	.byte	0x1	/* DW_AT_decl_file (fission-reread.cc) */
+	.byte	0x7	/* DW_AT_decl_line */
+	.byte	0x19	/* DW_AT_type */
+	.byte	0x8b
+	.byte	0x7e
+	.byte	0xac
+	.byte	0xce
+	.byte	0xf1
+	.byte	0x22
+	.byte	0x90
+			/* DW_AT_external */
+	.uleb128 0x2	/* DW_AT_location */
+	.byte	0xfb	/* DW_OP_GNU_addr_index */
+	.uleb128 0x1	/* (index into .debug_addr) */
+	.byte	0	/* end of children of DIE 0xb */
+.Lcu_end_dwo:
+
+	.section	.debug_info
+.Lskeleton_debug_info0:
+.Lcu_start:
+	.4byte	.Lcu_end - .Lcu_start - 4	/* Length of Compilation Unit Info */
+	.2byte	0x4	/* DWARF version number */
+	.4byte	.Lskeleton_debug_abbrev0	/* Offset Into Abbrev. Section */
+	.byte	0x4	/* Pointer Size (in bytes) */
+	.uleb128 0x1	/* (DIE (0) DW_TAG_compile_unit) */
+	.4byte	.Ltext0	/* DW_AT_low_pc */
+	.4byte	.Letext0-.Ltext0	/* DW_AT_high_pc */
+	.4byte	.Ldebug_line0	/* DW_AT_stmt_list */
+	.ascii "/tmp/src/gdb/testsuite\0"	/* DW_AT_comp_dir */
+	.ascii "gdb.dwarf2/fission-reread.dwo\0" /* DW_AT_GNU_dwo_name */
+	.4byte	.Ldebug_pubnames0	/* DW_AT_GNU_pubnames */
+	.4byte	.Ldebug_pubtypes0	/* DW_AT_GNU_pubtypes */
+	.4byte	.Ldebug_addr0	/* DW_AT_GNU_addr_base */
+	.byte	1	/* DW_AT_GNU_dwo_id */
+	.byte	2
+	.byte	3
+	.byte	4
+	.byte	5
+	.byte	6
+	.byte	7
+	.byte	8
+.Lcu_end:
+
+	.section	.debug_abbrev
+.Lskeleton_debug_abbrev0:
+	.uleb128 0x1	/* (abbrev code) */
+	.uleb128 0x11	/* (TAG: DW_TAG_compile_unit) */
+	.byte	0	/* DW_children_no */
+	.uleb128 0x11	/* (DW_AT_low_pc) */
+	.uleb128 0x1	/* (DW_FORM_addr) */
+	.uleb128 0x12	/* (DW_AT_high_pc) */
+	.uleb128 0x6	/* (DW_FORM_data4) */
+	.uleb128 0x10	/* (DW_AT_stmt_list) */
+	.uleb128 0x17	/* (DW_FORM_sec_offset) */
+	.uleb128 0x1b	/* (DW_AT_comp_dir) */
+	.uleb128 0x8	/* (DW_FORM_string) */
+	.uleb128 0x2130	/* (DW_AT_GNU_dwo_name) */
+	.uleb128 0x8	/* (DW_FORM_string) */
+	.uleb128 0x2134	/* (DW_AT_GNU_pubnames) */
+	.uleb128 0x17	/* (DW_FORM_sec_offset) */
+	.uleb128 0x2135	/* (DW_AT_GNU_pubtypes) */
+	.uleb128 0x17	/* (DW_FORM_sec_offset) */
+	.uleb128 0x2133	/* (DW_AT_GNU_addr_base) */
+	.uleb128 0x17	/* (DW_FORM_sec_offset) */
+	.uleb128 0x2131	/* (DW_AT_GNU_dwo_id) */
+	.uleb128 0x7	/* (DW_FORM_data8) */
+	.byte	0
+	.byte	0
+	.uleb128 0x2	/* (abbrev code) */
+	.uleb128 0x41	/* (TAG: DW_TAG_type_unit) */
+	.byte	0	/* DW_children_no */
+	.uleb128 0x1b	/* (DW_AT_comp_dir) */
+	.uleb128 0x8	/* (DW_FORM_string) */
+	.uleb128 0x2130	/* (DW_AT_GNU_dwo_name) */
+	.uleb128 0x8	/* (DW_FORM_string) */
+	.uleb128 0x2134	/* (DW_AT_GNU_pubnames) */
+	.uleb128 0x17	/* (DW_FORM_sec_offset) */
+	.uleb128 0x2135	/* (DW_AT_GNU_pubtypes) */
+	.uleb128 0x17	/* (DW_FORM_sec_offset) */
+	.uleb128 0x2133	/* (DW_AT_GNU_addr_base) */
+	.uleb128 0x17	/* (DW_FORM_sec_offset) */
+	.byte	0
+	.byte	0
+	.byte	0	/* end of skeleton .debug_abbrev */
+	.section	.debug_abbrev.dwo
+.Ldebug_abbrev0:
+	.uleb128 0x1	/* (abbrev code) */
+	.uleb128 0x41	/* (TAG: DW_TAG_type_unit) */
+	.byte	0x1	/* DW_children_yes */
+	.uleb128 0x13	/* (DW_AT_language) */
+	.uleb128 0xb	/* (DW_FORM_data1) */
+	.uleb128 0x210f	/* (DW_AT_GNU_odr_signature) */
+	.uleb128 0x7	/* (DW_FORM_data8) */
+	.uleb128 0x10	/* (DW_AT_stmt_list) */
+	.uleb128 0x17	/* (DW_FORM_sec_offset) */
+	.byte	0
+	.byte	0
+	.uleb128 0x2	/* (abbrev code) */
+	.uleb128 0x2	/* (TAG: DW_TAG_class_type) */
+	.byte	0x1	/* DW_children_yes */
+	.uleb128 0x3	/* (DW_AT_name) */
+	.uleb128 0x8	/* (DW_FORM_string) */
+	.uleb128 0xb	/* (DW_AT_byte_size) */
+	.uleb128 0xb	/* (DW_FORM_data1) */
+	.uleb128 0x3a	/* (DW_AT_decl_file) */
+	.uleb128 0xb	/* (DW_FORM_data1) */
+	.uleb128 0x3b	/* (DW_AT_decl_line) */
+	.uleb128 0xb	/* (DW_FORM_data1) */
+	.uleb128 0x1	/* (DW_AT_sibling) */
+	.uleb128 0x13	/* (DW_FORM_ref4) */
+	.byte	0
+	.byte	0
+	.uleb128 0x3	/* (abbrev code) */
+	.uleb128 0xd	/* (TAG: DW_TAG_member) */
+	.byte	0	/* DW_children_no */
+	.uleb128 0x3	/* (DW_AT_name) */
+	.uleb128 0x8	/* (DW_FORM_string) */
+	.uleb128 0x3a	/* (DW_AT_decl_file) */
+	.uleb128 0xb	/* (DW_FORM_data1) */
+	.uleb128 0x3b	/* (DW_AT_decl_line) */
+	.uleb128 0xb	/* (DW_FORM_data1) */
+	.uleb128 0x49	/* (DW_AT_type) */
+	.uleb128 0x13	/* (DW_FORM_ref4) */
+	.uleb128 0x38	/* (DW_AT_data_member_location) */
+	.uleb128 0xb	/* (DW_FORM_data1) */
+	.uleb128 0x32	/* (DW_AT_accessibility) */
+	.uleb128 0xb	/* (DW_FORM_data1) */
+	.byte	0
+	.byte	0
+	.uleb128 0x4	/* (abbrev code) */
+	.uleb128 0x24	/* (TAG: DW_TAG_base_type) */
+	.byte	0	/* DW_children_no */
+	.uleb128 0xb	/* (DW_AT_byte_size) */
+	.uleb128 0xb	/* (DW_FORM_data1) */
+	.uleb128 0x3e	/* (DW_AT_encoding) */
+	.uleb128 0xb	/* (DW_FORM_data1) */
+	.uleb128 0x3	/* (DW_AT_name) */
+	.uleb128 0x8	/* (DW_FORM_string) */
+	.byte	0
+	.byte	0
+	.uleb128 0x5	/* (abbrev code) */
+	.uleb128 0x11	/* (TAG: DW_TAG_compile_unit) */
+	.byte	0x1	/* DW_children_yes */
+	.uleb128 0x25	/* (DW_AT_producer) */
+	.uleb128 0x8	/* (DW_FORM_string) */
+	.uleb128 0x13	/* (DW_AT_language) */
+	.uleb128 0xb	/* (DW_FORM_data1) */
+	.uleb128 0x3	/* (DW_AT_name) */
+	.uleb128 0x8	/* (DW_FORM_string) */
+	.uleb128 0x1b	/* (DW_AT_comp_dir) */
+	.uleb128 0x8	/* (DW_FORM_string) */
+	.uleb128 0x2131	/* (DW_AT_GNU_dwo_id) */
+	.uleb128 0x7	/* (DW_FORM_data8) */
+	.byte	0
+	.byte	0
+	.uleb128 0x6	/* (abbrev code) */
+	.uleb128 0x2e	/* (TAG: DW_TAG_subprogram) */
+	.byte	0	/* DW_children_no */
+	.uleb128 0x3f	/* (DW_AT_external) */
+	.uleb128 0x19	/* (DW_FORM_flag_present) */
+	.uleb128 0x3	/* (DW_AT_name) */
+	.uleb128 0x8	/* (DW_FORM_string) */
+	.uleb128 0x3a	/* (DW_AT_decl_file) */
+	.uleb128 0xb	/* (DW_FORM_data1) */
+	.uleb128 0x3b	/* (DW_AT_decl_line) */
+	.uleb128 0xb	/* (DW_FORM_data1) */
+	.uleb128 0x49	/* (DW_AT_type) */
+	.uleb128 0x13	/* (DW_FORM_ref4) */
+	.uleb128 0x11	/* (DW_AT_low_pc) */
+	.uleb128 0x1f01	/* (DW_FORM_GNU_addr_index) */
+	.uleb128 0x12	/* (DW_AT_high_pc) */
+	.uleb128 0x6	/* (DW_FORM_data4) */
+	.uleb128 0x40	/* (DW_AT_frame_base) */
+	.uleb128 0x18	/* (DW_FORM_exprloc) */
+	.byte	0
+	.byte	0
+	.uleb128 0x7	/* (abbrev code) */
+	.uleb128 0x34	/* (TAG: DW_TAG_variable) */
+	.byte	0	/* DW_children_no */
+	.uleb128 0x3	/* (DW_AT_name) */
+	.uleb128 0x8	/* (DW_FORM_string) */
+	.uleb128 0x3a	/* (DW_AT_decl_file) */
+	.uleb128 0xb	/* (DW_FORM_data1) */
+	.uleb128 0x3b	/* (DW_AT_decl_line) */
+	.uleb128 0xb	/* (DW_FORM_data1) */
+	.uleb128 0x49	/* (DW_AT_type) */
+	.uleb128 0x20	/* (DW_FORM_ref_sig8) */
+	.uleb128 0x3f	/* (DW_AT_external) */
+	.uleb128 0x19	/* (DW_FORM_flag_present) */
+	.uleb128 0x2	/* (DW_AT_location) */
+	.uleb128 0x18	/* (DW_FORM_exprloc) */
+	.byte	0
+	.byte	0
+
+	/* Manually inserted.  */
+	.uleb128 0x8		/* abbrev code */
+	.uleb128 0x2		/* DW_TAG_class_type */
+	.byte	0x0		/* DW_has_children_no */
+	.uleb128 0x47		/* DW_AT_specification */
+	.uleb128 0x13		/* DW_FORM_ref4 */
+	.byte	0x0		/* Terminator */
+	.byte	0x0		/* Terminator */
+	/* End of manual insertion.  */
+
+	.byte	0
+	.section	.debug_pubnames
+.Ldebug_pubnames0:
+	.4byte	0x1f	/* Length of Public Names Info */
+	.2byte	0x2	/* DWARF Version */
+	.4byte	.Lskeleton_debug_info0	/* Offset of Compilation Unit Info */
+	.4byte	0xb0	/* Compilation Unit Length */
+	.4byte	0x86	/* DIE offset */
+	.ascii "main\0"	/* external name */
+	.4byte	0x9d	/* DIE offset */
+	.ascii "baz\0"	/* external name */
+	.4byte	0
+	.section	.debug_pubtypes
+.Ldebug_pubtypes0:
+	.4byte	0x1e	/* Length of Public Type Names Info */
+	.2byte	0x2	/* DWARF Version */
+	.4byte	.Lskeleton_debug_info0	/* Offset of Compilation Unit Info */
+	.4byte	0xb0	/* Compilation Unit Length */
+	.4byte	0x7f	/* DIE offset */
+	.ascii "int\0"	/* external name */
+	.4byte	0x25	/* DIE offset */
+	.ascii "foo\0"	/* external name */
+	.4byte	0
+	.section	.debug_aranges
+	.4byte	0x1c	/* Length of Address Ranges Info */
+	.2byte	0x2	/* DWARF Version */
+	.4byte	.Lskeleton_debug_info0	/* Offset of Compilation Unit Info */
+	.byte	0x4	/* Size of Address */
+	.byte	0	/* Size of Segment Descriptor */
+	.2byte	0	/* Pad to 16 byte boundary */
+	.2byte	0
+	.4byte	.Ltext0	/* Address */
+	.4byte	.Letext0-.Ltext0	/* Length */
+	.4byte	0
+	.4byte	0
+	.section	.debug_line
+.Ldebug_line0:
+	.section	.debug_line.dwo
+.Lskeleton_debug_line0:
+	.4byte	.LELT0-.LSLT0	/* Length of Source Line Info */
+.LSLT0:
+	.2byte	0x4	/* DWARF Version */
+	.4byte	.LELTP0-.LASLTP0	/* Prolog Length */
+.LASLTP0:
+	.byte	0x1	/* Minimum Instruction Length */
+	.byte	0x1	/* Maximum Operations Per Instruction */
+	.byte	0x1	/* Default is_stmt_start flag */
+	.byte	0xf6	/* Line Base Value (Special Opcodes) */
+	.byte	0xf5	/* Line Range Value (Special Opcodes) */
+	.byte	0xa	/* Special Opcode Base */
+	.byte	0	/* opcode: 0x1 has 0 args */
+	.byte	0x1	/* opcode: 0x2 has 1 args */
+	.byte	0x1	/* opcode: 0x3 has 1 args */
+	.byte	0x1	/* opcode: 0x4 has 1 args */
+	.byte	0x1	/* opcode: 0x5 has 1 args */
+	.byte	0	/* opcode: 0x6 has 0 args */
+	.byte	0	/* opcode: 0x7 has 0 args */
+	.byte	0	/* opcode: 0x8 has 0 args */
+	.byte	0x1	/* opcode: 0x9 has 1 args */
+	.byte	0	/* End directory table */
+	.ascii "fission-reread.cc\0"	/* File Entry: 0x1 */
+	.uleb128 0
+	.uleb128 0
+	.uleb128 0
+	.byte	0	/* End file name table */
+.LELTP0:
+.LELT0:
+	.section	.debug_addr
+.Ldebug_addr0:
+	.4byte	.LFB0	/* DW_AT_low_pc */
+	.4byte	baz	/* DW_AT_location */
+@
+
+
+1.9
+log
+@fix some gdb.dwarf2 tests for parallel safety
+
+This fixes a few gdb.dwarf2 tests to be more parallel-safe.  This
+mostly amounts to changing them to write their files into the
+directory designated by standard_output_file.
+
+Built and regtested on x86-64 Fedora 18.
+
+	* gdb.dwarf2/clztest.exp: Use standard_testfile.
+	* gdb.dwarf2/dw2-minsym-in-cu.exp: Use standard_testfile.
+	* gdb.dwarf2/fission-base.S: Remove directory from
+	DW_AT_GNU_dwo_name.
+	* gdb.dwarf2/fission-base.exp: Use build_executable.  Set
+	debug-file-directory.
+	* gdb.dwarf2/fission-reread.S: Remove directory from
+	DW_AT_GNU_dwo_name.
+	* gdb.dwarf2/fission-reread.exp: Use build_executable.  Set
+	debug-file-directory.
+@
+text
+@d103 1
+a103 1
+	.4byte	.Ltu_int	/* DW_AT_sibling */
+d108 1
+a108 1
+	.4byte	.Ltu_int	/* DW_AT_type */
+d137 1
+a137 3
+	/* Normally dwo_name would be "fission-reread.dwo".
+	   Simplification: Leave the DWO contents in the executable.  */
+	.ascii "fission-reread\0"	/* DW_AT_GNU_dwo_name */
+d154 8
+a161 8
+	.byte	0	/* DW_AT_GNU_dwo_id */
+	.byte	0
+	.byte	0
+	.byte	0
+	.byte	0
+	.byte	0
+	.byte	0
+	.byte	0
+d172 1
+a172 1
+	.4byte	.Lcu_int	/* DW_AT_type */
+d208 1
+a208 6
+	/* Normally dwo_name would be "fission-reread.dwo".
+	   Simplification: Leave the DWO contents in the executable.
+	   "gdb.dwarf2/" is included so that gdb can load the file without
+	   having to set "debug-file-directory".  This is useful when
+	   testing with cc-with-tweaks.sh -i.  */
+	.ascii "gdb.dwarf2/fission-reread\0"	/* DW_AT_GNU_dwo_name */
+d212 8
+a219 8
+	.byte	0	/* DW_AT_GNU_dwo_id */
+	.byte	0
+	.byte	0
+	.byte	0
+	.byte	0
+	.byte	0
+	.byte	0
+	.byte	0
+d407 1
+a407 1
+	.4byte	0x2c	/* Length of Address Ranges Info */
+d410 1
+a410 1
+	.byte	0x8	/* Size of Address */
+@
+
+
+1.8
+log
+@gdb/testsuite/gdb.dwarf2: Replace @@ with % for ARM compatability.
+
+The ARM assembler recognises @@ symbol as a comment marker and
+therefore is unable to assemble some of gdb.dwarf2 testsuite tests.
+This patch replaces all occurrences of @@ symbol with % sign to allow
+tests stay compatible with both ARM and x86 assembly. This patch has
+been tested on x86_64 and ARMv7 targets.
+
+gdb/testsuite/ChangeLog:
+
+2013-07-19  Omair Javaid  <Omair.Javaid@@linaro.org>
+
+        * gdb.dwarf2/fission-reread.S: Replace @@ sign with % sign to remove
+        assembler errors on arm.
+        * gdb.dwarf2/mac-fileno.S: Likewise.
+        * gdb.dwarf2/member-ptr-forwardref.S: Likewise.
+        * gdb.dwarf2/pr13961.S: Likewise.
+@
+text
+@d138 2
+a139 5
+	   Simplification: Leave the DWO contents in the executable.
+	   "gdb.dwarf2/" is included so that gdb can load the file without
+	   having to set "debug-file-directory".  This is useful when
+	   testing with cc-with-tweaks.sh -i.  */
+	.ascii "gdb.dwarf2/fission-reread\0"	/* DW_AT_GNU_dwo_name */
+@
+
+
+1.7
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@d46 1
+a46 1
+	.type	baz, @@object
+d54 1
+a54 1
+	.type	main, @@function
+@
+
+
+1.6
+log
+@	* gdb.dwarf2/fission-base.S: Include gdb.dwarf2/ in dwo_name.
+	* gdb.dwarf2/fission-reread.S: Ditto.
+	* gdb.dwarf2/fission-base.exp: Remove setting of debug-file-directory.
+	* gdb.dwarf2/fission-reread.exp: Ditto.
+@
+text
+@d1 1
+a1 1
+/* Copyright 2012 Free Software Foundation, Inc.
+@
+
+
+1.5
+log
+@	* gdb.dwarf2/fission-reread.S: Use .data instead of .bss.
+	* gdb.dwarf2/pr13961.S: Ditto.
+@
+text
+@d136 7
+a142 4
+	.ascii "/tmp/src/gdb/testsuite/gdb.dwarf2\0"	/* DW_AT_comp_dir */
+	/* Normally dwo_name would be "fission-reread.dwo". */
+	/* Simplification: Leave the DWO contents in the executable. */
+	.ascii "fission-reread\0"	/* DW_AT_GNU_dwo_name */
+d157 2
+a158 2
+	.ascii "fission-reread.cc\0"	/* DW_AT_name */
+	.ascii "/tmp/src/gdb/testsuite/gdb.dwarf2\0"	/* DW_AT_comp_dir */
+d212 7
+a218 4
+	.ascii "/tmp/src/gdb/testsuite/gdb.dwarf2\0"	/* DW_AT_comp_dir */
+	/* Normally dwo_name would be "fission-reread.dwo". */
+	/* Simplification: Leave the DWO contents in the executable. */
+	.ascii "fission-reread\0"	/* DW_AT_GNU_dwo_name */
+@
+
+
+1.4
+log
+@gdb/testsuite/
+	Fix a testcase regression by me.
+	* gdb.dwarf2/fission-reread.S: Fix two DW_FORM_data8 to be
+	DW_FORM_data4.
+@
+text
+@d44 1
+a44 1
+	.bss
+@
+
+
+1.4.2.1
+log
+@	* gdb.dwarf2/fission-reread.S: Use .data instead of .bss.
+	* gdb.dwarf2/pr13961.S: Ditto.
+@
+text
+@d44 1
+a44 1
+	.data	/* Previously this used .bss, but it's not portable.  */
+@
+
+
+1.3
+log
+@gdb/testsuite/
+	* gdb.dwarf2/fission-reread.S: Change # comments to /* */ comments.
+@
+text
+@d234 1
+a234 1
+	.uleb128 0x7	/* (DW_FORM_data8) */
+d354 1
+a354 1
+	.uleb128 0x7	/* (DW_FORM_data8) */
+@
+
+
+1.2
+log
+@gdb/testsuite/
+	* gdb.dwarf2/fission-reread.S: Remove .section attributes.
+	Change CU pointer size to 4 bytes, adjust .8byte to .4byte.  Remove
+	.note.GNU-stack.
+@
+text
+@d66 5
+a70 5
+	.4byte	.Ltu_end_dwo - .Ltu_start_dwo - 4	# Length of Compilation Unit Info
+	.2byte	0x4	# DWARF version number
+	.4byte	.Ldebug_abbrev0	# Offset Into Abbrev. Section
+	.byte	0x4	# Pointer Size (in bytes)
+	.byte	0x19	# Type Signature
+d78 4
+a81 4
+	.4byte	.Ltu_class_type - .Ltu_start_dwo	# Offset to Type DIE
+	.uleb128 0x1	# (DIE (0x17) DW_TAG_type_unit)
+	.byte	0x4	# DW_AT_language
+	.byte	0x73	# DW_AT_GNU_odr_signature
+d89 1
+a89 1
+	.4byte	.Lskeleton_debug_line0	# DW_AT_stmt_list
+d98 14
+a111 14
+	.uleb128 0x2	# (DIE (0x25) DW_TAG_class_type)
+	.ascii "foo\0"	# DW_AT_name
+	.byte	0x4	# DW_AT_byte_size
+	.byte	0x1	# DW_AT_decl_file (fission-reread.cc)
+	.byte	0x1	# DW_AT_decl_line
+	.4byte	.Ltu_int	# DW_AT_sibling
+	.uleb128 0x3	# (DIE (0x31) DW_TAG_member)
+	.ascii "bar\0"	# DW_AT_name
+	.byte	0x1	# DW_AT_decl_file (fission-reread.cc)
+	.byte	0x4	# DW_AT_decl_line
+	.4byte	.Ltu_int	# DW_AT_type
+	.byte	0	# DW_AT_data_member_location
+	.byte	0x1	# DW_AT_accessibility
+	.byte	0	# end of children of DIE 0x25
+d113 5
+a117 5
+	.uleb128 0x4	# (DIE (0x3f) DW_TAG_base_type)
+	.byte	0x4	# DW_AT_byte_size
+	.byte	0x5	# DW_AT_encoding
+	.ascii "int\0"	# DW_AT_name
+	.byte	0	# end of children of DIE 0x17
+d122 5
+a126 5
+	.4byte	.Ltu_end - .Ltu_start - 4	# Length of Type Unit Info
+	.2byte	0x4	# DWARF version number
+	.4byte	.Lskeleton_debug_abbrev0	# Offset Into Abbrev. Section
+	.byte	0x4	# Pointer Size (in bytes)
+	.byte	0x19	# Type Signature
+d134 9
+a142 9
+	.4byte	0	# Offset to Type DIE
+	.uleb128 0x2	# (DIE (0) DW_TAG_type_unit)
+	.ascii "/tmp/src/gdb/testsuite/gdb.dwarf2\0"	# DW_AT_comp_dir
+	# Normally dwo_name would be "fission-reread.dwo".
+	# Simplification: Leave the DWO contents in the executable.
+	.ascii "fission-reread\0"	# DW_AT_GNU_dwo_name
+	.4byte	.Ldebug_pubnames0	# DW_AT_GNU_pubnames
+	.4byte	.Ldebug_pubtypes0	# DW_AT_GNU_pubtypes
+	.4byte	.Ldebug_addr0	# DW_AT_GNU_addr_base
+d147 10
+a156 10
+	.4byte	.Lcu_end_dwo - .Lcu_start_dwo - 4	# Length of Compilation Unit Info
+	.2byte	0x4	# DWARF version number
+	.4byte	.Ldebug_abbrev0	# Offset Into Abbrev. Section
+	.byte	0x4	# Pointer Size (in bytes)
+	.uleb128 0x5	# (DIE (0xb) DW_TAG_compile_unit)
+	.ascii "GNU C++ 4.6.x-fission\0"	# DW_AT_producer
+	.byte	0x4	# DW_AT_language
+	.ascii "fission-reread.cc\0"	# DW_AT_name
+	.ascii "/tmp/src/gdb/testsuite/gdb.dwarf2\0"	# DW_AT_comp_dir
+	.byte	0	# DW_AT_GNU_dwo_id
+d165 19
+a183 19
+	.uleb128 0x4	# (DIE (0x7f) DW_TAG_base_type)
+	.byte	0x4	# DW_AT_byte_size
+	.byte	0x5	# DW_AT_encoding
+	.ascii "int\0"	# DW_AT_name
+	.uleb128 0x6	# (DIE (0x86) DW_TAG_subprogram)
+			# DW_AT_external
+	.ascii "main\0"	# DW_AT_name
+	.byte	0x1	# DW_AT_decl_file (fission-reread.cc)
+	.byte	0xa	# DW_AT_decl_line
+	.4byte	.Lcu_int	# DW_AT_type
+	.uleb128 0	# DW_AT_low_pc
+	.4byte	.LFE0-.LFB0	# DW_AT_high_pc
+	.uleb128 0x1	# DW_AT_frame_base
+	.byte	0x9c	# DW_OP_call_frame_cfa
+	.uleb128 0x7	# (DIE (0x9d) DW_TAG_variable)
+	.ascii "baz\0"	# DW_AT_name
+	.byte	0x1	# DW_AT_decl_file (fission-reread.cc)
+	.byte	0x7	# DW_AT_decl_line
+	.byte	0x19	# DW_AT_type
+d191 5
+a195 5
+			# DW_AT_external
+	.uleb128 0x2	# DW_AT_location
+	.byte	0xfb	# DW_OP_GNU_addr_index
+	.uleb128 0x1	# (index into .debug_addr)
+	.byte	0	# end of children of DIE 0xb
+d201 16
+a216 16
+	.4byte	.Lcu_end - .Lcu_start - 4	# Length of Compilation Unit Info
+	.2byte	0x4	# DWARF version number
+	.4byte	.Lskeleton_debug_abbrev0	# Offset Into Abbrev. Section
+	.byte	0x4	# Pointer Size (in bytes)
+	.uleb128 0x1	# (DIE (0) DW_TAG_compile_unit)
+	.4byte	.Ltext0	# DW_AT_low_pc
+	.4byte	.Letext0-.Ltext0	# DW_AT_high_pc
+	.4byte	.Ldebug_line0	# DW_AT_stmt_list
+	.ascii "/tmp/src/gdb/testsuite/gdb.dwarf2\0"	# DW_AT_comp_dir
+	# Normally dwo_name would be "fission-reread.dwo".
+	# Simplification: Leave the DWO contents in the executable.
+	.ascii "fission-reread\0"	# DW_AT_GNU_dwo_name
+	.4byte	.Ldebug_pubnames0	# DW_AT_GNU_pubnames
+	.4byte	.Ldebug_pubtypes0	# DW_AT_GNU_pubtypes
+	.4byte	.Ldebug_addr0	# DW_AT_GNU_addr_base
+	.byte	0	# DW_AT_GNU_dwo_id
+d228 36
+a263 36
+	.uleb128 0x1	# (abbrev code)
+	.uleb128 0x11	# (TAG: DW_TAG_compile_unit)
+	.byte	0	# DW_children_no
+	.uleb128 0x11	# (DW_AT_low_pc)
+	.uleb128 0x1	# (DW_FORM_addr)
+	.uleb128 0x12	# (DW_AT_high_pc)
+	.uleb128 0x7	# (DW_FORM_data8)
+	.uleb128 0x10	# (DW_AT_stmt_list)
+	.uleb128 0x17	# (DW_FORM_sec_offset)
+	.uleb128 0x1b	# (DW_AT_comp_dir)
+	.uleb128 0x8	# (DW_FORM_string)
+	.uleb128 0x2130	# (DW_AT_GNU_dwo_name)
+	.uleb128 0x8	# (DW_FORM_string)
+	.uleb128 0x2134	# (DW_AT_GNU_pubnames)
+	.uleb128 0x17	# (DW_FORM_sec_offset)
+	.uleb128 0x2135	# (DW_AT_GNU_pubtypes)
+	.uleb128 0x17	# (DW_FORM_sec_offset)
+	.uleb128 0x2133	# (DW_AT_GNU_addr_base)
+	.uleb128 0x17	# (DW_FORM_sec_offset)
+	.uleb128 0x2131	# (DW_AT_GNU_dwo_id)
+	.uleb128 0x7	# (DW_FORM_data8)
+	.byte	0
+	.byte	0
+	.uleb128 0x2	# (abbrev code)
+	.uleb128 0x41	# (TAG: DW_TAG_type_unit)
+	.byte	0	# DW_children_no
+	.uleb128 0x1b	# (DW_AT_comp_dir)
+	.uleb128 0x8	# (DW_FORM_string)
+	.uleb128 0x2130	# (DW_AT_GNU_dwo_name)
+	.uleb128 0x8	# (DW_FORM_string)
+	.uleb128 0x2134	# (DW_AT_GNU_pubnames)
+	.uleb128 0x17	# (DW_FORM_sec_offset)
+	.uleb128 0x2135	# (DW_AT_GNU_pubtypes)
+	.uleb128 0x17	# (DW_FORM_sec_offset)
+	.uleb128 0x2133	# (DW_AT_GNU_addr_base)
+	.uleb128 0x17	# (DW_FORM_sec_offset)
+d266 1
+a266 1
+	.byte	0	# end of skeleton .debug_abbrev
+d269 105
+a373 105
+	.uleb128 0x1	# (abbrev code)
+	.uleb128 0x41	# (TAG: DW_TAG_type_unit)
+	.byte	0x1	# DW_children_yes
+	.uleb128 0x13	# (DW_AT_language)
+	.uleb128 0xb	# (DW_FORM_data1)
+	.uleb128 0x210f	# (DW_AT_GNU_odr_signature)
+	.uleb128 0x7	# (DW_FORM_data8)
+	.uleb128 0x10	# (DW_AT_stmt_list)
+	.uleb128 0x17	# (DW_FORM_sec_offset)
+	.byte	0
+	.byte	0
+	.uleb128 0x2	# (abbrev code)
+	.uleb128 0x2	# (TAG: DW_TAG_class_type)
+	.byte	0x1	# DW_children_yes
+	.uleb128 0x3	# (DW_AT_name)
+	.uleb128 0x8	# (DW_FORM_string)
+	.uleb128 0xb	# (DW_AT_byte_size)
+	.uleb128 0xb	# (DW_FORM_data1)
+	.uleb128 0x3a	# (DW_AT_decl_file)
+	.uleb128 0xb	# (DW_FORM_data1)
+	.uleb128 0x3b	# (DW_AT_decl_line)
+	.uleb128 0xb	# (DW_FORM_data1)
+	.uleb128 0x1	# (DW_AT_sibling)
+	.uleb128 0x13	# (DW_FORM_ref4)
+	.byte	0
+	.byte	0
+	.uleb128 0x3	# (abbrev code)
+	.uleb128 0xd	# (TAG: DW_TAG_member)
+	.byte	0	# DW_children_no
+	.uleb128 0x3	# (DW_AT_name)
+	.uleb128 0x8	# (DW_FORM_string)
+	.uleb128 0x3a	# (DW_AT_decl_file)
+	.uleb128 0xb	# (DW_FORM_data1)
+	.uleb128 0x3b	# (DW_AT_decl_line)
+	.uleb128 0xb	# (DW_FORM_data1)
+	.uleb128 0x49	# (DW_AT_type)
+	.uleb128 0x13	# (DW_FORM_ref4)
+	.uleb128 0x38	# (DW_AT_data_member_location)
+	.uleb128 0xb	# (DW_FORM_data1)
+	.uleb128 0x32	# (DW_AT_accessibility)
+	.uleb128 0xb	# (DW_FORM_data1)
+	.byte	0
+	.byte	0
+	.uleb128 0x4	# (abbrev code)
+	.uleb128 0x24	# (TAG: DW_TAG_base_type)
+	.byte	0	# DW_children_no
+	.uleb128 0xb	# (DW_AT_byte_size)
+	.uleb128 0xb	# (DW_FORM_data1)
+	.uleb128 0x3e	# (DW_AT_encoding)
+	.uleb128 0xb	# (DW_FORM_data1)
+	.uleb128 0x3	# (DW_AT_name)
+	.uleb128 0x8	# (DW_FORM_string)
+	.byte	0
+	.byte	0
+	.uleb128 0x5	# (abbrev code)
+	.uleb128 0x11	# (TAG: DW_TAG_compile_unit)
+	.byte	0x1	# DW_children_yes
+	.uleb128 0x25	# (DW_AT_producer)
+	.uleb128 0x8	# (DW_FORM_string)
+	.uleb128 0x13	# (DW_AT_language)
+	.uleb128 0xb	# (DW_FORM_data1)
+	.uleb128 0x3	# (DW_AT_name)
+	.uleb128 0x8	# (DW_FORM_string)
+	.uleb128 0x1b	# (DW_AT_comp_dir)
+	.uleb128 0x8	# (DW_FORM_string)
+	.uleb128 0x2131	# (DW_AT_GNU_dwo_id)
+	.uleb128 0x7	# (DW_FORM_data8)
+	.byte	0
+	.byte	0
+	.uleb128 0x6	# (abbrev code)
+	.uleb128 0x2e	# (TAG: DW_TAG_subprogram)
+	.byte	0	# DW_children_no
+	.uleb128 0x3f	# (DW_AT_external)
+	.uleb128 0x19	# (DW_FORM_flag_present)
+	.uleb128 0x3	# (DW_AT_name)
+	.uleb128 0x8	# (DW_FORM_string)
+	.uleb128 0x3a	# (DW_AT_decl_file)
+	.uleb128 0xb	# (DW_FORM_data1)
+	.uleb128 0x3b	# (DW_AT_decl_line)
+	.uleb128 0xb	# (DW_FORM_data1)
+	.uleb128 0x49	# (DW_AT_type)
+	.uleb128 0x13	# (DW_FORM_ref4)
+	.uleb128 0x11	# (DW_AT_low_pc)
+	.uleb128 0x1f01	# (DW_FORM_GNU_addr_index)
+	.uleb128 0x12	# (DW_AT_high_pc)
+	.uleb128 0x7	# (DW_FORM_data8)
+	.uleb128 0x40	# (DW_AT_frame_base)
+	.uleb128 0x18	# (DW_FORM_exprloc)
+	.byte	0
+	.byte	0
+	.uleb128 0x7	# (abbrev code)
+	.uleb128 0x34	# (TAG: DW_TAG_variable)
+	.byte	0	# DW_children_no
+	.uleb128 0x3	# (DW_AT_name)
+	.uleb128 0x8	# (DW_FORM_string)
+	.uleb128 0x3a	# (DW_AT_decl_file)
+	.uleb128 0xb	# (DW_FORM_data1)
+	.uleb128 0x3b	# (DW_AT_decl_line)
+	.uleb128 0xb	# (DW_FORM_data1)
+	.uleb128 0x49	# (DW_AT_type)
+	.uleb128 0x20	# (DW_FORM_ref_sig8)
+	.uleb128 0x3f	# (DW_AT_external)
+	.uleb128 0x19	# (DW_FORM_flag_present)
+	.uleb128 0x2	# (DW_AT_location)
+	.uleb128 0x18	# (DW_FORM_exprloc)
+d390 8
+a397 8
+	.4byte	0x1f	# Length of Public Names Info
+	.2byte	0x2	# DWARF Version
+	.4byte	.Lskeleton_debug_info0	# Offset of Compilation Unit Info
+	.4byte	0xb0	# Compilation Unit Length
+	.4byte	0x86	# DIE offset
+	.ascii "main\0"	# external name
+	.4byte	0x9d	# DIE offset
+	.ascii "baz\0"	# external name
+d401 8
+a408 8
+	.4byte	0x1e	# Length of Public Type Names Info
+	.2byte	0x2	# DWARF Version
+	.4byte	.Lskeleton_debug_info0	# Offset of Compilation Unit Info
+	.4byte	0xb0	# Compilation Unit Length
+	.4byte	0x7f	# DIE offset
+	.ascii "int\0"	# external name
+	.4byte	0x25	# DIE offset
+	.ascii "foo\0"	# external name
+d411 6
+a416 6
+	.4byte	0x2c	# Length of Address Ranges Info
+	.2byte	0x2	# DWARF Version
+	.4byte	.Lskeleton_debug_info0	# Offset of Compilation Unit Info
+	.byte	0x8	# Size of Address
+	.byte	0	# Size of Segment Descriptor
+	.2byte	0	# Pad to 16 byte boundary
+d418 2
+a419 2
+	.4byte	.Ltext0	# Address
+	.4byte	.Letext0-.Ltext0	# Length
+d426 1
+a426 1
+	.4byte	.LELT0-.LSLT0	# Length of Source Line Info
+d428 2
+a429 2
+	.2byte	0x4	# DWARF Version
+	.4byte	.LELTP0-.LASLTP0	# Prolog Length
+d431 17
+a447 17
+	.byte	0x1	# Minimum Instruction Length
+	.byte	0x1	# Maximum Operations Per Instruction
+	.byte	0x1	# Default is_stmt_start flag
+	.byte	0xf6	# Line Base Value (Special Opcodes)
+	.byte	0xf5	# Line Range Value (Special Opcodes)
+	.byte	0xa	# Special Opcode Base
+	.byte	0	# opcode: 0x1 has 0 args
+	.byte	0x1	# opcode: 0x2 has 1 args
+	.byte	0x1	# opcode: 0x3 has 1 args
+	.byte	0x1	# opcode: 0x4 has 1 args
+	.byte	0x1	# opcode: 0x5 has 1 args
+	.byte	0	# opcode: 0x6 has 0 args
+	.byte	0	# opcode: 0x7 has 0 args
+	.byte	0	# opcode: 0x8 has 0 args
+	.byte	0x1	# opcode: 0x9 has 1 args
+	.byte	0	# End directory table
+	.ascii "fission-reread.cc\0"	# File Entry: 0x1
+d451 1
+a451 1
+	.byte	0	# End file name table
+d456 2
+a457 2
+	.4byte	.LFB0	# DW_AT_low_pc
+	.4byte	baz	# DW_AT_location
+@
+
+
+1.1
+log
+@	* dwarf2read.c (signatured_type): Make "per_cu" member first.
+	(init_cutu_and_read_dies): Handle rereading a DWO CU while it's
+	currently being read.  Propagate DW_AT_comp_dir to DWO DIE.
+
+	testsuite/
+	* gdb.dwarf2/fission-reread.S: New file.
+	* gdb.dwarf2/fission-reread.exp: New file.
+@
+text
+@d64 1
+a64 1
+	.section	.debug_types.dwo,"G",@@progbits,wt.198b7eaccef12290,comdat
+d69 1
+a69 1
+	.byte	0x8	# Pointer Size (in bytes)
+d120 1
+a120 1
+	.section	.debug_types,"G",@@progbits,wt.198b7eaccef12290,comdat
+d125 1
+a125 1
+	.byte	0x8	# Pointer Size (in bytes)
+d145 1
+a145 1
+	.section	.debug_info.dwo,"",@@progbits
+d150 1
+a150 1
+	.byte	0x8	# Pointer Size (in bytes)
+d176 1
+a176 1
+	.8byte	.LFE0-.LFB0	# DW_AT_high_pc
+d198 1
+a198 1
+	.section	.debug_info,"",@@progbits
+d204 1
+a204 1
+	.byte	0x8	# Pointer Size (in bytes)
+d206 2
+a207 2
+	.8byte	.Ltext0	# DW_AT_low_pc
+	.8byte	.Letext0-.Ltext0	# DW_AT_high_pc
+d226 1
+a226 1
+	.section	.debug_abbrev,"",@@progbits
+d267 1
+a267 1
+	.section	.debug_abbrev.dwo,"",@@progbits
+d388 1
+a388 1
+	.section	.debug_pubnames,"",@@progbits
+d399 1
+a399 1
+	.section	.debug_pubtypes,"",@@progbits
+d410 1
+a410 1
+	.section	.debug_aranges,"",@@progbits
+d418 5
+a422 5
+	.8byte	.Ltext0	# Address
+	.8byte	.Letext0-.Ltext0	# Length
+	.8byte	0
+	.8byte	0
+	.section	.debug_line,"",@@progbits
+d424 1
+a424 1
+	.section	.debug_line.dwo,"",@@progbits
+d454 1
+a454 1
+	.section	.debug_addr,"",@@progbits
+d456 2
+a457 4
+	.8byte	.LFB0	# DW_AT_low_pc
+	.8byte	baz	# DW_AT_location
+
+	.section	.note.GNU-stack,"",@@progbits
+@
+

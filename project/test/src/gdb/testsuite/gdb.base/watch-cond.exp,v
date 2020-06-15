@@ -1,0 +1,375 @@
+head	1.7;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.6
+	gdb_7_6-2013-04-26-release:1.6
+	gdb_7_6-branch:1.6.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.6
+	gdb_7_5_1-2012-11-29-release:1.5
+	gdb_7_5-2012-08-17-release:1.5
+	gdb_7_5-branch:1.5.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.5
+	gdb_7_4_1-2012-04-26-release:1.4.4.1
+	gdb_7_4-2012-01-24-release:1.4.4.1
+	gdb_7_4-branch:1.4.0.4
+	gdb_7_4-2011-12-13-branchpoint:1.4
+	gdb_7_3_1-2011-09-04-release:1.4
+	gdb_7_3-2011-07-26-release:1.4
+	gdb_7_3-branch:1.4.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.4
+	gdb_7_2-2010-09-02-release:1.3
+	gdb_7_2-branch:1.3.0.2
+	gdb_7_2-2010-07-07-branchpoint:1.3;
+locks; strict;
+comment	@# @;
+
+
+1.7
+date	2013.06.27.19.00.47;	author tromey;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2013.01.01.06.33.26;	author brobecke;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2012.01.04.08.17.46;	author brobecke;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2011.01.01.15.33.43;	author brobecke;	state Exp;
+branches
+	1.4.4.1;
+next	1.3;
+
+1.3
+date	2010.06.18.16.51.10;	author uweigand;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2010.06.01.21.29.21;	author msnyder;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2010.03.10.13.25.40;	author palves;	state Exp;
+branches;
+next	;
+
+1.4.4.1
+date	2012.01.06.04.44.01;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.7
+log
+@test suite update - gdb.base/[t-z]
+
+Convert files gdb.base/[t-z]*.exp to use standard_output_file et al.
+
+	* gdb.base/testenv.exp, gdb.base/tui-layout.exp,
+	gdb.base/twice.exp, gdb.base/type-opaque.exp, gdb.base/unload.exp,
+	gdb.base/unwindonsignal.exp, gdb.base/valgrind-db-attach.exp,
+	gdb.base/valgrind-infcall.exp, gdb.base/value-double-free.exp,
+	gdb.base/varargs.exp, gdb.base/watch-cond-infcall.exp,
+	gdb.base/watch-cond.exp, gdb.base/watch-non-mem.exp,
+	gdb.base/watch-read.exp, gdb.base/watch-vfork.exp,
+	gdb.base/watch_thread_num.exp, gdb.base/watchpoint-cond-gone.exp,
+	gdb.base/watchpoint-delete.exp, gdb.base/watchpoint-hw.exp,
+	gdb.base/watchpoint-solib.exp, gdb.base/watchpoint.exp,
+	gdb.base/watchpoints.exp, gdb.base/wchar.exp, gdb.base/whatis.exp:
+	Use standard_testfile, standard_output_file, prepare_for_testing,
+	clean_restart.
+@
+text
+@# Copyright 2010-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+#
+# Tests involving watchpoint conditions with local expressions.
+#
+
+standard_testfile .c
+
+if { [prepare_for_testing ${testfile}.exp ${testfile} ${srcfile}] } {
+    untested ${testfile}.exp
+    return -1
+}
+
+# Disable hardware watchpoints if necessary.
+if [target_info exists gdb,no_hardware_watchpoints] {
+    gdb_test_no_output "set can-use-hw-watchpoints 0" ""
+}
+
+if ![runto_main] then {
+    fail "Can't run to main"
+    return
+}
+
+gdb_test "watch global if q > 10" \
+    "atchpoint .*: global" \
+    "set write watchpoint on global variable, local condition"
+
+gdb_test "continue" \
+    "Old value = 10.*New value = 11.*" \
+    "watchpoint with global expression, local condition evaluates in correct frame"
+
+clean_restart ${testfile}
+
+# Disable hardware watchpoints if necessary.
+if [target_info exists gdb,no_hardware_watchpoints] {
+    gdb_test_no_output "set can-use-hw-watchpoints 0" ""
+}
+
+if ![runto_main] then {
+    fail "Can't run to main"
+    return
+}
+
+gdb_test "watch q if q > 10" \
+    "atchpoint .*: q" \
+    "set write watchpoint on local variable, local condition"
+
+gdb_test "continue" \
+    "Old value = 10.*New value = 11.*" \
+    "watchpoint with local expression, local condition evaluates in correct frame"
+
+clean_restart ${testfile}
+
+# Disable hardware watchpoints if necessary.
+if [target_info exists gdb,no_hardware_watchpoints] {
+    gdb_test_no_output "set can-use-hw-watchpoints 0" ""
+}
+
+if ![runto_main] then {
+    fail "Can't run to main"
+    return
+}
+
+gdb_test "watch global2" \
+    "atchpoint.*" \
+    "set write watchpoint on global2 variable"
+
+gdb_test "continue" \
+    "Old value = 0.*New value = 1.*" \
+    "watchpoint on global2 variable triggers"
+
+gdb_test_no_output "condition 2 *foo > 10" \
+    "condition of watchpoint 2 changes"
+
+gdb_test "continue" \
+    ".*condition cannot be tested in the current scope.*Old value = 1.*New value = 2.*" \
+    "watchpoint stops with untestable local expression"
+@
+
+
+1.6
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@d20 1
+a20 3
+set testfile "watch-cond"
+set srcfile ${testfile}.c
+set binfile ${objdir}/${subdir}/${testfile}
+@
+
+
+1.5
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d1 1
+a1 1
+# Copyright 2010-2012 Free Software Foundation, Inc.
+@
+
+
+1.4
+log
+@run copyright.sh for 2011.
+@
+text
+@d1 1
+a1 1
+# Copyright 2010, 2011 Free Software Foundation, Inc.
+@
+
+
+1.4.4.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d1 1
+a1 1
+# Copyright 2010-2012 Free Software Foundation, Inc.
+@
+
+
+1.3
+log
+@	* gdb.base/gdb11531.exp: Respect gdb,no_hardware_watchpoints flag.
+	* gdb.base/watch-cond.exp: Likewise.
+	* gdb.python/py-breakpoint.exp: Likewise.
+@
+text
+@d1 1
+a1 1
+# Copyright 2010 Free Software Foundation, Inc.
+@
+
+
+1.2
+log
+@2010-06-01  Michael Snyder  <msnyder@@vmware.com>
+
+	* gdb.base/arithmet.exp: Use gdb_test_no_output.
+	* gdb.base/arrayidx.exp: Ditto.
+	* gdb.base/attach.exp: Ditto.
+	* gdb.base/auxv.exp: Ditto.
+	* gdb.base/bigcre.exp: Ditto.
+	* gdb.base/break-always.exp: Ditto.
+	* gdb.base/break-interp.exp: Ditto.
+	* gdb.base/break.exp: Ditto.
+	* gdb.base/breakpoint-shadow.exp: Ditto.
+	* gdb.base/call-ar-st.exp: Ditto.
+	* gdb.base/call-sc.exp: Ditto.
+	* gdb.base/call-signal-resume.exp: Ditto.
+	* gdb.base/callfuncs.exp: Ditto.
+	* gdb.base/catch-syscall.exp: Ditto.
+	* gdb.base/charset.exp: Ditto.
+	* gdb.base/code-expr.exp: Ditto.
+	* gdb.base/commands.exp: Ditto.
+	* gdb.base/cond-expr.exp: Ditto.
+	* gdb.base/condbreak.exp: Ditto.
+	* gdb.base/cursal.exp: Ditto.
+	* gdb.base/cvexpr.exp: Ditto.
+	* gdb.base/default.exp: Ditto.
+	* gdb.base/del.exp: Ditto.
+	* gdb.base/detach.exp: Ditto.
+	* gdb.base/display.exp: Ditto.
+	* gdb.base/ena-dis-br.exp: Ditto.
+	* gdb.base/eval-skip.exp: Ditto.
+	* gdb.base/foll-fork.exp: Ditto.
+	* gdb.base/foll-vfork.exp: Ditto.
+	* gdb.base/frame-args.exp: Ditto.
+	* gdb.base/funcargs.exp: Ditto.
+	* gdb.base/gcore-buffer-overflow.exp: Ditto.
+	* gdb.base/gdbvars.exp: Ditto.
+	* gdb.base/help.exp: Ditto.
+	* gdb.base/ifelse.exp: Ditto.
+	* gdb.base/included.exp: Ditto.
+	* gdb.base/list.exp: Ditto.
+	* gdb.base/macscp.exp: Ditto.
+	* gdb.base/maint.exp: Ditto.
+	* gdb.base/multi-fork.exp: Ditto.
+	* gdb.base/overlays.exp: Ditto.
+	* gdb.base/page.exp: Ditto.
+	* gdb.base/pending.exp: Ditto.
+	* gdb.base/pointers.exp: Ditto.
+	* gdb.base/pr11022.exp: Ditto.
+	* gdb.base/prelink.exp: Ditto.
+	* gdb.base/printcmds.exp: Ditto.
+	* gdb.base/psymtab.exp: Ditto.
+	* gdb.base/randomize.exp: Ditto.
+	* gdb.base/relational.exp: Ditto.
+	* gdb.base/relocate.exp: Ditto.
+	* gdb.base/remote.exp: Ditto.
+	* gdb.base/sepdebug.exp: Ditto.
+	* gdb.base/set-lang-auto.exp: Ditto.
+	* gdb.base/setshow.exp: Ditto.
+	* gdb.base/setvar.exp: Ditto.
+	* gdb.base/signals.exp: Ditto.
+	* gdb.base/signull.exp: Ditto.
+	* gdb.base/sigstep.exp: Ditto.
+	* gdb.base/sizeof.exp: Ditto.
+	* gdb.base/solib-disc.exp: Ditto.
+	* gdb.base/store.exp: Ditto.
+	* gdb.base/structs.exp: Ditto.
+	* gdb.base/structs2.exp: Ditto.
+	* gdb.base/subst.exp: Ditto.
+	* gdb.base/term.exp: Ditto.
+	* gdb.base/trace-commands.exp: Ditto.
+	* gdb.base/unwindonsignal.exp: Ditto.
+	* gdb.base/valgrind-db-attach.exp: Ditto.
+	* gdb.base/varargs.exp: Ditto.
+	* gdb.base/watch-cond.exp: Ditto.
+	* gdb.base/watch_thread_num.exp: Ditto.
+	* gdb.base/watchpoint-cond-gone.exp: Ditto.
+	* gdb.base/watchpoint.exp: Ditto.
+	* gdb.base/whatis-exp.exp: Ditto.
+@
+text
+@d29 5
+d49 5
+d69 5
+@
+
+
+1.1
+log
+@	gdb/
+	* breakpoint.c (condition_command): Handle watchpoint conditions.
+	(is_hardware_watchpoint): Add comment.
+	(is_watchpoint): New.
+	(update_watchpoint): Don't reparse the watchpoint's condition
+	unless necessary.
+	(WP_IGNORE): New.
+	(watchpoint_check): Use it.
+	(bpstat_check_watchpoint): Handle it.
+	(bpstat_check_breakpoint_conditions): Evaluate watchpoint local
+	conditions in a frame where it makes sense.
+	(watch_command_1): Store the innermost block of the condition
+	expression.
+	(delete_breakpoint): Delete the watchpoint condition expression.
+	* breakpoint.h (struct bp_location) <cond>: Update comment.
+	(struct breakpoint): New fields `cond_exp' and
+	`cond_exp_valid_block'.
+
+	gdb/testsuite/
+	* gdb.base/watch-cond.c, gdb.base/watch-cond.exp: New.
+@
+text
+@d72 1
+a72 2
+gdb_test "condition 2 *foo > 10" \
+    "" \
+@
+

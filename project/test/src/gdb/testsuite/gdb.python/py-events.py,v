@@ -1,0 +1,512 @@
+head	1.10;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.8
+	gdb_7_6-2013-04-26-release:1.8
+	gdb_7_6-branch:1.8.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.8
+	gdb_7_5_1-2012-11-29-release:1.6
+	gdb_7_5-2012-08-17-release:1.6
+	gdb_7_5-branch:1.6.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.6
+	gdb_7_4_1-2012-04-26-release:1.4.2.1
+	gdb_7_4-2012-01-24-release:1.4.2.1
+	gdb_7_4-branch:1.4.0.2
+	gdb_7_4-2011-12-13-branchpoint:1.4
+	gdb_7_3_1-2011-09-04-release:1.1
+	gdb_7_3-2011-07-26-release:1.1
+	gdb_7_3-branch:1.1.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.1;
+locks; strict;
+comment	@# @;
+
+
+1.10
+date	2013.09.12.22.39.26;	author devans;	state Exp;
+branches;
+next	1.9;
+
+1.9
+date	2013.09.04.23.49.21;	author devans;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2013.01.01.06.41.26;	author brobecke;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2012.12.10.21.22.21;	author pkoning;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2012.02.17.19.24.27;	author tromey;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2012.01.04.08.27.49;	author brobecke;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2011.10.07.07.38.30;	author kpouget;	state Exp;
+branches
+	1.4.2.1;
+next	1.3;
+
+1.3
+date	2011.10.04.08.04.13;	author kpouget;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2011.09.15.12.27.20;	author kpouget;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2011.02.05.05.27.23;	author teawater;	state Exp;
+branches;
+next	;
+
+1.4.2.1
+date	2012.01.06.04.44.11;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.10
+log
+@	* gdb.python/py-events.py (new_objfile_handler): Remove accidentally
+	added code to print event.inferior.
+@
+text
+@# Copyright (C) 2010-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# This file is part of the GDB testsuite.  It tests python pretty
+# printers.
+import gdb
+
+def signal_stop_handler (event):
+    if (isinstance (event, gdb.StopEvent)):
+        print ("event type: stop")
+    if (isinstance (event, gdb.SignalEvent)):
+        print ("stop reason: signal")
+        print ("stop signal: %s" % (event.stop_signal))
+        if ( event.inferior_thread is not None) :
+            print ("thread num: %s" % (event.inferior_thread.num))
+
+def breakpoint_stop_handler (event):
+    if (isinstance (event, gdb.StopEvent)):
+        print ("event type: stop")
+    if (isinstance (event, gdb.BreakpointEvent)):
+        print ("stop reason: breakpoint")
+        print ("first breakpoint number: %s" % (event.breakpoint.number))
+        for bp in event.breakpoints:
+        	print ("breakpoint number: %s" % (bp.number))
+        if ( event.inferior_thread is not None) :
+            print ("thread num: %s" % (event.inferior_thread.num))
+        else:
+            print ("all threads stopped")
+
+def exit_handler (event):
+    assert (isinstance (event, gdb.ExitedEvent))
+    print ("event type: exit")
+    print ("exit code: %d" % (event.exit_code))
+    print ("exit inf: %d" % (event.inferior.num))
+    print ("dir ok: %s" % str('exit_code' in dir(event)))
+
+def continue_handler (event):
+    assert (isinstance (event, gdb.ContinueEvent))
+    print ("event type: continue")
+    if ( event.inferior_thread is not None) :
+        print ("thread num: %s" % (event.inferior_thread.num))
+
+def new_objfile_handler (event):
+    assert (isinstance (event, gdb.NewObjFileEvent))
+    print ("event type: new_objfile")
+    print ("new objfile name: %s" % (event.new_objfile.filename))
+
+class test_events (gdb.Command):
+    """Test events."""
+
+    def __init__ (self):
+        gdb.Command.__init__ (self, "test-events", gdb.COMMAND_STACK)
+
+    def invoke (self, arg, from_tty):
+        gdb.events.stop.connect (signal_stop_handler)
+        gdb.events.stop.connect (breakpoint_stop_handler)
+        gdb.events.exited.connect (exit_handler)
+        gdb.events.cont.connect (continue_handler)
+        print ("Event testers registered.")
+
+test_events ()
+
+class test_newobj_events (gdb.Command):
+    """NewObj events."""
+
+    def __init__ (self):
+        gdb.Command.__init__ (self, "test-objfile-events", gdb.COMMAND_STACK)
+
+    def invoke (self, arg, from_tty):
+        gdb.events.new_objfile.connect (new_objfile_handler)
+        print ("Object file events registered.")
+
+test_newobj_events ()
+@
+
+
+1.9
+log
+@	* gdb.python/py-events.py (exit_handler): Verify we get the expected
+	event.
+	(continue_handler, new_objfile_handler): Ditto.
+	(test_events): Rename command to "test-events".
+	(test_newobj_events): Rename command to "test-objfile-events".
+	* gdb.python/py-events.exp: Update.
+	* gdb.python/py-evsignal.exp: Update.
+	* gdb.python/py-evthreads.exp: Update.
+@
+text
+@a58 1
+    print ("inferior number: %d" % (event.inferior.num))
+@
+
+
+1.8
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@d43 2
+a44 2
+    if (isinstance (event, gdb.ExitedEvent)):
+        print ("event type: exit")
+d50 2
+a51 2
+    if (isinstance (event, gdb.ContinueEvent)):
+        print ("event type: continue")
+d56 4
+a59 6
+    if (isinstance (event, gdb.NewObjFileEvent)):
+        print ("event type: new_objfile")
+    if (event.new_objfile is not None):
+    	print ("new objfile name: %s" % (event.new_objfile.filename))
+    else:
+        print ("new objfile is None")
+d65 1
+a65 1
+        gdb.Command.__init__ (self, "test_events", gdb.COMMAND_STACK)
+d80 1
+a80 1
+        gdb.Command.__init__ (self, "test_newobj_events", gdb.COMMAND_STACK)
+d84 1
+a84 1
+        print ("New ObjectFile Event tester registered.")
+@
+
+
+1.7
+log
+@2012-12-10  Paul Koning  <paul_koning@@dell.com>
+
+	* gdb.base/charset.exp: Change print syntax for Python 3
+	compatibility.
+	* gdb.python/py-block.exp: Ditto.
+	* gdb.python/py-breakpoint.exp: Ditto.
+	* gdb.python/py-cmd.exp: Ditto.
+	* gdb.python/py-events.py: Ditto.
+	* gdb.python/py-finish-breakpoint.py: Ditto.
+	* gdb.python/py-finish-breakpoint2.exp: Ditto.
+	* gdb.python/py-finish-breakpoint2.py: Ditto.
+	* gdb.python/py-frame-inline.exp: Ditto.
+	* gdb.python/py-frame.exp: Ditto.
+	* gdb.python/py-infthread.exp: Ditto.
+	* gdb.python/py-objfile.exp: Ditto.
+	* gdb.python/py-parameter.exp: Ditto.
+	* gdb.python/py-progspace.exp: Ditto.
+	* gdb.python/py-prompt.exp: Ditto.
+	* gdb.python/py-symbol.exp: Ditto.
+	* gdb.python/py-symtab.exp: Ditto.
+	* gdb.python/py-template.exp: Ditto.
+	* gdb.python/py-value-cc.exp: Ditto.
+	* gdb.python/python.exp: Ditto.
+	* gdb.python/source2.py: Ditto.
+	* gdb.python/lib-types.exp: Change print syntax for Python 3
+	compatibility.
+	Use sorted() function rather than sort() method.
+	Accept either int or long values for enum values.
+	* gdb.python/py-events.exp: Use exec(open(...).read()) instead of
+	execfile for Python 3 compatibility.
+	* gdb.python/py-evsignal.exp: Ditto.
+	* gdb.python/py-evthreads.exp: Ditto.
+	* gdb.python/py-mi.exp: Ditto.
+	* gdb.python/py-pp-maint.exp: Ditto.
+	* gdb.python/py-prettyprint.exp: Ditto.
+	* gdb.python/py-finish-breakpoint.exp: Change print syntax for
+	Python 3 compatibility.
+	Skip tests for Python 2.4.
+	* gdb.python/py-inferior.exp: Change print syntax for
+	Python 3 compatibility.
+	Use byte string rather than character string in memory write test
+	if Python 3.
+	* gdb.python/py-pp-maint.py: Change class declarations to "new
+	class" syntax.
+	* gdb.python/py-prettyprint.py: Change iterator class to generator
+	function for Python 3 compatibility.
+	Make all classes "new style".
+	Fix indentation issue and stray semicolon.
+	* gdb.python/py-shared.expChange print syntax for Python 3
+	compatibility.
+	Define "long" if Python 3.
+	* gdb.python/py-type.exp: Change print syntax for Python 3
+	compatibility.
+	Accept either int or long values for enum values.
+	* gdb.python/py-value.exp: Change print syntax for Python 3
+	compatibility.
+	Skip "long" and "unicode" tests if Python 3.
+	Accept either "type" or "class" in type checks.
+	* lib/gdb.exp (gdb_py_is_py3k): New flag set if Python 3.
+	(gdb_py_is_py24): New flag set if Python 2.4 or 2.5.
+@
+text
+@d1 1
+a1 1
+# Copyright (C) 2010-2012 Free Software Foundation, Inc.
+@
+
+
+1.6
+log
+@	PR python/12070:
+	* python/py-event.c (event_object_getset): New global.
+	(event_object_type): Reference it.
+	* python/py-type.c (field_object_getset): New global.
+	(field_object_type): Reference it.
+	* python/python-internal.h (gdb_py_generic_dict): Declare.
+	* python/py-utils.c (gdb_py_generic_dict): New function.
+testsuite/gdb
+	* gdb.python/py-events.py (exit_handler): Add test for 'dir'.
+	* gdb.python/py-events.exp: Check 'dir' output.
+	* gdb.python/py-type.exp (test_fields): Add test for 'dir'.
+@
+text
+@d22 1
+a22 1
+        print "event type: stop"
+d24 2
+a25 2
+        print "stop reason: signal"
+        print "stop signal: %s" % (event.stop_signal)
+d27 1
+a27 1
+            print "thread num: %s" % (event.inferior_thread.num);
+d31 1
+a31 1
+        print "event type: stop"
+d33 2
+a34 2
+        print "stop reason: breakpoint"
+        print "first breakpoint number: %s" % (event.breakpoint.number)
+d36 1
+a36 1
+        	print "breakpoint number: %s" % (bp.number)
+d38 1
+a38 1
+            print "thread num: %s" % (event.inferior_thread.num);
+d40 1
+a40 1
+            print "all threads stopped"
+d44 4
+a47 4
+        print "event type: exit"
+    print "exit code: %d" % (event.exit_code)
+    print "exit inf: %d" % (event.inferior.num)
+    print "dir ok: %s" % str('exit_code' in dir(event))
+d51 1
+a51 1
+        print "event type: continue"
+d53 1
+a53 1
+        print "thread num: %s" % (event.inferior_thread.num);
+d57 1
+a57 1
+        print "event type: new_objfile"
+d59 1
+a59 1
+    	print "new objfile name: %s" % (event.new_objfile.filename)
+d61 1
+a61 1
+        print "new objfile is None"
+d74 1
+a74 1
+        print "Event testers registered."
+d86 1
+a86 1
+        print "New ObjectFile Event tester registered."
+@
+
+
+1.5
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d47 1
+@
+
+
+1.4
+log
+@	Allow Python notification of new object-file loadings.
+
+	* Makefile.in (SUBDIR_PYTHON_SRCS): Add py-newobjfilevent.c.
+	(SUBDIR_PYTHON_OBS): Add py-newobjfileevent.o.
+	Add build rule for this file.
+	* python/py-event.h (emit_new_objfile_event): New prototype.
+	(newobjfile): New Python event emitter.
+	* python/py-evts.c (gdbpy_initialize_py_events): Add new_objfile to
+	Python event registry.
+	* python/py-inferior.c: Include objfiles.h
+	(python_new_objfile): New function.
+	(gdbpy_initialize_inferior): Add python_new_objfile to the new objfile
+	observers.
+	* python/py-newobjfileevent.c: New file.
+	* python-internal.h (gdbpy_initialize_new_objfile_event): New
+	prototype.
+	* python/python.c (_initialize_python): Add
+	gdbpy_initialize_new_objfile_event call.
+	* NEWS: Add item for new Python event "gdb.newobjfile"
+
+2011-10-06  Kevin Pouget  <kevin.pouget@@st.com>
+
+	Allow Python notification of new object-file loadings.
+	* gdb.texinfo (Events In Python): Document `gdb.NewObjFileEvent'
+	event type.
+
+2011-10-06  Kevin Pouget  <kevin.pouget@@st.com>
+
+	Allow Python notification of new object-file loadings.
+	* gdb.python/py-events.exp: Test newobjfile event.
+	* gdb.python/py-events.py: Register newobjfile callback.
+	* gdb.python/py-events.c: Add call to shared library
+	* gdb.python/py-events-shlib.c: New file.
+@
+text
+@d1 1
+a1 1
+# Copyright (C) 2010, 2011 Free Software Foundation, Inc.
+@
+
+
+1.4.2.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d1 1
+a1 1
+# Copyright (C) 2010-2012 Free Software Foundation, Inc.
+@
+
+
+1.3
+log
+@2011-10-04  Kevin Pouget  <kevin.pouget@@st.com>
+
+       PR python/12691: Add the inferior to Python exited event
+       * python/py-exitedevent.c (create_exited_event_object): Add inferior
+       to exited_event.
+       * python/py-event.h (emit_exited_event): Likewise
+       * python/-inferior.c (python_inferior_exit): Likewise
+
+ 2011-10-04  Kevin Pouget  <kevin.pouget@@st.com>
+
+       PR python/12691: Add the inferior to Python exited event
+       * gdb.python/py-events.exp: Test the inferior attribute of exited
+       event with a fork.
+       * gdb.python/py-events.py: Print inferior number on exit.
+       * gdb.python/py-events.c: Fork the inferior.
+
+ 2011-10-04  Kevin Pouget  <kevin.pouget@@st.com>
+
+       PR python/12691: Add the inferior to Python exited event
+       * gdb.texinfo (Events In Python): Describe exited inferior attribute.
+@
+text
+@d54 8
+d76 12
+@
+
+
+1.2
+log
+@2011-09-15  Kevin Pouget  <kevin.pouget@@st.com>
+
+	Handle multiple breakpoint hits in Python interface:
+	* python/py-bpevent.c (create_breakpoint_event_object): Rename C/Python
+	variable to breakpoints.
+	* python/py-stopevent.c (emit_stop_event): Return a Python tuple of
+	bps instead of single breakpoint. Fix some space typos.
+	* python/py-stopevent.c (create_breakpoint_event_object): Rename
+	variable to breakpoints.
+
+testsuite:
+	* gdb.python/py-events.exp: Set a duplicate breakpoint and check its
+	presence.
+	* gdb.python/py-events.py (breakpoint_stop_handler): Browse all the
+	breakpoint hits.
+
+doc:
+	* gdb.texinfo (Events In Python): New function documentation:
+	gdb.BreakpointEvent.breakpoints. Indicate that
+	gdb.BreakpointEvent.breakpoint is now deprecated.
+@
+text
+@d46 1
+@
+
+
+1.1
+log
+@Add the file that prev commit forget.
+@
+text
+@d34 3
+a36 1
+        print "breakpoint number: %s" % (event.breakpoint.number)
+@
+

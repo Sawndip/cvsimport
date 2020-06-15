@@ -1,0 +1,528 @@
+head	1.9;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.7
+	gdb_7_6-2013-04-26-release:1.7
+	gdb_7_6-branch:1.7.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.7
+	gdb_7_5_1-2012-11-29-release:1.6
+	gdb_7_5-2012-08-17-release:1.6
+	gdb_7_5-branch:1.6.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.6
+	gdb_7_4_1-2012-04-26-release:1.5.4.1
+	gdb_7_4-2012-01-24-release:1.5.4.1
+	gdb_7_4-branch:1.5.0.4
+	gdb_7_4-2011-12-13-branchpoint:1.5
+	gdb_7_3_1-2011-09-04-release:1.5
+	gdb_7_3-2011-07-26-release:1.5
+	gdb_7_3-branch:1.5.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.5
+	gdb_7_2-2010-09-02-release:1.3
+	gdb_7_2-branch:1.3.0.4
+	gdb_7_2-2010-07-07-branchpoint:1.3
+	gdb_7_1-2010-03-18-release:1.3
+	gdb_7_1-branch:1.3.0.2
+	gdb_7_1-2010-02-18-branchpoint:1.3
+	gdb_7_0_1-2009-12-22-release:1.1
+	gdb_7_0-2009-10-06-release:1.1
+	gdb_7_0-branch:1.1.0.2
+	gdb_7_0-2009-09-16-branchpoint:1.1;
+locks; strict;
+comment	@# @;
+
+
+1.9
+date	2013.08.22.13.46.21;	author tromey;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2013.08.13.15.55.51;	author tromey;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2013.01.01.06.41.28;	author brobecke;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2012.01.04.08.27.56;	author brobecke;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2011.03.07.16.03.04;	author tromey;	state Exp;
+branches
+	1.5.4.1;
+next	1.4;
+
+1.4
+date	2011.01.01.15.33.51;	author brobecke;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2010.01.01.07.32.07;	author brobecke;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2009.11.12.19.59.28;	author drow;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2009.07.31.15.39.24;	author uweigand;	state Exp;
+branches;
+next	;
+
+1.5.4.1
+date	2012.01.06.04.54.30;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.9
+log
+@use standard_temp_file in another caching proc
+
+In an earlier patch I forgot to change the caching proc in cell.exp to
+use standard_temp_file.  This fixes the oversight.
+
+Tested on x86-64 Fedora 18.
+
+       * lib/cell.exp (skip_cell_tests): Use standard_temp_file.
+@
+text
+@# Copyright 2009-2013 Free Software Foundation, Inc.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+# Contributed by Markus Deuling <deuling@@de.ibm.com>.
+#
+# Support library for testing the combined debugger for Linux
+# on the Cell Broadband Engine.
+
+# Compile SPU objects.
+proc gdb_compile_cell_spu {source dest type options} {
+  global board
+
+  # Save and unset multilib flags; these are not appropriate
+  # for the SPU compiler.
+  set board [target_info name]
+  set save_multilib_flag [board_info $board multilib_flags]
+  unset_board_info "multilib_flags"
+
+  set options_spu [concat $options [list compiler=spu-gcc]]
+  set ccout [gdb_compile $source $dest $type $options_spu]
+
+  set_board_info multilib_flags $save_multilib_flag
+  return $ccout
+}
+
+# Compile PPU objects.  This is just like gdb_compile_pthreads, except that we
+# always add the libspe2 library for compiling Cell/B.E. programs.
+proc gdb_compile_cell_ppu {source dest type options} {
+    # We do not need to try multiple names for the pthread library
+    # -lpthread works on all Cell/B.E. systems
+    set lib "-lspe2 -lpthread"
+    set options_ppu [concat $options [list libs=$lib]]
+    return [gdb_compile $source $dest $type $options_ppu]
+}
+
+# Embed SPU executable into a PPU object.
+proc gdb_cell_embedspu {source dest options} {
+    global CC_FOR_TARGET
+
+    if [info exists CC_FOR_TARGET] {
+        set compiler $CC_FOR_TARGET
+    } else {
+	set compiler [board_info [target_info name] compiler]
+    }
+
+    # We assume the PPU compiler is called gcc or ppu-gcc,
+    # and find the appropriate embedspu based on that.
+    regsub gcc "$compiler" embedspu embedspu
+
+    # Determine default embedded symbol name from source filename.
+    set path [split "$source" /]
+    set filename [lindex $path [expr [llength $path] - 1]]
+    regsub -all -- "\[-\.\]" "$filename" "_" symbol
+
+    set options_embed [concat $options [list compiler=$embedspu]]
+    return [gdb_compile "$symbol $source $dest" "" none $options_embed]
+}
+
+# Run a test on the target to see if it supports Cell/B.E. hardware.
+# Return 0 if so, 1 if it does not.
+gdb_caching_proc skip_cell_tests {
+    global srcdir subdir gdb_prompt inferior_exited_re
+
+    set me "skip_cell_tests"
+
+    # Set up, compile, and execute a combined Cell/B.E. test program.
+    # Include the current process ID in the file names to prevent conflicts
+    # with invocations for multiple testsuites.
+    set src [standard_temp_file cell[pid].c]
+    set exe [standard_temp_file cell[pid].x]
+    set src_spu [standard_temp_file cell[pid]-spu.c]
+    set exe_spu [standard_temp_file cell[pid]-spu.x]
+
+    set f [open $src "w"]
+    puts $f "#include <libspe2.h>"
+    puts $f "extern spe_program_handle_t cell[pid]_spu_x;"
+    puts $f "int main (void) {"
+    puts $f "unsigned int entry = SPE_DEFAULT_ENTRY;"
+    puts $f "spe_context_ptr_t ctx = spe_context_create (0, NULL);"
+    puts $f "spe_program_load (ctx, &cell[pid]_spu_x);"
+    puts $f "return spe_context_run (ctx, &entry, 0, NULL, NULL, NULL); }"
+    close $f
+
+    set f [open $src_spu "w"]
+    puts $f "int main (void) { return 0; }"
+    close $f
+
+    verbose "$me:  compiling testfile $src" 2
+    set compile_flags {debug nowarnings quiet}
+
+    set skip 0
+    if { [gdb_compile_cell_spu $src_spu $exe_spu executable $compile_flags] != "" } {
+        verbose "$me:  compiling spu binary failed, returning 1" 2
+	set skip 1
+    }
+    if { ! $skip && [gdb_cell_embedspu $exe_spu $exe_spu-embed.o $compile_flags]  != "" } {
+        verbose "$me:  embedding spu binary failed, returning 1" 2
+	set skip 1
+    }
+    if { ! $skip && [gdb_compile_cell_ppu [list $src $exe_spu-embed.o] $exe executable $compile_flags] != "" } {
+        verbose "$me:  compiling ppu binary failed, returning 1" 2
+	set skip 1
+    }
+    file delete $src
+    file delete $src_spu
+    file delete $exe_spu
+    file delete $exe_spu-embed.o
+
+    if { $skip } {
+        return 1
+    }
+
+    # Compilation succeeded so now run it via gdb.
+
+    gdb_exit
+    gdb_start
+    gdb_reinitialize_dir $srcdir/$subdir
+    gdb_load "$exe"
+    gdb_run_cmd
+    gdb_expect {
+        -re ".*$inferior_exited_re normally.*${gdb_prompt} $" {
+            verbose -log "\n$me: Cell/B.E. hardware detected"
+            set result 0
+        }
+        -re ".*$inferior_exited_re with code.*${gdb_prompt} $" {
+            verbose -log "\n$me: Cell/B.E. hardware not detected"
+            set result 1
+        }
+        default {
+            verbose -log "\n$me Cell/B.E. hardware not detected (default case)"
+            set result 1
+        }
+    }
+    gdb_exit
+    remote_file build delete $exe
+
+    verbose "$me:  returning $result" 2
+    return $result
+}
+
+# Delete all breakpoints and stop on the next new SPU thread
+proc cont_spu_main { } {
+  delete_breakpoints
+  gdb_test "set spu stop-on-load on"
+  gdb_test "continue" \
+           "Continuing.*Temporary breakpoint .*main .*" \
+           "continue to SPU main"
+}
+
+# Continue to MARKER
+proc c_to { marker srcfile } {
+  set line [gdb_get_line_number $marker $srcfile]
+  gdb_test "break $line" \
+	   "Breakpoint.*at.*file.*$srcfile.*line $line.*" \
+	   "break $line"
+  gdb_test "continue" \
+	   "Continuing.*Breakpoint.*at.*$srcfile.*$line.*" \
+	   "continue to $line"
+}
+
+# Check if the current thread has SPU architecture
+proc check_spu_arch { msg } {
+  if { $msg == "" } {
+    set msg "spu architecture is spu256K"
+  }
+  gdb_test "show architecture" \
+	   "The target architecture is set automatically.*currently spu:256K.*" \
+	   $msg
+}
+@
+
+
+1.8
+log
+@add caching procs to test suite
+
+In the fully parallel mode, each .exp file can be run in parallel (at
+least conceptually -- the actual split may not be so severe).  This
+means that procs that compute a result and cache it are not going to
+function very well.  The test they run will be invoked over and over.
+
+This patch introduces a generic caching mechanism and changes various
+result-caching procs to use it.  This is a cleanup to introduce the
+basic change; the results aren't written to disk yet.
+
+A caching proc is defined using gdb_caching_proc, which works like
+"proc", except that it caches the result of the body.
+
+	* lib/cache.exp: New file.
+	* lib/cell.exp (skip_cell_tests): Use gdb_caching_proc.
+	* lib/gdb.exp: Load cache.exp.
+	(support_complex_tests, is_ilp32_target, is_lp64_target)
+	(is_amd64_regs_target, skip_altivec_tests, skip_vsx_tests)
+	(gdb_skip_xml_test): Use gdb_caching_proc.
+	* lib/opencl.exp (skip_opencl_tests): Use gdb_caching_proc.
+@
+text
+@d81 4
+a84 4
+    set src cell[pid].c
+    set exe cell[pid].x
+    set src_spu cell[pid]-spu.c
+    set exe_spu cell[pid]-spu.x
+@
+
+
+1.7
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@d73 1
+a73 2
+proc skip_cell_tests {} {
+    global skip_cell_tests_saved
+a75 1
+    # Use the cached value, if it exists.
+a76 4
+    if [info exists skip_cell_tests_saved] {
+        verbose "$me:  returning saved $skip_cell_tests_saved" 2
+        return $skip_cell_tests_saved
+    }
+d122 1
+a122 1
+        return [set skip_cell_tests_saved 1]
+d135 1
+a135 1
+            set skip_cell_tests_saved 0
+d139 1
+a139 1
+            set skip_cell_tests_saved 1
+d143 1
+a143 1
+            set skip_cell_tests_saved 1
+d149 2
+a150 2
+    verbose "$me:  returning $skip_cell_tests_saved" 2
+    return $skip_cell_tests_saved
+@
+
+
+1.6
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d1 1
+a1 1
+# Copyright 2009-2012 Free Software Foundation, Inc.
+@
+
+
+1.5
+log
+@gdb
+	* infrun.c (print_exited_reason): Include inferior id and pid in
+	message.
+gdb/testsuite
+	* lib/opencl.exp (skip_opencl_tests): Update for exit message
+	change.
+	* lib/mi-support.exp (mi_gdb_test): Update for exit message
+	change.
+	* lib/gdb.exp (gdb_test_multiple): Update comment.  Update for
+	exit message change.
+	(skip_altivec_tests): Update for exit message change.
+	(skip_vsx_tests): Likewise.
+	(gdb_continue_to_end): Likewise.  Add 'command' argument.
+	* lib/cell.exp (skip_cell_tests): Update for exit message change.
+	* gdb.threads/tls.exp: Update for exit message change.
+	* gdb.threads/thread-unwindonsignal.exp: Use
+	gdb_continue_to_end.
+	* gdb.threads/step.exp (step_it): Update for exit message change.
+	(continue_all): Likewise.
+	* gdb.threads/print-threads.exp (test_all_threads): Update for
+	exit message change.
+	* gdb.threads/interrupted-hand-call.exp: Use
+	gdb_continue_to_end.
+	* gdb.threads/execl.exp: Use gdb_continue_to_end.
+	* gdb.python/py-prettyprint.exp (run_lang_tests): Use
+	gdb_continue_to_end.
+	* gdb.hp/gdb.objdbg/objdbg02.exp: Use gdb_continue_to_end.
+	* gdb.hp/gdb.objdbg/objdbg01.exp: Use gdb_continue_to_end.
+	* gdb.hp/gdb.defects/solib-d.exp: Update for exit message change.
+	* gdb.cp/method.exp: Update for exit message change.
+	* gdb.cp/mb-templates.exp: Update for exit message change.
+	* gdb.cp/mb-inline.exp: Use gdb_continue_to_end.
+	* gdb.cp/annota3.exp: Update for exit message change.
+	* gdb.cp/annota2.exp: Update for exit message change.
+	* gdb.cell/fork.exp: Use gdb_continue_to_end.
+	* gdb.base/term.exp: Update for exit message change.
+	* gdb.base/step-test.exp (test_i): Update for exit message change.
+	* gdb.base/sigstep.exp (advance): Update for exit message change.
+	(advancei): Likewise.
+	* gdb.base/siginfo.exp: Update for exit message change.
+	* gdb.base/shlib-call.exp: Use gdb_continue_to_end.
+	* gdb.base/reread.exp: Use gdb_continue_to_end.
+	* gdb.base/langs.exp: Use gdb_continue_to_end.
+	* gdb.base/interrupt.exp: Update for exit message change.
+	* gdb.base/gdb1555.exp: Update for exit message change.
+	* gdb.base/exe-lock.exp: Use gdb_continue_to_end.
+	* gdb.base/ending-run.exp: Update for exit message change.
+	* gdb.base/chng-syms.exp: Update for exit message change.
+	* gdb.base/checkpoint.exp: Update for exit message change.
+	* gdb.base/catch-syscall.exp (check_for_program_end): Use
+	gdb_continue_to_end.
+	(test_catch_syscall_with_wrong_args): Likewise.
+	* gdb.base/call-signal-resume.exp: Use gdb_continue_to_end.
+	* gdb.base/break-interp.exp (test_ld): Update for exit message
+	change.
+	* gdb.base/bang.exp: Update for exit message change.
+	* gdb.base/attach.exp (do_attach_tests): Use gdb_continue_to_end.
+	(do_call_attach_tests): Likewise.
+	* gdb.base/a2-run.exp: Update for exit message change.
+	* gdb.arch/ppc-dfp.exp: Update for exit message change.
+	* gdb.ada/tasks.exp: Use gdb_continue_to_end.
+	* gdb.ada/catch_ex.exp: Use gdb_continue_to_end.
+@
+text
+@d1 1
+a1 1
+# Copyright 2009, 2010, 2011 Free Software Foundation, Inc.
+@
+
+
+1.5.4.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d1 1
+a1 1
+# Copyright 2009-2012 Free Software Foundation, Inc.
+@
+
+
+1.4
+log
+@run copyright.sh for 2011.
+@
+text
+@d75 1
+a75 1
+    global srcdir subdir gdb_prompt
+d139 1
+a139 1
+        -re ".*Program exited normally.*${gdb_prompt} $" {
+d143 1
+a143 1
+        -re ".*Program exited with code.*${gdb_prompt} $" {
+@
+
+
+1.3
+log
+@Update copyright year in most headers.
+
+Automatic update by copyright.sh.
+@
+text
+@d1 1
+a1 1
+# Copyright 2009, 2010 Free Software Foundation, Inc.
+@
+
+
+1.2
+log
+@	testsuite/
+	* lib/cell.exp (skip_cell_tests): Clean up test files before
+	returning.
+@
+text
+@d1 1
+a1 1
+# Copyright 2009 Free Software Foundation, Inc.
+@
+
+
+1.1
+log
+@Fix previous check-in.
+@
+text
+@d109 1
+d112 1
+a112 1
+        return [set skip_cell_tests_saved 1]
+d114 1
+a114 1
+    if { [gdb_cell_embedspu $exe_spu $exe_spu-embed.o $compile_flags]  != "" } {
+d116 1
+a116 1
+        return [set skip_cell_tests_saved 1]
+d118 1
+a118 1
+    if { [gdb_compile_cell_ppu [list $src $exe_spu-embed.o] $exe executable $compile_flags] != "" } {
+d120 1
+a120 1
+        return [set skip_cell_tests_saved 1]
+d127 4
+@
+

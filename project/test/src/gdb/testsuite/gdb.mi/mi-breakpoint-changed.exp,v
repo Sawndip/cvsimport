@@ -1,0 +1,640 @@
+head	1.8;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.5.2.1
+	gdb_7_6-2013-04-26-release:1.5
+	gdb_7_6-branch:1.5.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.5;
+locks; strict;
+comment	@# @;
+
+
+1.8
+date	2013.10.17.22.02.29;	author macro;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2013.06.25.11.37.48;	author teawater;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2013.03.15.01.41.29;	author qiyao;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2013.01.11.00.31.58;	author qiyao;	state Exp;
+branches
+	1.5.2.1;
+next	1.4;
+
+1.4
+date	2013.01.01.06.41.24;	author brobecke;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2012.11.03.12.14.47;	author qiyao;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2012.10.12.00.02.23;	author qiyao;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2012.09.29.00.03.56;	author qiyao;	state Exp;
+branches;
+next	;
+
+1.5.2.1
+date	2013.06.26.02.31.58;	author teawater;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.8
+log
+@	* gdb.mi/mi-breakpoint-changed.exp (test_insert_delete_modify):
+	Fix comment typo.
+	* lib/gdb.exp (gdb_init): Likewise.
+@
+text
+@# Copyright 2012-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+if {[skip_shlib_tests]} {
+    return 0
+}
+
+load_lib mi-support.exp
+
+standard_testfile pending.c
+set libfile1 "pendshr1"
+set libfile2 "pendshr2"
+set executable $testfile
+set libsrc1  $srcdir/$subdir/$libfile1.c
+set libsrc2  $srcdir/$subdir/$libfile2.c
+set lib_sl1  [standard_output_file pendshr1.sl]
+set lib_sl2  [standard_output_file pendshr2.sl]
+set lib_opts "debug"
+
+if { [gdb_compile_shlib $libsrc1 $lib_sl1 $lib_opts] != ""
+     || [gdb_compile_shlib $libsrc2 $lib_sl2 $lib_opts] != ""} {
+    untested "Could not compile either $libsrc1 or $libsrc2"
+    return -1
+}
+
+set MIFLAGS "-i=mi"
+
+set exec_opts [list debug shlib=$lib_sl1 shlib_load]
+if { [gdb_compile $srcdir/$subdir/$srcfile $binfile executable $exec_opts] != "" } {
+    untested "Failed to compile $srcfile"
+    return -1
+}
+
+proc test_insert_delete_modify { } {
+    global mi_gdb_prompt
+
+    gdb_exit
+    if [mi_gdb_start] {
+	continue
+    }
+
+    mi_run_to_main
+
+    mi_gdb_test "break marker" \
+	{(&.*)*.*~"Breakpoint 2 at.*\\n".*=breakpoint-created,bkpt=\{number="2",type="breakpoint".*\}.*\n\^done}
+
+    # Verify that '=breakpoint-modified' notification is correctly emitted:
+
+    # 1. when modifying command
+    send_gdb "commands\n"
+    gdb_expect {
+	-re "End with" {
+	}
+    }
+
+    send_gdb "silent\nend\n"
+    set test "change command"
+    gdb_expect {
+	-re ".*=breakpoint-modified.*${mi_gdb_prompt}$" {
+	    pass $test
+	}
+	-re ".*${mi_gdb_prompt}$" {
+	    fail $test
+	}
+	timeout {
+	    fail "$test (timeout)"
+	}
+    }
+
+    # Verify that '=breakpoint-created' notification is correctly emitted when
+    # creating any type of breakpoint.
+
+    set test "watch watch"
+    mi_gdb_test ${test} \
+	{(&.*)*.*~".*atchpoint 3: .*\\n".*=breakpoint-created,bkpt=\{number="3",type="(hw |)watchpoint".*\}.*\n\^done} \
+	$test
+    set test "trace marker"
+    mi_gdb_test $test \
+	{(&.*)*.*~"Tracepoint 4 at .*\\n".*=breakpoint-created,bkpt=\{number="4",type="tracepoint".*\}.*\n\^done} \
+	$test
+    set test "catch syscall"
+    mi_gdb_test $test \
+	{(&.*)*.*~"Catchpoint 5 .*\\n".*=breakpoint-created,bkpt=\{number="5",type="catchpoint".*\}.*\n\^done} \
+	$test
+    set test "dprintf marker, \"arg\" \""
+    mi_gdb_test $test \
+	{.*=breakpoint-created,bkpt=\{number="6",type="dprintf".*,script=\{\"printf \\\\\"arg\\\\\" \\\\\"\"\}.*\}\r\n\^done} \
+	$test
+
+    # 2. when modifying condition
+    set test "condition 2 main > 0x0"
+    mi_gdb_test $test \
+	{.*=breakpoint-modified,bkpt=\{number="2",.*,cond=\"main > 0x0\".*\}.*\n\^done} \
+	$test
+
+    # 3. when modifying enableness
+    set test "disable 3"
+    mi_gdb_test $test \
+	{.*=breakpoint-modified,bkpt=\{number="3",.*,enabled=\"n\".*\}.*\n\^done} \
+	$test
+    set test "enable 3"
+    mi_gdb_test $test \
+	{.*=breakpoint-modified,bkpt=\{number="3",.*,enabled=\"y\".*\}.*\n\^done} \
+	$test
+    # 4. when modifying ignore count.
+    set test "ignore 5 1"
+    mi_gdb_test $test \
+	{.*=breakpoint-modified,bkpt=\{number="5",.*,ignore=\"1\".*\}.*\n\^done} \
+	$test
+    # 5. when modifying pass count.
+    set test "passcount 1 4"
+    mi_gdb_test $test \
+	{.*=breakpoint-modified,bkpt=\{number="4",.*pass="1".*\}.*\n\^done} \
+	$test
+
+    # Delete some breakpoints and verify that '=breakpoint-deleted
+    # notification is correctly emitted.
+    for {set i 3} {$i < 7} {incr i} {
+	mi_gdb_test "delete ${i}" ".*=breakpoint-deleted,id=\"${i}\".*\\^done" \
+	    "delete ${i}"
+    }
+}
+
+test_insert_delete_modify
+
+# Test 'breakpoint-modified' notification is emited when pending breakpoints are
+# resolved.
+
+proc test_pending_resolved { } {
+    with_test_prefix "pending resolved" {
+	global decimal hex
+	global srcdir
+	global subdir
+	global binfile
+	global lib_sl1 lib_sl2
+	global mi_gdb_prompt
+
+	gdb_exit
+	if [mi_gdb_start] {
+	    continue
+	}
+	mi_gdb_reinitialize_dir $srcdir/$subdir
+	mi_gdb_load ${binfile}
+	mi_load_shlibs $lib_sl1 $lib_sl2
+
+	# Create a pending breakpoint on pendfunc1
+	mi_gdb_test "-break-insert -f pendfunc1" \
+	    {.*\^done,bkpt=.*addr=\"<PENDING>\".*} \
+	    "insert breakpoint on pendfunc1"
+	mi_run_cmd
+
+	set test "breakpoint on pendfunc1 resolved"
+	gdb_expect {
+	    -re ".*=breakpoint-modified,bkpt=\{number=\"1\".*addr=\"${hex}\".*,times=\"0\"" {
+		pass $test
+		exp_continue
+	    }
+	    -re ".*=breakpoint-modified,bkpt=\{number=\"1\".*addr=\"${hex}\".*,times=\"1\"" {
+		pass "$test: hit_count is updated"
+	    }
+	    -re ".*${mi_gdb_prompt}$" {
+		fail $test
+	    }
+	    timeout {
+		fail "$test (timeout)"
+	    }
+	}
+	mi_expect_stop "breakpoint-hit" "pendfunc1" ""\
+	    ".*" ".*" {"" "disp=\"keep\""} \
+	    "continue to pendfunc1 breakpoint"
+
+	# Delete breakpoint on pendfunc1
+	mi_gdb_test "-break-delete 1" {\^done} \
+	    "delete breakpoint on pendfunc1"
+	# Insert breakpoint on marker
+	mi_gdb_test "-break-insert marker" {.*\^done,bkpt=.*} \
+	    "insert breakpoint on marker"
+	# Create a pending breakpoint on pendfunc3
+	mi_gdb_test "-break-insert -f pendfunc3" \
+	    {.*\^done,bkpt=.*addr=\"<PENDING>\".*} \
+	    "insert breakpoint on pendfunc3"
+
+	mi_execute_to "exec-continue" "breakpoint-hit" "marker" ".*" ".*" ".*" \
+	    {"" "disp=\"keep\""} "continue to marker 1"
+
+	mi_send_resuming_command "exec-continue" "continuing execution to marker"
+
+	set test "breakpoint on pendfunc3 resolved"
+	gdb_expect {
+	    -re ".*=breakpoint-modified,bkpt=\{number=\"2\".*addr=\"${hex}\",.*func=\"marker\",.*times=\"1\"" {
+		pass "$test: hit_count is updated"
+		exp_continue
+	    }
+	    -re ".*=breakpoint-modified,bkpt=\{number=\"3\".*addr=\"${hex}\",.*func=\"pendfunc3\",.*times=\"0\"" {
+		pass $test
+	    }
+	    -re ".*${mi_gdb_prompt}$" {
+		fail $test
+	    }
+	    timeout {
+		fail "$test (timeout)"
+	    }
+	}
+	mi_expect_stop "breakpoint-hit" "marker" ".*" ".*" ".*" \
+	    {"" "disp=\"keep\""} "continue to marker 2"
+
+	mi_send_resuming_command "exec-continue" "continuing to exit"
+	set test "breakpoint on pendfunc3 pending again"
+	gdb_expect {
+	    -re ".*=breakpoint-modified,bkpt=\{number=\"3\".*addr=\"<PENDING>\"" {
+		pass $test
+	    }
+	    -re ".*${mi_gdb_prompt}$" {
+		fail $test
+	    }
+	    timeout {
+		fail "$test (timeout)"
+	    }
+	}
+
+	mi_expect_stop "exited-normally" "" "" "" "" "" ""
+    }
+}
+
+test_pending_resolved
+@
+
+
+1.7
+log
+@2013-06-25  Yao Qi  <yao@@codesourcery.com>
+	    Hui Zhu  <hui@@codesourcery.com>
+	    Pedro Alves  <palves@@redhat.com>
+
+	PR breakpoints/15075
+	PR breakpoints/15434
+	* breakpoint.c (bpstat_stop_status): Call
+	b->ops->after_condition_true.
+	(update_dprintf_command_list): Don't append "continue" command
+	to the command list of dprintf breakpoint.
+	(base_breakpoint_after_condition_true): New function.
+	(base_breakpoint_ops): Add base_breakpoint_after_condition_true.
+	(dprintf_after_condition_true): New function.
+	(initialize_breakpoint_ops): Set dprintf_after_condition_true.
+	* breakpoint.h (breakpoint_ops): Add after_condition_true.
+
+2013-06-25  Yao Qi  <yao@@codesourcery.com>
+	    Hui Zhu  <hui@@codesourcery.com>
+	    Pedro Alves  <palves@@redhat.com>
+
+	PR breakpoints/15075
+	PR breakpoints/15434
+	* gdb.base/dprintf-next.c: New file.
+	* gdb.base/dprintf-next.exp: New file.
+	* gdb.base/dprintf-non-stop.c: New file.
+	* gdb.base/dprintf-non-stop.exp: New file.
+	* gdb.base/dprintf.exp: Don't check "continue" in the output
+	of "info breakpoints".
+	* gdb.mi/mi-breakpoint-changed.exp (test_insert_delete_modify):
+	Don't check "continue" in script field.
+@
+text
+@d82 1
+a82 1
+    # Verify that '=breakpoint-created' notification is correctly emittd when
+@
+
+
+1.6
+log
+@gdb/testsuite/
+	* gdb.threads/non-ldr-exc-1.exp (do_test): Fix the indent of
+	using with_test_prefix.
+	* gdb.threads/non-ldr-exc-2.exp (do_test): Likewise.
+	* gdb.threads/non-ldr-exc-3.exp (do_test): Likewise.
+	* gdb.threads/non-ldr-exc-4.exp (do_test): Likewise.
+	* gdb.threads/watchpoint-fork.exp (test): Likewise.
+	* gdb.base/break-interp.exp (test_core): Likewise.
+	(test_attach_gdb): Likewise.
+	* gdb.base/catch-load.exp (one_catch_load_test): Likewise.
+	* gdb.base/disp-step-syscall.exp (disp_step_cross_syscall):
+	Likewise.
+	* gdb.base/jit-so.exp (one_jit_test): Likewise.
+	* gdb.base/jit.exp (one_jit_test): Likewise.
+	* gdb.base/sepdebug.exp (test_different_dir): Likewise.
+	* gdb.dwarf2/dw2-dir-file-name.exp (test): Likewise.
+	* gdb.dwarf2/dw2-noloc.exp (file_symbols): Likewise.
+	* gdb.mi/mi-breakpoint-changed.exp (test_pending_resolved):
+	Likewise.
+	* gdb.mi/mi-cmd-param-changed.exp (test_command_param_changed):
+	Likewise.
+	* gdb.mi/mi-watch.exp test_watchpoint_all): Likewise.
+	* gdb.mi/pr11022.exp (test_memory_changed_observer): Likewise.
+	* gdb.trace/change-loc.exp (tracepoint_change_loc_1): Likewise.
+	(tracepoint_change_loc_2): Likewise.
+	* gdb.trace/disconnected-tracing.exp (disconnected_tracing):
+	Likewise.
+	(disconnected_tfind): Likewise.
+	* gdb.trace/mi-traceframe-changed.exp (test_tfind_tfile):
+	Likewise.
+	(test_tfind_remote): Likewise.
+	* gdb.trace/mi-tracepoint-changed.exp (test_reconnect):
+	Likewise.
+	(test_pending_resolved): Likewise.
+	* gdb.trace/mi-tsv-changed.exp (test_create_delete_modify_tsv):
+	Likewise.
+	(test_upload_tsv): Likewise.
+	* gdb.trace/pending.exp (pending_tracepoint_resolved):
+	Likewise.
+	(pending_tracepoint_works): Likewise.
+	* gdb.trace/report.exp (use_collected_data): Likewise.
+	* gdb.trace/status-stop.exp (test_tstart_tstop_tstart):
+	Likewise.
+	(test_tstart_tstart, test_buffer_full_tstart): Likewise.
+	* gdb.trace/strace.exp (strace_info_marker): Likewise.
+	(strace_trace_on_same_addr): Likewise.
+	(strace_trace_on_diff_addr): Likewise.
+	* gdb.trace/unavailable.exp (gdb_collect_args_test): Likewise.
+	(gdb_collect_locals_test): Likewise.
+	(gdb_unavailable_registers_test): Likewise.
+	(gdb_collect_globals_test): Likewise.
+@
+text
+@d99 1
+a99 1
+	{.*=breakpoint-created,bkpt=\{number="6",type="dprintf".*,script=\{\"printf \\\\\"arg\\\\\" \\\\\"\",\"continue\"\}.*\}\r\n\^done} \
+@
+
+
+1.5
+log
+@gdb/testsuite/
+
+	* gdb.base/dprintf.exp: Check the output of 'info breakpoints'
+	for dprintf.
+	* gdb.mi/mi-breakpoint-changed.exp (test_insert_delete_modify):
+	Check the fields in "=breakpoint-created" for dprintf.
+@
+text
+@d141 90
+a230 66
+proc test_pending_resolved { } { with_test_prefix "pending resolved" {
+    global decimal hex
+    global srcdir
+    global subdir
+    global binfile
+    global lib_sl1 lib_sl2
+    global mi_gdb_prompt
+
+    gdb_exit
+    if [mi_gdb_start] {
+	continue
+    }
+    mi_gdb_reinitialize_dir $srcdir/$subdir
+    mi_gdb_load ${binfile}
+    mi_load_shlibs $lib_sl1 $lib_sl2
+
+    # Create a pending breakpoint on pendfunc1
+    mi_gdb_test "-break-insert -f pendfunc1" \
+	{.*\^done,bkpt=.*addr=\"<PENDING>\".*} \
+	"insert breakpoint on pendfunc1"
+    mi_run_cmd
+
+    set test "breakpoint on pendfunc1 resolved"
+    gdb_expect {
+	-re ".*=breakpoint-modified,bkpt=\{number=\"1\".*addr=\"${hex}\".*,times=\"0\"" {
+	    pass $test
+	    exp_continue
+	}
+	-re ".*=breakpoint-modified,bkpt=\{number=\"1\".*addr=\"${hex}\".*,times=\"1\"" {
+	    pass "$test: hit_count is updated"
+	}
+	-re ".*${mi_gdb_prompt}$" {
+	    fail $test
+	}
+	timeout {
+	    fail "$test (timeout)"
+	}
+    }
+    mi_expect_stop "breakpoint-hit" "pendfunc1" ""\
+	".*" ".*" {"" "disp=\"keep\""} \
+	"continue to pendfunc1 breakpoint"
+
+    # Delete breakpoint on pendfunc1
+    mi_gdb_test "-break-delete 1" {\^done} \
+	"delete breakpoint on pendfunc1"
+    # Insert breakpoint on marker
+    mi_gdb_test "-break-insert marker" {.*\^done,bkpt=.*} \
+	"insert breakpoint on marker"
+    # Create a pending breakpoint on pendfunc3
+    mi_gdb_test "-break-insert -f pendfunc3" \
+	{.*\^done,bkpt=.*addr=\"<PENDING>\".*} \
+	"insert breakpoint on pendfunc3"
+
+    mi_execute_to "exec-continue" "breakpoint-hit" "marker" ".*" ".*" ".*" \
+	{"" "disp=\"keep\""} "continue to marker 1"
+
+    mi_send_resuming_command "exec-continue" "continuing execution to marker"
+
+    set test "breakpoint on pendfunc3 resolved"
+    gdb_expect {
+	-re ".*=breakpoint-modified,bkpt=\{number=\"2\".*addr=\"${hex}\",.*func=\"marker\",.*times=\"1\"" {
+	    pass "$test: hit_count is updated"
+	    exp_continue
+	}
+	-re ".*=breakpoint-modified,bkpt=\{number=\"3\".*addr=\"${hex}\",.*func=\"pendfunc3\",.*times=\"0\"" {
+	    pass $test
+a231 9
+	-re ".*${mi_gdb_prompt}$" {
+	    fail $test
+	}
+	timeout {
+	    fail "$test (timeout)"
+	}
+    }
+    mi_expect_stop "breakpoint-hit" "marker" ".*" ".*" ".*" \
+	{"" "disp=\"keep\""} "continue to marker 2"
+d233 1
+a233 12
+    mi_send_resuming_command "exec-continue" "continuing to exit"
+    set test "breakpoint on pendfunc3 pending again"
+    gdb_expect {
+	-re ".*=breakpoint-modified,bkpt=\{number=\"3\".*addr=\"<PENDING>\"" {
+	    pass $test
+	}
+	-re ".*${mi_gdb_prompt}$" {
+	    fail $test
+	}
+	timeout {
+	    fail "$test (timeout)"
+	}
+d235 1
+a235 3
+
+    mi_expect_stop "exited-normally" "" "" "" "" "" ""
+}}
+@
+
+
+1.5.2.1
+log
+@2013-06-26  Yao Qi  <yao@@codesourcery.com>
+	    Hui Zhu  <hui@@codesourcery.com>
+	    Pedro Alves  <palves@@redhat.com>
+
+	PR breakpoints/15075
+	PR breakpoints/15434
+	* breakpoint.c (bpstat_stop_status): Call
+	b->ops->after_condition_true.
+	(update_dprintf_command_list): Don't append "continue" command
+	to the command list of dprintf breakpoint.
+	(base_breakpoint_after_condition_true): New function.
+	(base_breakpoint_ops): Add base_breakpoint_after_condition_true.
+	(dprintf_after_condition_true): New function.
+	(initialize_breakpoint_ops): Set dprintf_after_condition_true.
+	* breakpoint.h (breakpoint_ops): Add after_condition_true.
+
+2013-06-26  Yao Qi  <yao@@codesourcery.com>
+	    Hui Zhu  <hui@@codesourcery.com>
+	    Pedro Alves  <palves@@redhat.com>
+
+	PR breakpoints/15075
+	PR breakpoints/15434
+	* gdb.base/dprintf-next.c: New file.
+	* gdb.base/dprintf-next.exp: New file.
+	* gdb.base/dprintf-non-stop.c: New file.
+	* gdb.base/dprintf-non-stop.exp: New file.
+	* gdb.base/dprintf.exp: Don't check "continue" in the output
+	of "info breakpoints".
+	* gdb.mi/mi-breakpoint-changed.exp (test_insert_delete_modify):
+	Don't check "continue" in script field.
+@
+text
+@d99 1
+a99 1
+	{.*=breakpoint-created,bkpt=\{number="6",type="dprintf".*,script=\{\"printf \\\\\"arg\\\\\" \\\\\"\"\}.*\}\r\n\^done} \
+@
+
+
+1.4
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@d99 1
+a99 1
+	{.*=breakpoint-created,bkpt=\{number="6",type="dprintf".*\}.*\n\^done} \
+@
+
+
+1.3
+log
+@gdb:
+
+	Fix PR gdb/14617.
+	* breakpoint.c (trace_pass_set_count): Call
+	observer_notify_breakpoint_modified instead of
+	observer_notify_tracepoint_modified.
+	* mi/mi-cmd-break.c (mi_cmd_break_passcount): Likewise.
+
+gdb/doc:
+
+	* observer.texi (GDB Observers): Remove observer
+	'tracepoint_modified', 'tracepoint_created' and
+	'tracepoint_deleted'.
+
+gdb/testsuite:
+
+	Fix PR gdb/14617.
+	* gdb.mi/mi-breakpoint-changed.exp (test_insert_delete_modify):
+	Remove setup_kfail, and update test.
+@
+text
+@d1 1
+a1 1
+# Copyright 2012 Free Software Foundation, Inc.
+@
+
+
+1.2
+log
+@gdb/testsuite/
+	* gdb.mi/mi-breakpoint-changed.exp (test_pending_resolved): Remove
+	trail '.*' on matching patterns.
+@
+text
+@a122 1
+    setup_kfail gdb/14617  *-*-*
+d125 1
+a125 1
+	{.*=breakpoint-modified,bkpt=\{number="4",.*\}.*\n\^done} \
+@
+
+
+1.1
+log
+@gdb/testsuite/
+	* gdb.trace/mi-tracepoint-changed.exp: New.
+	* gdb.mi/mi-breakpoint-changed.exp: New.
+	* gdb.mi/pending.c, gdb.mi/pendshr1.c: New
+	* gdb.mi/pendshr2.c: New.
+@
+text
+@d166 1
+a166 1
+	-re ".*=breakpoint-modified,bkpt=\{number=\"1\".*addr=\"${hex}\".*,times=\"0\".*" {
+d170 1
+a170 1
+	-re ".*=breakpoint-modified,bkpt=\{number=\"1\".*addr=\"${hex}\".*,times=\"1\".*" {
+d222 1
+a222 1
+	-re ".*=breakpoint-modified,bkpt=\{number=\"3\".*addr=\"<PENDING>\".*" {
+@
+

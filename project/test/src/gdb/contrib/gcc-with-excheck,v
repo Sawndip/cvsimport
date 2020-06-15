@@ -1,0 +1,133 @@
+head	1.2;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.1
+	gdb_7_6-2013-04-26-release:1.1
+	gdb_7_6-branch:1.1.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.1;
+locks; strict;
+comment	@# @;
+
+
+1.2
+date	2013.05.30.16.22.06;	author tromey;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2013.02.28.19.28.25;	author tromey;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@add the cleanup checker
+
+This patch adds the cleanup checker.  This is a Python plugin for GCC
+that checks some rules for cleanup handling.  In particular it tries
+to notice when cleanups are left dangling at the end of a function.
+
+It does this by applying a few simple rules.
+
+First, it understands that a function whose return type is "struct
+cleanup *" is a "cleanup constructor".  Such functions are expected to
+return the first cleanup that they make.
+
+Then, it has the notion of a "master cleanup".  The checker keeps a
+stack of all cleanups made in a basic block.  The first element is
+pushed on the stack is the master cleanup -- the one that must later
+be passed to either do_cleanups or discard_cleanups.
+
+It is not perfect -- some constructs confuse it.  So, part of this
+series rewrites some code in gdb so that it is analyzable.  I'll note
+these spots and you can decide whether or not this is a good idea.
+
+This patch also changes gcc-with-excheck to give it options.  Now you
+must use either -Xc (for the cleanup checker) or -Xx (for the
+exception checker).
+
+	* contrib/cleanup_check.py: New file.
+	* contrib/gcc-with-excheck: Add option parsing.
+@
+text
+@#!/bin/sh
+#   Copyright 2011, 2013 Free Software Foundation, Inc.
+#
+#   This is free software: you can redistribute it and/or modify it
+#   under the terms of the GNU General Public License as published by
+#   the Free Software Foundation, either version 3 of the License, or
+#   (at your option) any later version.
+#
+#   This program is distributed in the hope that it will be useful, but
+#   WITHOUT ANY WARRANTY; without even the implied warranty of
+#   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+#   General Public License for more details.
+#
+#   You should have received a copy of the GNU General Public License
+#   along with this program.  If not, see
+#   <http://www.gnu.org/licenses/>.
+
+# You must set PYTHON_PLUGIN in the environment.
+# It should be the directory holding the "python.so" file.
+# Usage: gcc-with-excheck [-Xx|-Xc] [--] ARGS
+# -Xx means to invoke the exception checker.
+# -Xc means to invoke the cleanup checker.
+# -- means stop processing -X options.
+# ARGS are passed to gcc.
+
+GCC=${GCC:-gcc}
+exdir=`dirname $0`
+
+pargs=
+while true; do
+    case "$1" in
+	-Xc)
+	    pargs="$pargs -fplugin-arg-python-script=$exdir/cleanup_check.py"
+	    ;;
+	-Xx)
+	    pargs="$pargs -fplugin-arg-python-script=$exdir/excheck.py"
+	    ;;
+	-X*)
+	    echo "unrecognized argument $1" 1>&2
+	    exit 1
+	    ;;
+	--)
+	    shift
+	    break
+	    ;;
+	*)
+	    break
+	    ;;
+    esac
+    shift
+done
+
+# Recent versions of the Python plugin build two .so files in
+# different directories, so we have to set this.  This will be fixed
+# upstream at some point.
+export LD_LIBRARY_PATH=$PYTHON_PLUGIN:$PYTHON_PLUGIN/gcc-c-api
+
+gcc -fplugin=$PYTHON_PLUGIN/python.so $pargs "$@@"
+@
+
+
+1.1
+log
+@	* contrib/excheck.py: New file.
+	* contrib/exsummary.py: New file.
+	* contrib/gcc-with-excheck: New file.
+@
+text
+@d20 5
+d26 1
+d29 24
+d58 1
+a58 1
+gcc -fplugin=$PYTHON_PLUGIN/python.so -fplugin-arg-python-script=$exdir/excheck.py "$@@"
+@
+

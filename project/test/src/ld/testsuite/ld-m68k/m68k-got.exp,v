@@ -1,0 +1,460 @@
+head	1.3;
+access;
+symbols
+	binutils-2_24-branch:1.3.0.12
+	binutils-2_24-branchpoint:1.3
+	binutils-2_21_1:1.3
+	binutils-2_23_2:1.3
+	binutils-2_23_1:1.3
+	binutils-2_23:1.3
+	binutils-2_23-branch:1.3.0.10
+	binutils-2_23-branchpoint:1.3
+	binutils-2_22_branch:1.3.0.8
+	binutils-2_22:1.3
+	binutils-2_22-branch:1.3.0.6
+	binutils-2_22-branchpoint:1.3
+	binutils-2_21:1.3
+	binutils-2_21-branch:1.3.0.4
+	binutils-2_21-branchpoint:1.3
+	binutils-2_20_1:1.3
+	binutils-2_20:1.3
+	binutils-arc-20081103-branch:1.1.0.6
+	binutils-arc-20081103-branchpoint:1.1
+	binutils-2_20-branch:1.3.0.2
+	binutils-2_20-branchpoint:1.3
+	dje-cgen-play1-branch:1.2.0.2
+	dje-cgen-play1-branchpoint:1.2
+	arc-20081103-branch:1.1.0.4
+	arc-20081103-branchpoint:1.1
+	binutils-2_19_1:1.1
+	binutils-2_19:1.1
+	binutils-2_19-branch:1.1.0.2
+	binutils-2_19-branchpoint:1.1
+	binutils_latest_snapshot:1.3;
+locks; strict;
+comment	@# @;
+
+
+1.3
+date	2009.09.02.07.25.40;	author amodra;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2009.02.03.14.36.45;	author nickc;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2008.07.11.17.19.00;	author hjl;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.3
+log
+@update copyright dates
+@
+text
+@# Expect script for run_dump_test based ld-m68k GOT tests.
+#   Copyright 2008, 2009 Free Software Foundation, Inc.
+#
+# This file is part of the GNU Binutils.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+# MA 02110-1301, USA.
+#
+
+if { ![is_elf_format] || ![istarget m68k-*-*] } {
+    return
+}
+
+# 1 - 1
+# 2 - 8189
+# 3 - 8190
+# 4 - 16382
+# 5 - 16385
+
+proc gen_got_test { testname } {
+    global srcdir
+    global subdir
+
+    if [catch { set ofd [open "tmpdir/$testname.s" w] } msg] {
+	perror "$msg"
+	unresolved $testname
+	return
+    }
+
+    switch --  $testname {
+	"got-12" {
+	    set start 1
+	    set count 8189
+	    set xgot 0
+	}
+	"got-13" {
+	    set start 1
+	    set count 8190
+	    set xgot 0
+	}
+	"got-14" {
+	    set start 1
+	    set count 16382
+	    set xgot 0
+	}
+	"got-15" {
+	    set start 1
+	    set count 16385
+	    set xgot 0
+	}
+	"got-34" {
+	    set start 8190
+	    set count 16382
+	    set xgot 0
+	}
+	"got-35" {
+	    set start 8190
+	    set count 16385
+	    set xgot 0
+	}
+	"xgot-15" {
+	    set start 1
+	    set count 16385
+	    set xgot 1
+	}
+    }
+
+    set func [format "sum_%05d_%05d" $start $count]
+    puts $ofd "\t.text"
+    puts $ofd "\t.align	2"
+    puts $ofd "\t.globl $func"
+    puts $ofd "\t.type $func,@@function"
+    puts $ofd "$func:"
+    puts $ofd "\tlink.w %fp,#0"
+    puts $ofd "\tmove.l %a5,-(%sp)"
+    puts $ofd "\tmove.l #_GLOBAL_OFFSET_TABLE_@@GOTPC, %a5"
+    puts $ofd "\tlea (-6, %pc, %a5), %a5"
+
+    if { $xgot == 1 } {
+	set symbol [format "a%05d" $start]
+	incr start
+	puts $ofd "\tlea $symbol@@GOT,%a0"
+	puts $ofd "\tadd.l %a5,%a0"
+	puts $ofd "\tmove.l (%a0),%a0"
+	puts $ofd "\tmove.l (%a0),%d1"
+	for { set i $start } { $i < $count } { incr i } {
+	    set symbol [format "a%05d" $i]
+	    puts $ofd "\tlea $symbol@@GOT,%a0"
+	    puts $ofd "\tadd.l %a5,%a0"
+	    puts $ofd "\tmove.l (%a0),%a0"
+	    puts $ofd "\tmove.l (%a0),%d0"
+	    puts $ofd "\tadd.l %d0,%d1"
+	}
+	set symbol [format "a%05d" $count]
+	puts $ofd "\tlea $symbol@@GOT,%a0"
+	puts $ofd "\tadd.l %a5,%a0"
+	puts $ofd "\tmove.l (%a0),%a0"
+	puts $ofd "\tmove.l (%a0),%d0"
+	puts $ofd "\tadd.l %d1,%d0"
+    } else {
+	set symbol [format "a%05d" $start]
+	incr start
+	puts $ofd "\tmove.l $symbol@@GOT(%a5),%d0"
+	puts $ofd "\tmove.l %d0,%a0"
+	puts $ofd "\tmove.l (%a0),%d1"
+	for { set i $start } { $i < $count } { incr i } {
+	    set symbol [format "a%05d" $i]
+	    puts $ofd "\tmove.l $symbol@@GOT(%a5),%d0"
+	    puts $ofd "\tmove.l %d0,%a0"
+	    puts $ofd "\tmove.l (%a0),%d0"
+	    puts $ofd "\tadd.l %d0,%d1"
+	}
+	set symbol [format "a%05d" $count]
+	puts $ofd "\tmove.l $symbol@@GOT(%a5),%d0"
+	puts $ofd "\tmove.l %d0,%a0"
+	puts $ofd "\tmove.l (%a0),%d0"
+	puts $ofd "\tadd.l %d1,%d0"
+    }
+
+    puts $ofd "\tmove.l (%sp)+,%a5"
+    puts $ofd "\tunlk %fp"
+    puts $ofd "\trts"
+    puts $ofd "\t.size	$func, .-$func"
+
+    close $ofd
+}
+
+proc got_test { testname } {
+    global srcdir
+    global subdir
+    global objdir
+
+    if [catch { set ifd [open "$srcdir/$subdir/$testname.d" r] } msg] {
+	perror "$msg"
+	unresolved $testname
+	return
+    }
+    if [catch { set ofd [open "tmpdir/$testname.d" w] } msg] {
+	perror "$msg"
+	unresolved $testname
+	return
+    }
+
+    switch --  $testname {
+	"got-single-12-ok" {
+	    puts $ofd "#source: $objdir/tmpdir/got-12.s"
+	    set count 8189
+	}
+	"got-single-13-er" {
+	    puts $ofd "#source: $objdir/tmpdir/got-13.s"
+	    set count 0
+	}
+	"got-negative-14-ok" {
+	    puts $ofd "#source: $objdir/tmpdir/got-14.s"
+	    set count 16382
+	}
+	"got-negative-15-er" {
+	    puts $ofd "#source: $objdir/tmpdir/got-15.s"
+	    set count 0
+	}
+	"got-negative-12-13-14-34-ok" {
+	    puts $ofd "#source: $objdir/tmpdir/got-12.s"
+	    puts $ofd "#source: $objdir/tmpdir/got-13.s"
+	    puts $ofd "#source: $objdir/tmpdir/got-14.s"
+	    puts $ofd "#source: $objdir/tmpdir/got-34.s"
+	    set count 16382
+	}
+	"got-negative-12-13-14-35-er" {
+	    puts $ofd "#source: $objdir/tmpdir/got-12.s"
+	    puts $ofd "#source: $objdir/tmpdir/got-13.s"
+	    puts $ofd "#source: $objdir/tmpdir/got-14.s"
+	    puts $ofd "#source: $objdir/tmpdir/got-35.s"
+	    set count 0
+	}
+	"got-multigot-14-ok" {
+	    puts $ofd "#source: $objdir/tmpdir/got-14.s"
+	    set count 16382
+	}
+	"got-multigot-15-er" {
+	    puts $ofd "#source: $objdir/tmpdir/got-15.s"
+	    set count 0
+	}
+	"got-multigot-12-13-14-34-35-ok" {
+	    puts $ofd "#source: $objdir/tmpdir/got-12.s"
+	    puts $ofd "#source: $objdir/tmpdir/got-13.s"
+	    puts $ofd "#source: $objdir/tmpdir/got-14.s"
+	    puts $ofd "#source: $objdir/tmpdir/got-34.s"
+	    puts $ofd "#source: $objdir/tmpdir/got-35.s"
+	    set count 24578
+	}
+	"got-xgot-15-ok" {
+	    puts $ofd "#source: $objdir/tmpdir/xgot-15.s"
+	    set count 16385
+	}
+	"got-xgot-12-13-14-15-34-35-ok" {
+	    puts $ofd "#source: $objdir/tmpdir/got-12.s"
+	    puts $ofd "#source: $objdir/tmpdir/got-13.s"
+	    puts $ofd "#source: $objdir/tmpdir/got-14.s"
+	    puts $ofd "#source: $objdir/tmpdir/xgot-15.s"
+	    puts $ofd "#source: $objdir/tmpdir/got-34.s"
+	    puts $ofd "#source: $objdir/tmpdir/got-35.s"
+	    set count 24581
+	}
+    }
+
+    while { [gets $ifd line] != -1 } {
+	puts $ofd $line
+    }
+
+    for { set i 0 } { $i < $count } { incr i } {
+	puts $ofd "^\[0-9a-f\]+  \[0-9a-f\]+ R_68K_GLOB_DAT    00000000   a\[0-9\]+ \\\+ 0"
+    }
+
+    close $ifd
+    close $ofd
+    run_dump_test "tmpdir/$testname"
+}
+
+gen_got_test got-12
+gen_got_test got-13
+gen_got_test got-14
+gen_got_test got-15
+gen_got_test got-34
+gen_got_test got-35
+gen_got_test xgot-15
+
+run_dump_test "got-1"
+got_test "got-single-12-ok"
+got_test "got-single-13-er"
+got_test "got-negative-14-ok"
+got_test "got-negative-15-er"
+got_test "got-negative-12-13-14-34-ok"
+got_test "got-negative-12-13-14-35-er"
+got_test "got-multigot-14-ok"
+got_test "got-multigot-15-er"
+got_test "got-multigot-12-13-14-34-35-ok"
+got_test "got-xgot-15-ok"
+got_test "got-xgot-12-13-14-15-34-35-ok"
+@
+
+
+1.2
+log
+@        M68K TLS support.
+
+        ld/testsuite/
+        * ld-m68k/got-multigot-12-13-14-34-35-ok.d: Update.
+        * ld-m68k/got-multigot-14-ok.d: Update.
+        * ld-m68k/m68k-got.exp: Update.
+        * ld-m68k/got-negative-12-13-14-34-ok.d: Update.
+        * ld-m68k/got-negative-14-ok.d: Update.
+        * ld-m68k/tls-gd-1.d, ld-m68k/tls-gd-2.d: New tests.
+        * ld-m68k/tls-gd-ie-1.d, ld-m68k/tls-ie-1.d: New tests.
+        * ld-m68k/tls-ld-1.d, ld-m68k/tls-ld-2.d: New tests.
+        * ld-m68k/tls-ld-1.s, ld-m68k/tls-ld-2.s, ld-m68k/tls-le-1.s:
+        New test sources.
+        * ld-m68k/tls-no-1.s, ld-m68k/tls-gd-ie-1.s, ld-m68k/tls-gd-1.s:
+        New test sources.
+        * ld-m68k/tls-gd-2.s, ld-m68k/tls-ie-1.s: New test sources.
+        * ld-m68k/m68k.exp: Run new tests.
+        (merge isa-a isa-a:nodiv): Fix.
+
+        gas/testsuite/
+        * gas/m68k/tls-gd-3.d, gas/m68k/tls-gd-3.s: New test.
+        * gas/m68k/all.exp: Run it.
+
+        gas/
+        * config/m68k-parse.h (enum pic_relocation): Add values for TLS
+        relocations.
+        * config/m68k-parse.y (yylex): Parse TLS relocations.
+        * config/tc-m68k.c (m68k_elf_cons): New static function.
+        (md_pseudo_table): Use it.
+        (get_reloc_code, tc_m68k_fix_adjustable, tc_gen_reloc): Handle TLS
+        relocations.
+        (md_apply_fix): Fix to set thread local flag.
+        (m68k_elf_suffix): New static function; helper for m68k_elf_cons.
+
+        include/elf/
+        * m68k.h: Map TLS relocations to numbers.
+
+        bfd/
+        * bfd-in2.h: Regenerate.
+        * elf32-m68k.c: Handle 2-slot GOT entries.  Rename variables and
+        fields from n_entries to n_slots where appropriate, update comments.
+        (HOWTO): Add TLS relocations.
+        (reloc_map): Map BFD_RELOC_68K_TLS_* to R_68K_TLS_*.
+        (enum elf_m68k_got_offset_size): New enum.
+        (struct elf_m68k_got_entry.type): Move field to ...
+        (struct elf_m68k_got_entry_key): ... here.  Update all uses.
+        (elf_m68k_reloc_got_type, elf_m68k_reloc_got_offset_size): New static
+        functions.
+        (elf_m68k_reloc_got_n_entries, elf_m68k_reloc_tls_p): New static
+        functions.
+        (struct elf_m68k_got): merge rel_8o_n_entries and rel_8o_16o_n_entries
+        fields into n_entries array.  Update comments.
+        (elf_m68k_init_got): Simplify, update all uses.
+        (elf_m68k_init_got_entry_key): Handle R_68K_TLS_LDM32 reloc, update.
+        (ELF_M68K_REL_8O_MAX_N_ENTRIES_IN_GOT): Adjust to handle 2-slot
+        GOT entries; update name, update all uses.
+        (ELF_M68K_REL_8O_16O_MAX_N_ENTRIES_IN_GOT): Ditto.
+        (elf_m68k_get_got_entry): Update.
+        (elf_m68k_update_got_entry_type): Rewrite to handle TLS GOT entries,
+        simplify.
+        (elf_m68k_remove_got_entry_type): Simplify.
+        (elf_m68k_add_entry_to_got, elf_m68k_can_merge_gots_1): Update.
+        (elf_m68k_can_merge_gots): Update.
+        (elf_m68k_merge_gots_1, elf_m68k_merge_gots): Update.
+        (struct elf_m68k_finalize_got_offsets_arg): Rewrite to handle 2-slot
+        GOT entries, simplify.
+        (elf_m68k_finalize_got_offsets_1, elf_m68k_finalize_got_offsets): Same.
+        (struct elf_m68k_partition_multi_got_arg): Add slots_relas_diff
+        field, remove obsoleted local_n_entries field.
+        (elf_m68k_partition_multi_got_2): New static function.
+        (elf_m68k_partition_multi_got_1, elf_m68k_partition_multi_got): Use it;
+        update.
+        (elf_m68k_remove_got_entry_type): Update.
+        (elf_m68k_install_rela, dtpoff_base, tpoff): New static functions.
+        (elf_m68k_check_relocs): Handle TLS relocations.  Remove unnecessary
+        update of sgot->size and srelgot->size.
+        (elf_m68k_gc_sweep_hook): Update.
+        (elf_m68k_install_rela, dtpoff_base, tpoff): New static functions.
+        (elf_m68k_relocate_section, elf_m68k_finish_dynamic_symbol): Handle
+        TLS relocations.
+        * reloc.c (BFD_RELOC_68K_TLS_*): Declare TLS relocations.
+        * libbfd.h (bfd_reloc_code_real_names): Add BFD_RELOC_68K_TLS_*.
+@
+text
+@d2 1
+a2 1
+#   Copyright 008 Free Software Foundation, Inc.
+@
+
+
+1.1
+log
+@2008-07-11  H.J. Lu  <hongjiu.lu@@intel.com>
+
+	* ld-m68k/got-12.s: Removed.
+	* ld-m68k/got-13.s: Likewise.
+	* ld-m68k/got-14.s: Likewise.
+	* ld-m68k/got-15.s: Likewise.
+	* ld-m68k/got-34.s: Likewise.
+	* ld-m68k/got-35.s: Likewise.
+	* ld-m68k/xgot-15.s: Likewise.
+
+	* ld-m68k/got-multigot-12-13-14-34-35-ok.d: Remove #source
+	and expected relocations.
+	* ld-m68k/got-multigot-14-ok.d: Likewise.
+	* ld-m68k/got-negative-12-13-14-34-ok.d: Likewise.
+	* ld-m68k/got-negative-14-ok.d: Likewise.
+	* ld-m68k/got-single-12-ok.d: Likewise.
+	* ld-m68k/got-xgot-12-13-14-15-34-35-ok.d: Likewise.
+	* ld-m68k/got-xgot-15-ok.d: Likewise.
+
+	* ld-m68k/got-multigot-15-er.d: Remove #source.
+	* ld-m68k/got-negative-12-13-14-35-er.d: Likewise.
+	* ld-m68k/got-negative-15-er.d: Likewise.
+	* ld-m68k/got-single-13-er.d: Likewise.
+
+	* ld-m68k/m68k.exp: Move GOT tests to ...
+	* ld-m68k/m68k-got.exp: This.  New.
+@
+text
+@d29 1
+a29 1
+# 4 - 16384
+d55 1
+a55 1
+	    set count 16384
+d65 1
+a65 1
+	    set count 16384
+d167 1
+a167 1
+	    set count 16384
+d178 1
+a178 1
+	    set count 16384
+d189 1
+a189 1
+	    set count 16384
+d201 1
+a201 1
+	    set count 24580
+@
+

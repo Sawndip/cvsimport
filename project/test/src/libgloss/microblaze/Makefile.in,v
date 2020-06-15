@@ -1,0 +1,248 @@
+head	1.3;
+access;
+symbols
+	newlib-2_2_0:1.3.0.2
+	newlib-2_1_0:1.3
+	newlib-2_0_0:1.1
+	newlib-1_20_0:1.1
+	newlib-1_19_0:1.1
+	newlib-1_18_0:1.1;
+locks; strict;
+comment	@# @;
+
+
+1.3
+date	2013.07.23.09.11.17;	author corinna;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2013.07.16.07.55.44;	author corinna;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2009.09.28.16.43.57;	author jjohnstn;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.3
+log
+@	* microblaze/_exception_handler.S: Adjust to be weak.
+
+	* microblaze/Makefile.in: Add LINUX_BSP.
+	* microblaze/elf-gloss-linux.ld: New file.
+	* microblaze/elf-gloss-linux.specs: Likewise.
+	* microblaze/linux-crt0.S: Likewise.
+	* microblaze/linux-inbyte.c: Likewise.
+	* microblaze/linux-outbyte.c: Likewise.
+	* microblaze/linux-syscalls-wrap.c: Likewise.
+	* microblaze/linux-syscalls.S: Likewise.
+	* microblaze/linux-syscalls.h: Likewise.
+@
+text
+@#  Copyright 2007, 2009 Xilinx, Inc.  All rights reserved. 
+#  
+#  Redistribution and use in source and binary forms, with or without
+#  modification, are permitted provided that the following conditions are
+#  met:
+#  
+#  1.  Redistributions source code must retain the above copyright notice,
+#  this list of conditions and the following disclaimer. 
+#  
+#  2.  Redistributions in binary form must reproduce the above copyright
+#  notice, this list of conditions and the following disclaimer in the
+#  documentation and/or other materials provided with the distribution. 
+#  
+#  3.  Neither the name of Xilinx nor the names of its contributors may be
+#  used to endorse or promote products derived from this software without
+#  specific prior written permission. 
+#  
+#  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDER AND CONTRIBUTORS "AS
+#  IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+#  TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+#  PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+#  HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+#  SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED
+#  TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+#  PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+#  LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+#  NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+#  SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+# Makefile for libgloss/microblaze. This is the board support
+# code for the various microblaze targets.
+
+DESTDIR =
+VPATH = @@srcdir@@
+srcdir = @@srcdir@@
+objdir = .
+srcroot = $(srcdir)/../..
+objroot = $(objdir)/../..
+
+prefix = @@prefix@@
+exec_prefix = @@exec_prefix@@
+
+host_alias = @@host_alias@@
+target_alias = @@target_alias@@
+
+bindir = @@bindir@@
+libdir = @@libdir@@
+tooldir = $(exec_prefix)/$(target_alias)
+
+# Multilib support variables.
+# TOP is used instead of MULTI{BUILD,SRC}TOP.
+MULTIDIRS =
+MULTISUBDIR =
+MULTIDO = true
+MULTICLEAN = true
+
+INSTALL = @@INSTALL@@
+INSTALL_PROGRAM = @@INSTALL_PROGRAM@@
+INSTALL_DATA = @@INSTALL_DATA@@
+
+SHELL = /bin/sh
+
+CC = @@CC@@
+
+AS = @@AS@@
+AR = @@AR@@
+LD = @@LD@@
+RANLIB = @@RANLIB@@
+AR_FLAGS = qrv
+
+OBJDUMP = `if [ -f ${objroot}/../binutils/objdump ] ; \
+	then echo ${objroot}/../binutils/objdump ; \
+	else t='$(program_transform_name)'; echo objdump | sed -e $$t ; fi`
+OBJCOPY = `if [ -f ${objroot}/../binutils/objcopy ] ; \
+	then echo ${objroot}/../binutils/objcopy ; \
+	else t='$(program_transform_name)'; echo objcopy | sed -e $$t ; fi`
+
+CRT = crt0.o crt1.o crt2.o crt3.o crt4.o crtinit.o pgcrtinit.o sim-crtinit.o sim-pgcrtinit.o
+LIB = libgloss.a
+GENOBJS = fstat.o getpid.o isatty.o kill.o lseek.o print.o putnum.o stat.o unlink.o \
+          open.o close.o read.o write.o
+OBJS = ${GENOBJS} sbrk.o timer.o _exception_handler.o _hw_exception_handler.o \
+       _interrupt_handler.o _program_clean.o _program_init.o \
+       xil_malloc.o xil_sbrk.o xil_printf.o
+SCRIPTS	= xilinx.ld
+
+# Tiny Linux BSP.
+LINUX_BSP     = libgloss-linux.a
+CRT          += linux-crt0.o
+LINUX_OBJS    = linux-syscalls.o linux-syscalls-wrap.o
+LINUX_OBJS   += linux-outbyte.o linux-inbyte.o
+LINUX_SCRIPTS = elf-gloss-linux.specs
+
+CPU = @@CPU@@
+
+#### Host specific Makefile fragment comes in here.
+@@host_makefile_frag@@
+
+all: ${CRT} ${LIB} ${LINUX_BSP}
+
+install: ${CRT} ${LIB} install-linux
+	@@for crt in ${CRT}; do \
+	$(INSTALL_PROGRAM) $${crt} $(DESTDIR)$(tooldir)/lib${MULTISUBDIR}/$${crt}; \
+	done
+	$(INSTALL_PROGRAM) ${LIB} $(DESTDIR)$(tooldir)/lib${MULTISUBDIR}
+	$(INSTALL_PROGRAM) $(srcdir)/${SCRIPTS} $(DESTDIR)$(tooldir)/lib/
+
+install-linux: ${LINUX_BSP}
+	$(INSTALL_PROGRAM) ${LINUX_BSP} $(DESTDIR)$(tooldir)/lib${MULTISUBDIR}
+	set -e; for x in ${LINUX_SCRIPTS}; do ${INSTALL_DATA} ${srcdir}/${objtype}$$x $(DESTDIR)${tooldir}/lib${MULTISUBDIR}/$$x; done
+
+crt0.o:	crt0.S
+crt1.o:	crt1.S
+crt2.o:	crt2.S
+crt3.o:	crt3.S
+crt4.o:	crt4.S
+linux-crt0.o: linux-crt0.S
+crtinit.o: crtinit.S
+sim-crtinit.o: sim-crtinit.S
+sim-pgcrtinit.o: sim-pgcrtinit.S
+
+# target specific makefile fragment comes in here.
+@@target_makefile_frag@@
+
+clean mostlyclean:
+	rm -f *.o *.a *.map *.x
+
+distclean maintainer-clean realclean: clean
+	rm -f Makefile config.cache config.log config.status
+
+${LIB}:	${OBJS}
+	${AR} ${ARFLAGS} $@@ ${OBJS}
+	${RANLIB} $@@
+
+${LINUX_BSP}: ${LINUX_OBJS}
+	${AR} ${ARFLAGS} $@@ ${LINUX_OBJS}
+	${RANLIB} $@@
+
+.PHONY: info dvi doc install-info clean-info
+info doc dvi:
+install-info:
+clean-info:
+
+Makefile: Makefile.in config.status @@host_makefile_frag_path@@ @@target_makefile_frag_path@@ \
+	$(SHELL) config.status
+
+config.status: configure
+	$(SHELL) config.status --recheck
+@
+
+
+1.2
+log
+@	* microblaze/Makefile.in: Add GENOBJS and target_makefile_frag.
+	* microblaze/configure.in: Add target_makefile_frag.
+	* microblaze/configure: Regenerate.
+	* microblaze/xil_printf.c: Add new file.
+@
+text
+@d87 7
+d99 1
+a99 1
+all: ${CRT} ${LIB}
+d101 1
+a101 1
+install: ${CRT} ${LIB}
+d108 4
+d117 1
+d135 4
+@
+
+
+1.1
+log
+@
+2009-09-28  Michael Eager <eager@@eagercon.com>
+
+        * configure.in: Add microblaze-*-*.
+        * configure: Add microblaze-*-* (not regenerated.)
+        * microblaze: NEW microblaze target directory.
+        * microblaze/configure.in: NEW.
+        * microblaze/configure: Generate.
+        * microblaze/Makefile.in: NEW.
+        * microblaze/{crt0.S, crt1.S, crt2.S, crt3.S, crt4.S, crtinit.S}: NEW.
+        * microblaze/{pgcrtinit.S, _program_clean.S, _program_init.S,
+        sbrk.c, sim-crtinit.S, sim-pgcrtinit.S, timer.c, _exception_handler.S,
+        _hw_exception_handler.S, _interrupt_handler.S, xil_malloc.c,
+        nnxil_printf.c, xil_sbrk.c: NEW.
+        * microblaze/xilinx.ld: NEW.
+@
+text
+@d80 5
+a84 1
+OBJS = sbrk.o timer.o _exception_handler.o _hw_exception_handler.o _interrupt_handler.o _program_clean.o _program_init.o xil_malloc.o xil_sbrk.o 
+d110 3
+d128 1
+a128 1
+Makefile: Makefile.in config.status @@host_makefile_frag_path@@ \
+@
+

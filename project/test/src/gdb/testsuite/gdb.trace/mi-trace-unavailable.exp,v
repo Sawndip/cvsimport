@@ -1,0 +1,403 @@
+head	1.4;
+access;
+symbols;
+locks; strict;
+comment	@# @;
+
+
+1.4
+date	2013.08.27.05.20.57;	author qiyao;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2013.08.08.05.10.10;	author qiyao;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2013.06.20.00.39.11;	author qiyao;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2013.06.07.00.29.19;	author qiyao;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.4
+log
+@Add options to skip unavailable locals
+
+This is the patch to add new option '--skip-unavailable' to MI
+commands '-stack-list-{locals, arguments, variables}'.  This patch
+extends list_args_or_locals to add a new parameter 'skip_unavailable',
+and don't list locals or arguments if values are unavailable and
+'skip_unavailable' is true.
+
+This is inspecting a trace frame (tfind mode), where only a few
+locals have been collected.
+
+-stack-list-locals, no switch vs new switch:
+
+ -stack-list-locals --simple-values
+ ^done,locals=[{name="array",type="unsigned char [2]"},{name="i",type="int",value="<unavailable>"}]
+ -stack-list-locals --skip-unavailable --simple-values
+ ^done,locals=[{name="array",type="unsigned char [2]"}]
+
+-stack-list-arguments, no switch vs new switch:
+
+ -stack-list-arguments --simple-values
+ ^done,stack-args=[frame={level="0",args=[{name="j",type="int",value="4"},{name="s",type="char *",value="<unavailable>"}]},frame={level="1",args=[]}]
+ -stack-list-arguments --skip-unavailable --simple-values
+ ^done,stack-args=[frame={level="0",args=[{name="j",type="int",value="4"}]},frame={level="1",args=[]}]
+
+-stack-list-variables, no switch vs new switch:
+
+ -stack-list-variables --simple-values
+ ^done,variables=[{name="j",arg="1",type="int",value="4"},{name="s",arg="1",type="char *",value="<unavailable>"},{name="array",type="unsigned char [2]"},{name="i",type="int",value="<unavailable>"}]
+ -stack-list-variables --skip-unavailable --simple-values
+ ^done,variables=[{name="j",arg="1",type="int",value="4"},{name="array",type="unsigned char [2]"}]
+
+tests are added to test these new options.
+
+gdb:
+
+2013-08-27  Pedro Alves  <pedro@@codesourcery.com>
+	    Yao Qi  <yao@@codesourcery.com>
+
+	* mi/mi-cmd-stack.c (list_args_or_locals): Adjust prototype.
+	(parse_no_frames_option): Remove.
+	(mi_cmd_stack_list_locals): Handle --skip-unavailable.
+	(mi_cmd_stack_list_args): Adjust.
+	(mi_cmd_stack_list_variables): Handle --skip-unavailable.
+	(list_arg_or_local): Add new parameter 'skip_unavailable'.  Return
+	early if SKIP_UNAVAILABLE is true and ARG->val is unavailable.
+	Caller update.
+	(list_args_or_locals): New parameter 'skip_unavailable'.
+	Handle it.
+	* valprint.c (scalar_type_p): Rename to ...
+	(val_print_scalar_type_p): ... this.  Make extern.
+	(val_print, value_check_printable): Adjust.
+	* valprint.h (val_print_scalar_type_p): Declare.
+	* value.c (value_entirely_unavailable): New function.
+	* value.h (value_entirely_unavailable): Declare.
+
+	* NEWS: Mention the new option "--skip-unavailable" to MI
+	commands '-stack-list-locals', '-stack-list-arguments' and
+	'-stack-list-variables'.
+
+gdb/doc:
+
+2013-08-27  Pedro Alves  <pedro@@codesourcery.com>
+	    Yao Qi  <yao@@codesourcery.com>
+
+	* gdb.texinfo (GDB/MI Stack Manipulation) <-stack-list-locals>:
+	Document new --skip-unavailable option.
+	<-stack-list-variables>: Document new --skip-unavailable option.
+
+gdb/testsuite:
+
+2013-08-27  Yao Qi  <yao@@codesourcery.com>
+
+	* gdb.trace/entry-values.exp: Test unavailable entry value is
+	not shown when option '--skip-unavailable' is specified.
+	* gdb.trace/mi-trace-unavailable.exp (test_trace_unavailable):
+	Add tests for new option '--skip-unavailable'.
+@
+text
+@# Copyright 2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+load_lib trace-support.exp
+
+standard_testfile trace-unavailable.c
+
+if { [prepare_for_testing ${testfile}.exp ${testfile} ${srcfile} {debug}] } {
+    return -1
+}
+
+if ![runto_main] {
+    fail "Can't run to main to check for trace support"
+    return -1
+}
+
+if ![gdb_target_supports_trace] {
+    unsupported "Current target does not support trace"
+    return -1
+}
+
+gdb_exit
+
+load_lib mi-support.exp
+set MIFLAGS "-i=mi"
+
+if [mi_gdb_start] {
+    return
+}
+mi_run_to_main
+
+mi_gdb_test "-break-insert marker" \
+    "\\^done,bkpt=\{number=\"${decimal}\",type=\"breakpoint\".*\"\}" \
+    "insert tracepoint on marker"
+mi_gdb_test "-break-insert -a bar" \
+    "\\^done,bkpt=\{number=\"${decimal}\",type=\"tracepoint\".*\"\}" \
+    "insert tracepoint on bar"
+
+# Define an action.
+mi_gdb_test "-break-commands 3 \"collect array\" \"collect j\" \"end\" " \
+    {\^done} "set action"
+
+mi_gdb_test "-break-insert -a foo" \
+    "\\^done,bkpt=\{number=\"${decimal}\",type=\"tracepoint\".*\"\}" \
+    "insert tracepoint on foo"
+
+# Collect 'main' to make sure no registers are collected except PC.
+mi_gdb_test "-break-commands 4 \"collect main\" \"end\" " \
+    {\^done} "set action on tracepoint 4"
+
+mi_gdb_test "-trace-start" {.*\^done} "trace start"
+mi_send_resuming_command "exec-continue" "continuing to marker"
+mi_expect_stop \
+    "breakpoint-hit" "marker" ".*" ".*" ".*" {"" "disp=\"keep\""} \
+    "stop at marker"
+mi_gdb_test "-trace-stop" {.*} "trace stop"
+
+# Save trace frames to tfile.
+set tracefile [standard_output_file ${testfile}]
+mi_gdb_test "-trace-save ${tracefile}.tf" ".*\\^done" \
+    "save tfile trace file"
+# Save trace frames to ctf.
+mi_gdb_test "-trace-save -ctf ${tracefile}.ctf" ".*\\^done" \
+    "save ctf trace file"
+
+proc test_trace_unavailable { data_source } {
+    global decimal
+
+    with_test_prefix "$data_source" {
+
+	# Test MI commands '-stack-list-locals', '-stack-list-arguments',
+	#  and '-stack-list-variables'.
+	mi_gdb_test "-trace-find frame-number 0" \
+	    ".*\\^done,found=\"1\",tracepoint=\"${decimal}\",traceframe=\"0\",frame=\{.*" \
+	    "-trace-find frame-number 0"
+
+	# The "print entry-values" option shouldn't affect the output of
+	# '-stack-list-locals'.
+	foreach entry_values { no only preferred if-needed both compact default } {
+	    mi_gdb_test "-gdb-set print entry-values $entry_values" {\^done} ""
+
+	    with_test_prefix "$entry_values" {
+		# Test MI command '-stack-list-locals'.
+		mi_gdb_test "-stack-list-locals --simple-values" \
+		    ".*\\^done,locals=\\\[\{name=\"array\",type=\"unsigned char \\\[2\\\]\"\},\{name=\"i\",type=\"int\",value=\"<unavailable>\"\}\\\]" \
+		    "-stack-list-locals --simple-values"
+	    }
+	}
+
+	mi_gdb_test "-gdb-set print entry-values no" {\^done} \
+	    "-gdb-set print entry-values no"
+
+	# Test MI command '-stack-list-locals'.
+	mi_gdb_test "-stack-list-locals --simple-values" \
+	    ".*\\^done,locals=\\\[\{name=\"array\",type=\"unsigned char \\\[2\\\]\"\},\{name=\"i\",type=\"int\",value=\"<unavailable>\"\}\\\]" \
+	    "-stack-list-locals --simple-values"
+	mi_gdb_test "-stack-list-locals --skip-unavailable --simple-values" \
+	    ".*\\^done,locals=\\\[\{name=\"array\",type=\"unsigned char \\\[2\\\]\"\}\\\]" \
+	    "-stack-list-locals --skip-unavailable --simple-values"
+
+	# Test MI command '-stack-list-arguments'.
+	mi_gdb_test "-stack-list-arguments --simple-values" \
+	    ".*\\^done,stack-args=\\\[frame=\{level=\"0\",args=\\\[\{name=\"j\",type=\"int\",value=\"4\"\},\{name=\"s\",type=\"char \\\*\",value=\"<unavailable>\"\}\\\]\},.*\}.*" \
+	    "-stack-list-arguments --simple-values"
+	mi_gdb_test "-stack-list-arguments --skip-unavailable --simple-values" \
+	    ".*\\^done,stack-args=\\\[frame=\{level=\"0\",args=\\\[\{name=\"j\",type=\"int\",value=\"4\"\}\\\]\},.*\}.*" \
+	    "-stack-list-arguments --skip-unavailable --simple-values"
+
+	# Test MI command '-stack-list-variables'.
+	mi_gdb_test "-stack-list-variables --simple-values" \
+	    ".*\\^done,variables=\\\[\{name=\"j\",arg=\"1\",type=\"int\",value=\"4\"\},\{name=\"s\",arg=\"1\",type=\"char \\\*\",value=\"<unavailable>\"\},\{name=\"array\",type=\"unsigned char \\\[2\\\]\"\},\{name=\"i\",type=\"int\",value=\"<unavailable>\"\}\\\]" \
+	    "-stack-list-variables --simple-values"
+	mi_gdb_test "-stack-list-variables --skip-unavailable --simple-values" \
+	    ".*\\^done,variables=\\\[\{name=\"j\",arg=\"1\",type=\"int\",value=\"4\"\},\{name=\"array\",type=\"unsigned char \\\[2\\\]\"\}\\\]" \
+	    "-stack-list-variables --skip-unavailable --simple-values"
+
+	mi_gdb_test "-trace-find frame-number 1" \
+	    ".*\\^done,found=\"1\",tracepoint=\"${decimal}\",traceframe=\"1\",frame=\{.*" \
+	    "-trace-find frame-number 1"
+
+	set pcnum 0
+	if [is_amd64_regs_target] {
+	    set pcnum 16
+	} elseif [is_x86_like_target] {
+	    set pcnum 8
+	} else {
+	    # Other ports support tracepoint should define the number
+	    # of its own pc register.
+	}
+
+	if { $pcnum != 0 } {
+	    global hex
+	    # Test that register 0 and PC are displayed, and register
+	    # 0 is unavailable.
+	    mi_gdb_test "-data-list-register-values x 0 ${pcnum}" \
+		".*\\^done,register-values=\\\[\{number=\"0\",value=\"<unavailable>\"\},\{number=\"${pcnum}\",value=\"${hex}\"\}\\\]" \
+		"-data-list-register-values x"
+
+	    # Test that only available register PC is displayed.
+	    mi_gdb_test "-data-list-register-values --skip-unavailable x 0 ${pcnum}" \
+		".*\\^done,register-values=\\\[\{number=\"${pcnum}\",value=\"${hex}\"\}\\\]" \
+		"-data-list-register-values --skip-unavailable x"
+	}
+
+	# Don't issue command '-trace-find none' to return from
+	# tfind mode (examining trace frames) on purpose, in order
+	# to test that GDB is able to clear its tracing-related local state
+	# in the next -target-select.
+	# mi_gdb_test "-trace-find none" ".*\\^done,found=\"0\".*" "-trace-find none"
+    }
+}
+
+test_trace_unavailable "live"
+
+# Change target to ctf if GDB supports it.
+set msg "-target-select ctf"
+send_gdb "-target-select ctf ${tracefile}.ctf\n"
+gdb_expect {
+    -re ".*\\^connected.*${mi_gdb_prompt}$" {
+	# GDB supports ctf, do the test.
+	test_trace_unavailable "ctf"
+    }
+    -re ".*\\^error,msg=\"Undefined target command.*${mi_gdb_prompt}$" {
+	# GDB doesn't support ctf, skip the test.
+	unsupported "gdb does not support ctf target"
+    }
+    -re ".*$mi_gdb_prompt$" {
+	fail "$msg"
+    }
+    timeout {
+	fail "$msg (timeout)"
+    }
+}
+
+# Change target to tfile.
+mi_gdb_test "-target-select tfile ${tracefile}.tf" ".*\\^connected.*" \
+    "-target-select tfile"
+test_trace_unavailable "tfile"
+
+mi_gdb_exit
+@
+
+
+1.3
+log
+@gdb/
+	* frame.h (read_frame_local): Declare.
+	* mi/mi-cmd-stack.c (list_args_or_locals): Call
+	read_frame_local.
+	* stack.c (read_frame_local): New.
+
+gdb/testsuite/
+
+	* gdb.trace/mi-trace-unavailable.exp: Don't set
+	"print entry-values" to "no".
+	(test_trace_unavailable): Set various values to
+	"print entry-values" to test that the output of
+	'-stack-list-locals' is not affected, and then set
+	set "print entry-values" to "no".
+@
+text
+@d109 3
+d117 3
+d125 3
+@
+
+
+1.2
+log
+@Teach -data-list-register-values to not include unavailable registers
+
+This patch adds an option --skip-unavailable to MI command
+-data-list-register-values, so that unavailable registers are not
+displayed (on the context of traceframes).
+
+The old -data-list-register-values command behaves like
+
+  -data-list-register-values x 0 8
+  ^done,register-values=[{number="0",value="<unavailable>"},{number="8",value="0x80483de"}]
+
+With this patch, an option --skip-unavailable is added,
+
+  -data-list-register-values --skip-unavailable x 0 8
+  ^done,register-values=[{number="8",value="0x80483de"}]
+
+gdb:
+
+2013-06-20  Pedro Alves  <pedro@@codesourcery.com>
+	    Yao Qi  <yao@@codesourcery.com>
+
+	* NEWS: Mention the new option '--skip-unavailable' of command
+	-data-list-register-values.
+	* mi/mi-main.c (mi_cmd_data_list_register_values): Accept the
+	--skip-unavailable option.  Adjust to use output_register.
+	(output_register): Add new 'skip_unavailable' parameter.
+	Handle it.
+
+gdb/doc:
+
+2013-06-20  Pedro Alves  <pedro@@codesourcery.com>
+
+	* gdb.texinfo (GDB/MI Data Manipulation)
+	<-data-list-register-values>: Document the --skip-unavailable
+	option.
+
+gdb/testsuite:
+
+2013-06-20  Yao Qi  <yao@@codesourcery.com>
+
+	* gdb.trace/mi-trace-unavailable.exp: Set tracepoint on 'foo'
+	and set an action.
+	(test_trace_unavailable): Test command -data-list-register-values
+	in the context of traceframe and with option --skip-unavailable.
+	* gdb.trace/trace-unavailable.c (foo): New.
+	(main): Call it.
+	* gdb.mi/gdb2549.exp: Update matching pattern.
+@
+text
+@a77 3
+mi_gdb_test "-gdb-set print entry-values no" {\^done} \
+    "-gdb-set print entry-values no"
+
+d89 16
+@
+
+
+1.1
+log
+@gdb/testsuite/
+
+	* gdb.trace/mi-trace-unavailable.exp: New.
+	* gdb.trace/trace-unavailable.c: New.
+@
+text
+@d55 8
+d107 28
+@
+

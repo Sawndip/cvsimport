@@ -1,0 +1,142 @@
+head	1.2;
+access;
+symbols
+	binutils_latest_snapshot:1.1;
+locks; strict;
+comment	@# @;
+
+
+1.2
+date	2003.01.20.22.34.39;	author sveinse;	state dead;
+branches;
+next	1.1;
+
+1.1
+date	2002.08.28.10.38.50;	author nickc;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@Updates for fixing tic4x arch tagging of its object files.
+
+	* bfd/coffcode.h (coff_set_flags): Added get/set arch hooks.
+	* include/coff/tic4x.h (TICOFF_TARGET_MACHINE_GET): Fixed define bug
+	* include/coff/ti.h (TICOFF_TARGET_MACHINE_GET): Added macros
+	* ld/Makefile.am: Added etic3xcoff.o and etic4xcoff_onchip.o
+	* ld/Makefile.in: Regenerate
+	* ld/configure.tgt: Added extra target emulations
+	* ld/emulparams/tic3xcoff.sh: Remove old settings
+	* ld/emulparams/tic4xcoff.sh: Ditto
+	* ld/emulparams/tic3xcoff-onchip.sh: Added new
+	* ld/scripttempl/tic4xcoff.sc: Revise and combine both c3x and c4x
+	* ld/scripttempl/tic3xcoff.sc: Remove
+@
+text
+@# 32 interrupt vectors + 32 trap vectors each of 4 bytes
+# The .bss and .data sections need to be contiguous for direct addressing
+# The data page pointer gets loaded with the start of .bss
+# TI C compiler uses .cinit to initialise variables in .bss
+
+test -z "$ENTRY" && ENTRY=_start
+# These are substituted in as variables in order to get '}' in a shell
+# conditional expansion.
+INIT='.init : { *(.init) }'
+FINI='.fini : { *(.fini) }'
+cat <<EOF
+OUTPUT_FORMAT("${OUTPUT_FORMAT}")
+OUTPUT_ARCH("${OUTPUT_ARCH}")
+${LIB_SEARCH_DIRS}
+
+ENTRY(${ENTRY})
+${RELOCATING+ __SYSMEM_SIZE = DEFINED(__SYSMEM_SIZE) ? __SYSMEM_SIZE : 0x4000;}
+${RELOCATING+ __STACK_SIZE  = DEFINED(__STACK_SIZE)  ? __STACK_SIZE  : 0x1000;}
+
+SECTIONS
+{
+  .comms ${RELOCATING+ 64} : {
+    *(.comms)
+  } 
+  .bss ${RELOCATING+ SIZEOF(.comms) + ADDR(.comms)} : {
+    ${RELOCATING+ .bss  =  .;}	
+    *(.bss)
+    *(COMMON)
+    ${RELOCATING+  end  =  .;}
+    ${RELOCATING+  _end  =  end;}
+  }
+  .data ${RELOCATING+ SIZEOF(.bss) + ADDR(.bss)} :
+  { 				
+    ${RELOCATING+  .data  = .;}
+    *(.data)
+    ${RELOCATING+  edata  =  .;}
+  }
+  .const ${RELOCATING+ SIZEOF(.data) + ADDR(.data)} :
+  { 					
+    *(.const)
+  }
+  .cinit ${RELOCATING+ SIZEOF(.const) + ADDR(.const)} :
+  { 					
+    ${RELOCATING+  cinit = .;}
+    *(.cinit)
+    LONG(0);
+  }
+  .text ${RELOCATING+ SIZEOF(.cinit) + ADDR(.cinit)} : {
+    ${RELOCATING+  .text =  .;}
+    ${RELOCATING+ *(.init)}
+    *(.text)
+    ${CONSTRUCTING+ ___CTOR_LIST__ = .;}
+    ${CONSTRUCTING+ LONG(___CTOR_END__ - ___CTOR_LIST__ - 2)}
+    ${CONSTRUCTING+ *(.ctors)}
+    ${CONSTRUCTING+ LONG(0);}
+    ${CONSTRUCTING+ ___CTOR_END__  = .;}
+    ${CONSTRUCTING+ ___DTOR_LIST__ = .;}
+    ${CONSTRUCTING+ LONG(___DTOR_END__ - ___DTOR_LIST__ - 2)}
+    ${CONSTRUCTING+ *(.dtors)}
+    ${CONSTRUCTING+ LONG(0)}
+    ${CONSTRUCTING+ ___DTOR_END__  = .;}
+    ${RELOCATING+ *(.fini)}
+    ${RELOCATING+  etext =  .;}
+    ${RELOCATING+  _etext =  etext;}
+  }
+  .stack ${RELOCATING+ SIZEOF(.text) + ADDR(.text)} :
+  { 					
+    *(.stack)
+    ${RELOCATING+ .  =  . + __STACK_SIZE};		
+  }
+  .sysmem ${RELOCATING+ SIZEOF(.stack) + ADDR(.stack)} :
+  { 					
+    *(.sysmem)
+  }
+  .heap ${RELOCATING+ SIZEOF(.sysmem) + ADDR(.sysmem)} :
+  { 					
+    ${RELOCATING+ . += __SYSMEM_SIZE - SIZEOF(.sysmem)};
+  }
+  ${RELOCATING- ${INIT}}
+  ${RELOCATING- ${FINI}}
+  .stab  0 ${RELOCATING+(NOLOAD)} : 
+  {
+    [ .stab ]
+  }
+  .stabstr  0 ${RELOCATING+(NOLOAD)} :
+  {
+    [ .stabstr ]
+  }
+/* The TI tools sets cinit to -1 if the ram model is used.  */
+    ${RELOCATING+  cinit = SIZEOF(.cinit) == 1 ? cinit : -1;}
+}
+EOF
+@
+
+
+1.1
+log
+@Add TMS320C4x support
+@
+text
+@@
+

@@ -1,0 +1,94 @@
+head	1.1;
+access;
+symbols;
+locks; strict;
+comment	@ * @;
+
+
+1.1
+date	2013.07.26.11.15.45;	author palves;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.1
+log
+@GDB kills itself instead of interrupting inferior
+
+When GDB is run with IO redirected to a pipe, the 'interrupt' command
+causes it to kill its own process group instead of the inferior's.
+The problem manifests itself in async mode, native debugging:
+
+    $ cat | gdb <file>
+    (gdb) set target-async on
+    (gdb) run &
+    (gdb) interrupt
+    A debugging session is active.
+    Inferior 1 [process 20584] will be killed.
+    Quit anyway? (y or n) [answered Y; input not from terminal]
+
+In this case, GDB tells that its stdin isn't a tty and doesn't save
+the inferior's process group in
+inflow.c:terminal_init_inferior_with_pgrp.  The 'interrupt' command
+tries to 'kill' the inferior's process group in
+`inf-ptrace.c:inf_ptrace_stop`, but since that wasn't saved in the
+first place, GDB kills process group 0, meaning, its own process
+group.
+
+When GDB is used from a frontend, that means killing its own process
+group including the frontend and possibly the X session.  This was
+originally seen with SublimeGDB:
+  https://github.com/quarnster/SublimeGDB/issues/29.
+
+The patch makes GDB save the inferior pgid regardless of having a
+terminal, as pgid is used not only to reset foreground process group,
+but also to interrupt the inferior process.  It also adds a regression
+test.  Luckily, we can emulate not having a terminal with "set
+interactive-mode off", avoiding the need of special magic to spawn gdb
+with a pipe.
+
+Tested on x86_64 Fedora 17.
+
+gdb/
+2013-07-26  Cyril Nikolaev  <cyril@@nichtverstehen.de>
+
+	* inflow.c (terminal_init_inferior_with_pgrp): Save inferior
+	process group regardless of having tty on stdin.
+
+gdb/testsuite/
+2013-07-26  Pedro Alves  <palves@@redhat.com>
+
+	* gdb.base/interrupt-noterm.c, gdb.base/interrupt-noterm.exp: New
+	files.
+@
+text
+@/* This testcase is part of GDB, the GNU debugger.
+
+   Copyright (C) 2013 Free Software Foundation, Inc.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+#include <unistd.h>
+
+int
+main ()
+{
+  sleep (3);
+  return 0;
+}
+@

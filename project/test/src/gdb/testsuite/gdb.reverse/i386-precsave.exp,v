@@ -1,0 +1,750 @@
+head	1.13;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.13
+	gdb_7_6-2013-04-26-release:1.13
+	gdb_7_6-branch:1.13.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.13
+	gdb_7_5_1-2012-11-29-release:1.12
+	gdb_7_5-2012-08-17-release:1.12
+	gdb_7_5-branch:1.12.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.12
+	gdb_7_4_1-2012-04-26-release:1.8.2.1
+	gdb_7_4-2012-01-24-release:1.8.2.1
+	gdb_7_4-branch:1.8.0.2
+	gdb_7_4-2011-12-13-branchpoint:1.8
+	gdb_7_3_1-2011-09-04-release:1.5
+	gdb_7_3-2011-07-26-release:1.5
+	gdb_7_3-branch:1.5.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.5
+	gdb_7_2-2010-09-02-release:1.4
+	gdb_7_2-branch:1.4.0.2
+	gdb_7_2-2010-07-07-branchpoint:1.4
+	gdb_7_1-2010-03-18-release:1.2
+	gdb_7_1-branch:1.2.0.2
+	gdb_7_1-2010-02-18-branchpoint:1.2;
+locks; strict;
+comment	@# @;
+
+
+1.13
+date	2013.01.01.06.41.26;	author brobecke;	state Exp;
+branches;
+next	1.12;
+
+1.12
+date	2012.07.11.15.21.36;	author tromey;	state Exp;
+branches;
+next	1.11;
+
+1.11
+date	2012.06.26.17.54.59;	author tromey;	state Exp;
+branches;
+next	1.10;
+
+1.10
+date	2012.01.16.16.21.52;	author palves;	state Exp;
+branches;
+next	1.9;
+
+1.9
+date	2012.01.04.08.27.53;	author brobecke;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2011.11.08.08.23.48;	author qiyao;	state Exp;
+branches
+	1.8.2.1;
+next	1.7;
+
+1.7
+date	2011.05.24.12.01.22;	author muller;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2011.05.16.13.56.41;	author palves;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2011.01.01.15.33.49;	author brobecke;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2010.05.28.18.26.41;	author msnyder;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2010.05.05.18.07.02;	author brobecke;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2010.01.01.07.32.06;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2009.10.22.19.58.26;	author msnyder;	state Exp;
+branches;
+next	;
+
+1.8.2.1
+date	2012.01.06.04.54.28;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.13
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@# Copyright 2009-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# This file is part of the gdb testsuite.
+
+#
+# This test tests some i386 general instructions with a precord dumpfile.
+#
+
+# This test suitable only for process record-replay
+if ![supports_process_record] {
+    return
+}
+
+
+if ![istarget "i?86-*linux*"] then {
+    verbose "Skipping i386 reverse tests."
+    return
+}
+
+standard_testfile i386-reverse.c
+set precsave [standard_output_file i386.precsave]
+
+# some targets have leading underscores on assembly symbols.
+set additional_flags [gdb_target_symbol_prefix_flags]
+
+if {[prepare_for_testing $testfile.exp $testfile $srcfile \
+	 [list debug $additional_flags]]} {
+    return -1
+}
+
+set end_of_main          [gdb_get_line_number " end of main "]
+set end_of_inc_dec_tests [gdb_get_line_number " end inc_dec_tests "]
+
+runto main
+
+if [supports_process_record] {
+    # Activate process record/replay
+    gdb_test_no_output "record" "Turn on process record"
+}
+
+global hex
+global decimal
+
+gdb_test "break $end_of_main" \
+    "Breakpoint $decimal at .*/$srcfile, line $end_of_main\." \
+    "BP at end of main"
+
+gdb_test "continue" "Breakpoint .* end of main .*" "run to end of main"
+
+gdb_test "record save $precsave" \
+    "Saved core file $precsave with execution log\."  \
+    "save process recfile"
+
+gdb_test "kill" "" "Kill process, prepare to debug log file" \
+    "Kill the program being debugged\\? \\(y or n\\) " "y"
+
+gdb_test "record restore $precsave" \
+    "Program terminated with signal .*" \
+    "reload precord save file"
+
+gdb_test "step" "inc .eax.*" "step to inc eax 1st time"
+send_gdb "info reg eax\n"
+gdb_expect {
+    -re "eax *($hex)\t.*$gdb_prompt " {
+	set preinc_eax $expect_out(1,string)
+    }
+}
+
+gdb_test "step" "inc .ecx.*" "step to inc ecx 1st time"
+send_gdb "info reg ecx\n"
+gdb_expect {
+    -re "ecx *($hex)\t.*$gdb_prompt " {
+	set preinc_ecx $expect_out(1,string)
+    }
+}
+
+gdb_test "step" "inc .edx.*" "step to inc edx 1st time"
+send_gdb "info reg edx\n"
+gdb_expect {
+    -re "edx *($hex)\t.*$gdb_prompt " {
+	set preinc_edx $expect_out(1,string)
+    }
+}
+
+gdb_test "step" "inc .ebx.*" "step to inc ebx 1st time"
+send_gdb "info reg ebx\n"
+gdb_expect {
+    -re "ebx *($hex)\t.*$gdb_prompt " {
+	set preinc_ebx $expect_out(1,string)
+    }
+}
+
+gdb_test "step" "inc .esp.*" "step to inc esp 1st time"
+send_gdb "info reg esp\n"
+gdb_expect {
+    -re "esp *($hex)\t.*$gdb_prompt " {
+	set preinc_esp $expect_out(1,string)
+    }
+}
+
+gdb_test "step" "inc .ebp.*" "step to inc ebp 1st time"
+send_gdb "info reg ebp\n"
+gdb_expect {
+    -re "ebp *($hex)\t.*$gdb_prompt " {
+	set preinc_ebp $expect_out(1,string)
+    }
+}
+
+gdb_test "step" "inc .esi.*" "step to inc esi 1st time"
+send_gdb "info reg esi\n"
+gdb_expect {
+    -re "esi *($hex)\t.*$gdb_prompt " {
+	set preinc_esi $expect_out(1,string)
+    }
+}
+
+gdb_test "step" "inc .edi.*" "step to inc edi 1st time"
+send_gdb "info reg edi\n"
+gdb_expect {
+    -re "edi *($hex)\t.*$gdb_prompt " {
+	set preinc_edi $expect_out(1,string)
+    }
+}
+
+gdb_test "step" "dec .eax.*" "step to dec eax 1st time"
+send_gdb "info reg eax\n"
+gdb_expect {
+    -re "eax *($hex)\t.*$gdb_prompt " {
+	set predec_eax $expect_out(1,string)
+    }
+}
+
+gdb_test "step" "dec .ecx.*" "step to dec ecx 1st time"
+send_gdb "info reg ecx\n"
+gdb_expect {
+    -re "ecx *($hex)\t.*$gdb_prompt " {
+	set predec_ecx $expect_out(1,string)
+    }
+}
+
+gdb_test "step" "dec .edx.*" "step to dec edx 1st time"
+send_gdb "info reg edx\n"
+gdb_expect {
+    -re "edx *($hex)\t.*$gdb_prompt " {
+	set predec_edx $expect_out(1,string)
+    }
+}
+
+gdb_test "step" "dec .ebx.*" "step to dec ebx 1st time"
+send_gdb "info reg ebx\n"
+gdb_expect {
+    -re "ebx *($hex)\t.*$gdb_prompt " {
+	set predec_ebx $expect_out(1,string)
+    }
+}
+
+gdb_test "step" "dec .esp.*" "step to dec esp 1st time"
+send_gdb "info reg esp\n"
+gdb_expect {
+    -re "esp *($hex)\t.*$gdb_prompt " {
+	set predec_esp $expect_out(1,string)
+    }
+}
+
+gdb_test "step" "dec .ebp.*" "step to dec ebp 1st time"
+send_gdb "info reg ebp\n"
+gdb_expect {
+    -re "ebp *($hex)\t.*$gdb_prompt " {
+	set predec_ebp $expect_out(1,string)
+    }
+}
+
+gdb_test "step" "dec .esi.*" "step to dec esi 1st time"
+send_gdb "info reg esi\n"
+gdb_expect {
+    -re "esi *($hex)\t.*$gdb_prompt " {
+	set predec_esi $expect_out(1,string)
+    }
+}
+
+gdb_test "step" "dec .edi.*" "step to dec edi 1st time"
+send_gdb "info reg edi\n"
+gdb_expect {
+    -re "edi *($hex)\t.*$gdb_prompt " {
+	set predec_edi $expect_out(1,string)
+    }
+}
+
+# gdb_test "step" "end inc_dec_tests .*" "step to end inc_dec_tests 1st time"
+
+gdb_test "break $end_of_main" \
+    "Breakpoint $decimal at .* line $end_of_main\." \
+    "set breakpoint at end of main"
+
+gdb_test "continue" \
+    " end of main .*" \
+    "continue to end of main"
+
+gdb_test "break $end_of_inc_dec_tests" \
+    "Breakpoint $decimal at .* line $end_of_inc_dec_tests\." \
+    "set breakpoint at end of inc_dec_tests"
+
+gdb_test "reverse-continue" \
+    " end inc_dec_tests .*" \
+    "reverse to inc_dec_tests"
+
+#
+# Now reverse step, and check register values.
+#
+
+gdb_test "info reg edi" "edi *$preinc_edi\t.*" "edi before reverse-dec"
+gdb_test "reverse-step" "dec .edi.*" "reverse-step to dec edi"
+gdb_test "info reg edi" "edi *$predec_edi\t.*" "edi after reverse-dec"
+
+gdb_test "info reg esi" "esi *$preinc_esi\t.*" "esi before reverse-dec"
+gdb_test "reverse-step" "dec .esi.*" "reverse-step to dec esi"
+gdb_test "info reg esi" "esi *$predec_esi\t.*" "esi after reverse-dec"
+
+gdb_test "info reg ebp" "ebp *$preinc_ebp\t.*" "ebp before reverse-dec"
+gdb_test "reverse-step" "dec .ebp.*" "reverse-step to dec ebp"
+gdb_test "info reg ebp" "ebp *$predec_ebp\t.*" "ebp after reverse-dec"
+
+gdb_test "info reg esp" "esp *$preinc_esp\t.*" "esp before reverse-dec"
+gdb_test "reverse-step" "dec .esp.*" "reverse-step to dec esp"
+gdb_test "info reg esp" "esp *$predec_esp\t.*" "esp after reverse-dec"
+
+gdb_test "info reg ebx" "ebx *$preinc_ebx\t.*" "ebx before reverse-dec"
+gdb_test "reverse-step" "dec .ebx.*" "reverse-step to dec ebx"
+gdb_test "info reg ebx" "ebx *$predec_ebx\t.*" "ebx after reverse-dec"
+
+gdb_test "info reg edx" "edx *$preinc_edx\t.*" "edx before reverse-dec"
+gdb_test "reverse-step" "dec .edx.*" "reverse-step to dec edx"
+gdb_test "info reg edx" "edx *$predec_edx\t.*" "edx after reverse-dec"
+
+gdb_test "info reg ecx" "ecx *$preinc_ecx\t.*" "ecx before reverse-dec"
+gdb_test "reverse-step" "dec .ecx.*" "reverse-step to dec ecx"
+gdb_test "info reg ecx" "ecx *$predec_ecx\t.*" "ecx after reverse-dec"
+
+gdb_test "info reg eax" "eax *$preinc_eax\t.*" "eax before reverse-dec"
+gdb_test "reverse-step" "dec .eax.*" "reverse-step to dec eax"
+gdb_test "info reg eax" "eax *$predec_eax\t.*" "eax after reverse-dec"
+
+gdb_test "info reg edi" "edi *$predec_edi\t.*" "edi before reverse-inc"
+gdb_test "reverse-step" "inc .edi.*" "reverse-step to inc edi"
+gdb_test "info reg edi" "edi *$preinc_edi\t.*" "edi after reverse-inc"
+
+gdb_test "info reg esi" "esi *$predec_esi\t.*" "esi before reverse-inc"
+gdb_test "reverse-step" "inc .esi.*" "reverse-step to inc esi"
+gdb_test "info reg esi" "esi *$preinc_esi\t.*" "esi after reverse-inc"
+
+gdb_test "info reg ebp" "ebp *$predec_ebp\t.*" "ebp before reverse-inc"
+gdb_test "reverse-step" "inc .ebp.*" "reverse-step to inc ebp"
+gdb_test "info reg ebp" "ebp *$preinc_ebp\t.*" "ebp after reverse-inc"
+
+gdb_test "info reg esp" "esp *$predec_esp\t.*" "esp before reverse-inc"
+gdb_test "reverse-step" "inc .esp.*" "reverse-step to inc esp"
+gdb_test "info reg esp" "esp *$preinc_esp\t.*" "esp after reverse-inc"
+
+gdb_test "info reg ebx" "ebx *$predec_ebx\t.*" "ebx before reverse-inc"
+gdb_test "reverse-step" "inc .ebx.*" "reverse-step to inc ebx"
+gdb_test "info reg ebx" "ebx *$preinc_ebx\t.*" "ebx after reverse-inc"
+
+gdb_test "info reg edx" "edx *$predec_edx\t.*" "edx before reverse-inc"
+gdb_test "reverse-step" "inc .edx.*" "reverse-step to inc edx"
+gdb_test "info reg edx" "edx *$preinc_edx\t.*" "edx after reverse-inc"
+
+gdb_test "info reg ecx" "ecx *$predec_ecx\t.*" "ecx before reverse-inc"
+gdb_test "reverse-step" "inc .ecx.*" "reverse-step to inc ecx"
+gdb_test "info reg ecx" "ecx *$preinc_ecx\t.*" "ecx after reverse-inc"
+
+gdb_test "info reg eax" "eax *$predec_eax\t.*" "eax before reverse-inc"
+gdb_test "reverse-step" "inc .eax.*" "reverse-step to inc eax"
+gdb_test "info reg eax" "eax *$preinc_eax\t.*" "eax after reverse-inc"
+
+
+@
+
+
+1.12
+log
+@	* gdb.reverse/break-precsave.exp: Use standard_output_file.
+	* gdb.reverse/consecutive-precsave.exp: Use standard_output_file.
+	* gdb.reverse/finish-precsave.exp: Use standard_output_file.
+	* gdb.reverse/i386-precsave.exp: Use standard_output_file.
+	* gdb.reverse/machinestate-precsave.exp: Use standard_output_file.
+	* gdb.reverse/sigall-precsave.exp: Use standard_output_file.
+	* gdb.reverse/solib-precsave.exp: Use standard_output_file.
+	* gdb.reverse/step-precsave.exp: Use standard_output_file.
+	* gdb.reverse/until-precsave.exp: Use standard_output_file.
+	* gdb.reverse/watch-precsave.exp: Use standard_output_file.
+@
+text
+@d1 1
+a1 1
+# Copyright 2009-2012 Free Software Foundation, Inc.
+@
+
+
+1.11
+log
+@	* gdb.reverse/break-precsave.exp: Use standard_testfile.
+	* gdb.reverse/break-reverse.exp: Use standard_testfile.
+	* gdb.reverse/consecutive-precsave.exp: Use standard_testfile.
+	* gdb.reverse/consecutive-reverse.exp: Use standard_testfile.
+	* gdb.reverse/finish-precsave.exp: Use standard_testfile.
+	* gdb.reverse/finish-reverse-bkpt.exp: Use standard_testfile.
+	* gdb.reverse/finish-reverse.exp: Use standard_testfile.
+	* gdb.reverse/i386-precsave.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.reverse/i386-reverse.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.reverse/i386-sse-reverse.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.reverse/i387-env-reverse.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.reverse/i387-stack-reverse.exp: Use standard_testfile,
+	prepare_for_testing
+	* gdb.reverse/machinestate-precsave.exp: Use standard_testfile.
+	* gdb.reverse/machinestate.exp: Use standard_testfile.
+	* gdb.reverse/next-reverse-bkpt-over-sr.exp: Use standard_testfile.
+	* gdb.reverse/sigall-precsave.exp: Use standard_testfile,
+	build_executable.
+	* gdb.reverse/sigall-reverse.exp: Use standard_testfile,
+	build_executable.
+	* gdb.reverse/solib-precsave.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.reverse/solib-reverse.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.reverse/step-precsave.exp: Use standard_testfile.
+	* gdb.reverse/step-reverse.exp: Use standard_testfile.
+	* gdb.reverse/until-precsave.exp: Use standard_testfile.
+	* gdb.reverse/until-reverse.exp: Use standard_testfile.
+	* gdb.reverse/watch-precsave.exp: Use standard_testfile.
+	* gdb.reverse/watch-reverse.exp: Use standard_testfile.
+@
+text
+@d34 1
+d63 2
+a64 2
+gdb_test "record save i386.precsave" \
+    "Saved core file i386.precsave with execution log\."  \
+d70 1
+a70 1
+gdb_test "record restore i386.precsave" \
+@
+
+
+1.10
+log
+@2012-01-16  Pedro Alves  <palves@@redhat.com>
+
+	Remove all calls to strace.
+@
+text
+@d33 1
+a33 3
+set testfile "i386-precsave"
+set srcfile i386-reverse.c
+set binfile ${objdir}/${subdir}/${testfile}
+d38 2
+a39 2
+if { [gdb_compile "${srcdir}/${subdir}/${srcfile}" "${binfile}" executable [list debug $additional_flags]] != "" } {
+    untested ${testfile}.exp
+a45 6
+# Get things started.
+
+gdb_exit
+gdb_start
+gdb_reinitialize_dir $srcdir/$subdir
+gdb_load ${binfile}
+@
+
+
+1.9
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@a26 4
+if $tracelevel {
+    strace $tracelevel
+}
+
+@
+
+
+1.8
+log
+@gdb/testsuite/
+
+	* gdb.exp (supports_process_record): New.
+	(supports_reverse): New.
+	* gdb.reverse/break-precsave.exp: Call support_process_record
+	to run test conditionally.
+	* gdb.reverse/consecutive-precsave.exp: Likewise.
+	* gdb.reverse/i386-precsave.exp: Likewise.
+	* gdb.reverse/machinestate-precsave.exp: Likewise.
+	* gdb.reverse/solib-precsave.exp: Likewise.
+	* gdb.reverse/step-precsave.exp: Likewise.
+	* gdb.reverse/until-precsave.exp: Likewise.
+	* gdb.reverse/watch-precsave.exp: Likewise.
+	* gdb.reverse/break-reverse.exp: Call support_reverse  to run
+	test conditionally.
+	* gdb.reverse/consecutive-reverse.exp: Likewise.
+	* gdb.reverse/finish-precsave.exp: Likewise.
+	* gdb.reverse/finish-reverse-bkpt.exp: Likewise.
+	* gdb.reverse/finish-reverse.exp: Likewise.
+	* gdb.reverse/i386-reverse.exp: Likewise.
+	* gdb.reverse/i386-sse-reverse.exp: Likewise.
+	* gdb.reverse/machinestate.exp: Likewise.
+	* gdb.reverse/next-reverse-bkpt-over-sr.exp: Likewise.
+	* gdb.reverse/sigall-precsave.exp: Likewise.
+	* gdb.reverse/sigall-reverse.exp: Likewise.
+	* gdb.reverse/solib-reverse.exp: Likewise.
+	* gdb.reverse/step-reverse.exp: Likewise.
+	* gdb.reverse/until-reverse.exp: Likewise.
+	* gdb.reverse/watch-reverse.exp: Likewise.
+@
+text
+@d1 1
+a1 1
+# Copyright 2009, 2010, 2011 Free Software Foundation, Inc.
+@
+
+
+1.8.2.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d1 1
+a1 1
+# Copyright 2009-2012 Free Software Foundation, Inc.
+@
+
+
+1.7
+log
+@../commit.txt~
+@
+text
+@d23 1
+a23 1
+if ![target_info exists gdb,use_precord] {
+d60 1
+a60 1
+if [target_info exists gdb,use_precord] {
+@
+
+
+1.6
+log
+@2011-05-16  Pedro Alves  <pedro@@codesourcery.com>
+
+	gdb/testsuite/
+	* gdb.ada/start.exp: Call untested with the correct test filename.
+	* gdb.arch/i386-bp_permanent.exp: Call untested with the correct
+	test filename.  Make the test's binary unique.
+	* gdb.arch/i386-signal.exp: Call untested with the correct test
+	filename.
+	* gdb.arch/i386-size-overlap.exp: Ditto.
+	* gdb.arch/Makefile.in (EXECUTABLES): Update.
+	* gdb.base/gcore-buffer-overflow.exp: Ditto.
+	* gdb.cp/call-c.exp: Ditto.
+	* gdb.mi/mi-reverse.exp: Call untested with the correct test
+	filename.  Make the test's binary unique.
+	* gdb.mi/Makefile.in (EXECUTABLES): Update.
+	* gdb.python/py-mi.exp: Ditto.
+	* gdb.python/Makefile.in (EXECUTABLES): Update.
+	* gdb.reverse/i386-precsave.exp: Ditto.
+	* gdb.reverse/i387-env-reverse.exp: Call untested with the correct
+	test filename.
+	* gdb.reverse/i387-stack-reverse.exp: Ditto.
+	* gdb.reverse/sigall-precsave.exp: Ditto.  Make the test's binary
+	unique.
+	* gdb.reverse/sigall-reverse.exp: Call untested with the correct
+	test filename.
+	* gdb.reverse/Makefile.in (EXECUTABLES): Update.
+	* gdb.trace/tfile.exp: Ditto.
+@
+text
+@d42 1
+a42 5
+# TODO: detect this automatically
+set additional_flags ""
+if [istarget "i?86-*-cygwin*"] then {
+  set additional_flags "additional_flags=-DSYMBOL_PREFIX=\"_\""
+}
+@
+
+
+1.5
+log
+@run copyright.sh for 2011.
+@
+text
+@d37 2
+a38 2
+set testfile "i386-reverse"
+set srcfile ${testfile}.c
+d49 1
+a49 1
+    untested i386-reverse
+@
+
+
+1.4
+log
+@2010-05-28  Michael Snyder  <msnyder@@msnyder-server.eng.vmware.com>
+
+	* gdb.reverse/break-precsave.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/break-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/consecutive-precsave.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/consecutive-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/finish-precsave.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/finish-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/i386-precsave.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/i386-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/i386-sse-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/i387-env-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/i387-stack-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/machinestate-precsave.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/machinestate.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/sigall-precsave.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/sigall-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/solib-precsave.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/solib-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/step-precsave.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/step-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/until-precsave.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/until-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/watch-precsave.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/watch-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+@
+text
+@d1 1
+a1 1
+# Copyright 2009, 2010 Free Software Foundation, Inc.
+@
+
+
+1.3
+log
+@Do not set prms_id/bug_id anymore.
+
+2010-05-05  Joel Brobecker  <brobecker@@adacore.com>
+
+	Remove the use of prms_id and bug_id throughout the testsuite.
+@
+text
+@d66 1
+a66 2
+    gdb_test "record" "" "Turn on process record"
+    # FIXME: command ought to acknowledge, so we can test if it succeeded.
+@
+
+
+1.2
+log
+@Update copyright year in most headers.
+
+Automatic update by copyright.sh.
+@
+text
+@a30 2
+set prms_id 0
+set bug_id 0
+@
+
+
+1.1
+log
+@2009-10-19  Michael Snyder  <msnyder@@vmware.com>
+
+	* gdb.reverse/break-precsave.exp: New test.
+	* gdb.reverse/consecutive-precsave.exp: Ditto.
+	* gdb.reverse/finish-precsave.exp: Ditto.
+	* gdb.reverse/i386-precsave.exp: Ditto.
+	* gdb.reverse/machinestate-precsave.exp: Ditto.
+	* gdb.reverse/sigall-precsave.exp: Ditto.
+	* gdb.reverse/solilb-precsave.exp: Ditto.
+	* gdb.reverse/step-precsave.exp: Ditto.
+	* gdb.reverse/until-precsave.exp: Ditto.
+	* gdb.reverse/watch-precsave.exp: Ditto.
+@
+text
+@d1 1
+a1 1
+# Copyright 2009 Free Software Foundation, Inc.
+@
+

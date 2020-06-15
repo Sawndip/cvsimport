@@ -1,0 +1,288 @@
+head	1.5;
+access;
+symbols
+	binutils-2_24-branch:1.5.0.4
+	binutils-2_24-branchpoint:1.5
+	binutils-2_21_1:1.1.6.1
+	binutils-2_23_2:1.5
+	binutils-2_23_1:1.5
+	binutils-2_23:1.5
+	binutils-2_23-branch:1.5.0.2
+	binutils-2_23-branchpoint:1.5
+	binutils-2_22_branch:1.3.0.4
+	binutils-2_22:1.3
+	binutils-2_22-branch:1.3.0.2
+	binutils-2_22-branchpoint:1.3
+	binutils-2_21:1.1
+	binutils-2_21-branch:1.1.0.6
+	binutils-2_21-branchpoint:1.1
+	binutils-2_20_1:1.1
+	binutils-2_20:1.1
+	binutils-2_20-branch:1.1.0.4
+	binutils-2_20-branchpoint:1.1
+	dje-cgen-play1-branch:1.1.0.2
+	dje-cgen-play1-branchpoint:1.1
+	binutils_latest_snapshot:1.5;
+locks; strict;
+comment	@# @;
+
+
+1.5
+date	2012.06.15.15.13.35;	author amodra;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2012.06.06.10.50.15;	author amodra;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2011.05.24.00.06.17;	author hp;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2011.05.21.01.47.24;	author hp;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2009.03.25.03.04.21;	author hp;	state Exp;
+branches
+	1.1.6.1;
+next	;
+
+1.1.6.1
+date	2011.05.29.04.51.51;	author amodra;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.5
+log
+@ld/
+	* ldlang.h (lang_output_section_statement_type): Add after_end field.
+	(lang_abs_symbol_at_beginning_of, lang_abs_symbol_at_end_of): Delete.
+	(section_for_dot): Declare.
+	* ldlang.c (lang_size_sections_1): Correct comment.
+	(current_section): Move earlier.
+	(current_assign, prefer_next_section): New static vars.
+	(lang_do_assignments_1): Add found_end param.  Detect _end
+	assignment to set found_end.  Set os->after_end.  Set above statics.
+	(lang_do_assignments): Adjust lang_do_assignments_1 call.  Init
+	vars.
+	(section_for_dot): New function.
+	(lang_set_startof): Don't make an absolute symbol.
+	(lang_abs_symbol_at_beginning_of, lang_abs_symbol_at_end_of): Delete.
+	* ldexp.c (new_rel_from_abs): Use section_for_dot.
+	* emultempl/lnk960.em (symbol_at_beginning_of): New function.
+	(symbol_at_end_of): Likewise.
+	(lnk960_after_allocation): Use them.
+	* scripttempl/elf.sc: Precede OTHER_GOT_SYMBOLS with . = .; and
+	likewise before __bss_start.
+
+ld/testsuite/
+Update far too many tests.
+@
+text
+@#source: start1.s
+#source: tls-e-tpoffcomm1.s
+#as: --no-underscore --em=criself -I$srcdir/$subdir
+#ld: -m crislinux
+#objdump: -d -s -h -t -r -p
+
+# Make sure we can link a file with TPOFF relocs against common
+# symbols.
+
+.*:     file format elf32-cris
+
+Program Header:
+    LOAD off    0x0+ vaddr 0x0+80000 paddr 0x0+80000 align 2\*\*13
+         filesz 0x0+84 memsz 0x0+84 flags r-x
+     TLS off    0x0+84 vaddr 0x0+82084 paddr 0x0+82084 align 2\*\*2
+         filesz 0x0+ memsz 0x0+8 flags r--
+private flags = 0:
+
+Sections:
+Idx Name          Size      VMA       LMA       File off  Algn
+  0 .text         0+10  0+80074  0+80074  0+74  2\*\*1
+                  CONTENTS, ALLOC, LOAD, READONLY, CODE
+  1 .tbss         0+8  0+82084  0+82084  0+84  2\*\*2
+                  ALLOC, THREAD_LOCAL
+SYMBOL TABLE:
+0+80074 l    d  \.text	0+ \.text
+0+82084 l    d  \.tbss	0+ \.tbss
+0+ l    df \*ABS\*	0+ .*
+0+80078 l     F \.text	0+c do_test
+0+ l    df \*ABS\*	0+ .*
+0+80074 g       \.text	0+ _start
+0+82084 g       \.text	0+ __bss_start
+0+ g       \.tbss	0+4 foo
+0+82084 g       \.text	0+ _edata
+0+820a0 g       \.text	0+ _end
+0+4 g       \.tbss	0+4 bar
+#...
+Disassembly of section \.text:
+
+00080074 <_start>:
+   80074:	41b2                	moveq 1,\$r11
+#...
+00080078 <do_test>:
+   80078:	2f0e f8ff ffff      	add.d 0xfffffff8,\$r0
+   8007e:	2f1e fcff ffff      	add.d 0xfffffffc,\$r1
+@
+
+
+1.4
+log
+@bfd/
+	* elflink.c (elf_link_input_bfd): Provide a file symbol for
+	each input file with local syms, if the input lacks such.
+	(bfd_elf_final_link): Add a file symbol to mark end of locals
+	for which we can associate with input files.
+	(struct elf_final_link_info): Add filesym_count field.
+	(struct elf_outext_info): Add need_second_pass and second_pass.
+	(elf_link_output_extsym): Detect symbols defined in the output
+	file, emit them on second pass over locals.
+ld/testsuite/
+Update to suit added STT_FILE symbols.
+@
+text
+@d26 2
+a27 2
+0+80074 l    d  .text	0+ .text
+0+82084 l    d  .tbss	0+ .tbss
+d29 1
+a29 1
+0+80078 l     F .text	0+c do_test
+d31 6
+a36 6
+0+80074 g       .text	0+ _start
+0+82084 g       \*ABS\*	0+ __bss_start
+0+ g       .tbss	0+4 foo
+0+82084 g       \*ABS\*	0+ _edata
+0+820a0 g       \*ABS\*	0+ _end
+0+4 g       .tbss	0+4 bar
+d38 1
+a38 1
+Disassembly of section .text:
+@
+
+
+1.3
+log
+@	* ld-cris/tls-e-tpoffcomm1.d: Adjust for second PR12763 change,
+	setting TLS file offset.
+@
+text
+@d28 1
+d30 1
+@
+
+
+1.2
+log
+@	* ld-cris/tls-e-tpoffcomm1.d: Adjust for PR12763 change removing
+	empty program header.
+@
+text
+@d15 1
+a15 1
+     TLS off    0x0+ vaddr 0x0+82084 paddr 0x0+82084 align 2\*\*2
+d23 1
+a23 1
+  1 .tbss         0+8  0+82084  0+82084  0+  2\*\*2
+@
+
+
+1.1
+log
+@	* ld-cris/tls-e-dtpoffd3.d, ld-cris/tls-e-tpoffcomm1.d,
+	ld-cris/tls-e-tpoffcomm1.s: New tests.
+@
+text
+@d14 2
+a15 4
+         filesz 0x0+a4 memsz 0x0+a4 flags r-x
+    LOAD off    0x0+a4 vaddr 0x0+820a4 paddr 0x0+820a4 align 2\*\*13
+         filesz 0x0+ memsz 0x0+ flags rw-
+     TLS off    0x0+a4 vaddr 0x0+820a4 paddr 0x0+820a4 align 2\*\*2
+d21 1
+a21 1
+  0 .text         0+10  0+80094  0+80094  0+94  2\*\*1
+d23 1
+a23 1
+  1 .tbss         0+8  0+820a4  0+820a4  0+a4  2\*\*2
+d26 5
+a30 5
+0+80094 l    d  .text	0+ .text
+0+820a4 l    d  .tbss	0+ .tbss
+0+80098 l     F .text	0+c do_test
+0+80094 g       .text	0+ _start
+0+820a4 g       \*ABS\*	0+ __bss_start
+d32 2
+a33 2
+0+820a4 g       \*ABS\*	0+ _edata
+0+820c0 g       \*ABS\*	0+ _end
+d38 2
+a39 2
+00080094 <_start>:
+   80094:	41b2                	moveq 1,\$r11
+d41 3
+a43 3
+00080098 <do_test>:
+   80098:	2f0e f8ff ffff      	add.d 0xfffffff8,\$r0
+   8009e:	2f1e fcff ffff      	add.d 0xfffffffc,\$r1
+@
+
+
+1.1.6.1
+log
+@	PR 12365
+	PR 12613
+	PR 12632
+	PR 12739
+	PR 12753
+	PR 12760
+	PR 12763
+Apply fix from mainline along with assorted other small fixes.
+@
+text
+@d14 4
+a17 2
+         filesz 0x0+84 memsz 0x0+84 flags r-x
+     TLS off    0x0+84 vaddr 0x0+82084 paddr 0x0+82084 align 2\*\*2
+d23 1
+a23 1
+  0 .text         0+10  0+80074  0+80074  0+74  2\*\*1
+d25 1
+a25 1
+  1 .tbss         0+8  0+82084  0+82084  0+84  2\*\*2
+d28 5
+a32 5
+0+80074 l    d  .text	0+ .text
+0+82084 l    d  .tbss	0+ .tbss
+0+80078 l     F .text	0+c do_test
+0+80074 g       .text	0+ _start
+0+82084 g       \*ABS\*	0+ __bss_start
+d34 2
+a35 2
+0+82084 g       \*ABS\*	0+ _edata
+0+820a0 g       \*ABS\*	0+ _end
+d40 2
+a41 2
+00080074 <_start>:
+   80074:	41b2                	moveq 1,\$r11
+d43 3
+a45 3
+00080078 <do_test>:
+   80078:	2f0e f8ff ffff      	add.d 0xfffffff8,\$r0
+   8007e:	2f1e fcff ffff      	add.d 0xfffffffc,\$r1
+@
+
+

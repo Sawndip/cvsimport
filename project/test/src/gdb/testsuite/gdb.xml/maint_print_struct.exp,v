@@ -1,0 +1,118 @@
+head	1.1;
+access;
+symbols;
+locks; strict;
+comment	@# @;
+
+
+1.1
+date	2013.04.30.12.33.51;	author wtedeschi;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.1
+log
+@Fix display of structures/bitfields in register description.
+
+Add support for displaying structures and bitfields for registers when
+executing "maint print c-tdesc". This command is also used when
+converting the xml target description file into c file.
+
+Example of the behaviour is given below reporting a snipet of the xml file
+and a snippet of the c code generated.
+
+XML file contains:
+...
+    <union id="vecint">
+      <field name="v4" type="v4int8"/>
+      <field name="v2" type="v2int16"/>
+    </union>
+
+    <struct id="struct1">
+      <field name="v4" type="v4int8"/>
+      <field name="v2" type="v2int16"/>
+    </struct>
+
+    <struct id="struct2" size="8">
+      <field name="f1" start="0" end="34"/>
+      <field name="f2" start="63" end="63"/>
+    </struct>
+...
+
+Setting this xml file as target description file and
+issuing the maintenance print c-tdesc the following output
+is obtained:
+
+  feature = tdesc_create_feature (result, "extra");
+  field_type = tdesc_named_type (feature, "int8");
+  tdesc_create_vector (feature, "v4int8", field_type, 4);
+
+  field_type = tdesc_named_type (feature, "int16");
+  tdesc_create_vector (feature, "v2int16", field_type, 2);
+
+  type = tdesc_create_union (feature, "vecint");
+  field_type = tdesc_named_type (feature, "v4int8");
+  tdesc_add_field (type, "v4", field_type);
+  field_type = tdesc_named_type (feature, "v2int16");
+  tdesc_add_field (type, "v2", field_type);
+
+C output is not supported type "struct1".
+
+This is finally the issue.
+
+2013-03-27  Walfred Tedeschi  <walfred.tedeschi@@intel.com>
+
+        * target-descriptions.c (maint_print_c_tdesc_cmd):
+        Add case to parse structures as register types and
+        bitfields.
+
+testsuite/
+
+	* gdb.xml/maint_print_struct.exp: New file.
+	* gdb.xml/maint_print_struct.xml: New file.
+
+Change-Id: I2e20b095d508319c80275e724a9452c7e2834067
+Signed-off-by: Walfred Tedeschi <walfred.tedeschi@@intel.com>
+@
+text
+@# This testcase is part of GDB, the GNU debugger.
+#
+# Copyright 2013 Free Software Foundation, Inc.
+#
+# Contributed by Intel Corp. <walfred.tedeschi@@intel.com>
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+if {[gdb_skip_xml_test]} {
+    unsupported "maint_print_struct.exp"
+    return -1
+}
+
+gdb_start
+
+# Required registers are not present so it is expected a warning.
+#
+gdb_test "set tdesc filename $srcdir/$subdir/maint_print_struct.xml" "
+warning:.*" "setting a new tdesc having only a structure"
+
+gdb_test "maint print c-tdesc" "
+.*tdesc_create_reg \\(feature, \"bad_reg1\", \[0-9\]+, 1, NULL, 128, \"two_fielded\"\\);\r
+.*tdesc_create_reg \\(feature, \"bad_reg2\", \[0-9\]+, 1, NULL, 64, \"bitfield\"\\);\r
+.*" "printing tdesc with a structure and a bitfield"
+@

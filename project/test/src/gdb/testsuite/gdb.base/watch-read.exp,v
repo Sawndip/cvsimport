@@ -1,0 +1,348 @@
+head	1.7;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.5
+	gdb_7_6-2013-04-26-release:1.5
+	gdb_7_6-branch:1.5.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.5
+	gdb_7_5_1-2012-11-29-release:1.4
+	gdb_7_5-2012-08-17-release:1.4
+	gdb_7_5-branch:1.4.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.4
+	gdb_7_4_1-2012-04-26-release:1.3.4.1
+	gdb_7_4-2012-01-24-release:1.3.4.1
+	gdb_7_4-branch:1.3.0.4
+	gdb_7_4-2011-12-13-branchpoint:1.3
+	gdb_7_3_1-2011-09-04-release:1.3
+	gdb_7_3-2011-07-26-release:1.3
+	gdb_7_3-branch:1.3.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.3
+	gdb_7_2-2010-09-02-release:1.1
+	gdb_7_2-branch:1.1.0.2
+	gdb_7_2-2010-07-07-branchpoint:1.1;
+locks; strict;
+comment	@# @;
+
+
+1.7
+date	2013.06.27.19.00.47;	author tromey;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2013.05.15.17.33.04;	author palves;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2013.01.01.06.33.26;	author brobecke;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2012.01.04.08.17.46;	author brobecke;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2011.02.21.14.57.37;	author uweigand;	state Exp;
+branches
+	1.3.4.1;
+next	1.2;
+
+1.2
+date	2011.01.01.15.33.43;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2010.02.22.23.35.17;	author palves;	state Exp;
+branches;
+next	;
+
+1.3.4.1
+date	2012.01.06.04.44.01;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.7
+log
+@test suite update - gdb.base/[t-z]
+
+Convert files gdb.base/[t-z]*.exp to use standard_output_file et al.
+
+	* gdb.base/testenv.exp, gdb.base/tui-layout.exp,
+	gdb.base/twice.exp, gdb.base/type-opaque.exp, gdb.base/unload.exp,
+	gdb.base/unwindonsignal.exp, gdb.base/valgrind-db-attach.exp,
+	gdb.base/valgrind-infcall.exp, gdb.base/value-double-free.exp,
+	gdb.base/varargs.exp, gdb.base/watch-cond-infcall.exp,
+	gdb.base/watch-cond.exp, gdb.base/watch-non-mem.exp,
+	gdb.base/watch-read.exp, gdb.base/watch-vfork.exp,
+	gdb.base/watch_thread_num.exp, gdb.base/watchpoint-cond-gone.exp,
+	gdb.base/watchpoint-delete.exp, gdb.base/watchpoint-hw.exp,
+	gdb.base/watchpoint-solib.exp, gdb.base/watchpoint.exp,
+	gdb.base/watchpoints.exp, gdb.base/wchar.exp, gdb.base/whatis.exp:
+	Use standard_testfile, standard_output_file, prepare_for_testing,
+	clean_restart.
+@
+text
+@# This testcase is part of GDB, the GNU debugger.
+
+# Copyright 2010-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# This file is part of the gdb testsuite.
+
+#
+# Tests involving read watchpoints, and other kinds of watchpoints
+# watching the same memory as read watchpoints.
+#
+
+standard_testfile .c
+
+if {[skip_hw_watchpoint_access_tests]} {
+    return 0
+}
+
+if { [prepare_for_testing ${testfile}.exp ${testfile} ${srcfile}] } {
+    untested ${testfile}.exp
+    return -1
+}
+
+if { ![runto main] } then {
+    fail "run to main"
+    return
+}
+
+set read_line [gdb_get_line_number "read line" $srcfile]
+
+# Test running to a read of `global', with a read watchpoint set
+# watching it.
+
+gdb_test "rwatch global" \
+    "Hardware read watchpoint .*: global" \
+    "set hardware read watchpoint on global variable"
+
+# The first read is on entry to the loop.
+
+gdb_test "continue" \
+    "read watchpoint .*: global.*.*Value = 0.*in main.*$srcfile:$read_line.*" \
+    "read watchpoint triggers on first read"
+
+# The second read happens on second loop iteration, after `global'
+# having been incremented.  On architectures where gdb has to emulate
+# read watchpoints with access watchpoints, this tests the
+# only-report-if-value-changed logic.  On targets that support real
+# read watchpoints, this tests that GDB ignores the watchpoint's old
+# value, knowing that some untrapped write could have changed it, and
+# so reports the read watchpoint unconditionally.
+
+gdb_test "continue" \
+    "read watchpoint .*: global.*.*Value = 1.*in main.*$srcfile:$read_line.*" \
+    "read watchpoint triggers on read after value changed"
+
+# The following tests check that when the user sets a write or access
+# watchpoint watching the same memory as a read watchpoint, GDB also
+# applies the only-report-if-value-changed logic even on targets that
+# support real read watchpoints.
+
+# The program should be stopped at the read line.  Set a write
+# watchpoint (leaving the read watchpoint) and continue.  Only the
+# write watchpoint should be reported as triggering.
+
+gdb_test "watch global" \
+    "atchpoint .*: global" \
+    "set write watchpoint on global variable"
+
+gdb_test "continue" \
+    "atchpoint .*: global.*Old value = 1.*New value = 2.*" \
+    "write watchpoint triggers"
+
+set exp ""
+set exp "${exp}2.*read watchpoint.*keep y.*global.*breakpoint already hit 2 times.*"
+set exp "${exp}3.*watchpoint.*keep y.*global.*breakpoint already hit 1 time.*"
+gdb_test "info watchpoints" \
+    "$exp" \
+    "only write watchpoint triggers when value changes"
+
+# The program is now stopped at the write line.  Continuing should
+# stop at the read line, and only the read watchpoint should be
+# reported as triggering.
+
+gdb_test "continue" \
+    "read watchpoint .*: global.*Value = 2.*in main.*$srcfile:$read_line.*" \
+    "read watchpoint triggers when value doesn't change, trapping reads and writes"
+
+set exp ""
+set exp "${exp}2.*read watchpoint.*keep y.*global.*breakpoint already hit 3 times.*"
+set exp "${exp}3.*watchpoint.*keep y.*global.*breakpoint already hit 1 time.*"
+gdb_test "info watchpoints" \
+    "$exp" \
+    "only read watchpoint triggers when value doesn't change"
+@
+
+
+1.6
+log
+@Remove my name from a couple tests.
+
+Tested on x86_64 Fedora 17.
+
+gdb/testsuite/
+2013-05-15  Pedro Alves  <palves@@redhat.com>
+
+	* gdb.base/fixsection.c: Remove attribution.
+	* gdb.base/watch-read.exp: Ditto.
+@
+text
+@d25 1
+a25 2
+set testfile "watch-read"
+set srcfile ${testfile}.c
+@
+
+
+1.5
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@a17 2
+# This file was written by Pedro Alves <pedro@@codesourcery.com>
+
+@
+
+
+1.4
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d3 1
+a3 1
+# Copyright 2010-2012 Free Software Foundation, Inc.
+@
+
+
+1.3
+log
+@	* lib/gdb.exp (skip_hw_breakpoint_tests): New procedure.
+	(skip_hw_watchpoint_tests): Likewise.
+	(skip_hw_watchpoint_multi_tests): Likewise.
+	(skip_hw_watchpoint_access_tests): Likewise.
+
+	* gdb.base/hbreak.exp: Use appropriate skip_hw_..._tests checks.
+	* gdb.base/pr11022.exp: Likewise.
+	* gdb.base/watch-read.exp: Likewise.
+	* gdb.base/watch_thread_num.exp: Likewise.
+	* gdb.base/watchpoint-hw-hit-once.exp: Likewise.
+	* gdb.base/watchpoint-hw.exp: Likewise.
+	* gdb.base/watchpoint.exp: Likewise.
+	* gdb.threads/local-watch-wrong-thread.exp: Likewise.
+	* gdb.threads/watchthreads-reorder.exp: Likewise.
+	* gdb.threads/watchthreads.exp: Likewise.
+	* gdb.threads/watchthreads2.exp: Likewise.
+@
+text
+@d3 1
+a3 1
+# Copyright 2010, 2011 Free Software Foundation, Inc.
+@
+
+
+1.3.4.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d3 1
+a3 1
+# Copyright 2010-2012 Free Software Foundation, Inc.
+@
+
+
+1.2
+log
+@run copyright.sh for 2011.
+@
+text
+@d30 2
+a31 3
+if { [target_info exists gdb,no_hardware_watchpoints] } {
+    untested ${testfile}.exp
+    return -1
+@
+
+
+1.1
+log
+@2010-02-22  Pedro Alves  <pedro@@codesourcery.com>
+
+	PR9605
+
+	gdb/
+	* breakpoint.c (insert_bp_location): If inserting the read
+	watchpoint failed, fallback to an access watchpoint.
+	(bpstat_check_watchpoint): Stop for read watchpoint triggers even
+	if the value changed, if not watching the same memory for writes.
+	(watchpoint_locations_match): Add comment.
+	(update_global_location_list): Copy the location's watchpoint type.
+	* i386-nat.c (i386_length_and_rw_bits): It's an internal error to
+	handle read watchpoints here.
+	(i386_insert_watchpoint): Read watchpoints aren't supported.
+	* remote.c (remote_insert_watchpoint): Return 1 for unsupported
+	packets.
+	* target.h (target_insert_watchpoint): Update description.
+
+2010-02-22  Pedro Alves  <pedro@@codesourcery.com>
+
+	PR9605
+
+	gdbserver/
+	* i386-low.c (i386_length_and_rw_bits): Throw a fatal error if
+	handing a read watchpoint.
+	(i386_low_insert_watchpoint): Read watchpoints aren't supported.
+
+2010-02-22  Pedro Alves  <pedro@@codesourcery.com>
+
+	PR9605
+
+	gdb/testsuite/
+	* gdb.base/watch-read.c, gdb.base/watch-read.exp: New files.
+@
+text
+@d3 1
+a3 1
+# Copyright 2010 Free Software Foundation, Inc.
+@
+

@@ -1,0 +1,113 @@
+head	1.1;
+access;
+symbols
+	binutils-2_24-branch:1.1.0.10
+	binutils-2_24-branchpoint:1.1
+	binutils-2_21_1:1.1
+	binutils-2_23_2:1.1
+	binutils-2_23_1:1.1
+	binutils-2_23:1.1
+	binutils-2_23-branch:1.1.0.8
+	binutils-2_23-branchpoint:1.1
+	binutils-2_22_branch:1.1.0.6
+	binutils-2_22:1.1
+	binutils-2_22-branch:1.1.0.4
+	binutils-2_22-branchpoint:1.1
+	binutils-2_21:1.1
+	binutils-2_21-branch:1.1.0.2
+	binutils-2_21-branchpoint:1.1
+	binutils_latest_snapshot:1.1;
+locks; strict;
+comment	@# @;
+
+
+1.1
+date	2010.02.27.00.36.49;	author dougkwan;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.1
+log
+@2010-02-26  Doug Kwan  <dougkwan@@google.com>
+
+	* arm.cc (Target_arm::scan_reloc_for_stub): Move code handling
+	R_ARM_V4BX to Target_arm::scan_reloc_section_for_stubs.
+	(Target_arm::scan_reloc_section_for_stubs): Instead of calling
+	scan_reloc_for_stub, do all processing of R_ARM_V4BX here.
+	* options.cc (General_options::General_options): Initialize member
+	fix_v4bx_.
+	* testsuite/Makefile.am (check_SCRIPTS): Add arm_fix_v4bx.sh
+	(check_DATA): Add arm_fix_v4bx.stdout, arm_fix_v4bx_interworking.stdout
+	and rm_no_fix_v4bx.stdout
+	(arm_fix_v4bx.stdout, arm_fix_v4bx, arm_fix_v4bx.o,
+	arm_fix_v4bx_interworking.stdout, arm_fix_v4bx_interworking,
+	arm_no_fix_v4bx.stdout, arm_no_fix_v4bx): New make rules.
+	(MOSTLYCLEANFILES): Add arm_fix_v4bx, arm_fix_v4bx_interworking
+	and arm_no_fix_v4bx.
+	* Makefile.in: Regenerate.
+	* testsuite/arm_fix_v4bx.s: New file.
+	* testsuite/arm_fix_v4bx.sh: Ditto.
+@
+text
+@#!/bin/sh
+
+# arm_v4bx.sh -- a test case for --fix-v4bx and --fix-v4bx-interworking.
+
+# Copyright 2010 Free Software Foundation, Inc.
+# Written by Doug Kwan <dougkwan@@google.com>.
+
+# This file is part of gold.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+# MA 02110-1301, USA.
+
+# This file goes with arm_v4bx.s, an ARM assembly source file constructed to
+# have test the handling of R_ARM_V4BX relocation.
+
+check()
+{
+    if ! grep -q "$2" "$1"
+    then
+	echo "Did not find expected instruction in $1:"
+	echo "   $2"
+	echo ""
+	echo "Actual instructions below:"
+	cat "$1"
+	exit 1
+    fi
+}
+
+# Test --fix-v4bx
+check arm_fix_v4bx.stdout ".*00:	.* 	mov	pc, r0"
+check arm_fix_v4bx.stdout ".*04:	.* 	mov	pc, pc"
+
+# Test --fix-v4bx-interworking
+check arm_fix_v4bx_interworking.stdout ".*00:	.* 	b	.*00 <.*>"
+check arm_fix_v4bx_interworking.stdout ".*04:	.* 	mov	pc, pc"
+check arm_fix_v4bx_interworking.stdout ".*00:	.* 	tst	r0, #1"
+check arm_fix_v4bx_interworking.stdout ".*04:	.* 	moveq	pc, r0"
+check arm_fix_v4bx_interworking.stdout ".*08:	.* 	bx	r0"
+
+# Test no fix.
+check arm_no_fix_v4bx.stdout ".*00:	.* 	bx	r0"
+check arm_no_fix_v4bx.stdout ".*04:	.* 	bx	pc"
+
+exit 0
+@

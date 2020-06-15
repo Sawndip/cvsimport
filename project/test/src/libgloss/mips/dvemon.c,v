@@ -1,0 +1,164 @@
+head	1.1;
+access;
+symbols
+	newlib-2_2_0:1.1.0.10
+	newlib-2_1_0:1.1
+	newlib-2_0_0:1.1
+	newlib-1_20_0:1.1
+	newlib-1_19_0:1.1
+	newlib-1_18_0:1.1
+	newlib-1_17_0-arc:1.1.0.8
+	binutils-arc-20080908-branch:1.1.0.6
+	binutils-arc-20080908-branchpoint:1.1
+	newlib-1_17_0:1.1
+	newlib-1_16_0:1.1
+	newlib-1_15_0:1.1
+	newlib-csl-coldfire-4_1-32:1.1
+	newlib-csl-sourcerygxx-4_1-32:1.1
+	newlib-csl-innovasic-fido-3_4_4-33:1.1
+	newlib-csl-coldfire-4_1-30:1.1
+	newlib-csl-sourcerygxx-4_1-30:1.1
+	newlib-csl-coldfire-4_1-28:1.1
+	newlib-csl-sourcerygxx-4_1-28:1.1
+	newlib-csl-arm-2006q3-27:1.1
+	newlib-csl-sourcerygxx-4_1-27:1.1
+	newlib-csl-arm-2006q3-26:1.1
+	newlib-csl-sourcerygxx-4_1-26:1.1
+	newlib-csl-sourcerygxx-4_1-24:1.1
+	newlib-csl-sourcerygxx-4_1-23:1.1
+	newlib-csl-sourcerygxx-4_1-21:1.1
+	newlib-csl-arm-2006q3-21:1.1
+	newlib-csl-arm-2006q3-19:1.1
+	newlib-csl-sourcerygxx-4_1-19:1.1
+	newlib-csl-sourcerygxx-4_1-18:1.1
+	newlib-csl-sourcerygxx-3_4_4-25:1.1
+	newlib-csl-sourcerygxx-4_1-17:1.1
+	newlib-csl-sourcerygxx-4_1-14:1.1
+	newlib-csl-sourcerygxx-4_1-13:1.1
+	newlib-csl-sourcerygxx-4_1-12:1.1
+	newlib-csl-sourcerygxx-4_1-9:1.1
+	newlib-csl-sourcerygxx-4_1-8:1.1
+	newlib-csl-sourcerygxx-4_1-7:1.1
+	newlib-csl-arm-2006q1-6:1.1
+	newlib-csl-sourcerygxx-4_1-6:1.1
+	newlib-csl-sourcerygxx-4_1-5:1.1
+	newlib-csl-sourcerygxx-4_1-4:1.1
+	newlib-autotools-branch:1.1.0.4
+	newlib-csl-20060320-branch:1.1.0.2
+	newlib-csl-20060320-branchpoint:1.1
+	newlib-1_14_0:1.1
+	newlib-csl-arm-2005-q1b:1.1
+	newlib-csl-arm-2005-q1a:1.1
+	newlib-1_13_0:1.1
+	csl-arm-2004-q3:1.1
+	csl-arm-2004-q1a:1.1
+	csl-arm-2004-q1:1.1
+	newlib-1_12_0:1.1
+	csl-arm-2003-q4:1.1
+	newlib-1_11_0:1.1
+	cygnus_cvs_20020108_pre:1.1
+	newlib-1_10_0:1.1
+	newlib-1_9_0:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.1
+date	2000.03.17.22.48.51;	author ranjith;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.1
+log
+@20000317 sourceware import
+@
+text
+@/* dve.c -- I/O code for the Densan DVE-R3900 board.
+ *
+ * Copyright (c) 1998, 1999 Cygnus Support
+ *
+ * The authors hereby grant permission to use, copy, modify, distribute,
+ * and license this software and its documentation for any purpose, provided
+ * that existing copyright notices are retained in all copies and that this
+ * notice is included verbatim in any distributions. No written agreement,
+ * license, or royalty fee is required for any of the authorized uses.
+ * Modifications to this software may be copyrighted by their authors
+ * and need not follow the licensing terms described here, provided that
+ * the new terms are clearly indicated on the first page of each file where
+ * they apply.
+ */
+
+/* Flag indicating that we are being debugged by GDB.  If set,
+   preceded each character output to the console with a ^O,
+   so that GDB will print it instead of discarding it.  */
+
+int output_debug = 1;
+
+/* Monitor "ci" function (console input) */
+
+typedef int (*cifunc)(int waitflag);
+#ifdef __mips64
+static cifunc ci = (cifunc) 0xffffffffbfc00010L;
+#else
+static cifunc ci = (cifunc) 0xbfc00010;
+#endif
+
+#define WAIT    1
+#define NOWAIT  0 
+#define NOCHAR  (-1)
+
+/* Monitor "co" function (console output) */
+
+typedef void (*cofunc)(int c);
+#ifdef __mips64
+static cofunc co = (cofunc) 0xffffffffbfc00018L;
+#else
+static cofunc co = (cofunc) 0xbfc00018;
+#endif
+
+/*  outbyte -- shove a byte out the serial port; used by write.c.  */
+
+int
+outbyte(byte)
+     unsigned char byte;
+{
+  /* Output a ^O prefix so that GDB won't discard the output.  */
+  if (output_debug)
+    co (0x0f);
+
+  co (byte);
+  return byte;
+}
+
+/* inbyte -- get a byte from the serial port; used by read.c.  */
+
+unsigned char
+inbyte()
+{
+  return (unsigned char) ci (WAIT);
+}
+
+
+/* Structure filled in by get_mem_info.  Only the size field is
+   actually used (by sbrk), so the others aren't even filled in.  */
+
+struct s_mem
+{
+  unsigned int size;
+  unsigned int icsize;
+  unsigned int dcsize;
+};
+
+
+void
+get_mem_info (mem)
+     struct s_mem *mem;
+{
+  mem->size = 0x1000000;	/* DVE-R3900 board has 16 MB of RAM */
+}
+@

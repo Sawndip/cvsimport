@@ -1,0 +1,184 @@
+head	1.2;
+access;
+symbols
+	start:1.1.1.1 sockets:1.1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.2
+date	2005.04.04.20.33.28;	author msnyder;	state dead;
+branches;
+next	1.1;
+
+1.1
+date	2004.03.05.00.19.13;	author msnyder;	state Exp;
+branches
+	1.1.1.1;
+next	;
+
+1.1.1.1
+date	2004.03.05.00.19.13;	author msnyder;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@Oops, these were never meant to be here...
+@
+text
+@#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
+#include <netdb.h>
+#include <stdio.h>
+#include <errno.h>
+
+int verbose;
+
+int
+sock_open (hostname, portname, protocol)
+     char *hostname;
+     char *portname;
+     char *protocol;
+{
+  struct sockaddr_in sockaddr;
+  int port = atoi (portname);
+  struct protoent *proto;
+  struct hostent  *host;
+  int sock, tmp, fd;
+
+
+  /* open a socket (no particular binding) */
+  if (verbose)
+    fprintf (stderr, "Allocating a socket...\n");
+  sock = socket (PF_INET, SOCK_STREAM, 0);
+  if (sock < 0)
+    {
+      perror ("Can't open socket");
+      return -1;
+    }
+
+  /* Set reuseable address (??) */
+  if (verbose)
+    fprintf (stderr, "Making socket address reuseable (???)\n");
+  tmp = 1;
+  if (setsockopt (sock, SOL_SOCKET, SO_REUSEADDR, (char *) &tmp, 
+		  sizeof (tmp)))
+    {
+      perror ("setsocket reuseaddr");
+      return -1;
+    }
+
+  /* bind socket to address (port) */
+  sockaddr.sin_family      = PF_INET;
+  sockaddr.sin_port        = htons(port);
+  if (hostname && hostname[0])
+    {
+      host = gethostbyname (hostname);
+      if (!host)
+	{
+	  fprintf (stderr, "Couldn't find host '%s'\n", hostname);
+	  return -1;
+	}
+      memcpy (&sockaddr.sin_addr.s_addr, host->h_addr, 
+	      sizeof (struct in_addr));
+    }
+  else
+    sockaddr.sin_addr.s_addr = INADDR_ANY;
+
+  if (verbose)
+    fprintf (stderr, "Binding socket to port %s:%d; telling it to listen.\n", 
+	     (hostname && *hostname) ? hostname : "<this-host>", port);
+  if (bind   (sock, (struct sockaddr *) &sockaddr, sizeof (sockaddr)) ||
+      listen (sock, 1))
+    {
+      if (verbose)
+	fprintf (stderr, "Couldn't bind port %s:%d -- attempting to connect.\n", 
+		 hostname, port);
+      if (connect (sock, (struct sockaddr *) &sockaddr, sizeof (sockaddr)))
+	{
+	  perror ("connection failed.");
+	  return -1;
+	}
+      if (verbose)
+	fprintf (stderr, "Connected to previously opened socket.\n");
+      return sock;
+    }
+  else
+    {
+      if (verbose)
+	fprintf (stderr, "Accepting connection on socket (please wait)...\n");
+      tmp = sizeof (sockaddr);
+      fd = accept (sock, (struct sockaddr *) &sockaddr, &tmp);
+      if (fd < 0)
+	{
+	  perror ("Accept failed");
+	  return -1;
+	}
+
+      if (verbose)
+	fprintf (stderr, "Using protocol '%s'.\n", protocol);
+      proto = getprotobyname (protocol);
+      if (!proto)
+	{
+	  perror ("couldn't open protocol");
+	  return -1;
+	}
+ 
+#if 0
+      /* setting "keep alive" attribute for socket (??) */
+      if (verbose)
+	fprintf (stderr, "Setting socket's \"keep alive\" attribute (???)\n");
+      tmp = 1;
+      if (setsockopt (sock, SOL_SOCKET, SO_KEEPALIVE, (char *) &tmp,
+		      sizeof (tmp)))
+	{
+	  perror ("setsocket keepalive");
+	  return -1;
+	}
+#endif
+
+      if (protocol[0] == 't' &&
+	  protocol[1] == 'c' &&
+	  protocol[2] == 'p')
+	{
+	  /* set TCP_NODELAY */
+	  if (verbose)
+	    fprintf (stderr, "Setting TCP nodelay attribute.\n");
+	  tmp = 1;
+	  if (setsockopt (fd, proto->p_proto, TCP_NODELAY, (char *) &tmp,
+			  sizeof (tmp)))
+	    {
+	      perror ("setsockopt nodelay");
+	      return -1;
+	    }
+	}
+
+      close (sock);
+      return fd;
+    }
+}
+@
+
+
+1.1
+log
+@Initial revision
+@
+text
+@@
+
+
+1.1.1.1
+log
+@Import common files
+@
+text
+@@

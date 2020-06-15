@@ -1,0 +1,174 @@
+head	1.2;
+access;
+symbols;
+locks; strict;
+comment	@# @;
+
+
+1.2
+date	2013.10.16.15.08.11;	author luisgpm;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2013.04.11.14.13.43;	author jkratoch;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@	* gcore.in: Call GDB using the full path to the gcore script.
+	Error out if the GDB binary is not found.
+@
+text
+@#!/bin/sh
+
+#   Copyright (C) 2003-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+#
+# Script to generate a core file of a running program.
+# It starts up gdb, attaches to the given PID and invokes the gcore command.
+#
+
+if [ "$#" -eq "0" ]
+then
+    echo "usage:  @@GCORE_TRANSFORM_NAME@@ [-o filename] pid"
+    exit 2
+fi
+
+# Need to check for -o option, but set default basename to "core".
+name=core
+
+if [ "$1" = "-o" ]
+then
+    if [ "$#" -lt "3" ]
+    then
+	# Not enough arguments.
+	echo "usage:  @@GCORE_TRANSFORM_NAME@@ [-o filename] pid"
+	exit 2
+    fi
+    name=$2
+
+    # Shift over to start of pid list
+    shift; shift
+fi
+
+# Attempt to fetch the absolute path to the gcore script that was
+# called.
+binary_path=`dirname "$0"`
+
+if test "x$binary_path" = x. ; then
+  # We got "." back as a path.  This means the user executed
+  # the gcore script locally (i.e. ./gcore) or called the
+  # script via a shell interpreter (i.e. sh gcore).
+  binary_basename=`basename "$0"`
+
+  # If the gcore script was called like "sh gcore" and the script
+  # lives in the current directory, "which" will not give us "gcore".
+  # So first we check if the script is in the current directory
+  # before using the output of "which".
+  if test -f "$binary_basename" ; then
+    # We have a local gcore script in ".".  This covers the case of
+    # doing "./gcore" or "sh gcore".
+    binary_path="."
+  else
+    # The gcore script was not found in ".", which means the script
+    # was called from somewhere else in $PATH by "sh gcore".
+    # Extract the correct path now.
+    binary_path_from_env=`which "$0"`
+    binary_path=`dirname "$binary_path_from_env"`
+  fi
+fi
+
+# Check if the GDB binary is in the expected path.  If not, just
+# quit with a message.
+if [ ! -f "$binary_path"/@@GDB_TRANSFORM_NAME@@ ]; then
+  echo "gcore: GDB binary (${binary_path}/@@GDB_TRANSFORM_NAME@@) not found"
+  exit 1
+fi
+
+# Initialise return code.
+rc=0
+
+# Loop through pids
+for pid in $*
+do
+	# `</dev/null' to avoid touching interactive terminal if it is
+	# available but not accessible as GDB would get stopped on SIGTTIN.
+	$binary_path/@@GDB_TRANSFORM_NAME@@ </dev/null --nx --batch \
+	    -ex "set pagination off" -ex "set height 0" -ex "set width 0" \
+	    -ex "attach $pid" -ex "gcore $name.$pid" -ex detach -ex quit
+
+	if [ -r $name.$pid ] ; then 
+	    rc=0
+	else
+	    echo "@@GCORE_TRANSFORM_NAME@@: failed to create $name.$pid"
+	    rc=1
+	    break
+	fi
+
+
+done
+
+exit $rc
+@
+
+
+1.1
+log
+@gdb/
+	* Makefile.in (HAVE_NATIVE_GCORE_TARGET): New.
+	(generated_files): Add gcore.
+	(install-only, uninstall): Add gcore if HAVE_NATIVE_GCORE_TARGET or
+	HAVE_NATIVE_GCORE_HOST.
+	(gcore): New.
+	* NEWS (Changes since GDB 7.6): Mention newly installed gcore.
+	* config/alpha/alpha-osf3.mh, config/i386/fbsd.mh,
+	config/i386/fbsd64.mh, config/i386/i386gnu.mh, config/i386/i386sol2.mh,
+	config/i386/sol2-64.mh, config/mips/irix5.mh, config/mips/irix6.mh,
+	config/powerpc/fbsd.mh, config/sparc/fbsd.mh, config/sparc/sol2.mh:
+	Add HAVE_NATIVE_GCORE_HOST.
+	* configure: Regenerate.
+	* configure.ac (HAVE_NATIVE_GCORE_TARGET): New, set it, AC_SUBST it.
+	New AC_SUBST fir GDB_TRANSFORM_NAME and GCORE_TRANSFORM_NAME.  New
+	AC_CONFIG_FILES for gcore.
+	* configure.tgt: Add gdb_have_gcore to the initial comment.  Set
+	gdb_have_gcore.
+	* gdb_gcore.sh: Rename to ...
+	* gcore.in: ... here.  Remove gcore.sh comment.  Use GDB_TRANSFORM_NAME
+	and GCORE_TRANSFORM_NAME substitutions.
+
+gdb/doc/
+	* Makefile.in (MAN1S): Add gcore.1.
+	Remove "Host, target, and site specific Makefile fragments" comment.
+	(@@host_makefile_frag@@, HAVE_NATIVE_GCORE_TARGET): New.
+	(install-man1, uninstall-man1): Conditionalize gcore.1.
+	(gcore.1): New.
+	* gdb.texinfo (Man Pages): Add gcore man.
+	(gcore man): New node.
+@
+text
+@d46 34
+d88 1
+a88 1
+	@@GDB_TRANSFORM_NAME@@ </dev/null --nx --batch \
+@
+

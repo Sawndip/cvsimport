@@ -1,0 +1,203 @@
+git-cvsimport(1)
+================
+
+NAME
+----
+git-cvsimport - Salvage your data out of another SCM people love to hate
+
+
+SYNOPSIS
+--------
+[verse]
+'git cvsimport' [-A <author-conv-file>] [-b] [-C <git_repository>]
+              [-d <CVSROOT>] [-h] [-i] [-k] [-p <options-for-engine>]
+	      [-P <cvsps-output-file>] [-r <remote>] [-R] [-s <subst>]
+	      [-S <regex>] [-u] [-v] [-z <fuzz>] [<CVS_module>]
+
+DESCRIPTION
+-----------
+Imports a CVS repository into git. This tool will either create a new
+repository, or incrementally import into an existing one.
+
+*WARNING:* The CVS model of version control lends itself to all manner
+of perversities; not all sequences of CVS operations can be translated
+into an import stream, and importing is not guaranteed to produce a
+perfectly accurate representation of CVS history. Please see the
+section on <<issues,engine-specific issues>> for further reference.
+
+git cvsimport will do well at translating CVS repositories with a
+linear or close-to-linear revision history, no merges, and
+well-disciplined tagging practices.  More complex cases will require
+human judgment amplified by a repository-editing tool such as
+http://www.catb.org/~esr/reposurgeon[reposurgeon].
+
+OPTIONS
+-------
+-A <author-conv-file>::
+	CVS by default uses the Unix username when writing its
+	commit logs. Using this option and an author-conv-file
+	maps the name recorded in CVS to author name, e-mail and
+	optional timezone:
++
+---------
+	exon=Andreas Ericsson <ae@op5.se> +0200
+	spawn=Simon Pawn <spawn@frog-pond.org> -0500
+---------
++
+'git cvsimport' will make it appear as those authors had
+their GIT_AUTHOR_NAME and GIT_AUTHOR_EMAIL set properly
+all along.
++
+For convenience, this data is saved to `$GIT_DIR/cvs-authors`
+each time the '-A' option is provided and read from that same
+file each time 'git cvsimport' is run.
++
+It is not recommended to use this feature if you intend to
+export changes back to CVS again later with
+'git cvsexportcommit'.
+
+-b::
+        Create a bare repo. If you intend to set up a shared public
+	repository that all developers can read/write, or if you want
+	to use linkgit:git-cvsserver[1], then you probably want to
+	make a bare repository using this option. See
+	linkgit:gitcvs-migration[7].
+
+-C <target-dir>::
+        The git repository to import to.  If the directory doesn't
+        exist, it will be created.  Default is the current directory.
+
+-d <CVSROOT>::
+	The root of the CVS archive. It is only necessary to specify
+	this option if you are running from somewhere other than a
+	CVS checkout directory; the value is passed to the conversion
+	engine to be interpreted.
+
+-e <engine>::
+	Splitting the CVS log into patch sets is done by an engine program,
+	which must emit a git fast-import stream to standard output.
+	This option changes the engine used; when given, it must be the
+	first option on the command line.
+
+-h::
+	Print a short usage message and exit.
+
+-i::
+	Import-only: don't perform a checkout after importing.  This option
+	ensures the working directory and index remain untouched and will
+	not create them if they do not exist.
+
+-k::
+	Kill keywords: will extract files with '-kk' from the CVS archive
+	to avoid noisy changesets. Highly recommended, but off by default
+	to preserve compatibility with early imported trees.
+
+-P <cvsps-output-file>::
+	Instead of calling a conversion engine, read the provided
+	import-stream file. Useful for debugging or when the first
+	stage of conversion is being handled outside cvsimport.
+
+-r <remote>::
+	The git remote to import this CVS repository into.
+	Moves all CVS branches into remotes/<remote>/<branch>
+	akin to the way 'git clone' uses 'origin' by default.
+
+-p <options-for-engine>::
+	Additional options for the engine. If you need to pass
+	multiple options, separate them with a comma.
+
+-R::
+	Generate a `$GIT_DIR/cvs-revisions` file containing a mapping from CVS
+	revision numbers to newly-created Git commit IDs.  The generated file
+	will contain one line for each (filename, revision) pair imported;
+	each line will look like
++
+---------
+src/widget.c 1.1 1d862f173cdc7325b6fa6d2ae1cfd61fd1b512b7
+---------
++
+The revision data is appended to the file if it already exists, for use when
+doing incremental imports.
++
+This option may be useful if you have CVS revision numbers stored in commit
+messages, bug-tracking systems, email archives, and the like.
++
+-s <subst>::
+	Substitute the character "/" in branch names with <subst>
+
+-S <regex>::
+	Skip paths matching the regex.
+
+-u::
+	Convert underscores in tag and branch names to dots.
+
+-v::
+	Verbosity: let 'cvsimport' report what it is doing.
+
+-z <fuzz>::
+	Pass the timestamp fuzz factor, in seconds. If unset, this has
+	an engine-dependent default - usually 300s.
+
+<CVS_module>::
+	The CVS module you want to import. Relative to <CVSROOT>.  It
+	is only necessary to specify this option if you are running
+	from somewhere other than a CVS checkout directory; the value
+	is passed to the conversion engine to be interpreted.
+
+OUTPUT
+------
+If '-v' is specified, the program reports what it is doing.
+
+Otherwise, success is indicated the Unix way, i.e. by simply exiting with
+a zero exit status.
+
+[[compatibility]]
+COMPATIBILITY
+-------------
+The -a, -o, -m, -M, and -L options in older versions of this tool have
+been removed. In effect, -a is always on; you can negate it with
+suitably crafted -d arguments.
+
+[[issues]]
+ENGINE-SPECIFIC ISSUES
+----------------------
+The conversion engines try to warn you about repository histories they
+can't handle; see their individual manual pages to learn how to
+interpret the warnings you may receive.
+
+The default conversion engine is 'cvs-fast-export'.  If warnings you receive
+suggest that the repository translation is invalid, consider switching
+engines to 'cvs2git'.
+
+cvs-fast-export
+~~~~~~~~~~~~~~~
+The default conversion engine is 'cvs-fasrt-export'; at least version 1.10 is
+required.  The cvsps project page is at `http://www.catb.org/~esr/cvs-fast-export`.
+Things to know about this engine:
+
+* Must be run from within the top level of a CVS repository module
+  directory.
+
+* 'cvs-fast-export' automatically removes characters in CVS tag and branch names
+  that would be illegal in git.
+
+cvs2git
+~~~~~~~
+The cvs2git project page is at `http://cvs2svn.tigris.org`.  It is
+much slower than cvsps, and does not implement some git-cvsimport
+options (such as -d and -A), but it handles a wider range of
+pathological CVS cases.
+
+* 'cvs2git' takes a path option pointing to a repository module
+  subdirectory, defaulting to ".".
+
+* The -S option will interpret exclusion regular expressions using
+  Python syntax.
+
+* Illegal characters in branch and tag names will cause cvs2git to
+  abort with an error message.  A suitably-crafted --symbol-transform
+  option, passed via -p, may prevent this.
+
+GIT
+---
+Part of the linkgit:git[1] suite

@@ -1,0 +1,156 @@
+head	1.2;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.2
+	gdb_7_6-2013-04-26-release:1.2
+	gdb_7_6-branch:1.2.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.2
+	gdb_7_5_1-2012-11-29-release:1.1
+	gdb_7_5-2012-08-17-release:1.1
+	gdb_7_5-branch:1.1.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.1;
+locks; strict;
+comment	@-- @;
+
+
+1.2
+date	2013.01.01.06.33.16;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2012.02.03.07.32.40;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@--  Copyright 2011-2013 Free Software Foundation, Inc.
+--
+--  This program is free software; you can redistribute it and/or modify
+--  it under the terms of the GNU General Public License as published by
+--  the Free Software Foundation; either version 3 of the License, or
+--  (at your option) any later version.
+--
+--  This program is distributed in the hope that it will be useful,
+--  but WITHOUT ANY WARRANTY; without even the implied warranty of
+--  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+--  GNU General Public License for more details.
+--
+--  You should have received a copy of the GNU General Public License
+--  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+procedure Task_Switch is
+
+   -------------------
+   -- Declaractions --
+   -------------------
+
+   task type Callee is
+      entry Finito;
+   end Callee;
+   type Callee_Ptr is access Callee;
+
+   task type Caller is
+   end Caller;
+   type Caller_Ptr is access Caller;
+
+   procedure Break_Me;
+
+   My_Caller : Caller_Ptr;
+   My_Callee : Callee_Ptr;
+
+   ------------
+   -- Bodies --
+   ------------
+
+   task body Callee is
+   begin
+      --  Just wait until we are told to terminate this task.
+      --  This is just to maintain this task alive.
+      accept Finito do
+         null;
+      end Finito;
+   end Callee;
+
+   task body Caller is
+   begin
+      Break_Me;
+      My_Callee.Finito;
+   end Caller;
+
+   procedure Break_Me is
+   begin
+      null;
+   end Break_Me;
+
+begin
+
+   --  Make sure to create the Callee task first... And then give it
+   --  enough time to complete its activation phase before we start
+   --  the Caller task.
+   My_Callee := new Callee;
+   delay 0.1;
+
+   My_Caller := new Caller;
+
+end Task_Switch;
+@
+
+
+1.1
+log
+@GDB/MI: crash printing "_task" (Ada) argument
+
+In GDB/MI mode, trying to print the arguments of the frame corresponding
+to the body of a task ("-stack-list-arguments 1") causes the debugger to
+crash.
+
+This is because the compiler adds an implicit argument to that task body
+called "_task". mi/mi-cmd-stack.c:list_args_or_locals, which is
+responsible for printing the value of our arguments, finds that our
+"_task" symbol is an argument, and thus tries to fing the non-argument
+equivalent:
+
+              if (SYMBOL_IS_ARGUMENT (sym))
+                sym2 = lookup_symbol (SYMBOL_NATURAL_NAME (sym),
+                                      block, VAR_DOMAIN,
+                                      (int *) NULL);
+
+Unfortunately, it tries using the natural name, which doesn't always
+work for Ada parameters, in particular those who are internally-
+generated. In our case, The "_task" parameter's natural name is
+"<_task>", and that symbol does not exist.  So sym2 is NULL, thus
+causing the crash a little later on when trying to dereference it.
+We should be using the symbol linkage name in this case, the same
+way iterate_over_block_arg_vars already does.
+
+gdb/ChangeLog:
+
+        * mi/mi-cmd-stack.c (list_args_or_locals): For argument symbols,
+        use SYMBOL_LINKAGE_NAME to find the corresponding non-argument
+        symbol.  Add assertion that sym2 is never NULL.
+
+gdb/testsuite/ChangeLog:
+
+        * gdb.ada/mi_task_arg: New testcase.
+@
+text
+@d1 1
+a1 1
+--  Copyright 2011-2012 Free Software Foundation, Inc.
+@
+

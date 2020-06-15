@@ -1,0 +1,324 @@
+head	1.4;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.3
+	gdb_7_6-2013-04-26-release:1.3
+	gdb_7_6-branch:1.3.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.3
+	gdb_7_5_1-2012-11-29-release:1.2
+	gdb_7_5-2012-08-17-release:1.2
+	gdb_7_5-branch:1.2.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.2;
+locks; strict;
+comment	@# @;
+
+
+1.4
+date	2013.06.27.18.58.28;	author tromey;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2013.01.01.06.33.26;	author brobecke;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2012.05.14.20.33.16;	author sergiodj;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2012.04.27.20.52.06;	author sergiodj;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.4
+log
+@test suite update - gdb.base/s*
+
+Convert files gdb.base/s*.exp to use standard_output_file et al.
+
+	* gdb.base/save-bp.exp, gdb.base/savedregs.exp,
+	gdb.base/scope.exp, gdb.base/sep.exp, gdb.base/sepsymtab.exp,
+	gdb.base/set-lang-auto.exp, gdb.base/setshow.exp,
+	gdb.base/setvar.exp, gdb.base/shlib-call.exp,
+	gdb.base/shreloc.exp, gdb.base/sigall.exp,
+	gdb.base/sigaltstack.exp, gdb.base/sigbpt.exp,
+	gdb.base/sigchld.exp, gdb.base/siginfo-addr.exp,
+	gdb.base/siginfo-infcall.exp, gdb.base/siginfo-obj.exp,
+	gdb.base/siginfo.exp, gdb.base/signals.exp, gdb.base/signest.exp,
+	gdb.base/signull.exp, gdb.base/sigrepeat.exp,
+	gdb.base/sigstep.exp, gdb.base/sizeof.exp,
+	gdb.base/skip-solib.exp, gdb.base/so-impl-ld.exp,
+	gdb.base/solib-display.exp, gdb.base/solib-nodir.exp,
+	gdb.base/solib-overlap.exp, gdb.base/solib-symbol.exp,
+	gdb.base/solib-weak.exp, gdb.base/source.exp,
+	gdb.base/stack-checking.exp, gdb.base/stale-infcall.exp,
+	gdb.base/stap-probe.exp, gdb.base/start.exp,
+	gdb.base/step-break.exp, gdb.base/step-bt.exp,
+	gdb.base/step-line.exp, gdb.base/step-resume-infcall.exp,
+	gdb.base/step-test.exp, gdb.base/structs.exp,
+	gdb.base/structs2.exp, gdb.base/structs3.exp,
+	gdb.base/symbol-without-target_section.exp: Use standard_testfile,
+	standard_output_file, prepare_for_testing, clean_restart.
+@
+text
+@# Copyright (C) 2012-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+standard_testfile
+
+# Run the tests.  We run the tests two different ways: once with a
+# plain probe, and once with a probe that has an associated semaphore.
+# This returns -1 on failure to compile or start, 0 otherwise.
+proc stap_test {exec_name {arg ""}} {
+    global testfile hex srcfile
+
+    if {[prepare_for_testing ${testfile}.exp ${exec_name} $srcfile \
+	   [concat $arg debug]]} {
+	return -1
+    }
+
+    if ![runto_main] {
+	return -1
+    }
+
+    gdb_test "print \$_probe_argc" "No SystemTap probe at PC $hex" \
+	"check argument not at probe point"
+
+    gdb_test "info probes stap" \
+	"test *user *$hex .*" \
+	"info probes stap"
+    
+    if {[runto "-pstap test:user"]} {
+	pass "run to -pstap test:user"
+    } else {
+	fail "run to -pstap test:user"
+    }
+
+    # Test probe arguments.
+    gdb_test "print \$_probe_argc" " = 1" \
+    "print \$_probe_argc for probe user"
+    gdb_test "print \$_probe_arg0 == x" " = 1" \
+    "check \$_probe_arg0 for probe user"
+    gdb_test "print \$_probe_arg1" \
+    	"Invalid probe argument 1 -- probe has 1 arguments available" \
+    	"check \$_probe_arg1 for probe user"
+
+    # Set a breakpoint with multiple probe locations.
+    gdb_test "break -pstap test:two" \
+	"Breakpoint \[0-9\]+ at $hex.*2 locations.*" \
+	"set multi-location probe breakpoint (probe two)"
+
+    # Reinit GDB, set a breakpoint on probe m4.
+    delete_breakpoints
+    if {[runto "-pstap test:m4"]} {
+      pass "run to -pstap test:m4"
+    } else {
+      fail "run to -pstap test:m4"
+    }
+
+    # Testing probe arguments.
+    gdb_test "print \$_probe_argc" " = 3" \
+    "print \$_probe_argc for probe m4"
+    gdb_test "print \$_probe_arg0" " = 42" \
+    "check \$_probe_arg0 for probe m4"
+    gdb_test "print (const char *) \$_probe_arg1" \
+    " = $hex .This is a test message.*" \
+    "check \$_probe_arg1 for probe m4"
+    gdb_test "print \$_probe_arg2 == v" " = 1" \
+    "check \$_probe_arg2 for probe m4"
+
+    # Reinit GDB, set a breakpoint on probe ps.
+    delete_breakpoints
+    if {[runto "-pstap test:ps"]} {
+      pass "run to -pstap test:m4"
+    } else {
+      fail "run to -pstap test:m4"
+    }
+
+    gdb_test "print \$_probe_argc" " = 3" \
+    "print \$_probe_argc for probe ps"
+    gdb_test "print (const char *) \$_probe_arg1" \
+    " = $hex .This is another test message.*" \
+    "print \$_probe_arg1 for probe ps"
+
+    return 0
+}
+
+proc stap_test_no_debuginfo {exec_name {arg ""}} {
+    global testfile hex
+
+    if {[prepare_for_testing ${testfile}.exp ${exec_name} ${testfile}.c \
+	   {$arg nodebug optimize=-O2}]} {
+	return -1
+    }
+
+    if {[runto "-pstap test:user"]} {
+	pass "run to -pstap test:user"
+    } else {
+	fail "run to -pstap test:user"
+    }
+
+    # Test probe arguments.
+    gdb_test "print \$_probe_argc" " = 1" \
+    "print \$_probe_argc for probe user"
+    gdb_test "print \$_probe_arg0 == 23" " = 1" \
+    "check \$_probe_arg0 for probe user"
+    gdb_test "print \$_probe_arg1" \
+    	"Invalid probe argument 1 -- probe has 1 arguments available" \
+    	"check \$_probe_arg1 for probe user"
+
+    # Set a breakpoint with multiple probe locations.
+    # In this scenario, we may expect more than 2 locations because of
+    # the optimizations (inlining, loop unrolling, etc).
+    gdb_test "break -pstap test:two" \
+	"Breakpoint .* at $hex.*\[0-9\]+ locations.*" \
+	"set multi-location probe breakpoint (probe two)"
+
+    # Reinit GDB, set a breakpoint on probe m4.
+    delete_breakpoints
+    if {[runto "-pstap test:m4"]} {
+      pass "run to -pstap test:m4"
+    } else {
+      fail "run to -pstap test:m4"
+    }
+
+    # Testing probe arguments.
+    gdb_test "print \$_probe_argc" " = 3" \
+    "print \$_probe_argc for probe m4"
+    gdb_test "print \$_probe_arg0" " = 42" \
+    "check \$_probe_arg0 for probe m4"
+    gdb_test "print (const char *) \$_probe_arg1" \
+    " = $hex .This is a test message.*" \
+    "check \$_probe_arg1 for probe m4"
+    gdb_test "print \$_probe_arg2 == 0" " = 1" \
+    "check \$_probe_arg2 for probe m4"
+
+    # Reinit GDB, set a breakpoint on probe ps.
+    delete_breakpoints
+    if {[runto "-pstap test:ps"]} {
+      pass "run to -pstap test:m4"
+    } else {
+      fail "run to -pstap test:m4"
+    }
+
+    gdb_test "print \$_probe_argc" " = 3" \
+    "print \$_probe_argc for probe ps"
+    gdb_test "print (const char *) \$_probe_arg1" \
+    " = $hex .This is another test message.*" \
+    "print \$_probe_arg1 for probe ps"
+
+    return 0
+}
+
+with_test_prefix "without semaphore, not optimized" {
+    if {[stap_test "stap-probe-nosem-noopt"] == -1} {
+	untested stap-probe.exp
+	  return -1
+    }
+}
+
+with_test_prefix "with semaphore, not optimized" {
+    stap_test "stap-probe-sem-noopt" "-DUSE_PROBES"
+}
+
+with_test_prefix "without semaphore, optimized" {
+    stap_test_no_debuginfo "stap-probe-nosem-opt"
+}
+
+with_test_prefix "with semaphore, optimized" {
+    stap_test_no_debuginfo "stap-probe-sem-opt" "-DUSE_PROBES"
+}
+@
+
+
+1.3
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@d16 1
+a16 1
+set testfile stap-probe
+d22 1
+a22 1
+    global testfile hex
+d24 1
+a24 1
+    if {[prepare_for_testing ${testfile}.exp ${exec_name} ${testfile}.c \
+@
+
+
+1.2
+log
+@gdb/testsuite/ChangeLog:
+2012-05-14  Sergio Durigan Junior  <sergiodj@@redhat.com>
+
+	* gdb.base/stap-probe.exp (stap_test): Remove calls to
+	`rerun_to_main'.
+	(stap_test_no_debuginfo): Likewise.
+@
+text
+@d1 1
+a1 1
+# Copyright (C) 2012 Free Software Foundation, Inc.
+@
+
+
+1.1
+log
+@gdb/doc/ChangeLog:
+2012-04-27  Sergio Durigan Junior  <sergiodj@@redhat.com>
+	    Tom Tromey  <tromey@@redhat.com>
+
+	* gdb.texinfo (Static Probe Points): New entry, explaining SystemTap
+	and generic static probe support on GDB.
+
+gdb/testsuite/ChangeLog:
+2012-04-27  Sergio Durigan Junior  <sergiodj@@redhat.com>
+	    Tom Tromey  <tromey@@redhat.com>
+
+	* gdb.base/default.exp: Add `$_probe_arg*' convenience
+	variables.
+	* gdb.base/stap-probe.c: New file.
+	* gdb.base/stap-probe.exp: New file.
+	* gdb.trace/stap-trace.c: New file.
+	* gdb.trace/stap-trace.exp: New file.
+	* gdb.cp/nextoverthrow.exp: Add check for SystemTap probe in
+	libgcc's unwinder.
+@
+text
+@a61 1
+    rerun_to_main
+a80 1
+    rerun_to_main
+a127 1
+    rerun_to_main
+a146 1
+    rerun_to_main
+@
+

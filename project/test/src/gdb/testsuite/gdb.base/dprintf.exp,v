@@ -1,0 +1,590 @@
+head	1.11;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.8.2.2
+	gdb_7_6-2013-04-26-release:1.8.2.1
+	gdb_7_6-branch:1.8.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.8
+	gdb_7_5_1-2012-11-29-release:1.5
+	gdb_7_5-2012-08-17-release:1.5
+	gdb_7_5-branch:1.5.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.5;
+locks; strict;
+comment	@# @;
+
+
+1.11
+date	2013.06.25.11.37.48;	author teawater;	state Exp;
+branches;
+next	1.10;
+
+1.10
+date	2013.04.23.03.20.21;	author teawater;	state Exp;
+branches;
+next	1.9;
+
+1.9
+date	2013.03.27.05.28.57;	author kseitz;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2013.01.11.15.21.14;	author jkratoch;	state Exp;
+branches
+	1.8.2.1;
+next	1.7;
+
+1.7
+date	2013.01.11.00.31.58;	author qiyao;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2013.01.01.06.33.25;	author brobecke;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2012.07.04.14.57.23;	author jkratoch;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2012.07.02.15.29.39;	author shebs;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2012.05.15.13.36.18;	author jkratoch;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2012.05.15.13.08.58;	author jkratoch;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2012.05.14.15.38.41;	author shebs;	state Exp;
+branches;
+next	;
+
+1.8.2.1
+date	2013.04.25.01.26.36;	author teawater;	state Exp;
+branches;
+next	1.8.2.2;
+
+1.8.2.2
+date	2013.06.26.02.31.58;	author teawater;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.11
+log
+@2013-06-25  Yao Qi  <yao@@codesourcery.com>
+	    Hui Zhu  <hui@@codesourcery.com>
+	    Pedro Alves  <palves@@redhat.com>
+
+	PR breakpoints/15075
+	PR breakpoints/15434
+	* breakpoint.c (bpstat_stop_status): Call
+	b->ops->after_condition_true.
+	(update_dprintf_command_list): Don't append "continue" command
+	to the command list of dprintf breakpoint.
+	(base_breakpoint_after_condition_true): New function.
+	(base_breakpoint_ops): Add base_breakpoint_after_condition_true.
+	(dprintf_after_condition_true): New function.
+	(initialize_breakpoint_ops): Set dprintf_after_condition_true.
+	* breakpoint.h (breakpoint_ops): Add after_condition_true.
+
+2013-06-25  Yao Qi  <yao@@codesourcery.com>
+	    Hui Zhu  <hui@@codesourcery.com>
+	    Pedro Alves  <palves@@redhat.com>
+
+	PR breakpoints/15075
+	PR breakpoints/15434
+	* gdb.base/dprintf-next.c: New file.
+	* gdb.base/dprintf-next.exp: New file.
+	* gdb.base/dprintf-non-stop.c: New file.
+	* gdb.base/dprintf-non-stop.exp: New file.
+	* gdb.base/dprintf.exp: Don't check "continue" in the output
+	of "info breakpoints".
+	* gdb.mi/mi-breakpoint-changed.exp (test_insert_delete_modify):
+	Don't check "continue" in script field.
+@
+text
+@#   Copyright (C) 2012-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+
+if { [prepare_for_testing dprintf.exp "dprintf" {} {debug}] } {
+    return -1
+}
+
+set srcfile dprintf.c
+
+set bp_location1 [gdb_get_line_number "set breakpoint 1 here"]
+set dp_location1 [gdb_get_line_number "set dprintf 1 here"]
+
+if ![runto main] {
+    return -1
+}
+
+gdb_test "dprintf" "Format string required"
+
+gdb_test "dprintf foo" "Format string required"
+
+gdb_test "dprintf 29" "Format string required"
+
+delete_breakpoints
+
+gdb_breakpoint "main"
+
+gdb_test "dprintf foo,\"At foo entry\\n\"" \
+  "Dprintf .*"
+
+gdb_test "ignore \$bpnum 1" ".*Will ignore next crossing of breakpoint.*"
+
+gdb_test "dprintf $dp_location1,\"arg=%d, g=%d\\n\", arg, g" \
+  "Dprintf .*"
+
+gdb_test_sequence "info breakpoints" "dprintf info 1" {
+    "\[\r\n\]Num     Type           Disp Enb Address +What"
+    "\[\r\n\]2       breakpoint"
+    "\[\r\n\]3       dprintf"
+    "\[\r\n\]        printf \"At foo entry\\\\n\""
+    "\[\r\n\]4       dprintf"
+    "\[\r\n\]        printf \"arg=%d, g=%d\\\\n\", arg, g"
+}
+
+gdb_test "break $bp_location1" \
+  "Breakpoint .*"
+
+gdb_run_cmd
+
+gdb_test "" "Breakpoint"
+
+gdb_test "continue" "arg=1234, g=1234.*" "1st dprintf, gdb"
+
+gdb_test "continue" "At foo entry.*arg=1235, g=2222.*" "2nd dprintf, gdb"
+
+# The "call" style depends on having I/O functions available, so test.
+
+if ![target_info exists gdb,noinferiorio] {
+
+    # Now switch styles and rerun; in the absence of redirection the
+    # output should be the same.
+
+    gdb_test_no_output "set dprintf-style call" "Set dprintf style to call"
+
+    gdb_run_cmd
+
+    gdb_test "" "Breakpoint"
+
+    gdb_test "continue" "At foo entry.*arg=1234, g=1234.*" "1st dprintf, call"
+
+    gdb_test "continue" "At foo entry.*arg=1235, g=2222.*" "2nd dprintf, call"
+
+    gdb_test_no_output "set dprintf-function fprintf" "Set dprintf function"
+    gdb_test_no_output "set dprintf-channel stderr" "Set dprintf channel"
+
+    gdb_run_cmd
+
+    gdb_test "" "Breakpoint"
+
+    gdb_test "continue" "At foo entry.*arg=1234, g=1234.*" \
+	"1st dprintf, fprintf"
+
+    gdb_test "continue" "At foo entry.*arg=1235, g=2222.*" \
+	"2nd dprintf, fprintf"
+}
+
+set target_can_dprintf 1
+set msg "Set dprintf style to agent"
+gdb_test_multiple "set dprintf-style agent" $msg {
+    -re "warning: Target cannot run dprintf commands.*\r\n$gdb_prompt $" {
+	set target_can_dprintf 0
+	pass "$msg - cannot do"
+    }
+    -re ".*$gdb_prompt $" {
+	pass "$msg - can do"
+    }
+}
+
+if $target_can_dprintf {
+    gdb_run_cmd
+
+    gdb_test "" "Breakpoint"
+
+    gdb_test "continue" "Breakpoint \[0-9\]+, foo .*" "1st dprintf, agent"
+
+    gdb_test "continue" "Breakpoint \[0-9\]+, foo .*" "2nd dprintf, agent"
+
+    gdb_test_sequence "info breakpoints" "dprintf info 2" {
+	"\[\r\n\]Num     Type           Disp Enb Address +What"
+	"\[\r\n\]2       breakpoint"
+	"\[\r\n\]\tbreakpoint already hit 2 times"
+	"\[\r\n\]3       dprintf"
+	"\[\r\n\]\tbreakpoint already hit 2 times"
+	"\[\r\n\]        agent-printf \"At foo entry\\\\n\""
+	"\[\r\n\]4       dprintf"
+	"\[\r\n\]\tbreakpoint already hit 2 times"
+	"\[\r\n\]        agent-printf \"arg=%d, g=%d\\\\n\", arg, g"
+    }
+}
+
+gdb_test "set dprintf-style foobar" "Undefined item: \"foobar\"." \
+    "Set dprintf style to an unrecognized type"
+@
+
+
+1.10
+log
+@2013-04-23  Hui Zhu  <hui@@codesourcery.com>
+
+	PR gdb/15293
+
+	* breakpoint.c (bpstat_what): Add BPSTAT_WHAT_SINGLE to bp_dprintf.
+
+2013-04-23  Hui Zhu  <hui@@codesourcery.com>
+
+	PR gdb/15293
+
+	* gdb.base/dprintf.exp: Add ignore command.
+@
+text
+@a52 1
+    "\[\r\n\]        continue"
+a54 1
+    "\[\r\n\]        continue"
+a111 1
+
+a134 1
+
+@
+
+
+1.9
+log
+@	* gdb.base/dprintf.exp: Fix typo preventing "dprintf info 2"
+	from passing.
+@
+text
+@d43 2
+d66 1
+a66 1
+gdb_test "continue" "At foo entry.*arg=1234, g=1234.*" "1st dprintf, gdb"
+@
+
+
+1.8
+log
+@gdb/testsuite/
+	* gdb.base/dprintf.exp (dprintf info 1): Fix expectation on 64-bit
+	targets.
+@
+text
+@d122 1
+a122 1
+	"\[\r\n\]Num     Type           Disp Enb Address    What"
+@
+
+
+1.8.2.1
+log
+@2013-04-25  Hui Zhu  <hui@@codesourcery.com>
+
+	PR gdb/15293
+
+	* breakpoint.c (bpstat_what): Add BPSTAT_WHAT_SINGLE to bp_dprintf.
+
+2013-04-25  Hui Zhu  <hui@@codesourcery.com>
+
+	PR gdb/15293
+
+	* gdb.base/dprintf.exp: Add ignore command.
+@
+text
+@a42 2
+gdb_test "ignore \$bpnum 1" ".*Will ignore next crossing of breakpoint.*"
+
+d64 1
+a64 1
+gdb_test "continue" "arg=1234, g=1234.*" "1st dprintf, gdb"
+@
+
+
+1.8.2.2
+log
+@2013-06-26  Yao Qi  <yao@@codesourcery.com>
+	    Hui Zhu  <hui@@codesourcery.com>
+	    Pedro Alves  <palves@@redhat.com>
+
+	PR breakpoints/15075
+	PR breakpoints/15434
+	* breakpoint.c (bpstat_stop_status): Call
+	b->ops->after_condition_true.
+	(update_dprintf_command_list): Don't append "continue" command
+	to the command list of dprintf breakpoint.
+	(base_breakpoint_after_condition_true): New function.
+	(base_breakpoint_ops): Add base_breakpoint_after_condition_true.
+	(dprintf_after_condition_true): New function.
+	(initialize_breakpoint_ops): Set dprintf_after_condition_true.
+	* breakpoint.h (breakpoint_ops): Add after_condition_true.
+
+2013-06-26  Yao Qi  <yao@@codesourcery.com>
+	    Hui Zhu  <hui@@codesourcery.com>
+	    Pedro Alves  <palves@@redhat.com>
+
+	PR breakpoints/15075
+	PR breakpoints/15434
+	* gdb.base/dprintf-next.c: New file.
+	* gdb.base/dprintf-next.exp: New file.
+	* gdb.base/dprintf-non-stop.c: New file.
+	* gdb.base/dprintf-non-stop.exp: New file.
+	* gdb.base/dprintf.exp: Don't check "continue" in the output
+	of "info breakpoints".
+	* gdb.mi/mi-breakpoint-changed.exp (test_insert_delete_modify):
+	Don't check "continue" in script field.
+@
+text
+@d53 1
+d56 1
+d114 1
+d124 1
+a124 1
+	"\[\r\n\]Num     Type           Disp Enb Address +What"
+d138 1
+@
+
+
+1.7
+log
+@gdb/testsuite/
+
+	* gdb.base/dprintf.exp: Check the output of 'info breakpoints'
+	for dprintf.
+	* gdb.mi/mi-breakpoint-changed.exp (test_insert_delete_modify):
+	Check the fields in "=breakpoint-created" for dprintf.
+@
+text
+@d47 1
+a47 1
+    "\[\r\n\]Num     Type           Disp Enb Address    What"
+@
+
+
+1.6
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@d46 11
+d121 11
+@
+
+
+1.5
+log
+@gdb/testsuite/
+	PR 12649
+	* gdb.base/dprintf.exp (Set dprintf style to agent): Add missing
+	gdb_test_multiple $gdb_prompt terminator.
+@
+text
+@d1 1
+a1 1
+#   Copyright (C) 2012 Free Software Foundation, Inc.
+@
+
+
+1.4
+log
+@	Add target-side support for dynamic printf.
+	* NEWS: Mention the additional style.
+	* breakpoint.h (struct bp_target_info): New fields tcommands, persist.
+	(struct bp_location): New field cmd_bytecode.
+	* breakpoint.c: Include format.h.
+	(disconnected_dprintf): New global.
+	(parse_cmd_to_aexpr): New function.
+	(build_target_command_list): New function.
+	(insert_bp_location): Call it.
+	(remove_breakpoints_pid): Skip dprintf breakpoints.
+	(print_one_breakpoint_location): Ditto.
+	(dprintf_style_agent): New global.
+	(dprintf_style_enums): Add dprintf_style_agent.
+	(update_dprintf_command_list): Add agent case.
+	(agent_printf_command): New function.
+	(_initialize_breakpoint): Add new commands.
+	* common/ax.def (printf): New bytecode.
+	* ax.h (ax_string): Declare.
+	* ax-gdb.h (gen_printf): Declare.
+	* ax-gdb.c: Include cli-utils.h, format.h.
+	(gen_printf): New function.
+	(maint_agent_print_command): New function.
+	(_initialize_ax_gdb): Add maint agent-printf command.
+	* ax-general.c (ax_string): New function.
+	(ax_print): Add printf disassembly.
+	* Makefile.in (SFILES): Add format.c
+	(COMMON_OBS): Add format.o.
+	* common/format.h: New file.
+	* common/format.c: New file.
+	* printcmd.c: Include format.h.
+	(ui_printf): Call parse_format_string.
+	* remote.c (remote_state): New field breakpoint_commands.
+	(PACKET_BreakpointCommands): New enum.
+	(remote_breakpoint_commands_feature): New function.
+	(remote_protocol_features): Add new BreakpointCommands entry.
+	(remote_can_run_breakpoint_commands): New function.
+	(remote_add_target_side_commands): New function.
+	(remote_insert_breakpoint): Call it.
+	(remote_insert_hw_breakpoint): Ditto.
+	(_initialize_remote): Add new packet configuration for
+	target-side breakpoint commands.
+	* target.h (struct target_ops): New field
+	to_can_run_breakpoint_commands.
+	(target_can_run_breakpoint_commands): New macro.
+	* target.c (update_current_target): Handle
+	to_can_run_breakpoint_commands.
+
+	[gdbserver]
+	* Makefile.in (WARN_CFLAGS_NO_FORMAT): Define.
+	(ax.o): Add it to build rule.
+	(ax-ipa.o): Ditto.
+	(OBS): Add format.o.
+	(IPA_OBS): Add format.o.
+	* server.c (handle_query): Claim support for breakpoint commands.
+	(process_point_options): Add command case.
+	(process_serial_event): Leave running if there are printfs in
+	effect.
+	* mem-break.h (any_persistent_commands): Declare.
+	(add_breakpoint_commands): Declare.
+	(gdb_no_commands_at_breakpoint): Declare.
+	(run_breakpoint_commands): Declare.
+	* mem-break.c (struct point_command_list): New struct.
+	(struct breakpoint): New field command_list.
+	(any_persistent_commands): New function.
+	(add_commands_to_breakpoint): New function.
+	(add_breakpoint_commands): New function.
+	(gdb_no_commands_at_breakpoint): New function.
+	(run_breakpoint_commands): New function.
+	* linux-low.c (linux_wait_1): Test for and run breakpoint commands
+	locally.
+	* ax.c: Include format.h.
+	(ax_printf): New function.
+	(gdb_eval_agent_expr): Add printf opcode.
+
+	[doc]
+	* gdb.texinfo (Dynamic Printf): Mention agent style and
+	disconnected dprintf.
+	(Maintenance Commands): Describe maint agent-printf.
+	(General Query Packets): Mention BreakpointCommands feature.
+	(Packets): Document commands extension to Z0 packet.
+	* agentexpr.texi (Bytecode Descriptions): Document printf
+	bytecode.
+
+	[testsuite]
+	* gdb.base/dprintf.exp: Add agent style tests.
+@
+text
+@d91 1
+a91 1
+    -re "warning: Target cannot run dprintf commands.*" {
+@
+
+
+1.3
+log
+@gdb/testsuite/
+	* gdb.base/dprintf.exp: Remove now redundant breakpoint for main.
+@
+text
+@d88 24
+@
+
+
+1.2
+log
+@gdb/testsuite/
+	PR testsuite/12649
+	* gdb.base/dprintf.exp: Replace gdb_run_cmd by runto main.
+@
+text
+@a25 1
+gdb_breakpoint "main"
+@
+
+
+1.1
+log
+@2012-05-14  Stan Shebs  <stan@@codesourcery.com>
+
+	Add dynamic printf.
+	* breakpoint.h (enum bptype): New type bp_dprintf.
+	(struct breakpoint): New field extra_string.
+	(struct breakpoint_ops): Add arg to create_breakpoints_sal.
+	(create_breakpoint): Add extra_string arg.
+	* breakpoint.c (dprintf_breakpoint_ops): New.
+	(is_breakpoint): Add bp_dprintf.
+	(bpstat_what): Add dprintf case.
+	(bptype_string): Ditto.
+	(print_one_breakpoint_location): Ditto.
+	(init_bp_location): Ditto.
+	(bkpt_print_mention): Ditto.
+	(dprintf_style_enums): New array.
+	(dprintf_style): New global.
+	(dprintf_function): New global.
+	(dprintf_channel): New global.
+	(update_dprintf_command_list): New function.
+	(update_dprintf_commands): New function.
+	(init_breakpoint_sal): Add extra_string argument, handle it.
+	(create_breakpoint_sal): Add extra_string argument.
+	(create_breakpoints_sal): Add extra_string argument, update callers.
+	(find_condition_and_thread): Add extra argument.
+	(create_breakpoint): Add extra_string argument, record it.
+	(dprintf_command): New function.
+	(break_command_1): Add arg to create_breakpoint call.
+	(handle_gnu_v3_exceptions): Ditto.
+	(trace_command): Ditto.
+	(ftrace_command): Ditto.
+	(strace_command): Ditto.
+	(bkpt_print_mention): Add dprintf case.
+	(create_breakpoint_sal_default): Add extra_string argument.
+	(_initialize_breakpoint): Add new commands.
+	* mi/mi-cmd-break.c (mi_cmd_break_insert): Add arg to call.
+	* python/py-breakpoint.c (bppy_init): Ditto.
+	* python/py-finishbreakpoint.c (bpfinishpy_init): Ditto.
+
+	* gdb.texinfo (Dynamic Printf): New subsection.
+
+	* gdb.base/dprintf.c: New file.
+	* gdb.base/dprintf.exp: New file.
+@
+text
+@d27 3
+a29 1
+gdb_run_cmd
+@
+

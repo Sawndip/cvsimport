@@ -1,0 +1,968 @@
+head	1.14;
+access;
+symbols
+	binutils-2_24-branch:1.14.0.2
+	binutils-2_24-branchpoint:1.14
+	binutils-2_21_1:1.10
+	binutils-2_23_2:1.12
+	binutils-2_23_1:1.12
+	binutils-2_23:1.12
+	binutils-2_23-branch:1.12.0.2
+	binutils-2_23-branchpoint:1.12
+	binutils-2_22_branch:1.11.0.4
+	binutils-2_22:1.11
+	binutils-2_22-branch:1.11.0.2
+	binutils-2_22-branchpoint:1.11
+	binutils-2_21:1.10
+	binutils-2_21-branch:1.10.0.2
+	binutils-2_21-branchpoint:1.10
+	binutils-2_20_1:1.9
+	binutils-2_20:1.9
+	binutils-arc-20081103-branch:1.7.0.8
+	binutils-arc-20081103-branchpoint:1.7
+	binutils-2_20-branch:1.9.0.2
+	binutils-2_20-branchpoint:1.9
+	dje-cgen-play1-branch:1.7.0.6
+	dje-cgen-play1-branchpoint:1.7
+	arc-20081103-branch:1.7.0.4
+	arc-20081103-branchpoint:1.7
+	binutils-2_19_1:1.7
+	binutils-2_19:1.7
+	binutils-2_19-branch:1.7.0.2
+	binutils-2_19-branchpoint:1.7
+	binutils-2_18:1.4
+	binutils-2_18-branch:1.4.0.2
+	binutils-2_18-branchpoint:1.4
+	binutils_latest_snapshot:1.14;
+locks; strict;
+comment	@# @;
+
+
+1.14
+date	2013.02.05.22.38.34;	author amodra;	state Exp;
+branches;
+next	1.13;
+
+1.13
+date	2013.01.10.20.08.03;	author hjl;	state Exp;
+branches;
+next	1.12;
+
+1.12
+date	2012.07.24.22.23.21;	author eweddington;	state Exp;
+branches;
+next	1.11;
+
+1.11
+date	2011.03.22.18.10.47;	author eweddington;	state Exp;
+branches;
+next	1.10;
+
+1.10
+date	2009.11.26.13.45.25;	author nickc;	state Exp;
+branches;
+next	1.9;
+
+1.9
+date	2009.09.02.07.25.35;	author amodra;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2009.08.10.07.50.56;	author amodra;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2008.07.07.00.46.51;	author amodra;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2008.02.15.03.35.53;	author amodra;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2007.08.17.13.50.48;	author amodra;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2007.07.19.19.56.10;	author roland;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2007.07.06.14.09.42;	author nickc;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2007.05.05.06.51.24;	author denisc;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2006.05.24.07.36.11;	author nickc;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.14
+log
+@	* emultempl/avrelf.em (avr_elf_before_parse): New function.
+	(LDEMUL_BEFORE_PARSE): Define.
+@
+text
+@# This shell script emits a C file. -*- C -*-
+#   Copyright 2006, 2007, 2008, 2009
+#   Free Software Foundation, Inc.
+#
+# This file is part of the GNU Binutils.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+# MA 02110-1301, USA.
+
+
+# This file is sourced from elf32.em, and defines extra avr-elf specific
+# routines.  It is used to generate the trampolines for the avr6 family
+# of devices where one needs to address the issue that it is not possible
+# to reach the whole program memory by using 16 bit pointers.
+
+fragment <<EOF
+
+#include "elf32-avr.h"
+#include "ldctor.h"
+
+/* The fake file and it's corresponding section meant to hold
+   the linker stubs if needed.  */
+
+static lang_input_statement_type *stub_file;
+static asection *avr_stub_section;
+
+/* Variables set by the command-line parameters and transfered
+   to the bfd without use of global shared variables.  */
+
+static bfd_boolean avr_no_stubs = FALSE;
+static bfd_boolean avr_debug_relax = FALSE;
+static bfd_boolean avr_debug_stubs = FALSE;
+static bfd_boolean avr_replace_call_ret_sequences = TRUE;
+static bfd_vma avr_pc_wrap_around = 0x10000000;
+
+/* Transfers information to the bfd frontend.  */
+
+static void
+avr_elf_set_global_bfd_parameters (void)
+{
+  elf32_avr_setup_params (& link_info,
+                          stub_file->the_bfd,
+                          avr_stub_section,
+                          avr_no_stubs,
+                          avr_debug_stubs,
+                          avr_debug_relax,
+                          avr_pc_wrap_around,
+                          avr_replace_call_ret_sequences);
+}
+
+
+/* Makes a conservative estimate of the trampoline section size that could
+   be corrected later on.  */
+
+static void
+avr_elf_${EMULATION_NAME}_before_allocation (void)
+{
+  int ret;
+
+  gld${EMULATION_NAME}_before_allocation ();
+
+  /* We only need stubs for avr6, avrxmega6, and avrxmega7. */
+  if (strcmp ("${EMULATION_NAME}","avr6")
+      && strcmp ("${EMULATION_NAME}","avrxmega6")
+      && strcmp ("${EMULATION_NAME}","avrxmega7") )
+    avr_no_stubs = TRUE;
+
+  avr_elf_set_global_bfd_parameters ();
+
+  /* If generating a relocatable output file, then
+     we don't  have to generate the trampolines.  */
+  if (link_info.relocatable)
+    avr_no_stubs = TRUE;
+
+  if (avr_no_stubs)
+    return;
+
+  ret = elf32_avr_setup_section_lists (link_info.output_bfd, &link_info);
+
+  if (ret < 0)
+    einfo ("%X%P: can not setup the input section list: %E\n");
+
+  if (ret <= 0)
+    return;
+
+  /* Call into the BFD backend to do the real "stub"-work.  */
+  if (! elf32_avr_size_stubs (link_info.output_bfd, &link_info, TRUE))
+    einfo ("%X%P: can not size stub section: %E\n");
+}
+
+/* This is called before the input files are opened.  We create a new
+   fake input file to hold the stub section and generate the section itself.  */
+
+static void
+avr_elf_create_output_section_statements (void)
+{
+  flagword flags;
+
+  stub_file = lang_add_input_file ("linker stubs",
+                                   lang_input_file_is_fake_enum,
+                                   NULL);
+
+  stub_file->the_bfd = bfd_create ("linker stubs", link_info.output_bfd);
+  if (stub_file->the_bfd == NULL
+      || !bfd_set_arch_mach (stub_file->the_bfd,
+                             bfd_get_arch (link_info.output_bfd),
+                             bfd_get_mach (link_info.output_bfd)))
+    {
+      einfo ("%X%P: can not create stub BFD %E\n");
+      return;
+    }
+
+  /* Now we add the stub section.  */
+
+  flags = (SEC_ALLOC | SEC_LOAD | SEC_READONLY | SEC_CODE
+           | SEC_HAS_CONTENTS | SEC_RELOC | SEC_IN_MEMORY | SEC_KEEP);
+  avr_stub_section = bfd_make_section_anyway_with_flags (stub_file->the_bfd,
+							 ".trampolines",
+							 flags);
+  if (avr_stub_section == NULL)
+    goto err_ret;
+
+  avr_stub_section->alignment_power = 1;
+
+  ldlang_add_file (stub_file);
+
+  return;
+
+  err_ret:
+   einfo ("%X%P: can not make stub section: %E\n");
+   return;
+}
+
+/* Re-calculates the size of the stubs so that we won't waste space.  */
+
+static void
+avr_elf_after_allocation (void)
+{
+  if (!avr_no_stubs && ! RELAXATION_ENABLED)
+    {
+      /* If relaxing, elf32_avr_size_stubs will be called from
+	 elf32_avr_relax_section.  */
+      if (!elf32_avr_size_stubs (link_info.output_bfd, &link_info, TRUE))
+	einfo ("%X%P: can not size stub section: %E\n");
+    }
+
+  gld${EMULATION_NAME}_after_allocation ();
+
+  /* Now build the linker stubs.  */
+  if (!avr_no_stubs)
+    {
+      if (!elf32_avr_build_stubs (&link_info))
+	einfo ("%X%P: can not build stubs: %E\n");
+    }
+}
+
+static void
+avr_elf_before_parse (void)
+{
+  /* Don't create a demand-paged executable, since this feature isn't
+     meaningful in AVR. */
+  config.magic_demand_paged = FALSE;
+
+  gld${EMULATION_NAME}_before_parse ();
+}
+
+EOF
+
+
+PARSE_AND_LIST_PROLOGUE='
+
+#define OPTION_NO_CALL_RET_REPLACEMENT 301
+#define OPTION_PMEM_WRAP_AROUND        302
+#define OPTION_NO_STUBS                303
+#define OPTION_DEBUG_STUBS             304
+#define OPTION_DEBUG_RELAX             305
+'
+
+PARSE_AND_LIST_LONGOPTS='
+  { "no-call-ret-replacement", no_argument,
+     NULL, OPTION_NO_CALL_RET_REPLACEMENT},
+  { "pmem-wrap-around", required_argument,
+    NULL, OPTION_PMEM_WRAP_AROUND},
+  { "no-stubs", no_argument,
+    NULL, OPTION_NO_STUBS},
+  { "debug-stubs", no_argument,
+    NULL, OPTION_DEBUG_STUBS},
+  { "debug-relax", no_argument,
+    NULL, OPTION_DEBUG_RELAX},
+'
+
+PARSE_AND_LIST_OPTIONS='
+  fprintf (file, _("  --pmem-wrap-around=<val>    "
+		   "Make the linker relaxation machine assume that a\n"
+		   "                              "
+		   "  program counter wrap-around occures at address\n"
+		   "                              "
+		   "  <val>.  Supported values: 8k, 16k, 32k and 64k.\n"));
+  fprintf (file, _("  --no-call-ret-replacement   "
+		   "The relaxation machine normally will\n"
+		   "                              "
+		   "  substitute two immediately following call/ret\n"
+		   "                              "
+		   "  instructions by a single jump instruction.\n"
+		   "                              "
+		   "  This option disables this optimization.\n"));
+  fprintf (file, _("  --no-stubs                  "
+		   "If the linker detects to attempt to access\n"
+		   "                              "
+		   "  an instruction beyond 128k by a reloc that\n"
+		   "                              "
+		   "  is limited to 128k max, it inserts a jump\n"
+		   "                              "
+		   "  stub. You can de-active this with this switch.\n"));
+  fprintf (file, _("  --debug-stubs               "
+		   "Used for debugging avr-ld.\n"));
+  fprintf (file, _("  --debug-relax               "
+		   "Used for debugging avr-ld.\n"));
+'
+
+PARSE_AND_LIST_ARGS_CASES='
+
+    case OPTION_PMEM_WRAP_AROUND:
+      {
+        /* This variable is defined in the bfd library.  */
+        if ((!strcmp (optarg,"32k"))      || (!strcmp (optarg,"32K")))
+          avr_pc_wrap_around = 32768;
+        else if ((!strcmp (optarg,"8k")) || (!strcmp (optarg,"8K")))
+          avr_pc_wrap_around = 8192;
+        else if ((!strcmp (optarg,"16k")) || (!strcmp (optarg,"16K")))
+          avr_pc_wrap_around = 16384;
+        else if ((!strcmp (optarg,"64k")) || (!strcmp (optarg,"64K")))
+          avr_pc_wrap_around = 0x10000;
+        else
+          return FALSE;
+      }
+      break;
+
+    case OPTION_DEBUG_STUBS:
+      avr_debug_stubs = TRUE;
+      break;
+
+    case OPTION_DEBUG_RELAX:
+      avr_debug_relax = TRUE;
+      break;
+
+    case OPTION_NO_STUBS:
+      avr_no_stubs = TRUE;
+      break;
+
+    case OPTION_NO_CALL_RET_REPLACEMENT:
+      {
+        /* This variable is defined in the bfd library.  */
+        avr_replace_call_ret_sequences = FALSE;
+      }
+      break;
+'
+
+#
+# Put these extra avr-elf routines in ld_${EMULATION_NAME}_emulation
+#
+LDEMUL_BEFORE_PARSE=avr_elf_before_parse
+LDEMUL_BEFORE_ALLOCATION=avr_elf_${EMULATION_NAME}_before_allocation
+LDEMUL_AFTER_ALLOCATION=avr_elf_after_allocation
+LDEMUL_CREATE_OUTPUT_SECTION_STATEMENTS=avr_elf_create_output_section_statements
+@
+
+
+1.13
+log
+@Remove trailing white spaces in ld
+
+	* deffilep.y: Remove trailing white spaces.
+	* elf-hints-local.h: Likewise.
+	* ldexp.c: Likewise.
+	* ldlang.h: Likewise.
+	* ldmisc.c: Likewise.
+	* ldwrite.c: Likewise.
+	* pe-dll.c: Likewise.
+	* emulparams/criself.sh: Likewise.
+	* emulparams/crislinux.sh: Likewise.
+	* emulparams/elf32_tic6x_le.sh: Likewise.
+	* emulparams/elf32bmipn32-defs.sh: Likewise.
+	* emulparams/elf32mb_linux.sh: Likewise.
+	* emulparams/elf32mep.sh: Likewise.
+	* emulparams/elf32microblaze.sh: Likewise.
+	* emulparams/elf32ppc.sh: Likewise.
+	* emulparams/elf64_s390.sh: Likewise.
+	* emulparams/elf64alpha.sh: Likewise.
+	* emulparams/elf_s390.sh: Likewise.
+	* emulparams/elf_x86_64.sh: Likewise.
+	* emulparams/tic80coff.sh: Likewise.
+	* emultempl/aix.em: Likewise.
+	* emultempl/avrelf.em: Likewise.
+	* emultempl/cr16elf.em: Likewise.
+	* emultempl/pe.em: Likewise.
+	* emultempl/pep.em: Likewise.
+	* emultempl/spuelf.em: Likewise.
+	* emultempl/tic6xdsbt.em: Likewise.
+@
+text
+@d169 9
+d274 1
+@
+
+
+1.12
+log
+@2012-07-24  Jan Waclawek <konfera@@efton.sk>
+
+	PR ld/14058
+	* emultempl/avrelf.em (avr_elf_after_allocation): Call
+	elf32_avr_size_stubs with is_prealloc_run as TRUE.
+@
+text
+@d75 1
+a75 1
+  if (strcmp ("${EMULATION_NAME}","avr6") 
+@
+
+
+1.11
+log
+@/bfd:
+2011-03-22  Eric B. Weddington  <eric.weddington@@atmel.com>
+
+	* archures.c: Add AVR XMEGA architecture information.
+	* cpu-avr.c (arch_info_struct): Likewise.
+	* elf32-avr.c (bfd_elf_avr_final_write_processing): Likewise.
+	(elf32_avr_object_p): Likewise.
+
+/gas:
+2011-03-22  Eric B. Weddington  <eric.weddington@@atmel.com>
+
+	* config/tc-avr.c (struct avr_opcodes_s): Add opcode field.
+	(AVR_INSN): Change definition to match.
+	(avr_opcodes): Likewise, change to match.
+	(mcu_types): Add XMEGA architecture names and new XMEGA device names.
+	(md_show_usage): Add XMEGA architecture names.
+	(avr_operand): Add 'E' constraint for DES instruction of XMEGA devices.
+	Add support for SPM Z+ instruction.
+	* doc/c-avr.texi: Add documentation for XMEGA architectures and
+	devices.
+
+/include/opcode:
+2011-03-22  Eric B. Weddington  <eric.weddington@@atmel.com>
+
+	* avr.h (AVR_ISA_SPMX,AVR_ISA_DES,AVR_ISA_M256,AVR_ISA_XMEGA):
+	New instruction set flags.
+	(AVR_INSN): Add new instructions for SPM Z+, DES for XMEGA.
+
+/ld:
+2011-03-22  Eric B. Weddington  <eric.weddington@@atmel.com>
+
+	* Makefile.am (ALL_EMULATION_SOURCES): Add AVR XMEGA architectures.
+	(eavrxmega?.c): Likewise.
+	* configure.tgt (targ_extra_emuls): Likewise.
+	* emulparams/avrxmega1.sh: New file.
+	* emulparams/avrxmega2.sh: Likewise.
+	* emulparams/avrxmega3.sh: Likewise.
+	* emulparams/avrxmega4.sh: Likewise.
+	* emulparams/avrxmega5.sh: Likewise.
+	* emulparams/avrxmega6.sh: Likewise.
+	* emulparams/avrxmega7.sh: Likewise.
+	* emultempl/avrelf.em (avr_elf_${EMULATION_NAME}_before_allocation):
+	Add avrxmega6, avrxmega7 to list of architectures for no stubs.
+
+/opcodes:
+2011-03-22  Eric B. Weddington  <eric.weddington@@atmel.com>
+
+	* avr-dis.c (avr_operand): Add opcode_str parameter. Check for
+	post-increment to support LPM Z+ instruction. Add support for 'E'
+	constraint for DES instruction.
+	(print_insn_avr): Adjust calls to avr_operand. Rename variable.
+@
+text
+@d155 1
+a155 1
+      if (!elf32_avr_size_stubs (link_info.output_bfd, &link_info, FALSE))
+@
+
+
+1.10
+log
+@        PR ld/10956
+        * ld.h (struct args_type): Rename 'relax' field to
+        'disable_target_specific_optimizations' and turn it into a
+        tri-state variable.
+        (RELAXATION_DISABLED_BY_DEFAULT): New macro.
+        (RELAXATION_DISABLED_BY_USER): New macro.
+        (RELAXATION_ENABLED): New macro.
+        (DISABLE_RELAXATION): New macro.
+        (ENABLE_RELAXATION): New macro.
+        * lexsup (enum option_values): Add OPTION_NO_RELAX.
+        (struct ld_options): Add --no-relax.
+        (parse_args): Handle OPTION_NO_RELAX.  Use DISABLE_RELAXATION and
+        ENABLE_RELAXATION macros.
+        * ldlang.c (lang_relax_sections): Use RELAXATION_ENABLED macro.
+        (lang_process): Likewise.
+        * ldmain.c (main): Initialise
+        disable_target_specific_optimizations field.
+        (multiple_definition): Use RELAXATION_ENABLED macro.
+        * ld.texinfo: Document new command line option.
+        * emultempl/alphaelf.em: Remove --no-relax option.
+        (before_allocation): Test RELAXATION_DISABLED_BY_USER macro.
+        Use ENABLE_RELAXATION macro.
+        * emultempl/avrelf.em: (after_allocation): Test RELAXATION_ENABLED
+        macro.
+        * emultempl/cr16elf.em: Remove --no-relax option.
+        (before_allocation): Test RELAXATION_DISABLED_BY_USER macro.
+        Use ENABLE_RELAXATION macro.
+        * emultempl/crxelf.em: Remove --no-relax option.
+        (before_allocation): Test RELAXATION_DISABLED_BY_USER macro.
+        Use ENABLE_RELAXATION macro.
+        * emultempl/mmix-elfnmmo.em: (before_allocation): Use
+        ENABLE_RELAXATION macro.
+        * emultempl/needrelax.em: (before_allocation): Use
+        ENABLE_RELAXATION macro.
+        * emultempl/ppc32elf.em: (before_allocation): Test
+        RELAXATION_DISABLED_BY_DEFAULT macro. Use
+        ENABLE_RELAXATION macro.
+        * emultempl/sh64elf.em: (before_allocation): Test
+        RELAXATION_ENABLED macro. Use DISABLE_RELAXATION macro.
+        * emultempl/xtensaelf.em: Remove --no-relax option.
+        (before_allocation): Test RELAXATION_ENABLED macro.
+        Use ENABLE_RELAXATION macro.
+@
+text
+@d74 4
+a77 2
+  /* We only need stubs for the avr6 family.  */
+  if (strcmp ("${EMULATION_NAME}","avr6"))
+@
+
+
+1.9
+log
+@update copyright dates
+@
+text
+@d149 1
+a149 1
+  if (!avr_no_stubs && !command_line.relax)
+@
+
+
+1.8
+log
+@	PR 10474
+	* ldemul.c (after_allocation_default): Run lang_relax_sections.
+	* ldlang.h (lang_relax_sections): Declare.
+	* ldlang.c (relax_sections): Delete.
+	(lang_relax_sections): New function.
+	(lang_process): Don't relax directly from here.
+	* emultempl/alphaelf.em (alpha_finish): Call finish_default.
+	* emultempl/armelf.em (arm_elf_after_allocation): Delete.  Move body..
+	(gld${EMULATION_NAME}_finish): ..to here.  Move existing code..
+	(gld${EMULATION_NAME}_after_allocation): ..to here.  New function.
+	(LDEMUL_AFTER_ALLOCATION): Update.
+	* emultempl/avrelf.em (avr_elf_finish, LDEMUL_FINISH): Delete.
+	(avr_elf_after_allocation): New function.
+	(LDEMUL_AFTER_ALLOCATION): Define.
+	* emultempl/elf-generic.em (gld${EMULATION_NAME}_map_segments): Call
+	lang_relax_sections.
+	* emultempl/elf32.em (gld${EMULATION_NAME}_finish): Delete.  Move..
+	(gld${EMULATION_NAME}_after_allocation): ..code to here.  New function.
+	(LDEMUL_AFTER_ALLOCATION, LDEMUL_FINISH): Update.
+	* emultempl/genelf.em (gld${EMULATION_NAME}_finish): Delete.  Move..
+	(gld${EMULATION_NAME}_after_allocation): ..code to here.  New function.
+	(LDEMUL_FINISH): Delete.
+	(LDEMUL_AFTER_ALLOCATION): Define.
+	* emultempl/hppaelf.em (gld${EMULATION_NAME}_finish): Delete.  Move..
+	(gld${EMULATION_NAME}_after_allocation): ..to here.  New function.
+	(LDEMUL_FINISH): Delete.
+	(LDEMUL_AFTER_ALLOCATION): Define.
+	* emultempl/m68hc1xelf.em (m68hc11elf_finish): Delete.  Move..
+	(m68hc11elf_after_allocation): ..to here.  New function.
+	(LDEMUL_FINISH): Delete.
+	(LDEMUL_AFTER_ALLOCATION): Define.
+	* emultempl/m68kelf.em (m68k_elf_after_allocation): Call
+	gld${EMULATION_NAME}_after_allocation.
+	* emultempl/mmix-elfnmmo.em (mmix_after_allocation): Call
+	gld${EMULATION_NAME}_after_allocation.
+	* emultempl/mmo.em (mmo_finish): Delete.  Move body..
+	(gld${EMULATION_NAME}_after_allocation): ..to here.  New function.
+	(LDEMUL_FINISH): Define.
+	* emultempl/ppc64elf.em (ppc_layout_sections_again): Set elf_gp.
+	(gld${EMULATION_NAME}_finish): Move code sizing sections..
+	(gld${EMULATION_NAME}_after_allocation): ..to here.
+	* emultempl/sh64elf.em (sh64_elf_${EMULATION_NAME}_after_allocation):
+	Call gld${EMULATION_NAME}_after_allocation.
+	* emultempl/spuelf.em (gld${EMULATION_NAME}_finish): Delete
+	bfd_elf_discard_info and map_segments call.
+@
+text
+@d2 1
+a2 1
+#   Copyright 2006, 2007, 2008
+@
+
+
+1.7
+log
+@	* emultempl/armelf.em (elf32_arm_add_stub_section): Use
+	bfd_make_section_with_flags.
+	* emultempl/avrelf.em (avr_elf_create_output_section_statements):
+	Likewise.
+	* emultempl/hppaelf.em (hppaelf_add_stub_section): Likewise.
+	* emultempl/m68hc1xelf.em (m68hc11elf_add_stub_section): Likewise.
+	* emultempl/m68kcoff.em (gld${EMULATION_NAME}_after_open): Likewise.
+	* emultempl/m68kelf.em (m68k_elf_after_open): Likewise.
+	* emultempl/ppc64elf.em (ppc_add_stub_section): Likewise.
+	* emultempl/sh64elf.em (sh64_elf_${EMULATION_NAME}_before_allocation):
+	Likewise.
+@
+text
+@d147 1
+a147 1
+avr_elf_finish (void)
+d149 11
+d162 2
+a163 16
+      /* Now build the linker stubs.  */
+      if (stub_file->the_bfd->sections != NULL)
+       {
+         /* Call again the trampoline analyzer to initialize the trampoline
+            stubs with the correct symbol addresses.  Since there could have
+            been relaxation, the symbol addresses that were found during
+            first call may no longer be correct.  */
+         if (!elf32_avr_size_stubs (link_info.output_bfd, &link_info, FALSE))
+           {
+             einfo ("%X%P: can not size stub section: %E\n");
+             return;
+           }
+
+         if (!elf32_avr_build_stubs (&link_info))
+           einfo ("%X%P: can not build stubs: %E\n");
+       }
+a164 2
+
+  gld${EMULATION_NAME}_finish ();
+d264 1
+a264 1
+LDEMUL_FINISH=avr_elf_finish
+@
+
+
+1.6
+log
+@include/
+	* bfdlink.h (struct bfd_link_hash_table): Delete creator field.
+	(struct bfd_link_info): Add output_bfd.
+bfd/
+	* elflink.c: Replace all accesses to hash->creator field with
+	output_bfd->xvec.
+	* cofflink.c: Likewise.
+	* coff-h8300.c: Likewise.
+	* ecoff.c: Likewise.
+	* elf32-m68hc1x.c: Likewise.
+	* elf32-ppc.c: Likewise.
+	* elf64-alpha.c: Likewise.
+	* elf64-ppc.c: Likewise.
+	* elf64-sparc.c: Likewise.
+	* elfxx-mips.c: Likewise.
+	* i386linux.c: Likewise.
+	* m68klinux.c: Likewise.
+	* sparclinux.c: Likewise.
+	* sunos.c: Likewise.
+	* xcofflink.c: Likewise.
+	* linker.c: Likewise.
+	(_bfd_link_hash_table_init): Don't store creator.
+ld/
+	* ldmain.h (output_bfd): Delete.
+	* ldmain.c (output_bfd): Delete.
+	Replace all occurrences of output_bfd with link_info.output_bfd.
+	* ldcref.c: Likewise.
+	* ldctor.c: Likewise.
+	* ldemul.c: Likewise.
+	* ldexp.c: Likewise.
+	* ldfile.c: Likewise.
+	* ldlang.c: Likewise.
+	* ldmisc.c: Likewise.
+	* ldwrite.c: Likewise.
+	* pe-dll.c: Likewise.
+	* emultempl/aix.em: Likewise.
+	* emultempl/alphaelf.em: Likewise.
+	* emultempl/armcoff.em: Likewise.
+	* emultempl/armelf.em: Likewise.
+	* emultempl/avrelf.em: Likewise.
+	* emultempl/beos.em: Likewise.
+	* emultempl/elf-generic.em: Likewise.
+	* emultempl/elf32.em: Likewise.
+	* emultempl/gld960.em: Likewise.
+	* emultempl/hppaelf.em: Likewise.
+	* emultempl/irix.em: Likewise.
+	* emultempl/linux.em: Likewise.
+	* emultempl/lnk960.em: Likewise.
+	* emultempl/m68hc1xelf.em: Likewise.
+	* emultempl/mmix-elfnmmo.em: Likewise.
+	* emultempl/mmo.em: Likewise.
+	* emultempl/pe.em: Likewise.
+	* emultempl/pep.em: Likewise.
+	* emultempl/ppc32elf.em: Likewise.
+	* emultempl/ppc64elf.em: Likewise.
+	* emultempl/scoreelf.em: Likewise.
+	* emultempl/sh64elf.em: Likewise.
+	* emultempl/spuelf.em: Likewise.
+	* emultempl/sunos.em: Likewise.
+	* emultempl/vanilla.em: Likewise.
+	* emultempl/vxworks.em: Likewise.
+	* emultempl/xtensaelf.em: Likewise.
+	* emultempl/z80.em: Likewise.
+	* ldlang.c (open_output): Don't return output, instead write
+	link_info_output_bfd directly.
+	* emultempl/alphaelf.em: Replace occurrences of link_info.hash->creator
+	with link_info.output_bfd->xvec.
+	* emultempl/hppaelf.em: Likewise.
+	* emultempl/ppc32elf.em: Likewise.
+	* emultempl/ppc64elf.em: Likewise.
+	* emultempl/spuelf.em: Likewise.
+@
+text
+@a124 5
+  avr_stub_section = bfd_make_section_anyway (stub_file->the_bfd,
+                                              ".trampolines");
+  if (avr_stub_section == NULL)
+    goto err_ret;
+
+d127 4
+a130 1
+  if (!bfd_set_section_flags (stub_file->the_bfd, avr_stub_section, flags))
+@
+
+
+1.5
+log
+@	* emultempl/alphaelf.em: Format option help.
+	* emultempl/armcoff.em: Likewise.
+	* emultempl/armelf.em: Likewise.
+	* emultempl/avrelf.em: Likewise.
+	* emultempl/elf32.em: Likewise.
+	* emultempl/hppaelf.em: Likewise.
+	* emultempl/ia64elf.em: Likewise.
+	* emultempl/m68hc1xelf.em: Likewise.
+	* emultempl/ppc32elf.em: Likewise.
+	* emultempl/ppc64elf.em: Likewise.
+	* emultempl/scoreelf.em: Likewise.
+	* emultempl/spuelf.em: Likewise.
+	* emultempl/ticoff.em: Likewise.
+	* emultempl/vxworks.em: Likewise.
+	* emultempl/xtensaelf.em: Likewise.
+@
+text
+@d2 1
+a2 1
+#   Copyright 2006, 2007
+d88 1
+a88 1
+  ret = elf32_avr_setup_section_lists (output_bfd, &link_info);
+d97 1
+a97 1
+  if (! elf32_avr_size_stubs (output_bfd, &link_info, TRUE))
+d113 1
+a113 1
+  stub_file->the_bfd = bfd_create ("linker stubs", output_bfd);
+d116 2
+a117 2
+                             bfd_get_arch (output_bfd),
+                             bfd_get_mach (output_bfd)))
+d160 1
+a160 1
+         if (!elf32_avr_size_stubs (output_bfd, &link_info, FALSE))
+@
+
+
+1.4
+log
+@2007-07-19  Roland McGrath  <roland@@redhat.com>
+
+	* genscripts.sh (source_em, fragment): New sh functions.
+	Truncate e${EMULATION_NAME}.c file before .em script fills it.
+	Use source_em in place of . for the .em script.
+	* emultempl/generic.em: Use fragment and source_em functions.
+	* emultempl/aix.em: Likewise.
+	* emultempl/alphaelf.em: Likewise.
+	* emultempl/armcoff.em: Likewise.
+	* emultempl/armelf.em: Likewise.
+	* emultempl/avrelf.em: Likewise.
+	* emultempl/beos.em: Likewise.
+	* emultempl/cr16elf.em: Likewise.
+	* emultempl/crxelf.em: Likewise.
+	* emultempl/elf-generic.em: Likewise.
+	* emultempl/elf32.em: Likewise.
+	* emultempl/genelf.em: Likewise.
+	* emultempl/gld960.em: Likewise.
+	* emultempl/gld960c.em: Likewise.
+	* emultempl/hppaelf.em: Likewise.
+	* emultempl/ia64elf.em: Likewise.
+	* emultempl/irix.em: Likewise.
+	* emultempl/linux.em: Likewise.
+	* emultempl/lnk960.em: Likewise.
+	* emultempl/m68hc1xelf.em: Likewise.
+	* emultempl/m68kcoff.em: Likewise.
+	* emultempl/m68kelf.em: Likewise.
+	* emultempl/mipsecoff.em: Likewise.
+	* emultempl/mipself.em: Likewise.
+	* emultempl/mmix-elfnmmo.em: Likewise.
+	* emultempl/mmixelf.em: Likewise.
+	* emultempl/mmo.em: Likewise.
+	* emultempl/needrelax.em: Likewise.
+	* emultempl/netbsd.em: Likewise.
+	* emultempl/pe.em: Likewise.
+	* emultempl/pep.em: Likewise.
+	* emultempl/ppc32elf.em: Likewise.
+	* emultempl/ppc64elf.em: Likewise.
+	* emultempl/scoreelf.em: Likewise.
+	* emultempl/sh64elf.em: Likewise.
+	* emultempl/spuelf.em: Likewise.
+	* emultempl/sunos.em: Likewise.
+	* emultempl/ticoff.em: Likewise.
+	* emultempl/vanilla.em: Likewise.
+	* emultempl/vxworks.em: Likewise.
+	* emultempl/xtensaelf.em: Likewise.
+	* emultempl/z80.em: Likewise.
+@
+text
+@d201 26
+a226 24
+  fprintf (file, _("     --pmem-wrap-around=<val> "
+                           "Make the linker relaxation machine assume that a\n"
+                   "                              "
+                           "program counter wrap-around occures at address\n"
+                   "                              "
+                           "<val>. Supported values are 8k, 16k, 32k and 64k.\n"));
+  fprintf (file, _("     --no-call-ret-replacement "
+                           "The relaxation machine normally will\n"
+                   "                               "
+                           "substitute two immediately following call/ret\n"
+                   "                               "
+                           "instructions by a single jump instruction.\n"
+                   "                               "
+                           "This option disables this optimization.\n"));
+  fprintf (file, _("     --no-stubs "
+                           "If the linker detects to attempt to access\n"
+                   "                               "
+                           "an instruction beyond 128k by a reloc that\n"
+                   "                               "
+                           "is limited to 128k max, it inserts a jump\n"
+                   "                               "
+                           "stub. You can de-active this with this switch.\n"));
+  fprintf (file, _("     --debug-stubs Used for debugging avr-ld.\n"));
+  fprintf (file, _("     --debug-relax Used for debugging avr-ld.\n"));
+@
+
+
+1.3
+log
+@Update sources to GPLv3
+@
+text
+@d28 1
+a28 1
+cat >>e${EMULATION_NAME}.c <<EOF
+d33 1
+a33 1
+/* The fake file and it's corresponding section meant to hold 
+d129 1
+a129 1
+  
+d136 1
+a136 1
+  
+d150 1
+a150 1
+{ 
+d188 1
+a188 1
+  { "no-call-ret-replacement", no_argument, 
+d190 1
+a190 1
+  { "pmem-wrap-around", required_argument, 
+d192 1
+a192 1
+  { "no-stubs", no_argument, 
+d194 1
+a194 1
+  { "debug-stubs", no_argument, 
+d196 1
+a196 1
+  { "debug-relax", no_argument, 
+d230 1
+a230 1
+      { 
+@
+
+
+1.2
+log
+@	* multempl/avrelf.em (PARSE_AND_LIST_ARGS_CASES): Add new value for
+	"--pmem-wrap-around".
+	(PARSE_AND_LIST_OPTIONS): Describe new value for "--pmem-wrap-around".
+@
+text
+@d2 1
+a2 1
+#   Copyright 2006
+d5 1
+a5 1
+# This file is part of GLD, the Gnu Linker.
+d9 1
+a9 1
+# the Free Software Foundation; either version 2 of the License, or
+d19 2
+a20 2
+# Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston, 
+# MA 02110-1301 USA.
+d22 4
+a25 3
+# This file is sourced from elf32.em, and defines extra avr-elf
+# specific routines.  It is used to generate the trampolines for the avr6
+# family devices where one needs to address the issue that it is not possible
+@
+
+
+1.1
+log
+@Add support for AVR6 family
+@
+text
+@d205 1
+a205 1
+                           "<val>. Supported values are 16k, 32k and 64k.\n"));
+d233 2
+@
+

@@ -1,0 +1,128 @@
+head	1.1;
+access;
+symbols
+	cygwin-1_7_35-release:1.1
+	cygwin-1_7_34-release:1.1
+	cygwin-1_7_33-release:1.1
+	cygwin-1_7_32-release:1.1
+	cygwin-1_7_31-release:1.1
+	cygwin-1_7_30-release:1.1
+	cygwin-1_7_29-release:1.1
+	cygwin-1_7_29-release-branchpoint:1.1.0.14
+	cygwin-1_7_28-release:1.1
+	cygwin-1_7_27-release:1.1
+	cygwin-1_7_26-release:1.1
+	cygwin-1_7_25-release:1.1
+	cygwin-1_7_24-release:1.1
+	cygwin-1_7_23-release:1.1
+	cygwin-1_7_22-release:1.1
+	cygwin-1_7_21-release:1.1
+	cygwin-1_7_20-release:1.1
+	cygwin-1_7_19-release:1.1
+	cygwin-64bit-postmerge:1.1
+	cygwin-64bit-premerge-branch:1.1.0.12
+	cygwin-64bit-premerge:1.1
+	cygwin-1_7_18-release:1.1
+	cygwin-1_7_17-release:1.1
+	cygwin-64bit-branch:1.1.0.10
+	cygwin-1_7_16-release:1.1
+	cygwin-1_7_15-release:1.1
+	cygwin-1_7_14_2-release:1.1
+	cygwin-1_7_14-release:1.1
+	cygwin-1_7_12-release:1.1
+	cygwin-1_7_11-release:1.1
+	cygwin-1_7_10-release:1.1
+	cygwin-1_7_9-release:1.1
+	cygwin-1_7_8-release:1.1
+	cygwin-1_7_7-release:1.1
+	cygwin-1_7_5-release:1.1
+	cygwin-1_7_4-release:1.1
+	cygwin-1_7_3-release:1.1
+	cygwin-1_7_2-release:1.1
+	cygwin-1_7_1-release:1.1
+	cv-branch-2:1.1.0.8
+	cr-0x5f1:1.1.0.6
+	cv-branch:1.1.0.4
+	cr-0x3b58:1.1.0.2;
+locks; strict;
+comment	@ * @;
+
+
+1.1
+date	2004.03.04.21.08.22;	author tpfaff;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.1
+log
+@* winsup.api/pthread/mutex8e.c: New testcase.
+* winsup.api/pthread/mutex8n.c: Ditto.
+* winsup.api/pthread/mutex8r.c: Ditto.
+@
+text
+@/* 
+ * mutex8n.c
+ *
+ * Tests PTHREAD_NORMAL_MUTEX_INITIALIZER_NP.
+ * Thread locks mutex twice (recursive lock).
+ * The thread should deadlock.
+ *
+ * Depends on API functions: 
+ *      pthread_create()
+ *      pthread_mutex_init()
+ *	pthread_mutex_lock()
+ *	pthread_mutex_unlock()
+ */
+
+#include "test.h"
+
+static int lockCount = 0;
+
+pthread_mutex_t mutex = PTHREAD_NORMAL_MUTEX_INITIALIZER_NP;
+
+void * locker(void * arg)
+{
+  assert(pthread_mutex_lock(&mutex) == 0);
+  lockCount++;
+
+  /* Should wait here (deadlocked) */
+  assert(pthread_mutex_lock(&mutex) == 0);
+  lockCount++;
+  assert(pthread_mutex_unlock(&mutex) == 0);
+
+  return (void *) 555;
+}
+ 
+int
+main()
+{
+  pthread_t t;
+
+  assert(pthread_create(&t, NULL, locker, NULL) == 0);
+
+  Sleep(1000);
+
+  assert(lockCount == 1);
+
+  /*
+   * Should succeed even though we don't own the lock
+   * because FAST mutexes don't check ownership.
+   */
+  assert(pthread_mutex_unlock(&mutex) == 0);
+
+  Sleep (1000);
+
+  assert(lockCount == 2);
+
+  exit(0);
+
+  /* Never reached */
+  return 0;
+}
+
+@

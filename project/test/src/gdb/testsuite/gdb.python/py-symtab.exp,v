@@ -1,0 +1,654 @@
+head	1.14;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.14
+	gdb_7_6-2013-04-26-release:1.14
+	gdb_7_6-branch:1.14.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.14
+	gdb_7_5_1-2012-11-29-release:1.11
+	gdb_7_5-2012-08-17-release:1.11
+	gdb_7_5-branch:1.11.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.11
+	gdb_7_4_1-2012-04-26-release:1.5.2.1
+	gdb_7_4-2012-01-24-release:1.5.2.1
+	gdb_7_4-branch:1.5.0.2
+	gdb_7_4-2011-12-13-branchpoint:1.5
+	gdb_7_3_1-2011-09-04-release:1.4
+	gdb_7_3-2011-07-26-release:1.4
+	gdb_7_3-branch:1.4.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.4
+	gdb_7_2-2010-09-02-release:1.1
+	gdb_7_2-branch:1.1.0.2
+	gdb_7_2-2010-07-07-branchpoint:1.1;
+locks; strict;
+comment	@# @;
+
+
+1.14
+date	2013.01.01.06.41.26;	author brobecke;	state Exp;
+branches;
+next	1.13;
+
+1.13
+date	2012.12.10.21.22.21;	author pkoning;	state Exp;
+branches;
+next	1.12;
+
+1.12
+date	2012.10.15.15.23.47;	author tromey;	state Exp;
+branches;
+next	1.11;
+
+1.11
+date	2012.06.27.00.21.21;	author sivachandra;	state Exp;
+branches;
+next	1.10;
+
+1.10
+date	2012.06.22.17.59.33;	author tromey;	state Exp;
+branches;
+next	1.9;
+
+1.9
+date	2012.05.03.07.07.26;	author sivachandra;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2012.02.07.19.42.27;	author tromey;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2012.01.16.16.21.52;	author palves;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2012.01.04.08.27.49;	author brobecke;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2011.07.06.22.15.02;	author ratmice;	state Exp;
+branches
+	1.5.2.1;
+next	1.4;
+
+1.4
+date	2011.03.17.09.36.17;	author pmuldoon;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2011.01.01.15.33.49;	author brobecke;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2010.10.01.17.03.50;	author devans;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2010.02.24.21.18.28;	author pmuldoon;	state Exp;
+branches;
+next	;
+
+1.5.2.1
+date	2012.01.06.04.54.27;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.14
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@# Copyright (C) 2010-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# This file is part of the GDB testsuite.  It tests the mechanism
+# exposing values to Python.
+
+load_lib gdb-python.exp
+
+standard_testfile py-symbol.c
+
+if {[prepare_for_testing $testfile.exp $testfile $srcfile debug]} {
+    return -1
+}
+
+# Skip all tests if Python scripting is not enabled.
+if { [skip_python_tests] } { continue }
+
+if ![runto_main] then {
+    fail "Can't run to main"
+    return 0
+}
+
+global hex decimal
+
+# Setup and get the symbol table.
+set line_no [gdb_get_line_number "Block break here."]
+gdb_breakpoint $line_no
+gdb_continue_to_breakpoint "Block break here."
+gdb_py_test_silent_cmd "python frame = gdb.selected_frame()" "Get Frame" 0
+gdb_py_test_silent_cmd "python sal = frame.find_sal()" "Get block" 0
+gdb_py_test_silent_cmd "python symtab = sal.symtab" "Get block" 0
+gdb_py_test_silent_cmd "python global_block = symtab.global_block()" "Get global block" 0
+gdb_py_test_silent_cmd "python static_block = symtab.static_block()" "Get static block" 0
+gdb_py_test_silent_cmd "python global_symbols = \[\]; static_symbols = \[\]" "Set up symbol name lists" 0
+gdb_py_test_silent_cmd "python for sym in global_block: global_symbols.append(sym.name)" "Get global symbol names" 0
+gdb_py_test_silent_cmd "python for sym in static_block: static_symbols.append(sym.name)" "Get static symbol names" 0
+gdb_py_test_silent_cmd "step" "Step to the next line" 0
+gdb_py_test_silent_cmd "python new_pc = gdb.selected_frame().find_sal().pc" "Get new PC" 0
+
+# Test sal.
+gdb_test "python print (sal.symtab)" ".*gdb.python/py-symbol.c.*" "Test symtab"
+gdb_test "python print (sal.pc)" "${decimal}" "Test sal.pc"
+gdb_test "python print (sal.last == (new_pc - 1))" "True" "Test sal.last"
+gdb_test "python print (sal.line)" "$line_no" "Test sal.line"
+gdb_test "python print (sal.is_valid())" "True" "Test sal.is_valid"
+
+# Test symbol table.
+gdb_test "python print (symtab.filename)" ".*gdb.python/py-symbol.c.*" "Test symtab.filename"
+gdb_test "python print (symtab.objfile)" "<gdb.Objfile object at ${hex}>" "Test symtab.objfile"
+gdb_test "python print (symtab.fullname())" "testsuite/gdb.python/py-symbol.c.*" "Test symtab.fullname"
+gdb_test "python print (symtab.is_valid())" "True" "Test symtab.is_valid()"
+gdb_test "python print (\"qq\" in global_symbols)" "True" "Test qq in global symbols"
+gdb_test "python print (\"func\" in global_symbols)" "True" "Test func in global symbols"
+gdb_test "python print (\"main\" in global_symbols)" "True" "Test main in global symbols"
+gdb_test "python print (\"int\" in static_symbols)" "True" "Test int in static symbols"
+gdb_test "python print (\"char\" in static_symbols)" "True" "Test char in static symbols"
+gdb_test "python print (\"simple_struct\" in static_symbols)" "True" "Test simple_struct in static symbols"
+
+# Test is_valid when the objfile is unloaded.  This must be the last
+# test as it unloads the object file in GDB.
+gdb_unload
+gdb_test "python print (sal.is_valid())" "False" "Test sal.is_valid"
+gdb_test "python print (symtab.is_valid())" "False" "Test symtab.is_valid()"
+
+gdb_test_no_output "python sal = None" "Test sal destructor"
+gdb_test_no_output "python symtab = None" "Test symtab destructor"
+@
+
+
+1.13
+log
+@2012-12-10  Paul Koning  <paul_koning@@dell.com>
+
+	* gdb.base/charset.exp: Change print syntax for Python 3
+	compatibility.
+	* gdb.python/py-block.exp: Ditto.
+	* gdb.python/py-breakpoint.exp: Ditto.
+	* gdb.python/py-cmd.exp: Ditto.
+	* gdb.python/py-events.py: Ditto.
+	* gdb.python/py-finish-breakpoint.py: Ditto.
+	* gdb.python/py-finish-breakpoint2.exp: Ditto.
+	* gdb.python/py-finish-breakpoint2.py: Ditto.
+	* gdb.python/py-frame-inline.exp: Ditto.
+	* gdb.python/py-frame.exp: Ditto.
+	* gdb.python/py-infthread.exp: Ditto.
+	* gdb.python/py-objfile.exp: Ditto.
+	* gdb.python/py-parameter.exp: Ditto.
+	* gdb.python/py-progspace.exp: Ditto.
+	* gdb.python/py-prompt.exp: Ditto.
+	* gdb.python/py-symbol.exp: Ditto.
+	* gdb.python/py-symtab.exp: Ditto.
+	* gdb.python/py-template.exp: Ditto.
+	* gdb.python/py-value-cc.exp: Ditto.
+	* gdb.python/python.exp: Ditto.
+	* gdb.python/source2.py: Ditto.
+	* gdb.python/lib-types.exp: Change print syntax for Python 3
+	compatibility.
+	Use sorted() function rather than sort() method.
+	Accept either int or long values for enum values.
+	* gdb.python/py-events.exp: Use exec(open(...).read()) instead of
+	execfile for Python 3 compatibility.
+	* gdb.python/py-evsignal.exp: Ditto.
+	* gdb.python/py-evthreads.exp: Ditto.
+	* gdb.python/py-mi.exp: Ditto.
+	* gdb.python/py-pp-maint.exp: Ditto.
+	* gdb.python/py-prettyprint.exp: Ditto.
+	* gdb.python/py-finish-breakpoint.exp: Change print syntax for
+	Python 3 compatibility.
+	Skip tests for Python 2.4.
+	* gdb.python/py-inferior.exp: Change print syntax for
+	Python 3 compatibility.
+	Use byte string rather than character string in memory write test
+	if Python 3.
+	* gdb.python/py-pp-maint.py: Change class declarations to "new
+	class" syntax.
+	* gdb.python/py-prettyprint.py: Change iterator class to generator
+	function for Python 3 compatibility.
+	Make all classes "new style".
+	Fix indentation issue and stray semicolon.
+	* gdb.python/py-shared.expChange print syntax for Python 3
+	compatibility.
+	Define "long" if Python 3.
+	* gdb.python/py-type.exp: Change print syntax for Python 3
+	compatibility.
+	Accept either int or long values for enum values.
+	* gdb.python/py-value.exp: Change print syntax for Python 3
+	compatibility.
+	Skip "long" and "unicode" tests if Python 3.
+	Accept either "type" or "class" in type checks.
+	* lib/gdb.exp (gdb_py_is_py3k): New flag set if Python 3.
+	(gdb_py_is_py24): New flag set if Python 2.4 or 2.5.
+@
+text
+@d1 1
+a1 1
+# Copyright (C) 2010-2012 Free Software Foundation, Inc.
+@
+
+
+1.12
+log
+@	PR python/14635:
+	* python/py-symtab.c (del_objfile_sal): Set 'symtab' field
+	to Py_None.
+testsuite
+	* gdb.python/py-symtab.exp: Test sal and symtab destructors.
+@
+text
+@d53 5
+a57 5
+gdb_test "python print sal.symtab" ".*gdb.python/py-symbol.c.*" "Test symtab"
+gdb_test "python print sal.pc" "${decimal}" "Test sal.pc"
+gdb_test "python print sal.last == (new_pc - 1)" "True" "Test sal.last"
+gdb_test "python print sal.line" "$line_no" "Test sal.line"
+gdb_test "python print sal.is_valid()" "True" "Test sal.is_valid"
+d60 10
+a69 10
+gdb_test "python print symtab.filename" ".*gdb.python/py-symbol.c.*" "Test symtab.filename"
+gdb_test "python print symtab.objfile" "<gdb.Objfile object at ${hex}>" "Test symtab.objfile"
+gdb_test "python print symtab.fullname()" "testsuite/gdb.python/py-symbol.c.*" "Test symtab.fullname"
+gdb_test "python print symtab.is_valid()" "True" "Test symtab.is_valid()"
+gdb_test "python print \"qq\" in global_symbols" "True" "Test qq in global symbols"
+gdb_test "python print \"func\" in global_symbols" "True" "Test func in global symbols"
+gdb_test "python print \"main\" in global_symbols" "True" "Test main in global symbols"
+gdb_test "python print \"int\" in static_symbols" "True" "Test int in static symbols"
+gdb_test "python print \"char\" in static_symbols" "True" "Test char in static symbols"
+gdb_test "python print \"simple_struct\" in static_symbols" "True" "Test simple_struct in static symbols"
+d74 2
+a75 2
+gdb_test "python print sal.is_valid()" "False" "Test sal.is_valid"
+gdb_test "python print symtab.is_valid()" "False" "Test symtab.is_valid()"
+@
+
+
+1.11
+log
+@2012-06-26  Siva Chandra Reddy  <sivachandra@@google.com>
+
+        New attribute 'last' for gdb.Symtab_and_line.
+        * NEWS (Python Scripting): Add entry about the new attribute.
+        * python/py-symtab.c (salpy_get_last): New function which
+        implements the get method for the 'last' attribute of
+        gdb.Symtab_and_line.
+        (sal_object_getset): Add entry for the 'last' attribute.
+
+        doc/
+        * gdb.texinfo (Symbol Tables In Python): Add description about
+        the new 'last' attribute of gdb.Symtab_and line.
+
+        testsuite/
+        * gdb.python/py-symtab.exp: Add tests to test the new attribute
+        'last' of gdb.Symtab_and_line.
+        * gdb.python/py-symbol.c: Move break point comment to enable
+        testing of gdb.Symtab_and_line.last.
+@
+text
+@d76 3
+@
+
+
+1.10
+log
+@	* gdb.python/lib-types.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.python/py-block.exp: Use standard_testfile.
+	* gdb.python/py-breakpoint.exp: Use standard_testfile.
+	* gdb.python/py-events.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.python/py-evsignal.exp: Use standard_testfile.
+	* gdb.python/py-evethreads.exp: Use standard_testfile.
+	* gdb.python/py-explore-cc.exp: Use standard_testfile.
+	* gdb.python/py-explore.exp: Use standard_testfile.
+	* gdb.python/py-finish-breakpoint.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.python/py-finish-breakpoint2.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.python/py-frame-inline.exp: Use standard_testfile.
+	* gdb.python/py-frame.exp: Use standard_testfile.
+	* gdb.python/py-inferior.exp: Use standard_testfile.
+	* gdb.python/py-infthread.exp: Use standard_testfile.
+	* gdb.python/py-mi.exp: Use standard_testfile.
+	* gdb.python/py-objfile-script.exp: Use standard_testfile,
+	build_executable.
+	* gdb.python/py-objfile.exp: Use standard_testfile.
+	* gdb.python/py-pp-maint.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.python/py-prettyprint.exp: Use standard_testfile.
+	* gdb.python/py-progspace.exp: Use standard_testfile,
+	build_executable.
+	* gdb.python/py-prompt.exp: Use standard_testfile,
+	build_executable.
+	* gdb.python/py-section-script.exp: Use standard_testfile,
+	build_executable.
+	* gdb.python/py-shared.exp: Use standard_testfile,
+	standard_output_file, clean_restart.
+	* gdb.python/py-symbol.exp: Use standard_output_file,
+	prepare_for_testing.
+	* gdb.python/py-symtab.exp: Use standard_output_file,
+	prepare_for_testing
+	* gdb.python/py-template.exp: Use standard_testfile.
+	* gdb.python/py-type.exp: Use standard_testfile.
+	* gdb.python/py-value-cc.exp: Use standard_testfile.
+	* gdb.python/py-value.exp: Use standard_testfile.
+	* gdb.python/python.exp: Use standard_testfile, build_executable.
+@
+text
+@d49 2
+d55 1
+@
+
+
+1.9
+log
+@2012-05-03  Siva Chandra Reddy  <sivachandra@@google.com>
+
+	Add two new methods global_block and static_block to gdb.Symtab
+	objects.
+	* NEWS (Python scripting): Add entry about the new methods.
+	* python/py-symtab.c (stpy_global_block): New function which
+	implements the gdb.Symtab.global_block() method.
+	(stpy_static_block): New function which implements the
+	gdb.Symtab.static_block() method.
+	(symtab_object_methods): Add entries for the two new methods.
+
+	* testsuite/gdb.python/py-symbol.exp: Add tests to test the new
+	methods gdb.Symtab.global_block() and gdb.Symtab.static_block().
+	* tessuite/gdb.python/py-symbol.c: Add new struct to help test
+	gdb.Symtab.static_block().
+
+	* doc/gdb.texinfo (Symbol Tables In Python): Add documentation
+	about the new methods global_block and static_block on
+	gdb.Symtab objects.
+@
+text
+@d21 3
+a23 5
+set testfile "py-symbol"
+set srcfile ${testfile}.c
+set binfile ${objdir}/${subdir}/${testfile}
+if { [gdb_compile "${srcdir}/${subdir}/${srcfile}" "${binfile}" executable {debug}] != "" } {
+    untested "Couldn't compile ${srcfile}"
+a26 6
+# Start with a fresh gdb.
+gdb_exit
+gdb_start
+gdb_reinitialize_dir $srcdir/$subdir
+gdb_load ${binfile}
+
+@
+
+
+1.8
+log
+@	PR python/13599:
+	* python/py-symbol.c (sympy_line): New function.
+	(symbol_object_getset): Add "line".
+gdb/doc
+	* gdb.texinfo (Symbols In Python): Document Symbol.line.
+gdb/testsuite
+	* gdb.python/py-symbol.c (qq): New global.
+	* gdb.python/py-symbol.exp: Add test for frame-less
+	lookup_symbol.
+	* gdb.python/py-symtab.exp: Fix line number.
+@
+text
+@d52 5
+d69 6
+@
+
+
+1.7
+log
+@2012-01-16  Pedro Alves  <palves@@redhat.com>
+
+	Remove all calls to strace.
+@
+text
+@d46 2
+a47 1
+gdb_breakpoint [gdb_get_line_number "Block break here."]
+d56 1
+a56 1
+gdb_test "python print sal.line" "42" "Test sal.line"
+@
+
+
+1.6
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@a18 4
+if $tracelevel then {
+    strace $tracelevel
+}
+
+@
+
+
+1.5
+log
+@gdb.python/python.exp: Update filename paths.
+gdb.python/py-symtab.exp: Ditto.
+@
+text
+@d1 1
+a1 1
+# Copyright (C) 2010, 2011 Free Software Foundation, Inc.
+@
+
+
+1.5.2.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d1 1
+a1 1
+# Copyright (C) 2010-2012 Free Software Foundation, Inc.
+@
+
+
+1.4
+log
+@2011-03-17  Phil Muldoon  <pmuldoon@@redhat.com>
+
+	    * python/py-symtab.c: Populate symtab_object_methods,
+	    sal_object_methods.
+	    (stpy_is_valid): New function.
+	    (salpy_is_valid): Ditto.
+	    * python/py-symbol.c: Declare symbol_object_methods.
+	    Populate.
+	    (sympy_is_valid): New function.
+	    * python/py-objfile.c: Declare objfile_object_methods.
+	    Populate.
+	    (objfpy_is_valid): New function.
+	    * python/py-inferior.c: Populate inferior_object_methods.
+	    (infpy_is_valid): New function.
+	    * python/py-infthread.c: Populate thread_object_methods.
+	    (thpy_is_valid): New function.
+	    * python/py-block.c: Declare block_object_methods.
+	    Populate.  Declare
+	    block_iterator_object_methods.  Populate.
+	    (blpy_is_valid): New function.
+	    (blpy_iter_is_valid): Ditto.
+
+2010-03-17  Phil Muldoon  <pmuldoon@@redhat.com>
+
+	    * gdb.python/Makefile.in: Add py-objfile.
+	    * gdb.python/py-objfile.exp: New file.
+	    * gdb.python/py-objfile.c: New file.
+	    * gdb.python/py-block.exp: Add is_valid tests.
+	    * gdb.python/py-inferior.exp: Ditto.
+	    * gdb.python/py-infthread.exp: Ditto.
+	    * gdb.python/py-symbol.exp: Ditto.
+	    * gdb.python/py-symtab.exp: Ditto.
+
+2011-03-17  Phil Muldoon  <pmuldoon@@redhat.com>
+
+	    * gdb.texinfo (Blocks In Python): Add is_valid method
+              description.
+	      (Inferiors In Python): Likewise.
+	      (Threads In Python): Likewise.
+	      (Symbols In Python): Likewise.
+	      (Objfiles In Python): Likewise.
+	      (Symbol Tables In Python): Likewise.
+@
+text
+@d57 1
+a57 1
+gdb_test "python print sal.symtab" "gdb/testsuite/gdb.python/py-symbol.c.*" "Test symtab"
+d63 1
+a63 1
+gdb_test "python print symtab.filename" "testsuite/gdb.python/py-symbol.c.*" "Test symtab.filename"
+@
+
+
+1.3
+log
+@run copyright.sh for 2011.
+@
+text
+@d60 1
+d66 7
+@
+
+
+1.2
+log
+@	* lib/gdb-python.exp: New file.
+	* gdb.python/py-block.exp: Use it.
+	* gdb.python/py-breakpoint.exp: Ditto.
+	* gdb.python/py-frame.exp: Ditto.
+	* gdb.python/py-inferior.exp: Ditto.
+	* gdb.python/py-param.exp: Ditto.
+	* gdb.python/py-prettyprint.exp: Ditto.
+	* gdb.python/py-shared.exp: Ditto.
+	* gdb.python/py-symbol.exp: Ditto.
+	* gdb.python/py-symtab.exp: Ditto.
+	* gdb.python/py-type.exp: Ditto.
+	* gdb.python/py-value.exp: Ditto.
+	* gdb.python/python.exp: Ditto.
+@
+text
+@d1 1
+a1 1
+# Copyright (C) 2010 Free Software Foundation, Inc.
+@
+
+
+1.1
+log
+@2010-02-24  Phil Muldoon  <pmuldoon@@redhat.com>
+   	    Tom Tromey  <tromey@@redhat.com>
+	    Thiago Jung Bauermann  <bauerman@@br.ibm.com>
+
+	* python/python.c (_initialize_python): Call
+	gdbpy_initialize_symtabs, gdbpy_initialize_symbols and
+	gdbpy_initialize_blocks.
+	* python/python-internal.h: Declare struct symbol, block and
+	symtab_and_line.  Declare block_object_type and
+	symbol_object_type
+	(gdbpy_lookup_symbol gdbpy_block_for_pc)
+	(symtab_and_line_to_sal_object, symtab_to_symtab_object)
+	(symbol_to_symbol_object,  block_to_block_object)
+	(gdbpy_initialize_symtabs,gdbpy_initialize_symbols)
+	(gdbpy_initialize_blocks ): Declare.
+	* python/py-frame.c (frapy_block, frapy_function, frapy_find_sal)
+	(frapy_select): Add methods.
+	(frapy_read_var): Add symbol branch.
+	* Makefile.in (SUBDIR_PYTHON_OBS): Add py-symbol, py-symtab,
+	py-block.
+	(SUBDIR_PYTHON_SRCS): Likewise.
+	(py-symbol.o): New rule.
+	(py-symtab.o): Likewise.
+	(py-block.o): Likewise.
+	* python/py-symbol.c: New file.
+	* python/py-symtab.c: Likewise.
+	* python/py-block.c: Likewise.
+
+
+2010-02-24  Phil Muldoon  <pmuldoon@@redhat.com>
+
+	* Makefile.in: Add py-block and py-symbol.
+	* gdb.python/py-symbol.exp: New File.
+	* gdb.python/py-symtab.exp: New File.
+	* gdb.python/py-block.exp: New File.
+	* gdb.python/py-symbol.c: New File.
+	* gdb.python/py-block.c: New File.
+
+
+2010-02-24  Phil Muldoon  <pmuldoon@@redhat.com>
+
+	* gdb.texinfo (Frames In Python): Add block, find_sal, function
+	and select method descriptions.
+	(Python API): Add Blocks In Python, Symbols in Python and Symbol
+	Tables in Python to menu.
+	(Blocks In Python): New node.
+	(Symbols In Python): New node.
+	(Symbol Tables in Python): New node.
+@
+text
+@d23 2
+a32 11
+# Run a command in GDB, and report a failure if a Python exception is thrown.
+# If report_pass is true, report a pass if no exception is thrown.
+proc gdb_py_test_silent_cmd {cmd name report_pass} {
+  global gdb_prompt
+
+  gdb_test_multiple $cmd $name {
+      -re "Traceback.*$gdb_prompt $"  { fail $name }
+      -re "$gdb_prompt $"	      { if $report_pass { pass $name } }
+  }
+}
+
+@
+

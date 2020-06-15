@@ -1,0 +1,553 @@
+head	1.13;
+access;
+symbols
+	preoverlapped:1.12
+	drop_9x_support_start:1.11
+	cr-0x5f1:1.11.0.18
+	cv-branch:1.11.0.16
+	pre-ptymaster-archetype:1.11
+	cr-0x3b58:1.11.0.14
+	cr-0x5ef:1.11.0.12
+	after-mmap-privanon-noreserve:1.11
+	after-mmap-revamp:1.11
+	before-mmap-revamp:1.11
+	cgf-more-exit-sync:1.11
+	post_wait_sig_exit:1.11
+	pre_wait_sig_exit:1.11
+	reparent-point:1.11
+	noreparent:1.11.0.10
+	cr-0x5e6:1.11.0.8
+	cr-0x9e:1.11.0.6
+	cr-0x9d:1.11.0.4
+	cgf-deleteme:1.11.0.2
+	pre-sigrewrite:1.11
+	corinna-01:1.10
+	cr-0x9c:1.10.0.6
+	cr-0x9b:1.10.0.4
+	cr-0x99:1.10
+	Z-emcb-cygwin_daemon:1.10.0.2
+	w32api-2_2:1.10
+	mingw-runtime-2_4:1.10
+	pre-cgf-merge:1.10
+	cgf-dev-branch:1.10.0.16
+	predaemon:1.9
+	cygwin_daemon_merge_HEAD:1.9
+	pregp02r1:1.9.0.32
+	cygnus_cvs_20020108_pre:1.9
+	Z-cygwin_daemon_merge-new_HEAD:1.9
+	Z-cygwin_daemon_merge_HEAD:1.9
+	cygwin_daemon:1.9.0.2;
+locks; strict;
+comment	@// @;
+expand	@o@;
+
+
+1.13
+date	2007.08.13.17.16.04;	author corinna;	state dead;
+branches;
+next	1.12;
+
+1.12
+date	2007.02.22.16.04.19;	author corinna;	state Exp;
+branches;
+next	1.11;
+
+1.11
+date	2003.11.14.23.40.05;	author rbcollins;	state Exp;
+branches;
+next	1.10;
+
+1.10
+date	2002.09.23.00.31.30;	author cgf;	state Exp;
+branches;
+next	1.9;
+
+1.9
+date	2001.09.12.17.46.35;	author corinna;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2001.09.11.20.01.00;	author cgf;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2001.08.04.21.10.52;	author cgf;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2001.06.24.22.26.49;	author cgf;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2000.09.08.02.56.54;	author cgf;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2000.09.03.04.16.35;	author cgf;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2000.05.04.19.46.32;	author cgf;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2000.03.18.06.26.14;	author cgf;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2000.02.17.19.38.31;	author cgf;	state Exp;
+branches
+	1.1.1.1;
+next	;
+
+1.1.1.1
+date	2000.02.17.19.38.31;	author cgf;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.13
+log
+@	* Makefile.in (DLL_OFILES): Remove delqueue.o.
+	* delqueue.cc: Delete.
+	* fhandler.h (fhandler_base::close_fs): Drop declaration.
+	(fhandler_disk_file::close): Drop declaration.
+	* fhandler_disk_file.cc (fhandler_base::fstat_fs): Call close instead of
+	close_fs.
+	(fhandler_base::fstat_helper): Use open FH_UNIX handle in call to
+	get_file_attribute.
+	(fhandler_base::open_fs): Call close instead of get_file_attribute.
+	(fhandler_disk_file::close): Remove.
+	(fhandler_base::close_fs): Remove.
+	* fhandler_socket.cc (fhandler_socket::close): Just call
+	fhandler_base::close for FH_UNIX sockets.
+	* shared.cc (user_shared_initialize): Drop call to
+	user_shared->delqueue.init.
+	* shared_info.h (CURR_USER_MAGIC): Change according to below change.
+	(MAX_DELQUEUES_PENDING): Remove.
+	(class delqueue_list): Remove.
+	(class user_info): Remove delqueue.
+	* syscalls.cc (close_all_files): Drop call to
+	user_shared->delqueue.process_queue.
+	(unlink): Drop delqueue handling.
+@
+text
+@/* delqueue.cc
+
+   Copyright 1996, 1998, 1999, 2000, 2001, 2007 Red Hat, Inc.
+
+This file is part of Cygwin.
+
+This software is a copyrighted work licensed under the terms of the
+Cygwin license.  Please consult the file "CYGWIN_LICENSE" for
+details. */
+
+#include "winsup.h"
+#include "shared_info.h"
+
+/* FIXME: this delqueue module is very flawed and should be rewritten.
+	First, having an array of a fixed size for keeping track of the
+	unlinked but not yet deleted files is bad.  Second, some programs
+	will unlink files and then create a new one in the same location
+	and this behavior is not supported in the current code.  Probably
+	we should find a move/rename function that will work on open files,
+	and move delqueue files to some special location or some such
+	hack... */
+
+void
+delqueue_list::init ()
+{
+  empty = 1;
+  memset (inuse, 0, MAX_DELQUEUES_PENDING);
+}
+
+void
+delqueue_list::queue_file (const char *dosname)
+{
+  char temp[CYG_MAX_PATH], *end;
+  GetFullPathName (dosname, sizeof (temp), temp, &end);
+
+  /* Note about race conditions: The only time we get to this point is
+     when a delete fails because someone's holding the descriptor open.
+     In those cases, other programs will be unable to delete the file
+     also, so any entries referring to that file will not be removed
+     from the queue while we're here. */
+
+  if (!empty)
+  {
+    /* check for duplicates */
+    for (int i=0; i < MAX_DELQUEUES_PENDING; i++)
+      if (inuse[i] && strcmp (name[i], temp) == 0)
+	return;
+  }
+
+  for (int i = 0; i < MAX_DELQUEUES_PENDING; i++)
+    if (!inuse[i])
+      {
+	/* set the name first, in case someone else is running the
+	   queue they'll get a valid name */
+	strcpy (name[i], temp);
+	inuse[i] = 1;
+	empty = 0;
+	debug_printf ("adding '%s' to queue %d", temp, i);
+	return;
+      }
+
+  system_printf ("Out of queue slots");
+}
+
+void
+delqueue_list::process_queue ()
+{
+  if (empty)
+    return;
+  /* We set empty to 1 here, rather than later, to avoid a race
+     condition - some other program might queue up a file while we're
+     processing, and it will zero out empty also. */
+  empty = 1; /* but might get set to zero again, below */
+
+  syscall_printf ("Running delqueue");
+
+  for (int i = 0; i < MAX_DELQUEUES_PENDING; i++)
+    if (inuse[i])
+      {
+	if (DeleteFileA (name[i]))
+	  {
+	    syscall_printf ("Deleted %s", name[i]);
+	    inuse[i] = 0;
+	  }
+	else
+	  {
+	    int res = GetLastError ();
+	    empty = 0;
+	    if (res == ERROR_SHARING_VIOLATION)
+	      {
+		/* File still inuse, that's ok */
+		syscall_printf ("Still using %s", name[i]);
+	      }
+	    else
+	      {
+		syscall_printf ("Hmm, don't know what to do with '%s', %E", name[i]);
+		inuse[i] = 0;
+	      }
+	  }
+      }
+}
+@
+
+
+1.12
+log
+@	Throughout remove all usage of wincap.access_denied_on_delete.
+	* dir.cc (rmdir): Add existance check to be errno-compatible with Linux.
+	* fhandler_disk_file.cc (fhandler_disk_file::rmdir): Drop test for
+	non-existent dir on 9x share.
+	* syscalls.cc (unlink): Add comment.
+	* wincap.cc: Remove access_denied_on_delete flag throughout.
+	* wincap.h: Ditto.
+@
+text
+@@
+
+
+1.11
+log
+@2003-11-11  Robert Collins <rbtcollins@@hotmail.com>
+	    Ron Parker <rdparker@@butlermfg.com>
+
+	* bsdlib.cc: Update throughout to use CYG_MAX_PATH rather than MAX_PATH.
+	* cygheap.h: Ditto.
+	* dcrt0.cc: Ditto.
+	* delqueue.cc: Ditto.
+	* dlfcn.cc: Ditto.
+	* dll_init.cc: Ditto.
+	* dll_init.h: Ditto.
+	* dtable.cc: Ditto.
+	* environ.cc: Ditto.
+	* environ.h: Ditto.
+	* exceptions.cc: Ditto.
+	* external.cc: Ditto.
+	* fhandler_disk_file.cc: Ditto.
+	* fhandler_proc.cc: Ditto.
+	* fhandler_process.cc: Ditto.
+	* fhandler_raw.cc: Ditto.
+	* fhandler_registry.cc: Ditto.
+	* fhandler_socket.cc: Ditto.
+	* fhandler_virtual.cc: Ditto.
+	* miscfuncs.cc: Ditto.
+	* mmap.cc: Ditto.
+	* netdb.cc: Ditto.
+	* path.cc: Ditto.
+	* path.h: Ditto.
+	* pinfo.cc: Ditto.
+	* pinfo.h: Ditto.
+	* pthread.cc: Ditto.
+	* registry.cc: Ditto.
+	* shared.cc: Ditto.
+	* shared_info.h: Ditto.
+	* smallprint.c: Ditto.
+	* spawn.cc: Ditto.
+	* strace.cc: Ditto.
+	* syscalls.cc: Ditto.
+	* thread.h: Ditto.
+	* uinfo.cc: Ditto.
+	* winsup.h: Ditto.
+	* include/limits.h: Ditto.
+	* include/cygwin/config.h: Ditto.
+	* include/sys/param.h: Ditto.
+@
+text
+@d3 1
+a3 1
+   Copyright 1996, 1998, 1999, 2000, 2001 Red Hat, Inc.
+d89 1
+a89 3
+	    if (res == ERROR_SHARING_VIOLATION ||
+		(wincap.access_denied_on_delete ()
+		 && res == ERROR_ACCESS_DENIED))
+@
+
+
+1.10
+log
+@More GNUify non-GNU formatted functions calls throughout.
+@
+text
+@d33 1
+a33 1
+  char temp[MAX_PATH], *end;
+@
+
+
+1.9
+log
+@        * Makefile.in: Build wincap.o.
+        * wincap.cc: New file.
+        * wincap.h: Ditto.
+        * autoload.cc: Add dynamic load statement for `CreateHardLinkA'.
+        * dcrt0.cc (os_being_run): Eliminated.
+        (osname): Ditto.
+        (iswinnt): Ditto.
+        (set_os_type): Ditto.
+        (dll_crt0_1): Call wincap.init() instead of set_os_type().
+        (_dll_crt0): Ditto.
+        * environ.cc (set_chunksize): New function.
+        (parse_thing): `forkchunk' setting now invokes function `set_chunksize'.
+        * fork.cc (chunksize): Eliminated. Moved to be member of wincap.
+        * host_dependent.h: Removed.
+        * syscalls.cc (_link): Try using `CreateHardLinkA' first, if available.
+        * cygheap.cc, dcrt0.cc, delqueue.cc, dir.cc,
+        environ.cc, fhandler.cc, fhandler.h, fhandler_console.cc,
+        fhandler_mem.cc, fork.cc, mmap.cc, net.cc, pinfo.cc, pinfo.h,
+        security.cc, syscalls.cc, sysconf.cc, syslog.cc, thread.cc,
+        times.cc, tty.cc, uinfo.cc, uname.cc, winsup.h: Use new wincap
+        capability check throughout.
+        * winsup.h: Include wincap.h. Eliminate extern declarations of
+        `os_being_run' and `iswinnt'. Eliminate `os_type" definition.
+        * include/cygwin/version.h: Bump version to 1.3.4.
+@
+text
+@d27 1
+a27 1
+  memset(inuse, 0, MAX_DELQUEUES_PENDING);
+d46 1
+a46 1
+      if (inuse[i] && strcmp(name[i], temp) == 0)
+d55 1
+a55 1
+	strcpy(name[i], temp);
+@
+
+
+1.8
+log
+@Update copyrights.
+@
+text
+@d90 2
+a91 1
+		(!iswinnt && res == ERROR_ACCESS_DENIED))
+@
+
+
+1.7
+log
+@Throughout, change check for running under Windows NT to 'iswinnt'.
+* dcrt0.cc (set_os_type): Set 'iswinnt' appropriately.
+* cygheap.cc (init_cheap): Revert to using VirtualAlloc for allocating cygheap.
+(cygheap_setup_for_child_cleanup): New function.  Standard function to call
+after calling CreateProcess to cleanup cygheap info passed to child.
+(cygheap_fixup_in_child): Copy cygheap from shared memory into allocated space
+under Windows 9x or if can't relocate shared space under NT.
+* cygheap.h: Declare new function.
+* spawn.cc (spawn_guts): Use cygheap_fixup_in_child.
+* fork.cc (fork_parent): Ditto.
+* winsup.h: Declare iswinnt.
+@
+text
+@d3 1
+a3 1
+   Copyright 1996, 1998 Cygnus Solutions.
+@
+
+
+1.6
+log
+@forced commit
+@
+text
+@d90 1
+a90 1
+		(os_being_run != winNT && res == ERROR_ACCESS_DENIED))
+@
+
+
+1.5
+log
+@Break out more header info into separate files.  Use appropriate header files
+throughout.
+* shared.h: Remove.
+* cygwin_version.h: New file.
+* delqueue.h: New file.
+* environ.h: New file.
+* host_dependent.h: New file.
+* perprocess.h: New file.
+* registry.h: New file.
+* security.h: New file.
+@
+text
+@@
+
+
+1.4
+log
+@* Makefile.in: Add cygheap.o.
+* child_info.h: Add specific exec class.
+* cygheap.h: New file.  Contains declarations for cygwin heap.
+* cygheap.cc: New file.  Implements cygwin heap functions.
+* dcrt0.cc (quoted): Simplify due to new method for passing arguments between
+cygwin programs.
+(alloc_stack_hard_way): Attempt to handle overlapped stack.
+(dll_crt0_1): Move child_info processing here.  Accomodate new method for
+passing arguments between cygwin programs.  Initialize cygwin heap.  Establish
+__argc and __argv variables.
+(_dll_crt0): Move most of child_info processing to dll_crt0_1.
+(cygwin_dll_init): Remove duplication.
+* dtable.cc (dtable::extend): Allocate dtable using cygwin heap.
+(dtable::build_fhandler): Ditto for fhandler type being constructed.
+(dtable::dup_worker): Free new fhandler from cygwin heap on error.
+(dtable::select_*): Don't assume that this == fdtab.
+(dtable::linearize_fd_array): Delete.
+(dtable::delinearize_fd_array): Delete.
+(dtable::fixup_after_exec): New file.
+(dtable::vfork_child_dup): Use cygwin heap.
+(dtable::vfork_parent_restore): Ditto.
+* dtable.h: Remove obsolete methods.  Add new method.
+* environ.cc (posify): Eliminate already_posix parameter and logic.
+(envsize): New function.
+(_addenv): Use envsize.
+(environ_init): Accept an argument pointing to an existing environment list.
+If supplied, allocate space for this in the the program's heap.
+* fhandler.cc (fhandler_base::operator =): Move here from fhandler.h.  Use
+cygwin heap to allocate filenames.
+(fhandler_base::set_name): Allocate/free names from cygwin heap.
+(fhandler_base::linearize): Delete.
+(fhandler_base::de_linearize): Delete.
+(fhandler_base::operator delete): Free from cygwin heap.
+(fhandler_base::~fhandler_base): Ditto.
+* fhandler.h: Accomodate elimination of *linearize and other changes above.
+* fhandler_console.cc (fhandler_console::fixup_after_exec): Rename from
+de_linearize.
+* heap.h: New file.
+* fhandler_tty.cc (fhandler_tty_slave::fhandler_tty_slave): Use cygwin heap for
+name.  fhandler_tty::fixup_after_exec): Rename from de_linearize.
+* fork.cc (fork): Call cygheap_fixup_in_child.
+* heap.cc: Use declarations in heap.h.
+* malloc.cc: Sprinkle assertions throughout to catch attempts to free/realloc
+something from the cygwin heap.
+* path.cc: Throughout, eliminate use of per-thread cache for cwd.  Use cwd_*
+functions rather than cwd_* variables to access cwd_win32 and cwd_posix.
+(cwd_win32): New function.
+(cwd_posix): New function.
+(cwd_hash): New function.
+(cwd_fixup_after_exec): New function.
+* path.h: Accomodate path.cc changes.
+* pinfo.cc (pinfo_init): Accept a pointer to an environment table.  Pass this
+to environ_init.  Eliminate old 'title' tests.
+* pinfo.h: Accomodate above change in argument.
+* spawn.cc (struct av): New method for building argv list.
+(av::unshift): New method.
+(spawn_guts): Allocate everything that the child process needs in the cygwin
+heap and pass a pointer to this to the child.  Build argv list using new
+method.  Eliminate delinearize stuff.
+* thread.h: Eliminate _cwd_win32 and _cwd_posix buffers.
+* winsup.h: Eliminate obsolete functions.  Add envsize() declaration.
+@
+text
+@d12 1
+@
+
+
+1.3
+log
+@* configure.in: Use -gstabs+ as compile debug option.  This seems to promote
+better handling of symbols.
+* configure: Regenerate.
+* delqueue.cc (delqueue_list::process_queue): Allow ERROR_ACCESS_DENIED to
+indicate that a file is being shared under Windows 95.
+* syscalls.cc (_unlink): Use full path name.  Take special action for Windows
+95.  Assume that an ERROR_ACCESS_DENIED indicates a sharing violation unless
+it's on a remote drive.  Punt if there is an ERROR_ACCESS_DENIED on a remote
+drive.
+@
+text
+@d89 1
+a89 1
+	        (os_being_run != winNT && res == ERROR_ACCESS_DENIED))
+d97 1
+a97 1
+	        inuse[i] = 0;
+@
+
+
+1.2
+log
+@* delqueue.cc (delqueue_list::queue_file): Add some debugging.
+* path.h (class path_conv): Add a char * operator for the most common case.
+* syscalls.cc (_unlink): Rewrite to use FILE_FLAG_DELETE_ON_CLOSE when possible
+(i.e., on NT).
+@
+text
+@d88 2
+a89 1
+	    if (res == ERROR_SHARING_VIOLATION)
+@
+
+
+1.1
+log
+@Initial revision
+@
+text
+@d57 1
+@
+
+
+1.1.1.1
+log
+@import winsup-2000-02-17 snapshot
+@
+text
+@@

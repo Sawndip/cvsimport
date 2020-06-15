@@ -1,0 +1,224 @@
+head	1.5;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.3
+	gdb_7_6-2013-04-26-release:1.3
+	gdb_7_6-branch:1.3.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.3
+	gdb_7_5_1-2012-11-29-release:1.1
+	gdb_7_5-2012-08-17-release:1.1
+	gdb_7_5-branch:1.1.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.1;
+locks; strict;
+comment	@# @;
+
+
+1.5
+date	2013.09.20.22.43.28;	author devans;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2013.08.22.13.39.13;	author tromey;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2013.01.01.06.41.22;	author brobecke;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2012.09.11.16.42.09;	author devans;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2012.06.28.01.10.38;	author devans;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.5
+log
+@	* lib/dwarf.exp (build_executable_from_fission_assembler): New proc.
+	* gdb.dwarf2/fission-base.S: Update.  Split out .dwo into separate
+	file.
+	* gdb.dwarf2/fission-loclists.S: Ditto.
+	* gdb.dwarf2/fission-reread.S: Ditto.
+	* gdb.dwarf2/fission-base.exp: Skip of remote host.  Compile with
+	build_executable_from_fission_assembler.
+	* gdb.dwarf2/fission-loclists.exp: Ditto.
+	* gdb.dwarf2/fission-reread.exp: Ditto.
+@
+text
+@# Copyright 2012-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+load_lib dwarf.exp
+
+# We run objcopy locally to split out the .dwo file.
+if [is_remote host] {
+    return 0
+}
+
+# This test can only be run on targets which support DWARF-2 and use gas.
+if ![dwarf2_support] {
+    return 0  
+}
+
+# This test can only be run on x86-64 targets.
+if {![istarget x86_64-*] || ![is_lp64_target]} {
+    return 0
+}
+
+standard_testfile .S
+
+if [build_executable_from_fission_assembler \
+	"$testfile.exp" "$binfile" "$srcfile" {nodebug}] {
+    return -1
+}
+
+clean_restart ${binfile}
+
+if ![runto_main] {
+    return -1
+}
+
+# Do a few basic things to verify we're finding the DWO debug info.
+
+gdb_test "ptype main" "type = int \\(\\)"
+gdb_test "ptype func" "type = int \\(int\\)"
+
+gdb_test "frame" "#0 *main \\(\\) at $testfile\\.c:$decimal.*" \
+    "frame in main"
+
+gdb_test "break func" "Breakpoint.*at.* file .*$testfile\\.c, line .*"
+
+gdb_test "continue" "Breakpoint.* func \\(arg=-1\\).*" \
+    "continue to func"
+
+gdb_test "frame" "#0 *func \\(arg=-1\\) at $testfile\\.c:$decimal.*" \
+    "frame in func"
+@
+
+
+1.4
+log
+@fix some gdb.dwarf2 tests for parallel safety
+
+This fixes a few gdb.dwarf2 tests to be more parallel-safe.  This
+mostly amounts to changing them to write their files into the
+directory designated by standard_output_file.
+
+Built and regtested on x86-64 Fedora 18.
+
+	* gdb.dwarf2/clztest.exp: Use standard_testfile.
+	* gdb.dwarf2/dw2-minsym-in-cu.exp: Use standard_testfile.
+	* gdb.dwarf2/fission-base.S: Remove directory from
+	DW_AT_GNU_dwo_name.
+	* gdb.dwarf2/fission-base.exp: Use build_executable.  Set
+	debug-file-directory.
+	* gdb.dwarf2/fission-reread.S: Remove directory from
+	DW_AT_GNU_dwo_name.
+	* gdb.dwarf2/fission-reread.exp: Use build_executable.  Set
+	debug-file-directory.
+@
+text
+@d18 5
+a32 2
+set basename "fission-base"
+
+d35 2
+a36 1
+if { [build_executable "$testfile.exp" "$testfile" "$srcfile" {nodebug}] } {
+d40 1
+a40 8
+gdb_exit
+gdb_start
+gdb_reinitialize_dir $srcdir/$subdir
+
+gdb_test_no_output "set debug-file-directory [file dirname $binfile]" \
+    "set debug-file-directory"
+
+gdb_load ${binfile}
+@
+
+
+1.3
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@d32 1
+a32 1
+if { [prepare_for_testing "$testfile.exp" "$testfile" "$srcfile" {nodebug}] } {
+d36 9
+@
+
+
+1.2
+log
+@	* gdb.dwarf2/fission-base.S: Include gdb.dwarf2/ in dwo_name.
+	* gdb.dwarf2/fission-reread.S: Ditto.
+	* gdb.dwarf2/fission-base.exp: Remove setting of debug-file-directory.
+	* gdb.dwarf2/fission-reread.exp: Ditto.
+@
+text
+@d1 1
+a1 1
+# Copyright 2012 Free Software Foundation, Inc.
+@
+
+
+1.1
+log
+@	* dwarf2read.c (dwarf2_cu): Add ranges_base.
+	Delete have_addr_base, unused.  All uses updated.
+	(init_cutu_and_read_dies): Process DW_AT_GNU_ranges_base.
+	(dwarf2_get_pc_bounds): Add ranges_base.
+	(dwarf2_record_block_ranges): Ditto.
+
+	testsuite/
+	* gdb.dwarf2/fission-base.c: New file.
+	* gdb.dwarf2/fission-base.S: New file.
+	* gdb.dwarf2/fission-base.exp: New file.
+@
+text
+@d32 1
+a32 4
+# IWBN to use prepare_for_testing here, but we need to set debug-file-directory
+# before we load the binary.
+
+if { [build_executable "$testfile.exp" "$testfile" "$srcfile" {nodebug}] } {
+a35 7
+gdb_exit
+gdb_start
+gdb_reinitialize_dir $srcdir/$subdir
+# Set debug-file-directory so we find the dwo file.
+gdb_test_no_output "set debug-file-directory $subdir"
+gdb_load [standard_output_file $testfile]
+
+@
+

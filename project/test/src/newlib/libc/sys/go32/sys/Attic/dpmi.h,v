@@ -1,0 +1,257 @@
+head	1.3;
+access;
+symbols
+	cygnus_cvs_20020108_pre:1.2
+	newlib-1_10_0:1.2
+	cygwin-1-3-6-4:1.2.0.2
+	newlib-1_9_0:1.1.1.1
+	cygwin-1_1_1:1.1.1.1
+	newlib-2000-02-17:1.1.1.1
+	SNAPSHOT:1.1.1;
+locks; strict;
+comment	@ * @;
+expand	@o@;
+
+
+1.3
+date	2002.12.20.02.29.00;	author jjohnstn;	state dead;
+branches;
+next	1.2;
+
+1.2
+date	2001.02.22.22.12.42;	author jjohnstn;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2000.02.17.19.39.50;	author cgf;	state Exp;
+branches
+	1.1.1.1;
+next	;
+
+1.1.1.1
+date	2000.02.17.19.39.50;	author cgf;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.3
+log
+@
+2002-12-19  Jeff Johnston  <jjohnstn@@redhat.com>
+
+        * configure.host: Remove references to go32.
+        * libc/sys/go32/*: Removed.
+@
+text
+@/* This is file dpmi.h */
+/*
+** Copyright (C) 1993 DJ Delorie
+**
+** This file is distributed under the terms listed in the document
+** "copying.dj".
+** A copy of "copying.dj" should accompany this file; if not, a copy
+** should be available from where this file was obtained.  This file
+** may not be distributed without a verbatim copy of "copying.dj".
+**
+** This file is distributed WITHOUT ANY WARRANTY; without even the implied
+** warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+*/
+
+#ifndef _DPMI_H_
+#define _DPMI_H_
+
+
+#include <sys/types.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+typedef union {
+  struct {
+    u_long edi;
+    u_long esi;
+    u_long ebp;
+    u_long res;
+    u_long ebx;
+    u_long edx;
+    u_long ecx;
+    u_long eax;
+  } d;
+  struct {
+    u_short di, di_hi;
+    u_short si, si_hi;
+    u_short bp, bp_hi;
+    u_short res, res_hi;
+    u_short bx, bx_hi;
+    u_short dx, dx_hi;
+    u_short cx, cx_hi;
+    u_short ax, ax_hi;
+    u_short flags;
+    u_short es;
+    u_short ds;
+    u_short fs;
+    u_short gs;
+    u_short ip;
+    u_short cs;
+    u_short sp;
+    u_short ss;
+  } x;
+  struct {
+    u_char edi[4];
+    u_char esi[4];
+    u_char ebp[4];
+    u_char res[4];
+    u_char bl, bh, ebx_b2, ebx_b3;
+    u_char dl, dh, edx_b2, edx_b3;
+    u_char cl, ch, ecx_b2, ecx_b3;
+    u_char al, ah, eax_b2, eax_b3;
+  } h;
+} _go32_dpmi_registers;
+
+typedef struct {
+  u_long  size;
+  u_long  pm_offset;
+  u_short pm_selector;
+  u_short rm_offset;
+  u_short rm_segment;
+} _go32_dpmi_seginfo;
+
+typedef struct {
+  u_long available_memory;
+  u_long available_pages;
+  u_long available_lockable_pages;
+  u_long linear_space;
+  u_long unlocked_pages;
+  u_long available_physical_pages;
+  u_long total_physical_pages;
+  u_long free_linear_space;
+  u_long max_pages_in_paging_file;
+  u_long reserved[3];
+} _go32_dpmi_meminfo;
+
+/* returns zero if success, else dpmi error and info->size is max size */
+int _go32_dpmi_allocate_dos_memory(_go32_dpmi_seginfo *info);
+	/* set size to bytes/16, call, use rm_segment.  Do not
+	   change anthing but size until the memory is freed.
+	   If error, max size is returned in size as bytes/16. */
+int _go32_dpmi_free_dos_memory(_go32_dpmi_seginfo *info);
+	/* set new size to bytes/16, call.  If error, max size
+	   is returned in size as bytes/16 */
+int _go32_dpmi_resize_dos_memory(_go32_dpmi_seginfo *info);
+	/* uses pm_selector to free memory */
+
+/* These both use the rm_segment:rm_offset fields only */
+int _go32_dpmi_get_real_mode_interrupt_vector(int vector, _go32_dpmi_seginfo *info);
+int _go32_dpmi_set_real_mode_interrupt_vector(int vector, _go32_dpmi_seginfo *info);
+
+/* These do NOT wrap the function in pm_offset in an iret handler.
+   You must provide an assembler interface yourself, or alloc one below.
+   You may NOT longjmp out of an interrupt handler. */
+int _go32_dpmi_get_protected_mode_interrupt_vector(int vector, _go32_dpmi_seginfo *info);
+	/* puts vector in pm_selector:pm_offset. */
+int _go32_dpmi_set_protected_mode_interrupt_vector(int vector, _go32_dpmi_seginfo *info);
+	/* sets vector from pm_offset and pm_selector */
+int _go32_dpmi_chain_protected_mode_interrupt_vector(int vector, _go32_dpmi_seginfo *info);
+	/* sets up wrapper that calls function in pm_offset, chaining to old
+	   handler when it returns */
+
+/* These can be used to generate assember IRET-style wrappers for functions */
+int _go32_dpmi_allocate_iret_wrapper(_go32_dpmi_seginfo *info);
+	/* Put function ptr in pm_offset, call, returns wrapper entry in pm_offset. */
+int _go32_dpmi_free_iret_wrapper(_go32_dpmi_seginfo *info);
+	/* assumes pm_offset points to wrapper, frees it */
+
+/* simulate real mode calls.  CS:IP from regs for non-interrupt */
+int _go32_dpmi_simulate_int(int vector, _go32_dpmi_registers *regs);
+int _go32_dpmi_simulate_fcall(_go32_dpmi_registers *regs);
+int _go32_dpmi_simulate_fcall_iret(_go32_dpmi_registers *regs);
+
+/* These automatically handle the tasks of restructuring the
+   real-mode stack for the proper return type.  The callback
+   (info->pm_offset) is called as (*pmcb)(_go32_dpmi_registers *regs); */
+int _go32_dpmi_allocate_real_mode_callback_retf(_go32_dpmi_seginfo *info, _go32_dpmi_registers *regs);
+	/* points callback at pm_offset, returns seg:ofs of callback addr
+	   in rm_segment:rm_offset.  Do not change any fields until freed.
+	   Interface is added to simulate far return */
+int _go32_dpmi_allocate_real_mode_callback_iret(_go32_dpmi_seginfo *info, _go32_dpmi_registers *regs);
+	/* same, but simulates iret */
+int _go32_dpmi_free_real_mode_callback(_go32_dpmi_seginfo *info);
+	/* frees callback */
+
+/* Only available_memory is guaranteed to be valid.  Try
+   available_physical_pages for phys mem left */
+int _go32_dpmi_get_free_memory_information(_go32_dpmi_meminfo *info);
+
+/* Convenience functions.  These use the above memory info call.
+   The return value is *bytes* */
+u_long _go32_dpmi_remaining_physical_memory(void);
+u_long _go32_dpmi_remaining_virtual_memory(void);
+
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif
+@
+
+
+1.2
+log
+@
+2001-02-22  Jeff Johnston  <jjohnstn@@redhat.com>
+
+        * libc/include/machine/setjmp-dj.h: With DJ Delorie's permission,
+        changed the copyright information to allow free modification of the
+        file with no reference to "copying.dj".
+        * libc/include/sys/stat-dj.h: Ditto.
+        * libc/machine/i386/setjmp.S: Ditto.
+        * libc/sys/h8300hms/sys/file.h: Ditto.
+        * libc/sys/sysmec/access.c: Ditto.
+        * libc/sys/sysnecv850/access.c: Ditto.
+        * libc/stdio/mktemp.c: Fixed typo for the word copyright.
+        * libc/stdlib/getenv_r.c: Ditto.
+        * libc/stdlib/putenv_r.c: Ditto.
+        * libc/stdlib/setenv_r.c: Ditto.
+        * libc/stdlib/getenv.c: Removed DJ reference since any possible
+        modifications will now be in the _r version of this file.
+        * libc/stdlib/putenv.c: Ditto.
+        * libc/stdlib/setenv.c: Ditto.
+        * libc/sys/go32/copying.dj: Removed DJ's address which is no longer
+        valid.  Added a reference to DJ's web page that contains his address.
+        * libc/sys/go32/*.s: Removed references to DJ's old address.
+        * libc/sys/go32/*.c: Ditto.
+        * libc/sys/go32/*.h: Ditto.
+        * libc/sys/go32/*.S: Ditto.
+        * libc/sys/go32/sys/*.h: Ditto.
+@
+text
+@@
+
+
+1.1
+log
+@Initial revision
+@
+text
+@d3 1
+a3 1
+** Copyright (C) 1993 DJ Delorie, 24 Kirsten Ave, Rochester NH 03867-2954
+d6 1
+a6 1
+** "copying.dj", available from DJ Delorie at the address above.
+@
+
+
+1.1.1.1
+log
+@import newlib-2000-02-17 snapshot
+@
+text
+@@

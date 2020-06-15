@@ -1,0 +1,425 @@
+head	1.8;
+access;
+symbols
+	gdb_7_4_1-2012-04-26-release:1.5
+	gdb_7_4-2012-01-24-release:1.5
+	gdb_7_4-branch:1.5.0.4
+	gdb_7_4-2011-12-13-branchpoint:1.5
+	gdb_7_3_1-2011-09-04-release:1.5
+	gdb_7_3-2011-07-26-release:1.5
+	gdb_7_3-branch:1.5.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.5
+	gdb_7_2-2010-09-02-release:1.4
+	gdb_7_2-branch:1.4.0.2
+	gdb_7_2-2010-07-07-branchpoint:1.4
+	gdb_7_1-2010-03-18-release:1.3
+	gdb_7_1-branch:1.3.0.2
+	gdb_7_1-2010-02-18-branchpoint:1.3
+	gdb_7_0_1-2009-12-22-release:1.2
+	gdb_7_0-2009-10-06-release:1.2
+	gdb_7_0-branch:1.2.0.4
+	gdb_7_0-2009-09-16-branchpoint:1.2
+	msnyder-checkpoint-072509-branch:1.2.0.2
+	msnyder-checkpoint-072509-branchpoint:1.2
+	reverse-20081226-branch:1.1.0.10
+	reverse-20081226-branchpoint:1.1
+	multiprocess-20081120-branch:1.1.0.8
+	multiprocess-20081120-branchpoint:1.1
+	reverse-20080930-branch:1.1.0.6
+	reverse-20080930-branchpoint:1.1
+	reverse-20080717-branch:1.1.0.4
+	reverse-20080717-branchpoint:1.1
+	msnyder-reverse-20080609-branch:1.1.0.2
+	msnyder-reverse-20080609-branchpoint:1.1;
+locks; strict;
+comment	@# @;
+
+
+1.8
+date	2012.04.19.15.27.52;	author palves;	state dead;
+branches;
+next	1.7;
+
+1.7
+date	2012.04.18.20.45.25;	author palves;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2012.04.18.12.09.39;	author palves;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2011.01.01.15.33.25;	author brobecke;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2010.05.23.00.57.01;	author palves;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2010.01.01.07.31.50;	author brobecke;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2009.01.03.05.57.57;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2008.04.14.18.05.12;	author drow;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.8
+log
+@2012-04-19  Pedro Alves  <palves@@redhat.com>
+
+	gdb/
+	* gnulib/: Move whole directory ...
+	* gnulib/import/: ... here, and re-rerun gnulib-tool to adjust.
+	* Makefile.in (LIBGNU, INCGNU, GNULIB_H, CLEANDIRS)
+	(REQUIRED_SUBDIRS, all-lib, gnulib/Makefile, ACLOCAL_AMFLAGS)
+	(aclocal_m4_deps): Adjust.
+	* aclocal.m4: Regenerate.
+	* configure: Regenerate.
+	* configure.ac: Adjust AC_OUTPUT output.
+
+	gdbserver/
+	* Makefile.in (LIBGNU, INCGNU): Adjust.
+	(GNULIB_FLAGS_TO_PASS, GNULIB_H): Adjust.
+	(all, install-only, uninstall, clean-info, all-lib, clean)
+	(maintainer-clean, Makefile, gnulib/Makefile): Adjust.
+	* configure.ac: Adjust AC_OUTPUT output.
+	* aclocal.m4: Regenerate.
+	* configure: Regenerate.
+@
+text
+@# memchr.m4 serial 12
+dnl Copyright (C) 2002-2004, 2009-2012 Free Software Foundation, Inc.
+dnl This file is free software; the Free Software Foundation
+dnl gives unlimited permission to copy and/or distribute it,
+dnl with or without modifications, as long as this notice is preserved.
+
+AC_DEFUN_ONCE([gl_FUNC_MEMCHR],
+[
+  dnl Check for prerequisites for memory fence checks.
+  gl_FUNC_MMAP_ANON
+  AC_CHECK_HEADERS_ONCE([sys/mman.h])
+  AC_CHECK_FUNCS_ONCE([mprotect])
+
+  AC_REQUIRE([gl_HEADER_STRING_H_DEFAULTS])
+  m4_ifdef([gl_FUNC_MEMCHR_OBSOLETE], [
+    dnl These days, we assume memchr is present.  But if support for old
+    dnl platforms is desired:
+    AC_CHECK_FUNCS_ONCE([memchr])
+    if test $ac_cv_func_memchr = no; then
+      HAVE_MEMCHR=0
+    fi
+  ])
+  if test $HAVE_MEMCHR = 1; then
+    # Detect platform-specific bugs in some versions of glibc:
+    # memchr should not dereference anything with length 0
+    #   http://bugzilla.redhat.com/499689
+    # memchr should not dereference overestimated length after a match
+    #   http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=521737
+    #   http://sourceware.org/bugzilla/show_bug.cgi?id=10162
+    # Assume that memchr works on platforms that lack mprotect.
+    AC_CACHE_CHECK([whether memchr works], [gl_cv_func_memchr_works],
+      [AC_RUN_IFELSE([AC_LANG_PROGRAM([[
+#include <string.h>
+#if HAVE_SYS_MMAN_H
+# include <fcntl.h>
+# include <unistd.h>
+# include <sys/types.h>
+# include <sys/mman.h>
+# ifndef MAP_FILE
+#  define MAP_FILE 0
+# endif
+#endif
+]], [[
+  int result = 0;
+  char *fence = NULL;
+#if HAVE_SYS_MMAN_H && HAVE_MPROTECT
+# if HAVE_MAP_ANONYMOUS
+  const int flags = MAP_ANONYMOUS | MAP_PRIVATE;
+  const int fd = -1;
+# else /* !HAVE_MAP_ANONYMOUS */
+  const int flags = MAP_FILE | MAP_PRIVATE;
+  int fd = open ("/dev/zero", O_RDONLY, 0666);
+  if (fd >= 0)
+# endif
+    {
+      int pagesize = getpagesize ();
+      char *two_pages =
+        (char *) mmap (NULL, 2 * pagesize, PROT_READ | PROT_WRITE,
+                       flags, fd, 0);
+      if (two_pages != (char *)(-1)
+          && mprotect (two_pages + pagesize, pagesize, PROT_NONE) == 0)
+        fence = two_pages + pagesize;
+    }
+#endif
+  if (fence)
+    {
+      if (memchr (fence, 0, 0))
+        result |= 1;
+      strcpy (fence - 9, "12345678");
+      if (memchr (fence - 9, 0, 79) != fence - 1)
+        result |= 2;
+      if (memchr (fence - 1, 0, 3) != fence - 1)
+        result |= 4;
+    }
+  return result;
+]])], [gl_cv_func_memchr_works=yes], [gl_cv_func_memchr_works=no],
+      [dnl Be pessimistic for now.
+       gl_cv_func_memchr_works="guessing no"])])
+    if test "$gl_cv_func_memchr_works" != yes; then
+      REPLACE_MEMCHR=1
+    fi
+  fi
+])
+
+# Prerequisites of lib/memchr.c.
+AC_DEFUN([gl_PREREQ_MEMCHR], [
+  AC_CHECK_HEADERS([bp-sym.h])
+])
+@
+
+
+1.7
+log
+@2012-04-18  Pedro Alves  <palves@@redhat.com>
+
+	Update gnulib from latest git.
+	(639ea5ae15e39fe48d43e04864b2997301e4b969)
+
+	* gnulib/Makefile.am: Update.
+	* gnulib/dummy.c: Update.
+	* gnulib/extra/arg-nonnull.h: Update.
+	* gnulib/extra/c++defs.h: Update.
+	* gnulib/extra/update-copyright: Update.
+	* gnulib/extra/warn-on-use.h: Update.
+	* gnulib/inttypes.in.h: Update.
+	* gnulib/m4/00gnulib.m4: Update.
+	* gnulib/m4/extensions.m4: Update.
+	* gnulib/m4/gnulib-cache.m4: Update.
+	* gnulib/m4/gnulib-common.m4: Update.
+	* gnulib/m4/gnulib-comp.m4: Update.
+	* gnulib/m4/gnulib-tool.m4: Update.
+	* gnulib/m4/include_next.m4: Update.
+	* gnulib/m4/inttypes-pri.m4: Update.
+	* gnulib/m4/inttypes.m4: Update.
+	* gnulib/m4/longlong.m4: Update.
+	* gnulib/m4/memchr.m4: Update.
+	* gnulib/m4/memmem.m4: Update.
+	* gnulib/m4/mmap-anon.m4: Update.
+	* gnulib/m4/multiarch.m4: Update.
+	* gnulib/m4/onceonly.m4: Update.
+	* gnulib/m4/stddef_h.m4: Update.
+	* gnulib/m4/stdint.m4: Update.
+	* gnulib/m4/string_h.m4: Update.
+	* gnulib/m4/warn-on-use.m4: Update.
+	* gnulib/m4/wchar_h.m4: Update.
+	* gnulib/m4/wchar_t.m4: Update.
+	* gnulib/m4/wint_t.m4: Update.
+	* gnulib/memchr.c: Update.
+	* gnulib/memmem.c: Update.
+	* gnulib/stddef.in.h: Update.
+	* gnulib/stdint.in.h: Update.
+	* gnulib/str-two-way.h: Update.
+	* gnulib/string.in.h: Update.
+	* gnulib/wchar.in.h: Update.
+
+	* gnulib/extra/arg-nonnull.h: Delete.
+	* gnulib/extra/c++defs.h: Delete.
+	* gnulib/extra/warn-on-use.h: Delete.
+	* gnulib/m4/wchar_h.m4: Delete.
+	* gnulib/m4/wint_t.m4: Delete.
+	* gnulib/wchar.in.h: Delete.
+
+	* gnulib/extra/snippets/arg-nonnull.h: New.
+	* gnulib/extra/snippets/c++defs.h: New.
+	* gnulib/extra/snippets/warn-on-use.h: New.
+
+	* aclocal.m4: Regenerate.
+	* config.in: Regenerate.
+	* configure: Regenerate.
+	* gnulib/Makefile.in: Regenerate.
+
+	* gdbserver/aclocal.m4: Regenerate.
+	* gdbserver/config.in: Regenerate.
+	* gdbserver/configure: Regenerate.
+@
+text
+@@
+
+
+1.6
+log
+@2012-04-18  Pedro Alves  <palves@@redhat.com>
+
+	Revert gnulib/ part of:
+	2011-01-01  Joel Brobecker  <brobecker@@adacore.com>
+	Copyright year update in most files (performed by copyright.sh).
+@
+text
+@d1 2
+a2 2
+# memchr.m4 serial 8
+dnl Copyright (C) 2002-2004, 2009-2010 Free Software Foundation, Inc.
+a13 1
+  dnl These days, we assume memchr is present.  But just in case...
+d15 9
+a23 2
+  AC_CHECK_FUNCS_ONCE([memchr])
+  if test $ac_cv_func_memchr = yes; then
+d44 1
+d68 1
+a68 1
+        return 1;
+d71 3
+a73 1
+        return 2;
+d75 1
+a75 1
+  return 0;
+a81 6
+  else
+    HAVE_MEMCHR=0
+  fi
+  if test $HAVE_MEMCHR = 0 || test $REPLACE_MEMCHR = 1; then
+    AC_LIBOBJ([memchr])
+    gl_PREREQ_MEMCHR
+@
+
+
+1.5
+log
+@run copyright.sh for 2011.
+@
+text
+@d2 1
+a2 1
+dnl Copyright (C) 2002-2004, 2009-2011 Free Software Foundation, Inc.
+@
+
+
+1.4
+log
+@gdb/
+2010-05-23  Pedro Alves  <pedro@@codesourcery.com>
+
+	Update gnulib from latest git.
+	(250b80067c1e1d8faa0c42fb572f721975b929c5)
+
+	* gnulib/memcmp.c: Removed.
+	* gnulib/memchr.valgrind: New.
+	* gnulib/stddef.in.h: New.
+	* gnulib/Makefile.am: Updated.
+	* gnulib/memchr.c: Updated.
+	* gnulib/memmem.c: Updated.
+	* gnulib/stdint.in.h: Updated.
+	* gnulib/str-two-way.h: Updated.
+	* gnulib/string.in.h: Updated.
+	* gnulib/wchar.in.h: Updated.
+
+	* gnulib/extra/link-warning.h: Removed.
+	* gnulib/extra/c++defs.h: New.
+	* gnulib/extra/warn-on-use.h: New.
+	* gnulib/extra/arg-nonnull.h: Updated.
+
+	* gnulib/m4/extensions.m4: Updated.
+	* gnulib/m4/gnulib-cache.m4: Updated.
+	* gnulib/m4/gnulib-common.m4: Updated.
+	* gnulib/m4/gnulib-comp.m4: Updated.
+	* gnulib/m4/gnulib-tool.m4: Updated.
+	* gnulib/m4/include_next.m4: Updated.
+	* gnulib/m4/longlong.m4: Updated.
+	* gnulib/m4/memchr.m4: Updated.
+	* gnulib/m4/memmem.m4: Updated.
+	* gnulib/m4/stdint.m4: Updated.
+	* gnulib/m4/string_h.m4: Updated.
+	* gnulib/m4/memcmp.m4: Removed.
+	* gnulib/m4/onceonly_2_57.m4: Removed.
+	* gnulib/m4/00gnulib.m4: New.
+	* gnulib/m4/mmap-anon.m4: New.
+	* gnulib/m4/multiarch.m4: New.
+	* gnulib/m4/onceonly.m4: New.
+	* gnulib/m4/stddef_h.m4: New.
+	* gnulib/m4/warn-on-use.m4: New.
+	* gnulib/m4/wchar.m4: Removed.
+	* gnulib/m4/wchar_h.m4: New.
+	* gnulib/m4/wchar_t.m4: New.
+	* gnulib/m4/wint_t.m4: New.
+
+	* aclocal.m4: Regenerate.
+	* config.in: Likewise.
+	* configure: Likewise.
+	* gnulib/Makefile.in: Likewise.
+
+gdb/gdbserver/
+2010-05-23  Pedro Alves  <pedro@@codesourcery.com>
+
+	* config.h, configure: Regenerate.
+@
+text
+@d2 1
+a2 1
+dnl Copyright (C) 2002-2004, 2009-2010 Free Software Foundation, Inc.
+@
+
+
+1.3
+log
+@Update copyright year in most headers.
+
+Automatic update by copyright.sh.
+@
+text
+@d1 2
+a2 2
+# memchr.m4 serial 4
+dnl Copyright (C) 2002, 2003, 2004, 2009, 2010 Free Software Foundation, Inc.
+d7 1
+a7 1
+AC_DEFUN([gl_FUNC_MEMCHR],
+d9 69
+a77 2
+  AC_REPLACE_FUNCS(memchr)
+  if test $ac_cv_func_memchr = no; then
+d84 1
+a84 1
+  AC_CHECK_HEADERS(bp-sym.h)
+@
+
+
+1.2
+log
+@        Updated copyright notices for most files.
+@
+text
+@d2 1
+a2 1
+dnl Copyright (C) 2002, 2003, 2004, 2009 Free Software Foundation, Inc.
+@
+
+
+1.1
+log
+@Add missed files from last commit.
+@
+text
+@d2 1
+a2 1
+dnl Copyright (C) 2002, 2003, 2004 Free Software Foundation, Inc.
+@
+

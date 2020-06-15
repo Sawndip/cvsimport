@@ -1,0 +1,223 @@
+head	1.1;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.1.2.2
+	gdb_7_6-2013-04-26-release:1.1.2.2
+	gdb_7_6-branch:1.1.0.2;
+locks; strict;
+comment	@# @;
+
+
+1.1
+date	2013.04.19.14.13.30;	author palves;	state Exp;
+branches
+	1.1.2.1;
+next	;
+
+1.1.2.1
+date	2013.04.19.14.13.30;	author palves;	state dead;
+branches;
+next	1.1.2.2;
+
+1.1.2.2
+date	2013.04.19.14.15.51;	author palves;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.1
+log
+@Fix the x87 FP register printout when issuing the “info float” command.
+
+Consider the following simple program:
+
+.globl  _start
+.text
+_start:
+      fldt    val
+.data
+      val: .byte 0x00,0x00,0x45,0x07,0x11,0x19,0x22,0xe9,0xfe,0xbf
+
+With current GDB on x86-64 GNU/Linux hosts, after the moment the fldt
+command has been executed the register st(0) looks like this,
+according to the “info regs” output (TOP=7):
+
+  R7: Valid   0xffffffbffffffffeffffffe922191107450000 -0.910676542908976927
+
+which is clearly wrong (just count its length).  The problem is due to
+the printf statement (see patch) printing a promoted integer value of
+a char argument "raw[i]", and, since char is signed on x86-64
+GNU/Linux, the erroneous “ffffff” are printed for the first three
+bytes which turn out to be "negative".  The fix is to use gdb_byte
+instead which is unsigned (and is the type of value_contents(), the
+type to be used for raw target bytes anyway).  After the fix the value
+will be printed correctly:
+
+  R7: Valid   0xbffee922191107450000 -0.910676542908976927
+
+gdb/
+2013-04-19  Vladimir Kargov <kargov@@gmail.com>
+	    Pedro Alves  <palves@@redhat.com>
+
+	* i387-tdep.c (i387_print_float_info): Use gdb_byte for pointer to
+	value contents.
+
+gdb/testsuite/
+2013-04-19  Vladimir Kargov  <kargov@@gmail.com>
+	    Pedro Alves  <palves@@redhat.com>
+
+	* gdb.arch/i386-float.S: New file.
+	* gdb.arch/i386-float.exp: New file.
+@
+text
+@# Copyright (C) 2009-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+
+# This file is part of the gdb testsuite.
+
+# Test the x87 floating point information printout.
+
+if { ![istarget "i?86-*-*"] && ![istarget "x86_64-*-*"] } then {
+    verbose "Skipping i386 tests for x87 floating point support."
+    return
+}
+
+standard_testfile .S
+
+# some targets have leading underscores on assembly symbols.
+set additional_flags [gdb_target_symbol_prefix_flags]
+
+if { [prepare_for_testing break.exp $testfile $srcfile [list debug $additional_flags]] } {
+    return -1
+}
+
+if ![runto_main] then {
+    fail "Can't run to main"
+    return 0
+}
+
+gdb_test "stepi" ".*fldt.*" "first stepi"
+gdb_test "info float" ".*R7: Empty   0x00000000000000000000\r\n.*"
+gdb_test "stepi" ".*ret.*" "second stepi"
+gdb_test "info float" ".*=>R7: Valid   0xbffee922191107450000 .*"
+@
+
+
+1.1.2.1
+log
+@file i386-float.exp was added on branch gdb_7_6-branch on 2013-04-19 14:15:51 +0000
+@
+text
+@d1 43
+@
+
+
+1.1.2.2
+log
+@Fix the x87 FP register printout when issuing the “info float” command.
+
+Consider the following simple program:
+
+.globl  _start
+.text
+_start:
+      fldt    val
+.data
+      val: .byte 0x00,0x00,0x45,0x07,0x11,0x19,0x22,0xe9,0xfe,0xbf
+
+With current GDB on x86-64 GNU/Linux hosts, after the moment the fldt
+command has been executed the register st(0) looks like this,
+according to the “info regs” output (TOP=7):
+
+  R7: Valid   0xffffffbffffffffeffffffe922191107450000 -0.910676542908976927
+
+which is clearly wrong (just count its length).  The problem is due to
+the printf statement (see patch) printing a promoted integer value of
+a char argument "raw[i]", and, since char is signed on x86-64
+GNU/Linux, the erroneous “ffffff” are printed for the first three
+bytes which turn out to be "negative".  The fix is to use gdb_byte
+instead which is unsigned (and is the type of value_contents(), the
+type to be used for raw target bytes anyway).  After the fix the value
+will be printed correctly:
+
+  R7: Valid   0xbffee922191107450000 -0.910676542908976927
+
+gdb/
+2013-04-19  Vladimir Kargov <kargov@@gmail.com>
+	    Pedro Alves  <palves@@redhat.com>
+
+	* i387-tdep.c (i387_print_float_info): Use gdb_byte for pointer to
+	value contents.
+
+gdb/testsuite/
+2013-04-19  Vladimir Kargov  <kargov@@gmail.com>
+	    Pedro Alves  <palves@@redhat.com>
+
+	* gdb.arch/i386-float.S: New file.
+	* gdb.arch/i386-float.exp: New file.
+@
+text
+@a0 43
+# Copyright (C) 2009-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+
+# This file is part of the gdb testsuite.
+
+# Test the x87 floating point information printout.
+
+if { ![istarget "i?86-*-*"] && ![istarget "x86_64-*-*"] } then {
+    verbose "Skipping i386 tests for x87 floating point support."
+    return
+}
+
+standard_testfile .S
+
+# some targets have leading underscores on assembly symbols.
+set additional_flags [gdb_target_symbol_prefix_flags]
+
+if { [prepare_for_testing break.exp $testfile $srcfile [list debug $additional_flags]] } {
+    return -1
+}
+
+if ![runto_main] then {
+    fail "Can't run to main"
+    return 0
+}
+
+gdb_test "stepi" ".*fldt.*" "first stepi"
+gdb_test "info float" ".*R7: Empty   0x00000000000000000000\r\n.*"
+gdb_test "stepi" ".*ret.*" "second stepi"
+gdb_test "info float" ".*=>R7: Valid   0xbffee922191107450000 .*"
+@
+
+

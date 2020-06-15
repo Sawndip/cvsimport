@@ -1,0 +1,379 @@
+head	1.5;
+access;
+symbols
+	gdb_5_3-2002-12-12-release:1.4
+	carlton_dictionary-20020927-merge:1.4
+	carlton_dictionary-branch:1.4.0.16
+	carlton_dictionary-20020920-branchpoint:1.4
+	gdb_5_3-branch:1.4.0.14
+	gdb_5_3-2002-09-04-branchpoint:1.4
+	kseitz_interps-20020829-merge:1.4
+	cagney_sysregs-20020825-branch:1.4.0.12
+	cagney_sysregs-20020825-branchpoint:1.4
+	readline_4_3-import-branch:1.4.0.10
+	readline_4_3-import-branchpoint:1.4
+	gdb_5_2_1-2002-07-23-release:1.4
+	kseitz_interps-20020528-branch:1.4.0.8
+	kseitz_interps-20020528-branchpoint:1.4
+	cagney_regbuf-20020515-branch:1.4.0.6
+	cagney_regbuf-20020515-branchpoint:1.4
+	jimb-macro-020506-branch:1.4.0.4
+	jimb-macro-020506-branchpoint:1.4
+	gdb_5_2-2002-04-29-release:1.4
+	gdb_5_2-branch:1.4.0.2
+	gdb_5_2-2002-03-03-branchpoint:1.4
+	gdb_5_1_1-2002-01-24-release:1.3
+	gdb_5_1_0_1-2002-01-03-release:1.3
+	cygnus_cvs_20020108_pre:1.4
+	gdb_5_1_0_1-2002-01-03-branch:1.3.0.8
+	gdb_5_1_0_1-2002-01-03-branchpoint:1.3
+	gdb_5_1-2001-11-21-release:1.3
+	gdb_s390-2001-09-26-branch:1.3.0.6
+	gdb_s390-2001-09-26-branchpoint:1.3
+	gdb_5_1-2001-07-29-branch:1.3.0.4
+	gdb_5_1-2001-07-29-branchpoint:1.3
+	dberlin-typesystem-branch:1.3.0.2
+	dberlin-typesystem-branchpoint:1.3;
+locks; strict;
+comment	@# @;
+
+
+1.5
+date	2002.09.29.14.20.31;	author cagney;	state dead;
+branches;
+next	1.4;
+
+1.4
+date	2001.08.19.01.23.43;	author cagney;	state Exp;
+branches
+	1.4.8.1
+	1.4.16.1;
+next	1.3;
+
+1.3
+date	2001.06.23.21.47.09;	author cagney;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2001.06.18.17.57.42;	author cagney;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2001.06.18.12.55.06;	author cagney;	state Exp;
+branches;
+next	;
+
+1.4.8.1
+date	2002.10.01.00.46.31;	author kseitz;	state dead;
+branches;
+next	;
+
+1.4.16.1
+date	2002.10.11.22.23.02;	author carlton;	state dead;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.5
+log
+@Delete no-longer-needed tests.
+@
+text
+@#   Copyright 1999, 2000 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+# 
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  
+
+# Please email any bugs, comments, and/or additions to this file to:
+# bug-gdb@@prep.ai.mit.edu
+
+#
+# Test Machine interface (MI) operations for disassembly.
+#
+# The goal is not to test gdb functionality, which is done by other tests,
+# but to verify the correct output response to MI operations.
+#
+
+load_lib mi-support.exp
+set MIFLAGS "-i=mi0"
+
+gdb_exit
+if [mi_gdb_start] {
+    continue
+}
+
+set testfile "basics"
+set srcfile ${testfile}.c
+set binfile ${objdir}/${subdir}/${testfile}
+if  { [gdb_compile "${srcdir}/${subdir}/${srcfile}" "${binfile}" executable {debug additional_flags=-DFAKEARGV}] != "" } {
+     gdb_suppress_entire_file "Testcase compile failed, so all tests in this file will automatically fail."
+}
+
+mi_delete_breakpoints
+mi_gdb_reinitialize_dir $srcdir/$subdir
+mi_gdb_load ${binfile}
+
+proc test_breakpoints_creation_and_listing {} {
+    global mi_gdb_prompt
+    global srcfile
+    global hex
+
+    # Insert some breakpoints and list them
+    # Also, disable some so they do not interfere with other tests
+    # Tests:
+    # -break-insert
+    # -break-list
+    # -break-disable
+    # -break-info
+
+    mi_gdb_test "200-break-insert main" \
+             "200\\^done,bkpt=\{number=\"1\",type=\"breakpoint\",disp=\"keep\",enabled=\"y\",addr=\"$hex\",func=\"main\",file=\".*basics.c\",line=\"32\",times=\"0\"\}" \
+             "break-insert operation"
+
+    mi_gdb_test "204-break-list" \
+                "204\\^done,BreakpointTable=\{hdr=\{.*\},bkpt=\{number=\"1\",type=\"breakpoint\",disp=\"keep\",enabled=\"y\",addr=\"$hex\",func=\"main\",file=\".*basics.c\",line=\"32\",times=\"0\"\}\}" \
+                "list of breakpoints"
+}
+
+proc test_running_the_program {} {
+    global mi_gdb_prompt
+    global hex
+
+    # Run the program without args
+    # Tests:
+    # -exec-run
+
+    # mi_gdb_test cannot be used for asynchronous commands because there are
+    # two prompts involved and this can lead to a race condition.
+    # FIXME: We are accepting a duplicate file and line info temporarely.
+    # The following is equivalent to a send_gdb "000-exec-run\n"
+    mi_run_cmd
+    # The running part has been checked already by mi_run_cmd
+        gdb_expect {
+	    -re "\[\r\n\]*000\\*stopped,reason=\"breakpoint-hit\",bkptno=\"1\",thread-id=\"\[01\]\",frame=\{addr=\"$hex\",func=\"main\",args=\{\},file=\".*basics.c\",line=\"32\"\}\r\n$mi_gdb_prompt$" {
+            pass "run to main"
+          }
+          -re ".*$mi_gdb_prompt$" {fail "run to main (2)"}
+          timeout {fail "run to main (timeout 2)"}
+        }
+}
+
+proc test_disassembly_only {} {
+    global mi_gdb_prompt
+    global hex
+    global decimal
+
+    # Test disassembly more only for the current function.
+    # Tests:
+    # -data-disassemble -s $pc -e "$pc+8" -- 0
+    # -data-disassembly -f basics.c -l 32 -- 0
+
+    mi_gdb_test "print/x \$pc" "" ""
+    mi_gdb_test "111-data-disassemble -s \$pc -e \"\$pc + 12\" -- 0" \
+	    "111\\^done,asm_insns=\{\{address=\"$hex\",func-name=\"main\",offset=\"$decimal\",inst=\".*\"\},\{address=\"$hex\",func-name=\"main\",offset=\"$decimal\",inst=\".*\"\}.*\}" \
+             "data-disassemble from pc to pc+12 assembly only"
+
+    mi_gdb_test "222-data-disassemble  -f basics.c -l 32 -- 0" \
+	    "222\\^done,asm_insns=\{\{address=\"$hex\",func-name=\"main\",offset=\"0\",inst=\".*\"\},.*,\{address=\"$hex\",func-name=\"main\",offset=\"$decimal\",inst=\".*\"\}\}" \
+              "data-disassemble file & line, assembly only"
+}
+
+proc test_disassembly_lines_limit {} {
+    global mi_gdb_prompt
+    global hex
+    global decimal
+
+    # Test disassembly more only for the current function.
+    # Tests:
+    # -data-disassembly -f basics.c -l 32 -n 20 -- 0
+    # -data-disassembly -f basics.c -l 32 -n 0 -- 0
+    # -data-disassembly -f basics.c -l 32 -n 50 -- 0
+
+    mi_gdb_test "print/x \$pc" "" ""
+    mi_gdb_test "222-data-disassemble  -f basics.c -l 32 -n 20 -- 0" \
+	    "222\\^done,asm_insns=\{\{address=\"$hex\",func-name=\"main\",offset=\"0\",inst=\".*\"\},.*,\{address=\"$hex\",func-name=\"main\",offset=\"$decimal\",inst=\".*\"\}\}" \
+              "data-disassemble file, line, number assembly only"
+
+    mi_gdb_test "222-data-disassemble  -f basics.c -l 32 -n 0 -- 0" \
+	    "222\\^done,asm_insns=\{\}" \
+              "data-disassemble file, line, number (zero lines) assembly only"
+
+    mi_gdb_test "222-data-disassemble  -f basics.c -l 32 -n 50 -- 0" \
+	    "222\\^done,asm_insns=\{\{address=\"$hex\",func-name=\"main\",offset=\"0\",inst=\".*\"\},.*,\{address=\"$hex\",func-name=\"main\",offset=\"$decimal\",inst=\".*\"\}\}" \
+              "data-disassemble file, line, number (more than main lines) assembly only"
+}
+
+
+proc test_disassembly_mixed {} {
+    global mi_gdb_prompt
+    global hex
+    global decimal
+
+    # Test disassembly more only for the current function.
+    # Tests:
+    # -data-disassembly -f basics.c -l 21 -- 1
+    # -data-disassembly -s $pc -e "$pc+8" -- 1
+
+    mi_gdb_test "002-data-disassemble -f basics.c -l 21 -- 1" \
+	    "002\\^done,asm_insns=\{src_and_asm_line=\{line=\"21\",file=\".*basics.c\",line_asm_insn=\{\{address=\"$hex\",func-name=\"callee2\",offset=\"0\",inst=\".*\"\}.*\}\},.*,src_and_asm_line=\{line=\"$decimal\",file=\".*basics.c\",line_asm_insn=\{.*\{address=\"$hex\",func-name=\"callee2\",offset=\"$decimal\",inst=\".*\"\}\}\}\}" \
+             "data-disassemble file, line assembly mixed"
+
+    #
+    # In mixed mode, the lowest level of granularity is the source line.
+    # So we are going to get the disassembly for the source line at
+    # which we are now, even if we have specified that the range is only 2 insns.
+    #
+    mi_gdb_test "003-data-disassemble -s \$pc -e \"\$pc+4\" -- 1" \
+	    "003\\^done,asm_insns=\{src_and_asm_line=\{line=\"$decimal\",file=\".*basics.c\",line_asm_insn=\{\{address=\"$hex\",func-name=\"main\",offset=\"$decimal\",inst=\".*\"\}.*\{address=\"$hex\",func-name=\"main\",offset=\"$decimal\",inst=\".*\"\}\}\}\}" \
+             "data-disassemble range assembly mixed"
+}
+
+proc test_disassembly_mixed_lines_limit {} {
+    global mi_gdb_prompt
+    global hex
+    global decimal
+
+    # Test disassembly more only for the current function.
+    # Tests:
+    # -data-disassembly -f basics.c -l 32 -n 20 -- 1
+    # -data-disassembly -f basics.c -l 32 -n 0 -- 1
+    # -data-disassembly -f basics.c -l 32 -n 50 -- 1
+
+    mi_gdb_test "print/x \$pc" "" ""
+    mi_gdb_test "222-data-disassemble  -f basics.c -l 32 -n 20 -- 1" \
+	    "222\\^done,asm_insns=\{src_and_asm_line=\{line=\"$decimal\",file=\".*basics.c\",line_asm_insn=\{\{address=\"$hex\",func-name=\"main\",offset=\"0\",inst=\".*\"\},.*,\{address=\"$hex\",func-name=\"main\",offset=\"$decimal\",inst=\".*\"\}.*\}" \
+              "data-disassemble file, line, number assembly mixed"
+
+    mi_gdb_test "222-data-disassemble  -f basics.c -l 32 -n 0 -- 1" \
+	    "222\\^done,asm_insns=\{src_and_asm_line=\{line=\"31\",file=\".*basics.c\",line_asm_insn=\{\}\}\}" \
+              "data-disassemble file, line, number (zero lines) assembly mixed"
+
+    mi_gdb_test "222-data-disassemble  -f basics.c -l 32 -n 50 -- 1" \
+	    "222\\^done,asm_insns=\{src_and_asm_line=\{line=\"$decimal\",file=\".*basics.c\",line_asm_insn=\{\{address=\"$hex\",func-name=\"main\",offset=\"0\",inst=\".*\"\},.*,\{address=\"$hex\",func-name=\"main\",offset=\"$decimal\",inst=\".*\"\}.*\}" \
+              "data-disassemble file, line, number (more than main lines) assembly mixed"
+}
+
+proc test_disassembly_bogus_args {} {
+    global mi_gdb_prompt
+    global hex
+
+    # Test that bogus input to disassembly command is rejected.
+    # Tests:
+    # -data-disassembly -f foo -l abc -n 0 -- 0
+    # -data-disassembly -s foo -e bar -- 0
+    # -data-disassembly -s $pc -f basics.c -- 0
+    # -data-disassembly -f basics.c -l 32 -- 9
+
+    mi_gdb_test "123-data-disassemble -f foo -l abc -n 0 -- 0" \
+             ".*123\\^error,msg=\"mi_cmd_disassemble: Invalid filename.\"" \
+             "data-disassemble bogus filename"
+
+    mi_gdb_test "321-data-disassemble -s foo -e bar -- 0" \
+             "321\\^error,msg=\"No symbol \\\\\"foo\\\\\" in current context.\"" \
+             "data-disassemble bogus address"
+
+    mi_gdb_test "456-data-disassemble -s \$pc -f basics.c -- 0" \
+             "456\\^error,msg=\"mi_cmd_disassemble: Usage: \\( .-f filename -l linenum .-n howmany.. | .-s startaddr -e endaddr.\\) .--. mixed_mode.\"" \
+             "data-disassemble mix different args"
+
+    mi_gdb_test "789-data-disassemble -f basics.c -l 32 -- 9" \
+             "789\\^error,msg=\"mi_cmd_disassemble: Mixed_mode argument must be 0 or 1.\"" \
+             "data-disassemble wrong mode arg"
+
+}
+
+test_breakpoints_creation_and_listing
+test_running_the_program
+test_disassembly_only
+test_disassembly_mixed
+test_disassembly_bogus_args
+test_disassembly_lines_limit
+test_disassembly_mixed_lines_limit
+
+mi_gdb_exit
+return 0
+@
+
+
+1.4
+log
+@* mi0-var-block.exp, mi0-stack.exp, mi0-simplerun.exp,
+mi0-regs.exp, mi0-watch.exp, mi0-stepi.exp, mi0-until.exp,
+mi0-return.exp, mi0-read-memory.exp, mi0-eval.exp,
+mi0-disassemble.exp, mi0-console.exp, mi-watch.exp,
+mi-var-display.exp, mi-var-cmd.exp, mi-var-child.exp,
+mi-until.exp, mi-var-block.exp, mi-stepi.exp, mi-stack.exp,
+mi-simplerun.exp, mi-return.exp, mi-regs.exp, mi-read-memory.exp,
+mi-disassemble.exp, mi-eval.exp, mi-console.exp: Replace pattern
+matching thread=0 with one to also match thread=1.
+Fix PR gdb/190.
+@
+text
+@@
+
+
+1.4.16.1
+log
+@Merge with mainline; merge tag carlton_dictionary-20021011-merge.
+@
+text
+@@
+
+
+1.4.8.1
+log
+@Merge with kseitz_interps-20020930-merge.
+@
+text
+@@
+
+
+1.3
+log
+@Rename gdb.mi/ChangeLog-mi to gdb.mi/ChangeLog.  Update everything.
+@
+text
+@d83 1
+a83 1
+	    -re "\[\r\n\]*000\\*stopped,reason=\"breakpoint-hit\",bkptno=\"1\",thread-id=\"0\",frame=\{addr=\"$hex\",func=\"main\",args=\{\},file=\".*basics.c\",line=\"32\"\}\r\n$mi_gdb_prompt$" {
+@
+
+
+1.2
+log
+@Recognize -i=mi0, -i=mi1 and -i=mi.
+@
+text
+@a224 4
+
+# Local variables: 
+# change-log-default-name: "ChangeLog-mi"
+# End: 
+@
+
+
+1.1
+log
+@Clone the mi-*.exp tests into mi0-*.exp.
+@
+text
+@d28 1
+@
+

@@ -1,0 +1,170 @@
+head	1.1;
+access;
+symbols
+	cygwin-1_7_35-release:1.1
+	cygwin-1_7_34-release:1.1
+	cygwin-1_7_33-release:1.1
+	cygwin-1_7_32-release:1.1
+	cygwin-1_7_31-release:1.1
+	cygwin-1_7_30-release:1.1
+	cygwin-1_7_29-release:1.1
+	cygwin-1_7_29-release-branchpoint:1.1.0.2
+	cygwin-pre-user-db:1.1
+	cygwin-1_7_28-release:1.1
+	cygwin-1_7_27-release:1.1
+	cygwin-1_7_26-release:1.1
+	cygwin-1_7_25-release:1.1
+	cygwin-1_7_24-release:1.1
+	cygwin-1_7_23-release:1.1
+	cygwin-1_7_22-release:1.1
+	cygwin-1_7_21-release:1.1;
+locks; strict;
+comment	@# @;
+
+
+1.1
+date	2013.06.18.09.45.37;	author corinna;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.1
+log
+@	* Makefile.in (VPATH): Drop CONFIG_DIR.
+	(EXTRA_DLL_OFILES): Remove.
+	(DLL_OFILES): Remove EXTRA_DLL_OFILES.
+	(ASFLAGS): Define as -D_WIN64 on x86_64.
+	(GMON_OFILES): Add mcountFunc.o.
+	($(srcdir)/$(TLSOFFSETS_H)): Use target_cpu rather than CONFIG_DIR.
+	* configure.ac (CONFIG_DIR): Remove definition.
+	* configure: Regenerate.
+	* gcrt0.c: Use latest version from Mingw-w64 project.
+	* gmon.c: Ditto.
+	* gmon.h: Ditto.
+	* mcount.c: Ditto.
+	* mcountFunc.S: Ditto, new file.
+	* profil.c: Ditto.
+	* profil.h: Ditto.
+	* config: Remove entire directory.
+@
+text
+@/**
+ * This file has no copyright assigned and is placed in the Public Domain.
+ * This file is part of the mingw-w64 runtime package.
+ * No warranty is given; refer to the file DISCLAIMER.PD within this package.
+ */
+#include <_mingw_mac.h>
+
+	.file "mcountFunc.S"
+	.text
+#ifdef _WIN64
+	.align 8
+#else
+	.align 4
+#endif
+
+/* gcc always assumes the mcount public symbol has a single leading underscore
+   for our target.  See gcc/config/i386.h; it isn't overridden in
+   config/i386/cygming.h or any other places for mingw */
+.globl _mcount
+        .def    _mcount;  .scl    2;      .type   32;     .endef
+_mcount:
+#ifndef _WIN64
+	push %ebp
+	mov %esp, %ebp
+	push %eax
+	push %ecx
+	push %edx
+	movl 4(%ebp),%edx
+	movl (%ebp),%eax
+	movl 4(%eax),%eax
+	push %edx
+	push %eax
+	call __MINGW_USYMBOL(_mcount_private)
+	add $8, %esp
+	pop %edx
+	pop %ecx
+	pop %eax
+	leave
+	ret
+#else
+	push %rbp
+	mov %rsp, %rbp
+	push %rax
+	push %rcx
+	push %rdx
+	push %r8
+	push %r9
+	push %r10
+	push %r11
+	movq 8(%rbp),%rdx
+	movq (%rbp),%rax
+	movq 8(%rax),%rcx
+	sub $40, %rsp
+	call __MINGW_USYMBOL(_mcount_private)
+	add $40, %rsp
+	pop %r11
+	pop %r10
+	pop %r9
+	pop %r8
+	pop %rdx
+	pop %rcx
+	pop %rax
+	leave
+	ret
+#endif
+
+/* gcc always assumes the mcount public symbol has a single leading underscore
+   for our target.  See gcc/config/i386.h; it isn't overridden in
+   config/i386/cygming.h or any other places for mingw.  This is the entry
+   for new prologue mechanism required for x64 seh calling convention.  */
+.globl __fentry__
+        .def    _mcount_top;  .scl    2;      .type   32;     .endef
+__fentry__:
+#ifndef _WIN64
+	push %ebp
+	mov %esp, %ebp
+	push %eax
+	push %ecx
+	push %edx
+	movl 4(%ebp),%edx
+	movl 8(%ebp),%eax
+	push %edx
+	push %eax
+	call __MINGW_USYMBOL(_mcount_private)
+	add $8, %esp
+	pop %edx
+	pop %ecx
+	pop %eax
+	leave
+	ret
+#else
+	push %rbp
+	mov %rsp, %rbp
+	push %rax
+	push %rcx
+	push %rdx
+	push %r8
+	push %r9
+	push %r10
+	push %r11
+	movq 8(%rbp),%rdx
+	movq 16(%rbp),%rcx
+	sub $40, %rsp
+	call __MINGW_USYMBOL(_mcount_private)
+	add $40, %rsp
+	pop %r11
+	pop %r10
+	pop %r9
+	pop %r8
+	pop %rdx
+	pop %rcx
+	pop %rax
+	leave
+	ret
+#endif
+@

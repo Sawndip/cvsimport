@@ -1,0 +1,463 @@
+head	1.7;
+access;
+symbols
+	cygwin-1_7_17-release:1.6
+	cygwin-64bit-branch:1.6.0.8
+	cygwin-1_7_16-release:1.6
+	cygwin-1_7_15-release:1.6
+	cygwin-1_7_14_2-release:1.6
+	cygwin-1_7_14-release:1.6
+	cygwin-1_7_12-release:1.6
+	cygwin-1_7_11-release:1.6
+	cygwin-1_7_10-release:1.6
+	cygwin-1_7_9-release:1.6
+	cygwin-1_7_8-release:1.6
+	cygwin-1_7_7-release:1.6
+	cygwin-1_7_5-release:1.6
+	cygwin-1_7_4-release:1.6
+	cygwin-1_7_3-release:1.6
+	cygwin-1_7_2-release:1.6
+	cygwin-1_7_1-release:1.6
+	cv-branch-2:1.6.0.6
+	cr-0x5f1:1.6.0.4
+	cv-branch:1.6.0.2
+	cr-0x3b58:1.5.0.2
+	cr-0x9e:1.4.0.4
+	cr-0x9d:1.4.0.2
+	corinna-01:1.3
+	cr-0x9c:1.3.0.6
+	cr-0x9b:1.3.0.4
+	cr-0x99:1.3
+	Z-emcb-cygwin_daemon:1.3.0.2
+	w32api-2_2:1.3
+	mingw-runtime-2_4:1.3;
+locks; strict;
+comment	@ * @;
+
+
+1.7
+date	2012.11.07.16.52.41;	author cgf;	state dead;
+branches;
+next	1.6;
+
+1.6
+date	2006.06.12.00.55.06;	author dannysmith;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2004.09.28.08.46.51;	author dannysmith;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2004.01.15.07.19.20;	author dannysmith;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2002.11.15.01.08.16;	author dannysmith;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2002.11.12.21.34.06;	author dannysmith;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2002.10.06.22.18.25;	author earnie;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.7
+log
+@* mingw: Delete obsolete directory.
+* w32api: Ditto.
+@
+text
+@/*
+ * mcd.h
+ *
+ * Media changer driver interface
+ *
+ * This file is part of the w32api package.
+ *
+ * Contributors:
+ *   Created by Casper S. Hornstrup <chorns@@users.sourceforge.net>
+ *
+ * THIS SOFTWARE IS NOT COPYRIGHTED
+ *
+ * This source code is offered for use in the public domain. You may
+ * use, modify or distribute it freely.
+ *
+ * This code is distributed in the hope that it will be useful but
+ * WITHOUT ANY WARRANTY. ALL WARRANTIES, EXPRESS OR IMPLIED ARE HEREBY
+ * DISCLAIMED. This includes but is not limited to warranties of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ *
+ */
+
+#ifndef __MCD_H
+#define __MCD_H
+
+#if __GNUC__ >=3
+#pragma GCC system_header
+#endif
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#include "ntddk.h"
+#include "srb.h"
+#include "scsi.h"
+#include "ntddchgr.h"
+
+#if defined(_MCD_)
+  #define CHANGERAPI DECLSPEC_EXPORT
+#else
+  #define CHANGERAPI DECLSPEC_IMPORT
+#endif
+
+#ifdef DebugPrint
+#undef DebugPrint
+#endif
+
+#ifdef DBG
+#define DebugPrint(x) ChangerClassDebugPrint x
+#else
+#define DebugPrint(x)
+#endif
+
+#define MAXIMUM_CHANGER_INQUIRY_DATA			252
+
+CHANGERAPI
+PVOID
+DDKAPI
+ChangerClassAllocatePool(
+  /*IN*/ POOL_TYPE  PoolType,
+  /*IN*/ ULONG  NumberOfBytes);
+
+VOID
+ChangerClassDebugPrint(
+  ULONG  DebugPrintLevel,
+  PCCHAR  DebugMessage,
+  ...);
+
+CHANGERAPI
+PVOID
+DDKAPI
+ChangerClassFreePool(
+  /*IN*/ PVOID  PoolToFree);
+
+CHANGERAPI
+NTSTATUS
+DDKAPI
+ChangerClassSendSrbSynchronous(
+  /*IN*/ PDEVICE_OBJECT  DeviceObject,
+  /*IN*/ PSCSI_REQUEST_BLOCK  Srb,
+  /*IN*/ PVOID  Buffer,
+  /*IN*/ ULONG  BufferSize,
+  /*IN*/ BOOLEAN  WriteToDevice);
+
+
+typedef NTSTATUS DDKAPI
+(*CHANGER_INITIALIZE)(
+  /*IN*/ PDEVICE_OBJECT  DeviceObject);
+
+typedef ULONG DDKAPI
+(*CHANGER_EXTENSION_SIZE)(
+  VOID);
+
+typedef VOID DDKAPI
+(*CHANGER_ERROR_ROUTINE)(
+  PDEVICE_OBJECT  DeviceObject,
+  PSCSI_REQUEST_BLOCK  Srb,
+  NTSTATUS  *Status,
+  BOOLEAN  *Retry);
+
+typedef NTSTATUS DDKAPI
+(*CHANGER_COMMAND_ROUTINE)(
+  /*IN*/ PDEVICE_OBJECT  DeviceObject,
+  /*IN*/ PIRP  Irp);
+
+typedef NTSTATUS DDKAPI
+(*CHANGER_PERFORM_DIAGNOSTICS)(
+  /*IN*/ PDEVICE_OBJECT  DeviceObject,
+  /*OUT*/ PWMI_CHANGER_PROBLEM_DEVICE_ERROR  ChangerDeviceError);
+
+typedef struct _MCD_INIT_DATA {
+  ULONG  InitDataSize;
+  CHANGER_EXTENSION_SIZE  ChangerAdditionalExtensionSize;
+  CHANGER_INITIALIZE  ChangerInitialize;
+  CHANGER_ERROR_ROUTINE  ChangerError;
+  CHANGER_PERFORM_DIAGNOSTICS  ChangerPerformDiagnostics;
+  CHANGER_COMMAND_ROUTINE  ChangerGetParameters;
+  CHANGER_COMMAND_ROUTINE  ChangerGetStatus;
+  CHANGER_COMMAND_ROUTINE  ChangerGetProductData;
+  CHANGER_COMMAND_ROUTINE  ChangerSetAccess;
+  CHANGER_COMMAND_ROUTINE  ChangerGetElementStatus;
+  CHANGER_COMMAND_ROUTINE  ChangerInitializeElementStatus;
+  CHANGER_COMMAND_ROUTINE  ChangerSetPosition;
+  CHANGER_COMMAND_ROUTINE  ChangerExchangeMedium;
+  CHANGER_COMMAND_ROUTINE  ChangerMoveMedium;
+  CHANGER_COMMAND_ROUTINE  ChangerReinitializeUnit;
+  CHANGER_COMMAND_ROUTINE  ChangerQueryVolumeTags;
+} MCD_INIT_DATA, *PMCD_INIT_DATA;
+
+CHANGERAPI
+NTSTATUS
+DDKAPI
+ChangerClassInitialize(
+  /*IN*/ PDRIVER_OBJECT  DriverObject,
+  /*IN*/ PUNICODE_STRING  RegistryPath,
+  /*IN*/ PMCD_INIT_DATA  MCDInitData);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* __MCD_H */
+@
+
+
+1.6
+log
+@	[mingw-Bugs-1424461]
+	*include/imagehlp.h: Comment out IN, OUT and OPTIONAL,
+	throughout.
+	*include/rpcdce.h: Don't define IN, OUT or OPTIONAL if
+	_NO_W32_PSEUDO_MODIFIERS.
+	*include/rpcnsi.h: Comment out IN, OUT and OPTIONAL,
+	throughout.
+	*include/rpcnsip.h: Likewise.
+	*include/windef.h: Don't define IN, OUT or OPTIONAL
+	if _NO_W32_PSEUDO_MODIFIERS.
+	*include/ddk/batclass.h: Comment out IN, OUT and OPTIONAL,
+	throughout.
+	*include/ddk/cfgmgr32.h: Likewise.
+	*include/ddk/ddkmapi.h: Likewise.
+	*include/ddk/hidclass.h: Likewise.
+	*include/ddk/hidpi.h: Likewise.
+	*include/ddk/kbdmou.h: Likewise.
+	*include/ddk/mcd.h: Likewise.
+	*include/ddk/miniport.h: Likewise.
+	*include/ddk/minitape.h: Likewise.
+	*include/ddk/ndis.h: Likewise.
+	*include/ddk/ndistapi.h: Likewise.
+	*include/ddk/ndiswan.h: Likewise.
+	*include/ddk/ntapi.h: Likewise.
+	*include/ddk/ntdd8042.h: Likewise.
+	*include/ddk/ntddpcm.h: Likewise.
+	*include/ddk/ntifs.h: Likewise.
+	*include/ddk/ntpoapi.h: Likewise.
+	*include/ddk/parallel.h: Likewise.
+	*include/ddk/pfhook.h: Likewise.
+	*include/ddk/scsiwmi.h: Likewise.
+	*include/ddk/smbus.h: Likewise.
+	*include/ddk/srb.h: Likewise.
+	*include/ddk/storport.h: Likewise.
+	*include/ddk/tdikrnl.h: Likewise.
+	*include/ddk/upssvc.h: Likewise.
+	*include/ddk/usbcamdi.h: Likewise.
+	*include/ddk/usbscan.h: Likewise.
+	*include/ddk/video.h: Likewise.
+	*include/ddk/videoagp.h: Likewise.
+	*include/ddk/win2k.h: Likewise.
+	*include/ddk/winddi.h: Likewise.
+	*include/ddk/winddk.h: Don't define IN, OUT or OPTIONAL
+	if _NO_W32_PSEUDO_MODIFIERS.
+	Comment out IN, OUT and OPTIONAL, throughout.
+	*include/ddk/winnt4.h: Comment out IN, OUT and OPTIONAL,
+	throughout.
+	*include/ddk/ws2san.h: Likewise.
+@
+text
+@@
+
+
+1.5
+log
+@2004-09-29  Filip Navara  <xnavara@@volny.cz>
+
+	* include/ddk/(atm.h, batclass.h, cfg.h, cfgmgr32.h, d4drvif.h,
+	d4iface.h, ddkmapi.h, hidclass.h, hidpi.h, mcd.h, miniport.h,
+	mountdev.h, mountmgr.h, ndis.h, ndistapi.h, ndiswan.h, netpnp.h,
+	newdev.h, ntapi.h, ntdd8042.h, ntddbeep.h, ntddcdrm.h, ntddcdvd.h,
+	ntddchgr.h, ntdddisk.h, ntddkbd.h, ntddmou.h, ntddpar.h, ntddpcm.h,
+	ntddscsi.h, ntddser.h, ntddstor.h, ntddtape.h, ntddtdi.h,
+	ntddvdeo.h, ntddvol.h, ntpoapi.h, parallel.h, pfhook.h, poclass.h,
+	scsi.h, scsiscan.h, smbus.h, srb.h, storport.h, tdiinfo.h,
+	tdikrnl.h, tvout.h, upssvc.h, usb.h, usb100.h, usbdi.h, usbioctl.h,
+	usbiodef.h, usbscan.h, usbuser.h, videoagp.h, winddi.h, winddk.h,
+	winnt4.h, ws2san.h): Fixed packing.
+	* include/ddk/atm.h (ATM_TRAFFIC_DESCRIPTOR_IE): Fixed declaration.
+	* include/ddk/hidclass.h (HID_INTERFACE_HIDPARSE,
+	HID_INTERFACE_NOTIFY_PNP): Likewise.
+	* include/ddk/ndis.h (NDIS_DMA_BLOCK, CO_FLOW_PARAMETERS): Likewise.
+	(NdisQueryPacketLength): Added macro. Thanks to Art Yerkes
+	<ayerkes@@speakeasy.net>.
+	* include/ddk/usb100.h (USB_CONFIGURATION_DESCRIPTOR): Fixed
+	declaration.
+	* include/ddk/winddi.h (PATHDATA, GLYPHPOS): Likewise.
+	* include/ddk/winddk.h (PDRIVER_CONTROL, PDRIVER_LIST_CONTROL,
+	PDRIVER_ADD_DEVICE, PIO_COMPLETION_ROUTINE, PDRIVER_CANCEL,
+	PKDEFERRED_ROUTINE, PDRIVER_DISPATCH, PIO_DPC_ROUTINE,
+	PMM_DLL_INITIALIZE, PMM_DLL_UNLOAD, PDRIVER_ENTRY,
+	PDRIVER_INITIALIZE, PKSERVICE_ROUTINE, PIO_TIMER_ROUTINE,
+	PDRIVER_REINITIALIZE, PDRIVER_STARTIO, PKSYNCHRONIZE_ROUTINE,
+	PDRIVER_UNLOAD, DRIVER_OBJECT): Fixed callback declarations.
+	(struct FILE_BASIC_INFORMATION): Renamed to _FILE_BASIC_INFORMATION.
+	(SYNCH_LEVEL): Added definition.
+	(KPCR, KPCR_TIB): Fixed declaration.
+	(Interlocked[Push/Pop]EntrySList): Declare only if winbase.h isn't
+	included and _WIN32_WINNT >= 0x0501.
+	(RtlEqualLuid): Fixed macro definition.
+	(KfLowerIrql, KfRaiseIrql): Declare and use instead of KeLowerIrql and
+	KeRaiseIrql on i386 architectures.
+@
+text
+@d61 2
+a62 2
+  IN POOL_TYPE  PoolType,
+  IN ULONG  NumberOfBytes);
+d74 1
+a74 1
+  IN PVOID  PoolToFree);
+d80 5
+a84 5
+  IN PDEVICE_OBJECT  DeviceObject,
+  IN PSCSI_REQUEST_BLOCK  Srb,
+  IN PVOID  Buffer,
+  IN ULONG  BufferSize,
+  IN BOOLEAN  WriteToDevice);
+d89 1
+a89 1
+  IN PDEVICE_OBJECT  DeviceObject);
+d104 2
+a105 2
+  IN PDEVICE_OBJECT  DeviceObject,
+  IN PIRP  Irp);
+d109 2
+a110 2
+  IN PDEVICE_OBJECT  DeviceObject,
+  OUT PWMI_CHANGER_PROBLEM_DEVICE_ERROR  ChangerDeviceError);
+d135 3
+a137 3
+  IN PDRIVER_OBJECT  DriverObject,
+  IN PUNICODE_STRING  RegistryPath,
+  IN PMCD_INIT_DATA  MCDInitData);
+@
+
+
+1.4
+log
+@2004-01-15  Filip Navara  <xnavara@@volny.cz>
+
+	* include/ddk/mcd.h: Don't care about value of DBG define.
+	* include/ddk/srb.h: Ditto.
+	* include/ddk/storport.h: Ditto.
+	* include/ddk/video.h: Ditto.
+	* include/nspapi.h (SetServiceW, GetAddressByNameA,
+	GetAddressByNameW): Correct protoype.
+	* include/ntsecapi.h (PCUNICODE_STRING): Define.
+@
+text
+@a33 2
+#pragma pack(push,4)
+
+a138 2
+#pragma pack(pop)
+
+@
+
+
+1.3
+log
+@	* include/ddk/(atm.h, batclass.h, cfg.h, cfgmgr32.h, d4drvif.h,
+	d4iface.h, ddkmapi.h, hidclass.h, hidpi.h, hidusage.h, mcd.h,
+	miniport.h, minitape.h, mountdev.h, mountmgr.h, ndis.h,
+	ndisquid.h, ndistapi.h, ndisvan.h, netevent.h, netpnp.h,
+	netdev.h, ntapi.h, ntdd8042.h, ntddbeep.h, ntddcdrm.h,
+	ntddcdvd.h, ntddchgr.h, ntdddisk.h, ntddk.h, ntddkbd.h,
+	ntddmou.h, ntddndis.h, ntddpar.h, ntddpcm.h, ntddscsi.h,
+	ntddser.h, ntddstor.h, ntddtape.h, ntddtdi.h, ntddvdeo.h,
+	ntddvol.h, ntifs.h, ntpoapi.h, ntstatus.h, parallel.h, pfhook.h,
+	poclass.h, scsi.h, scsiscan.h, scsiwmi.h, smbus.h, srb.h,
+	storport.h, tdi.h, tdiinfo.h, tdikrnl.h, tdistat.h, tvout.h,
+	upssvc.h, usb.h, usb100.h, usbcamdi.h, usbdi.h, usbioctl.h,
+	usbiodef.h, usbscan.h, usbuser.h, video.h, videoagp.h, win2k.h,
+	winddi.h, winddk.h, winnt4.h, winxp.h, ws2san.h,
+	xfilter.h): Change comment to refer w32api package, not MinGW.
+@
+text
+@d51 1
+a51 1
+#if DBG
+@
+
+
+1.2
+log
+@	* include/ddk/(atm.h, batclass.h, cfg.h, cfgmgr32.h, d4drvif.h,
+	d4iface.h, ddkmapi.h, hidclass.h, hidpi.h, hidusage.h, mcd.h,
+	miniport.h, minitape.h, mountdev.h, mountmgr.h, ndis.h,
+	ndisquid.h, ndistapi.h, ndisvan.h, netevent.h, netpnp.h,
+	netdev.h, ntapi.h, ntdd8042.h, ntddbeep.h, ntddcdrm.h,
+	ntddcdvd.h, ntddchgr.h, ntdddisk.h, ntddk.h, ntddkbd.h,
+	ntddmou.h, ntddndis.h, ntddpar.h, ntddpcm.h, ntddscsi.h,
+	ntddser.h, ntddstor.h, ntddtape.h, ntddtdi.h, ntddvdeo.h,
+	ntddvol.h, ntifs.h, ntpoapi.h, ntstatus.h, parallel.h, pfhook.h,
+	poclass.h, scsi.h, scsiscan.h, scsiwmi.h, smbus.h, srb.h,
+	storport.h, tdi.h, tdiinfo.h, tdikrnl.h, tdistat.h, tvout.h,
+	upssvc.h, usb.h, usb100.h, usbcamdi.h, usbdi.h, usbioctl.h,
+	usbiodef.h, usbscan.h, usbuser.h, video.h, videoagp.h, win2k.h,
+	winddi.h, winddk.h, winnt4.h, winxp.h, ws2san.h,
+	xfilter.h): Fix typo in disclaimer comment.
+@
+text
+@d6 1
+a6 1
+ * This file is part of the MinGW package.
+@
+
+
+1.1
+log
+@
+2002-10-06  Casper Hornstrup  <chorns@@it.dk>
+
+	* include/ddk: New subdir.
+	* lib/ddk: Ditto.
+	* include/ddk/(atm.h, batclass.h, cfg.h, cfgmgr32.h, d4drvif.h,
+	d4iface.h, ddkmapi.h, hidclass.h, hidpi.h, hidusage.h, mcd.h,
+	miniport.h, minitape.h, mountdev.h, mountmgr.h, ndis.h,
+	ndisquid.h, ndistapi.h, ndisvan.h, netevent.h, netpnp.h,
+	netdev.h, ntapi.h, ntdd8042.h, ntddbeep.h, ntddcdrm.h,
+	ntddcdvd.h, ntddchgr.h, ntdddisk.h, ntddk.h, ntddkbd.h,
+	ntddmou.h, ntddndis.h, ntddpar.h, ntddpcm.h, ntddscsi.h,
+	ntddser.h, ntddstor.h, ntddtape.h, ntddtdi.h, ntddvdeo.h,
+	ntddvol.h, ntifs.h, ntpoapi.h, ntstatus.h, parallel.h, pfhook.h,
+	poclass.h, scsi.h, scsiscan.h, scsiwmi.h, smbus.h, srb.h,
+	storport.h, tdi.h, tdiinfo.h, tdikrnl.h, tdistat.h, tvout.h,
+	upssvc.h, usb.h, usb100.h, usbcamdi.h, usbdi.h, usbioctl.h,
+	usbiodef.h, usbscan.h, usbuser.h, video.h, videoagp.h, win2k.h,
+	winddi.h, winddk.h, winnt4.h, winxp.h, ws2san.h,
+	xfilter.h): New files.
+	* lib/ddk/(Makefile.in, apcups.def, cfgmgr32.def, dxapi.def,
+	hal.def, hid.def, hidparse.def, mcd.def, ndis.def, ntoskrnl.def,
+	scsiport.def, tdi.def, usbcamd.def, usbcamd2.def, videoprt.def,
+	win32k.def): Ditto.
+@
+text
+@d18 1
+a18 1
+ * DISCLAMED. This includes but is not limited to warranties of
+@
+

@@ -1,0 +1,507 @@
+head	1.4;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.1.2.1
+	gdb_7_6-2013-04-26-release:1.1.2.1
+	gdb_7_6-branch:1.1.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.1;
+locks; strict;
+comment	@# @;
+
+
+1.4
+date	2013.04.10.15.11.12;	author palves;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2013.03.21.19.18.25;	author palves;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2013.03.14.13.34.06;	author qiyao;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2013.03.08.15.06.39;	author abidh;	state Exp;
+branches
+	1.1.2.1;
+next	;
+
+1.1.2.1
+date	2013.03.21.19.14.38;	author palves;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.4
+log
+@Accept "set foo unlimited" in integer/uinteger/zuinteger_unlimited commands.
+
+Currently, several commands take "0" or "-1" to mean "unlimited".
+
+"show" knows when to print "unlimited":
+
+ (gdb) show height
+ Number of lines gdb thinks are in a page is 45.
+ (gdb) set height 0
+ (gdb) show height
+ Number of lines gdb thinks are in a page is unlimited.
+
+However, the user can't herself specify "unlimited" directly:
+
+ (gdb) set height unlimited
+ No symbol table is loaded.  Use the "file" command.
+ (gdb)
+
+This patch addresses that, by adjusting the set handler for all
+integer/uinteger/zuinteger_unlimited commands to accept literal
+"unlimited".  It also installs a completer.  Presently, we complete on
+symbols by default, and at
+<http://sourceware.org/ml/gdb-patches/2013-03/msg00864.html> I've
+shown a WIP prototype that tried to keep that half working in these
+commands.  In the end, it turned out to be more complicated than
+justifiable, IMO.  It's super rare to want to pass the value of a
+variable/symbol in the program to a GDB set/show knob.  That'll still
+work, it's just that we won't assist with completion anymore.  This
+patch just sticks with the simple, and completes on "unlimited", and
+nothing else.  This simplification means that
+
+  "set he<tab><tab>"
+
+is all it takes to get to:
+
+  "set height unlimited"
+
+The patch then goes through all integer/uinteger/zuinteger_unlimited
+commands in the tree, and updates both the online help and the manual
+to mention that "unlimited" is accepted in addition to 0/-1.  In the
+cases where the command had no online help text at all, this adds it.
+I've tried to make the texts read in a way that "unlimited" is
+suggested before "0" or "-1" is.
+
+Tested on x86_64 Fedora 17.
+
+gdb/
+2013-04-10  Pedro Alves  <palves@@redhat.com>
+
+	* cli/cli-decode.c (integer_unlimited_completer): New function.
+	(add_setshow_integer_cmd, add_setshow_uinteger_cmd)
+	(add_setshow_zuinteger_unlimited_cmd): Install the "unlimited"
+	completer.
+	* cli/cli-setshow.c: Include "cli/cli-utils.h".
+	(is_unlimited_literal): New function.
+	(do_set_command): Handle literal "unlimited" arguments.
+	* frame.c (_initialize_frame) <set backtrace limit>: Document
+	"unlimited".
+	* printcmd.c (_initialize_printcmd) <set print
+	max-symbolic-offset>: Add help text.
+	* record-full.c (_initialize_record_full) <set record full
+	insn-number-max>: Likewise.
+	* record.c (_initialize_record) <set record
+	instruction-history-size, set record function-call-history-size>:
+	Add help text.
+	* ser-tcp.c (_initialize_ser_tcp) <set tcp connect-timeout>: Add
+	help text.
+	* tracepoint.c (_initialize_tracepoint) <set trace-buffer-size>:
+	Likewise.
+	* source.c (_initialize_source) <set listsize>: Add help text.
+	* utils.c (initialize_utils) <set height, set width>: Likewise.
+	<set pagination>: Mention "set height unlimited".
+	* valprint.c (_initialize_valprint) <set print elements, set print
+	repeats>: Document "unlimited".
+
+gdb/doc/
+2013-04-10  Pedro Alves  <palves@@redhat.com>
+
+	* gdb.texinfo (Process Record and Replay): Document that "set
+	record full insn-number-max", "set record
+	instruction-history-size" and "set record
+	function-call-history-size" accept "unlimited".
+	(Backtrace): Document that "set backtrace limit" accepts
+	"unlimited".
+	(List): Document that "set listsize" accepts "unlimited".
+	(Print Settings)" Document that "set print max-symbolic-offset",
+	"set print elements" and "set print repeats" accept "unlimited".
+	(Starting and Stopping Trace Experiments): Document that "set
+	trace-buffer-size" accepts "unlimited".
+	(Remote Configuration): Document that "set tcp connect-timeout"
+	accepts "unlimited".
+	(Command History): Document that "set history size" accepts
+	"unlimited".
+	(Screen Size): Document that "set height" and "set width" accepts
+	"unlimited".  Adjust "set pagination"'s description to suggest
+	"set height unlimited" instead of "set height 0".
+
+gdb/testsuite/
+2013-04-10  Pedro Alves  <palves@@redhat.com>
+
+	* gdb.base/completion.exp: Test "set height", "set listsize" and
+	"set trace-buffer-size" completion.
+	* gdb.base/setshow.exp: Test "set height unlimited".
+	* gdb.trace/trace-buffer-size.exp: Test "set trace-buffer-size
+	unlimited".
+@
+text
+@# Copyright 1998-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+load_lib "trace-support.exp"
+
+standard_testfile
+
+if [prepare_for_testing ${testfile}.exp $testfile $srcfile \
+        {debug nowarnings}] {
+    untested "failed to prepare for trace tests"
+    return -1
+}
+
+if ![runto_main] {
+    fail "can't run to main to check for trace support"
+    return -1
+}
+
+if ![gdb_target_supports_trace] {
+    unsupported "target does not support trace"
+    return -1
+}
+
+set BUFFER_SIZE 4
+set default_size -1
+set test "get default buffer size"
+
+# Save default trace buffer size in 'default_size'.
+gdb_test_multiple "tstatus" $test {
+    -re ".*Trace buffer has ($decimal) bytes of ($decimal) bytes free.*$gdb_prompt $" {
+        set default_size $expect_out(2,string)
+        pass $test
+    }
+}
+
+# If we did not get the default size then there is no point in running the
+# tests below.
+if { $default_size < 0 } {
+  return -1
+}
+
+# Change buffer size to 'BUFFER_SIZE'.
+gdb_test_no_output \
+  "set trace-buffer-size $BUFFER_SIZE" \
+  "set trace buffer size 1"
+
+gdb_test "tstatus" \
+  ".*Trace buffer has $decimal bytes of $BUFFER_SIZE bytes free.*" \
+  "tstatus check 2"
+
+gdb_test "show trace-buffer-size $BUFFER_SIZE" \
+  "Requested size of trace buffer is $BUFFER_SIZE.*" \
+  "show trace buffer size"
+
+# -1 means "no limit on GDB's end.  Let the target choose."
+gdb_test_no_output \
+  "set trace-buffer-size -1" \
+  "set trace buffer size 2"
+
+# "unlimited" means the same.
+gdb_test_no_output "set trace-buffer-size unlimited"
+
+# Test that tstatus gives us default buffer size now.
+gdb_test "tstatus" \
+  ".*Trace buffer has $decimal bytes of $default_size bytes free.*" \
+  "tstatus check 3"
+
+gdb_test_no_output \
+  "set trace-buffer-size $BUFFER_SIZE" \
+  "set trace buffer size 3"
+
+# We set trace buffer to very small size.  Then after running trace,
+# we check if it is full.  This will show if setting trace buffer
+# size really worked.
+gdb_breakpoint ${srcfile}:[gdb_get_line_number "breakpoint1"]
+gdb_test "trace test_function" \
+  "Tracepoint \[0-9\]+ at .*" \
+  "set tracepoint at test_function"
+gdb_trace_setactions "Set action for trace point 1" "" \
+  "collect var" "^$"
+gdb_test_no_output "tstart"
+gdb_test "continue" \
+  "Continuing.*Breakpoint $decimal.*" \
+  "run trace experiment 1"
+gdb_test "tstatus" \
+  ".*Trace stopped because the buffer was full.*" \
+  "buffer full check 1"
+
+# Use the default size -- the trace buffer should not end up
+# full this time
+clean_restart ${testfile}
+runto_main
+gdb_breakpoint ${srcfile}:[gdb_get_line_number "breakpoint1"]
+gdb_test "trace test_function" \
+  "Tracepoint \[0-9\]+ at .*" \
+  "set tracepoint at test_function"
+gdb_trace_setactions "Set action for trace point 2" "" \
+  "collect var" "^$"
+gdb_test_no_output "tstart"
+gdb_test "continue" \
+  "Continuing.*Breakpoint $decimal.*" \
+  "run trace experiment 2"
+gdb_test "tstatus" \
+  ".*Trace is running on the target.*" \
+  "buffer full check 2"
+gdb_test_no_output "tstop"
+@
+
+
+1.3
+log
+@Fix gdb.trace/trace-buffer-size.exp race.
+
+Just the usual missing $gdb_prompt match:
+
+ (gdb) tstatus
+ No trace has been run on the target.
+ Collected 0 trace frames.
+ Trace buffer has 5242880 bytes of 5242880 bytes free (0% full).
+ Trace will stop if GDB disconnects.
+ Not looking at any trace frame.
+ PASS: gdb.trace/trace-buffer-size.exp: get default buffer size
+ (gdb) set trace-buffer-size 4
+ (gdb) FAIL: gdb.trace/trace-buffer-size.exp: set trace buffer size 1
+
+This fixes it.
+
+gdb/testsuite/
+2013-03-21  Pedro Alves  <palves@@redhat.com>
+
+	* gdb.trace/trace-buffer-size.exp (get default buffer size):
+	Expect $gdb_prompt in gdb_test_multiple.
+@
+text
+@d67 1
+d72 3
+@
+
+
+1.2
+log
+@gdb/testsuite/
+
+	* config/monitor.exp (gdb_target_cmd): Remove semicolon after
+	'return'.
+	(gdb_target_monitor, gdb_load): Likewise.
+	* config/sid.exp (gdb_load): Likewise.
+	* config/slite.exp (gdb_load): Likewise.
+	* config/vx.exp (gdb_start, spawn_vxgdb): Likewise.
+	* gdb.ada/arrayidx.exp, gdb.ada/null_array.exp: Likewise.
+	* gdb.arch/mips-octeon-bbit.exp (single_step): Likewise.
+	(single_step_until): Likewise.
+	* gdb.arch/powerpc-d128-regs.exp: Likewise.
+	* gdb.arch/system-gcore.exp: Likewise.
+	* gdb.base/bigcore.exp (extract_heap): Likewise.
+	* gdb.base/break-on-linker-gcd-function.exp: Likewise.
+	* gdb.base/call-ar-st.exp: Likewise.
+	* gdb.base/call-rt-st.exp: Likewise.
+	* gdb.base/call-sc.exp, gdb.base/call-strs.exp: Likewise.
+	* gdb.base/callfuncs.exp, gdb.base/completion.exp: Likewise.
+	* gdb.base/condbreak.exp, gdb.base/constvars.exp: Likewise.
+	* gdb.base/corefile.exp: Likewise.
+	* gdb.base/dbx.exp (gdb_file_cmd): Likewise.
+	* gdb.base/exprs.exp, gdb.base/fileio.exp: Likewise.
+	* gdb.base/fixsection.exp: Likewise.
+	* gdb.base/funcargs.exp: Likewise.
+	* gdb.base/gcore-buffer-overflow.exp: Likewise.
+	* gdb.base/gcore-relro.exp: Likewise.
+	* gdb.base/gcore.exp, gdb.base/gdb11530.exp: Likewise.
+	* gdb.base/gdb11531.exp, gdb.base/gnu-ifunc.exp: Likewise.
+	* gdb.base/info-os.exp, gdb.base/info-proc.exp: Likewise.
+	* gdb.base/interp.exp, gdb.base/langs.exp:: Likewise.
+	* gdb.base/list.exp: Likewise.
+	(set_listsize): Likewise.
+	* gdb.base/logical.exp, gdb.base/mips_pro.exp: Likewise.
+	* gdb.base/miscexprs.exp, gdb.base/nodebug.exp: Likewise.
+	* gdb.base/opaque.exp, gdb.base/pointers.exp: Likewise.
+	* gdb.base/psymtab.exp, gdb.base/ptype.exp: Likewise.
+	* gdb.base/relational.exp, gdb.base/scope.exp: Likewise.
+	* gdb.base/setvar.exp: Likewise.
+	(test_set): Likewise.
+	* gdb.base/signals.exp, gdb.base/sizeof.exp: Likewise.
+	* gdb.base/solib-overlap.exp: Likewise.
+	* gdb.base/store.exp, gdb.base/structs.exp: Likewise.
+	* gdb.base/structs2.exp, gdb.base/volatile.exp: Likewise.
+	* gdb.base/watchpoint.exp (initialize): Likewise.
+	(test_simple_watchpoint): Likewise.
+	(test_disabling_watchpoints): Likewise.
+	(test_watchpoint_triggered_in_syscall): Likewise.
+	* gdb.base/whatis.exp, gdb.cp/ambiguous.exp: Likewise.
+	* gdb.cp/casts.exp, gdb.cp/ctti.exp: Likewise.
+	* gdb.cp/namespace.exp, gdb.cp/nsdecl.exp: Likewise.
+	* gdb.cp/psmang.exp, gdb.dwarf2/dw2-ranges.exp: Likewise.
+	* gdb.hp/gdb.aCC/optimize.exp: Likewise.
+	* gdb.hp/gdb.aCC/watch-cmd.exp: Likewise.
+	* gdb.hp/gdb.base-hp/callfwmall.exp: Likewise.
+	* gdb.hp/gdb.base-hp/pxdb.exp: Likewise.
+	* gdb.hp/gdb.compat/xdb1.exp: Likewise.
+	* gdb.hp/gdb.compat/xdb2.exp: Likewise.
+	* gdb.hp/gdb.compat/xdb3.exp: Likewise.
+	* gdb.hp/gdb.defects/bs14602.exp: Likewise.
+	* gdb.hp/gdb.defects/solib-d.exp: Likewise.
+	* gdb.mi/gdb792.exp: Likewise.
+	* gdb.mi/mi-inheritance-syntax-error.exp: Likewise.
+	* gdb.mi/mi-logging.exp, gdb.mi/mi-var-cp.exp : Likewise.
+	* gdb.mi/mi-var-rtti.exp, gdb.python/py-type.exp: Likewise.
+	* gdb.threads/gcore-thread.exp: Likewise.
+	(load_core): Likewise.
+	* gdb.threads/pthreads.exp (all_threads_running): Likewise.
+	(test_startup, check_control_c): Likewise.
+	* gdb.threads/sigstep-threads.exp: Likewise.
+	* gdb.threads/thread_check.exp: Likewise.
+	* gdb.trace/backtrace.exp, gdb.trace/change-loc.exp: Likewise.
+	* gdb.trace/circ.exp (run_trace_experiment): Likewise.
+	(set_a_tracepoint, trace_buffer_normal): Likewise.
+	(gdb_trace_circular_tests): Likewise.
+	* gdb.trace/collection.exp: Likewise.
+	* gdb.trace/disconnected-tracing.exp: Likewise.
+	* gdb.trace/infotrace.exp: Likewise.
+	* gdb.trace/mi-traceframe-changed.exp: Likewise.
+	* gdb.trace/mi-tracepoint-changed.exp: Likewise.
+	* gdb.trace/mi-tsv-changed.exp (test_create_delete_modify_tsv): Likewise.
+	* gdb.trace/packetlen.exp, gdb.trace/passc-dyn.exp: Likewise.
+	* gdb.trace/pending.exp, gdb.trace/report.exp: Likewise.
+	* gdb.trace/stap-trace.exp: Likewise.
+	* gdb.trace/status-stop.exp,gdb.trace/strace.exp: Likewise.
+	* gdb.trace/tfind.exp, gdb.trace/trace-break.exp: Likewise.
+	* gdb.trace/trace-buffer-size.exp: Likewise.
+	* gdb.trace/tspeed.exp, gdb.trace/tsv.exp: Likewise.
+	* gdb.trace/unavailable.exp: Likewise.
+	* gdb.trace/while-dyn.exp: Likewise.
+	* lib/fortran.exp (set_lang_fortran): Likewise.
+	* lib/gdb.exp (default_gdb_version, gdb_start_cmd): Likewise.
+	(gdb_breakpoint, gdb_reinitialize_dir): Likewise.
+	(default_gdb_start, get_compiler_info): Likewise.
+	(gdb_compile, gdb_compile_objc, gdb_reload, gdb_init): Likewise.
+	(get_debug_format, setup_xfail_format): Likewise.
+	(rerun_to_main, gdb_skip_float_test): Likewise.
+	(build_id_debug_filename_get, get_remotetimeout): Likewise.
+	* lib/java.exp (set_lang_java): Likewise.
+	* lib/mi-support.exp (default_mi_gdb_start): Likewise.
+	(mi_gdb_reinitialize_dir, mi_gdb_target_cmd): Likewise.
+	(mi_gdb_file_cmd, mi_gdb_test): Likewise.
+	(mi_run_cmd_full, mi_expect_interrupt): Likewise.
+	* lib/objc.exp (set_lang_objc): Likewise.
+	* lib/pascal.exp (set_lang_pascal): Likewise.
+	* lib/prompt.exp (default_prompt_gdb_start): Likewise.
+	* lib/trace-support.exp (gdb_trace_setactions, gdb_tfind_test): Likewise.
+	(gdb_readexpr, gdb_gettpnum, gdb_find_recursion_test_baseline): Likewise.
+@
+text
+@d42 1
+a42 1
+    -re ".*Trace buffer has ($decimal) bytes of ($decimal) bytes free.*" {
+@
+
+
+1.1
+log
+@2012-03-08  Stan Shebs  <stan@@codesourcery.com>
+	    Hafiz Abid Qadeer  <abidh@@codesourcery.com>
+
+	gdb/
+	* NEWS: Mention set and show trace-buffer-size commands.
+	Mention new packet.
+	* target.h (struct target_ops): New method
+	to_set_trace_buffer_size.
+	(target_set_trace_buffer_size): New macro.
+	* target.c (update_current_target): Set up new method.
+	* tracepoint.c (trace_buffer_size): New global.
+	(start_tracing): Send it to the target.
+	(set_trace_buffer_size): New function.
+	(_initialize_tracepoint): Add new setshow for trace-buffer-size.
+	* remote.c (remote_set_trace_buffer_size): New function.
+	(_initialize_remote): Use it.
+	(QTBuffer:size) New remote command.
+	(PACKET_QTBuffer_size): New enum.
+	(remote_protocol_features): Add an entry for
+	PACKET_QTBuffer_size.
+
+	gdb/gdbserver/
+	* tracepoint.c (trace_buffer_size): New global.
+	(DEFAULT_TRACE_BUFFER_SIZE): New define.
+	(init_trace_buffer): Change to one-argument function. Allocate
+	trace buffer memory.
+	(handle_tracepoint_general_set): Call cmd_bigqtbuffer_size to
+	handle QTBuffer:size packet.
+	(cmd_bigqtbuffer_size): New function.
+	(initialize_tracepoint): Call init_trace_buffer with
+	DEFAULT_TRACE_BUFFER_SIZE.
+	* server.c (handle_query): Add QTBuffer:size in the
+	supported packets.
+
+	gdb/doc/
+	* gdb.texinfo (Starting and Stopping Trace Experiments): Document
+	trace-buffer-size set and show commands.
+	(Tracepoint Packets): Document QTBuffer:size.
+	(General Query Packets): Document QTBuffer:size.
+
+	gdb/testsuite/
+	* gdb.trace/trace-buffer-size.exp: New file.
+	* gdb.trace/trace-buffer-size.c: New file.
+@
+text
+@d33 1
+a33 1
+    return -1;
+d51 1
+a51 1
+  return -1;
+@
+
+
+1.1.2.1
+log
+@Fix gdb.trace/trace-buffer-size.exp race.
+
+Just the usual missing $gdb_prompt match:
+
+ (gdb) tstatus
+ No trace has been run on the target.
+ Collected 0 trace frames.
+ Trace buffer has 5242880 bytes of 5242880 bytes free (0% full).
+ Trace will stop if GDB disconnects.
+ Not looking at any trace frame.
+ PASS: gdb.trace/trace-buffer-size.exp: get default buffer size
+ (gdb) set trace-buffer-size 4
+ (gdb) FAIL: gdb.trace/trace-buffer-size.exp: set trace buffer size 1
+
+This fixes it.
+
+gdb/testsuite/
+2013-03-21  Pedro Alves  <palves@@redhat.com>
+
+	* gdb.trace/trace-buffer-size.exp (get default buffer size):
+	Expect $gdb_prompt in gdb_test_multiple.
+@
+text
+@d42 1
+a42 1
+    -re ".*Trace buffer has ($decimal) bytes of ($decimal) bytes free.*$gdb_prompt $" {
+@
+
+

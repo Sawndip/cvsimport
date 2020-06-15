@@ -1,0 +1,482 @@
+head	1.3;
+access;
+symbols
+	msnyder-fork-checkpoint-branch:1.3.0.6
+	msnyder-fork-checkpoint-branchpoint:1.3
+	msnyder-tracepoint-checkpoint-branch:1.3.0.4
+	msnyder-tracepoint-checkpoint-branchpoint:1.3
+	jimb-rda-nptl-branch:1.3.0.2
+	jimb-rda-nptl-branchpoint:1.3;
+locks; strict;
+comment	@ * @;
+
+
+1.3
+date	2003.05.20.21.09.01;	author kevinb;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2002.12.03.03.22.08;	author kevinb;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2002.08.28.01.22.28;	author kevinb;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.3
+log
+@	* gdbserv-utils.c (gdbserv_le_bytes_from_reg): Fix typo that caused
+	incorrect number of bytes to be copied.
+@
+text
+@/* gdbserv-utils.c
+
+   Copyright 1998, 2000, 2001, 2002 Red Hat, Inc.
+
+   This file is part of RDA, the Red Hat Debug Agent (and library).
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 2 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 59 Temple Place - Suite 330,
+   Boston, MA 02111-1307, USA.
+   
+   Alternative licenses for RDA may be arranged by contacting Red Hat,
+   Inc.  */
+
+
+#include "config.h"
+
+#include <stdio.h>
+#include <string.h>
+
+#include "gdbserv.h"
+#include "gdbserv-utils.h"
+
+
+unsigned char
+gdbserv_to_hex (int c)
+{
+  static const unsigned char hexchars[] = "0123456789abcdef";
+  return hexchars[c & 0xf];
+}
+
+
+/* Convert ch from a hex digit to an int. */
+
+int
+gdbserv_hex_to (unsigned char ch)
+{
+  switch (ch)
+    {
+    case 'a': case 'b': case 'c': case 'd': case 'e': case 'f':
+      return ch-'a'+10;
+    case 'A': case 'B': case 'C': case 'D': case 'E': case 'F':      
+      return ch-'A'+10;
+    case '0': case '1': case '2': case '3': case '4':
+    case '5': case '6': case '7': case '8': case '9':
+      return ch-'0';
+    default:
+      return -1;
+    }
+}
+
+unsigned int
+gdbserv_ulong_to_hex (char *ptr, unsigned long ulong_value, int num_bits)
+{
+  int num_chars = 0;
+
+  if (ulong_value == 0)
+    {
+      *(ptr++) = '0';
+      *(ptr++) = '0';
+      return 2;
+    }
+
+  num_bits = (num_bits + 7) / 8;
+  while (num_bits)
+    {
+      int v = (ulong_value >> ((num_bits - 1) * 8));
+      if (v || (num_bits == 1))
+	{
+	  v = v & 255;
+	  *(ptr++) = gdbserv_to_hex ((v / 16) & 15);
+	  *(ptr++) = gdbserv_to_hex (v & 15);
+	  num_chars += 2;
+	}
+      num_bits--;
+    }
+
+  return (num_chars);
+}
+
+unsigned int
+gdbserv_raw_to_hex (char **ptr, char *mem, int nr_bytes)
+{
+  int i;
+  for (i = 0; i < nr_bytes; i++)
+    {
+      *(*ptr)++ = gdbserv_to_hex (*mem >> 4);
+      *(*ptr)++ = gdbserv_to_hex (*mem++);
+    }
+  return i;
+}
+
+void
+gdbserv_reg_to_ulong (struct gdbserv *gdbserv,
+		      const struct gdbserv_reg *reg,
+		      unsigned long *val)
+{
+  int i;
+  unsigned long l = 0;
+  for (i = 0; i < reg->len; i++)
+    {
+      l <<= 8;
+      l |= (unsigned char) reg->buf[i];
+    }
+  if (reg->negative_p)
+    (*val) = -l;
+  else
+    (*val) = l;
+}
+
+
+void
+gdbserv_reg_to_ulonglong (struct gdbserv *gdbserv,
+			  const struct gdbserv_reg *reg,
+			  unsigned long long *val)
+{
+  int i;
+  unsigned long long l = 0;
+  for (i = 0; i < reg->len; i++)
+    {
+      l <<= 8;
+      l |= (unsigned char) reg->buf[i];
+    }
+  if (reg->negative_p)
+    (*val) = -l;
+  else
+    (*val) = l;
+}
+
+static void
+unpack_ulongest (struct gdbserv_reg *reg,
+		 unsigned long long val)
+{
+  int len;
+  int idx;
+  /* unpack */
+  len = 0;
+  do
+    {
+      reg->buf[sizeof (reg->buf) - len - 1] = val & 0xff;
+      val >>= 8;
+      len++;
+    }
+  while (val != 0);
+  /* left shift */
+  for (idx = 0; idx < len; idx++)
+    {
+      reg->buf[idx] = reg->buf[sizeof (reg->buf) - len + idx];
+    }
+  reg->len = len;
+}
+
+void
+gdbserv_ulong_to_reg (struct gdbserv *gdbserv,
+		      unsigned long val,
+		      struct gdbserv_reg *reg)
+{
+  reg->negative_p = 0;
+  unpack_ulongest (reg, val);
+}
+
+void
+gdbserv_long_to_reg (struct gdbserv *gdbserv,
+		     long val,
+		     struct gdbserv_reg *reg)
+{
+  if (val < 0)
+    {
+      reg->negative_p = 1;
+      val = -val;
+    }
+  else
+    reg->negative_p = 0;
+  unpack_ulongest (reg, val);
+}
+
+void
+gdbserv_ulonglong_to_reg (struct gdbserv *gdbserv,
+			  unsigned long long val,
+			  struct gdbserv_reg *reg)
+{
+  reg->negative_p = 0;
+  unpack_ulongest (reg, val);
+}
+
+void
+gdbserv_longlong_to_reg (struct gdbserv *gdbserv,
+			 long long val,
+			 struct gdbserv_reg *reg)
+{
+  if (val < 0)
+    {
+      reg->negative_p = 1;
+      val = -val;
+    }
+  else
+    reg->negative_p = 0;
+  unpack_ulongest (reg, val);
+}
+
+/* Copy bytes from one buffer to another in reverse order.  Used for
+   converting byte order from big endian to little endian or vice versa.  */
+
+static void
+reverse_copy_bytes (void *dest, const void *src, int len)
+{
+  char *d = dest;
+  const char *s = src;
+  int i;
+
+  for (i = 0; i < len; i++)
+    {
+      d[i] = s[len - i - 1];
+    }
+}
+
+void
+gdbserv_be_bytes_to_reg (struct gdbserv *gdbserv,
+		         const void *buf,
+		         int buflen,
+		         struct gdbserv_reg *reg,
+			 int reglen,
+			 int sign_extend)
+{
+  int bufoffset = 0;
+  int regoffset = 0;
+  int len = buflen;
+
+  reg->negative_p = 0;
+  reg->len = reglen;
+
+  if (reglen > buflen)
+    {
+      memset (reg->buf,
+              (sign_extend && (((char *) buf)[0] & 0x80)) ? 0xff : 0,
+	      reglen - buflen);
+      regoffset = reglen - buflen;
+    }
+
+  if (buflen > reglen)
+    {
+      bufoffset = buflen - reglen;
+      len = reglen;
+    }
+
+  memcpy (reg->buf + regoffset, (char *)buf + bufoffset, len);
+}
+
+void
+gdbserv_be_bytes_from_reg (struct gdbserv *gdbserv,
+		           void *buf,
+		           int buflen,
+                           const struct gdbserv_reg *reg,
+			   int sign_extend)
+{
+  int bufoffset = 0;
+  int regoffset = 0;
+  int len = reg->len;
+
+  if (reg->len > buflen)
+    {
+      regoffset = reg->len - buflen;
+      len = buflen;
+    }
+
+  if (buflen > reg->len)
+    {
+      memset (buf,
+              (sign_extend && (reg->buf[0] & 0x80)) ? 0xff : 0,
+	      buflen - reg->len);
+      bufoffset = buflen - reg->len;
+    }
+
+  memcpy ((char *)buf + bufoffset, reg->buf + regoffset, len);
+}
+
+void
+gdbserv_le_bytes_to_reg (struct gdbserv *gdbserv,
+		         const void *buf,
+		         int buflen,
+		         struct gdbserv_reg *reg,
+			 int reglen,
+			 int sign_extend)
+{
+  int regoffset = 0;
+  int len = buflen;
+
+  reg->negative_p = 0;
+  reg->len = reglen;
+
+  if (reglen > buflen)
+    {
+      memset (reg->buf,
+              (sign_extend && (((char *) buf)[buflen - 1] & 0x80)) ? 0xff : 0,
+	      reglen - buflen);
+      regoffset = reglen - buflen;
+    }
+
+  if (buflen > reglen)
+      len = reglen;
+
+  reverse_copy_bytes (reg->buf + regoffset, buf, len);
+}
+
+void
+gdbserv_le_bytes_from_reg (struct gdbserv *gdbserv,
+		           void *buf,
+		           int buflen,
+                           const struct gdbserv_reg *reg,
+			   int sign_extend)
+{
+  int bufoffset = 0;
+  int regoffset = 0;
+  int len = reg->len;
+
+  if (reg->len > buflen)
+    {
+      regoffset = reg->len - buflen;
+      len = buflen;
+    }
+
+  if (buflen > reg->len)
+    {
+      memset ((char *)buf + reg->len,
+              (sign_extend && (reg->buf[reg->len - 1] & 0x80)) ? 0xff : 0,
+	      buflen - reg->len);
+    }
+
+  reverse_copy_bytes (buf, reg->buf + regoffset, len);
+}
+
+void
+gdbserv_host_bytes_to_reg (struct gdbserv *gdbserv,
+		           const void *buf,
+		           int buflen,
+		           struct gdbserv_reg *reg,
+			   int reglen,
+			   int sign_extend)
+{
+#ifdef WORDS_BIGENDIAN
+  gdbserv_be_bytes_to_reg (gdbserv, buf, buflen, reg, reglen, sign_extend);
+#else
+  gdbserv_le_bytes_to_reg (gdbserv, buf, buflen, reg, reglen, sign_extend);
+#endif
+}
+
+void
+gdbserv_host_bytes_from_reg (struct gdbserv *gdbserv,
+		             void *buf,
+		             int buflen,
+                             const struct gdbserv_reg *reg,
+			     int sign_extend)
+{
+#ifdef WORDS_BIGENDIAN
+  gdbserv_be_bytes_from_reg (gdbserv, buf, buflen, reg, sign_extend);
+#else
+  gdbserv_le_bytes_from_reg (gdbserv, buf, buflen, reg, sign_extend);
+#endif
+}
+@
+
+
+1.2
+log
+@Revise gdbserv_{host,le,be}_bytes_{to,from}_reg() interfaces.  Also add
+support for mips64 targets.
+@
+text
+@d339 1
+a339 1
+  reverse_copy_bytes (buf, reg->buf + regoffset, reg->len);
+@
+
+
+1.1
+log
+@Added files comprising RDA.
+@
+text
+@d230 9
+a238 3
+		         int len,
+		         struct gdbserv_reg *reg)
+{
+d240 17
+a256 2
+  reg->len = len;
+  memcpy (reg->buf, buf, len);
+d262 23
+a284 5
+		           int *lenp,
+                           const struct gdbserv_reg *reg)
+{
+  *lenp = reg->len;
+  memcpy (buf, reg->buf, reg->len);
+d290 4
+a293 2
+		         int len,
+		         struct gdbserv_reg *reg)
+d295 3
+d299 14
+a312 2
+  reg->len = len;
+  reverse_copy_bytes (reg->buf, buf, len);
+d318 22
+a339 5
+		           int *lenp,
+                           const struct gdbserv_reg *reg)
+{
+  *lenp = reg->len;
+  reverse_copy_bytes (buf, reg->buf, reg->len);
+d345 4
+a348 2
+		           int len,
+		           struct gdbserv_reg *reg)
+d351 1
+a351 1
+  gdbserv_be_bytes_to_reg (gdbserv, buf, len, reg);
+d353 1
+a353 1
+  gdbserv_le_bytes_to_reg (gdbserv, buf, len, reg);
+d360 3
+a362 2
+		             int *lenp,
+                             const struct gdbserv_reg *reg)
+d365 1
+a365 1
+  gdbserv_be_bytes_from_reg (gdbserv, buf, lenp, reg);
+d367 1
+a367 1
+  gdbserv_le_bytes_from_reg (gdbserv, buf, lenp, reg);
+@
+

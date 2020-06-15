@@ -1,0 +1,115 @@
+head	1.1;
+access;
+symbols
+	binutils-2_24-branch:1.1.0.2
+	binutils-2_24-branchpoint:1.1
+	binutils_latest_snapshot:1.1;
+locks; strict;
+comment	@# @;
+
+
+1.1
+date	2013.03.21.16.08.07;	author nickc;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.1
+log
+@	* elf32-h8300 (h8_relax_section): Add new relaxation of mov
+	@@(disp:32,ERx) to mov @@(disp:16,ERx).
+	(R_H8_DISP32A16): New reloc.
+	Comments added and corrected.
+	* reloc.c (BFD_RELOC_H8_DISP32A16): New reloc.
+	* bfd-in2.h: Regenerate.
+	* libbfd.h: Regenerate.
+
+	* ld.texinfo (H8/300): Add description of relaxation of
+	mov @@(disp:32,ERx) to mov @@(disp:16,ERx).
+
+	* ld-h8300/h8300.exp: Add new relax-7 test on ELF.
+	* ld-h8300/relax-2.s: Add other direction and .w/.l variants of
+	mov insns.
+	* ld-h8300/relax-2.d: Update expected disassembly.
+	* ld-h8300/relax-7a.s: New: tests for mov @@(disp:32,ERx) -> mov
+	@@(disp:16,ERx).
+	* ld-h8300/relax-7b.s: New: Likewise.
+	* ld-h8300/relax-7.d: New: expected disassembly.
+
+	* config/tc-h8300.c (do_a_fix_imm): Add relaxation of mov
+	@@(disp:32,ERx) to mov @@(disp:16,ERx) insns by new reloc
+	R_H8_DISP32A16.
+	* config/tc-h8300.h: Remove duplicated defines.
+@
+text
+@	.h8300s
+# relax expected
+	.global _start
+	.section	.text.func1,"ax",@@progbits
+	.align 1
+_start:
+	sub.l	er0,er0
+	sub.l	er2,er2
+	mov.l	#var3,er1
+	mov.l	@@(table+4:32,er2),er2
+	jmp	@@er2
+	.section	.rodata.tab,"a",@@progbits
+	.align 2
+table:
+	.long	.L20
+	.long	.L21
+	.long	.L22
+	.long	.L30noRelax
+	.long	.L31noRelax
+	.long	.L32noRelax
+	.long	.L100Relax
+	.section	.text.func1
+.L20:
+	mov.b	@@(var1+1:32,er0), r2l
+	mov.b	r2l,@@(var1+1:32,er0)
+	mov.b	@@(1:32,er1), r2l
+	mov.b	r2l,@@(1:32,er1)
+	rts
+.L21:
+	mov.w	@@(var2+2:32,er0), r2
+	mov.w	r2,@@(var2+2:32,er0)
+	mov.w	@@(2:32,er1), r2
+	mov.w	r2,@@(2:32,er1)
+	rts
+.L22:
+	mov.l	@@(var3+4:32,er0), er2
+	mov.l	er2,@@(var3+4:32,er0)
+	mov.l	@@(4:32,er1), er2
+	mov.l	er2,@@(4:32,er1)
+	rts
+
+.L100Relax:
+	mov.l	#0x01007800,er0
+# part of MOV.L @@(d:24,ERs),ERd opcode
+	mov.w	@@var2+2:32,r1
+	rts
+
+# no relax allowed:
+.L30noRelax:
+	mov.b	@@(var4+1:32,er0), r2l
+	mov.b	r2l,@@(var4+1:32,er0)
+	mov.b	@@(0x8000:32,er1), r2l
+	mov.b	r2l,@@(0x8000:32,er1)
+	rts
+.L31noRelax:
+	mov.w	@@(var5+2:32,er0), r2
+	mov.w	r2,@@(var5+2:32,er0)
+	mov.w	@@(0x8000:32,er1), r2
+	mov.w	r2,@@(0x8000:32,er1)
+	rts
+.L32noRelax:
+	mov.l	@@(var6+4:32,er0), er2
+	mov.l	er2,@@(var6+4:32,er0)
+	mov.l	@@(0x8000:32,er1), er2
+	mov.l	er2,@@(0x8000:32,er1)
+	rts
+@

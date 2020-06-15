@@ -1,0 +1,620 @@
+head	1.10;
+access;
+symbols
+	binutils-2_24-branch:1.10.0.2
+	binutils-2_24-branchpoint:1.10
+	binutils-2_21_1:1.9
+	binutils-2_23_2:1.9
+	binutils-2_23_1:1.9
+	binutils-2_23:1.9
+	binutils-2_23-branch:1.9.0.10
+	binutils-2_23-branchpoint:1.9
+	binutils-2_22_branch:1.9.0.8
+	binutils-2_22:1.9
+	binutils-2_22-branch:1.9.0.6
+	binutils-2_22-branchpoint:1.9
+	binutils-2_21:1.9
+	binutils-2_21-branch:1.9.0.4
+	binutils-2_21-branchpoint:1.9
+	binutils-2_20_1:1.9
+	binutils-2_20:1.9
+	binutils-arc-20081103-branch:1.7.0.8
+	binutils-arc-20081103-branchpoint:1.7
+	binutils-2_20-branch:1.9.0.2
+	binutils-2_20-branchpoint:1.9
+	dje-cgen-play1-branch:1.7.0.6
+	dje-cgen-play1-branchpoint:1.7
+	arc-20081103-branch:1.7.0.4
+	arc-20081103-branchpoint:1.7
+	binutils-2_19_1:1.7
+	binutils-2_19:1.7
+	binutils-2_19-branch:1.7.0.2
+	binutils-2_19-branchpoint:1.7
+	binutils-2_18:1.6
+	binutils-2_18-branch:1.6.0.2
+	binutils-2_18-branchpoint:1.6
+	binutils_latest_snapshot:1.10;
+locks; strict;
+comment	@# @;
+
+
+1.10
+date	2013.02.21.02.29.11;	author amodra;	state Exp;
+branches;
+next	1.9;
+
+1.9
+date	2009.09.02.07.25.35;	author amodra;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2009.08.10.07.50.56;	author amodra;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2008.02.15.03.35.53;	author amodra;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2007.07.19.19.56.10;	author roland;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2007.07.06.14.09.42;	author nickc;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2007.01.11.12.23.53;	author nathan;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2006.07.26.12.27.12;	author amodra;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2006.06.20.16.37.29;	author amodra;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2006.06.20.02.22.14;	author amodra;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.10
+log
+@bfd/
+	* elf-bfd.h (struct elf_obj_tdata): Rename segment_map to seg_map.
+	Delete num_locals and num_globals.
+	(elf_num_locals, elf_num_globals): Don't define.
+	(elf_seg_map, elf_next_file_pos, elf_eh_frame_hdr, elf_linker,
+	elf_stack_flags, elf_strtab_sec, elf_shstrtab_sec): Define.
+	* bfd.c, * elf-eh-frame.c, * elf-nacl.c, * elf-vxworks.c, * elf.c,
+	* elf32-arm.c, * elf32-lm32.c, * elf32-ppc.c, * elf32-rx.c,
+	* elf32-spu.c, * elf64-hppa.c, * elfcode.h, * elflink.c,
+	* elfnn-ia64.c, * elfxx-mips.c: Use newly defined elf_obj_tdata
+	accessor macros.
+	* elf.c (elf_map_symbols): Add pnum_locals param.  Return
+	number of locals syms via new param.
+	(swap_out_syms): Adjust to suit elf_map_symbols change.
+ld/
+	* emultempl/elf-generic.em: Use newly defined elf_obj_tdata
+	accessor macros.
+@
+text
+@# This shell script emits a C file. -*- C -*-
+#   Copyright 2006, 2007, 2008, 2009 Free Software Foundation, Inc.
+#
+# This file is part of the GNU Binutils.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+# MA 02110-1301, USA.
+#
+
+# This file is sourced from elf32.em and from ELF targets that use
+# generic.em.
+#
+fragment <<EOF
+
+static void
+gld${EMULATION_NAME}_map_segments (bfd_boolean need_layout)
+{
+  int tries = 10;
+
+  do
+    {
+      lang_relax_sections (need_layout);
+      need_layout = FALSE;
+
+      if (link_info.output_bfd->xvec->flavour == bfd_target_elf_flavour
+	  && !link_info.relocatable)
+	{
+	  bfd_size_type phdr_size;
+
+	  phdr_size = elf_program_header_size (link_info.output_bfd);
+	  /* If we don't have user supplied phdrs, throw away any
+	     previous linker generated program headers.  */
+	  if (lang_phdr_list == NULL)
+	    elf_seg_map (link_info.output_bfd) = NULL;
+	  if (!_bfd_elf_map_sections_to_segments (link_info.output_bfd,
+						  &link_info))
+	    einfo ("%F%P: map sections to segments failed: %E\n");
+
+	  if (phdr_size != elf_program_header_size (link_info.output_bfd))
+	    {
+	      if (tries > 6)
+		/* The first few times we allow any change to
+		   phdr_size .  */
+		need_layout = TRUE;
+	      else if (phdr_size
+		       < elf_program_header_size (link_info.output_bfd))
+		/* After that we only allow the size to grow.  */
+		need_layout = TRUE;
+	      else
+		elf_program_header_size (link_info.output_bfd) = phdr_size;
+	    }
+	}
+    }
+  while (need_layout && --tries);
+
+  if (tries == 0)
+    einfo (_("%P%F: looping in map_segments"));
+}
+EOF
+@
+
+
+1.9
+log
+@update copyright dates
+@
+text
+@d42 1
+a42 1
+	  phdr_size = elf_tdata (link_info.output_bfd)->program_header_size;
+d46 1
+a46 1
+	    elf_tdata (link_info.output_bfd)->segment_map = NULL;
+d51 1
+a51 2
+	  if (phdr_size
+	      != elf_tdata (link_info.output_bfd)->program_header_size)
+d58 1
+a58 1
+		       < elf_tdata (link_info.output_bfd)->program_header_size)
+d62 1
+a62 2
+		elf_tdata (link_info.output_bfd)->program_header_size
+		  = phdr_size;
+@
+
+
+1.8
+log
+@	PR 10474
+	* ldemul.c (after_allocation_default): Run lang_relax_sections.
+	* ldlang.h (lang_relax_sections): Declare.
+	* ldlang.c (relax_sections): Delete.
+	(lang_relax_sections): New function.
+	(lang_process): Don't relax directly from here.
+	* emultempl/alphaelf.em (alpha_finish): Call finish_default.
+	* emultempl/armelf.em (arm_elf_after_allocation): Delete.  Move body..
+	(gld${EMULATION_NAME}_finish): ..to here.  Move existing code..
+	(gld${EMULATION_NAME}_after_allocation): ..to here.  New function.
+	(LDEMUL_AFTER_ALLOCATION): Update.
+	* emultempl/avrelf.em (avr_elf_finish, LDEMUL_FINISH): Delete.
+	(avr_elf_after_allocation): New function.
+	(LDEMUL_AFTER_ALLOCATION): Define.
+	* emultempl/elf-generic.em (gld${EMULATION_NAME}_map_segments): Call
+	lang_relax_sections.
+	* emultempl/elf32.em (gld${EMULATION_NAME}_finish): Delete.  Move..
+	(gld${EMULATION_NAME}_after_allocation): ..code to here.  New function.
+	(LDEMUL_AFTER_ALLOCATION, LDEMUL_FINISH): Update.
+	* emultempl/genelf.em (gld${EMULATION_NAME}_finish): Delete.  Move..
+	(gld${EMULATION_NAME}_after_allocation): ..code to here.  New function.
+	(LDEMUL_FINISH): Delete.
+	(LDEMUL_AFTER_ALLOCATION): Define.
+	* emultempl/hppaelf.em (gld${EMULATION_NAME}_finish): Delete.  Move..
+	(gld${EMULATION_NAME}_after_allocation): ..to here.  New function.
+	(LDEMUL_FINISH): Delete.
+	(LDEMUL_AFTER_ALLOCATION): Define.
+	* emultempl/m68hc1xelf.em (m68hc11elf_finish): Delete.  Move..
+	(m68hc11elf_after_allocation): ..to here.  New function.
+	(LDEMUL_FINISH): Delete.
+	(LDEMUL_AFTER_ALLOCATION): Define.
+	* emultempl/m68kelf.em (m68k_elf_after_allocation): Call
+	gld${EMULATION_NAME}_after_allocation.
+	* emultempl/mmix-elfnmmo.em (mmix_after_allocation): Call
+	gld${EMULATION_NAME}_after_allocation.
+	* emultempl/mmo.em (mmo_finish): Delete.  Move body..
+	(gld${EMULATION_NAME}_after_allocation): ..to here.  New function.
+	(LDEMUL_FINISH): Define.
+	* emultempl/ppc64elf.em (ppc_layout_sections_again): Set elf_gp.
+	(gld${EMULATION_NAME}_finish): Move code sizing sections..
+	(gld${EMULATION_NAME}_after_allocation): ..to here.
+	* emultempl/sh64elf.em (sh64_elf_${EMULATION_NAME}_after_allocation):
+	Call gld${EMULATION_NAME}_after_allocation.
+	* emultempl/spuelf.em (gld${EMULATION_NAME}_finish): Delete
+	bfd_elf_discard_info and map_segments call.
+@
+text
+@d2 1
+a2 1
+#   Copyright 2006, 2007, 2008 Free Software Foundation, Inc.
+@
+
+
+1.7
+log
+@include/
+	* bfdlink.h (struct bfd_link_hash_table): Delete creator field.
+	(struct bfd_link_info): Add output_bfd.
+bfd/
+	* elflink.c: Replace all accesses to hash->creator field with
+	output_bfd->xvec.
+	* cofflink.c: Likewise.
+	* coff-h8300.c: Likewise.
+	* ecoff.c: Likewise.
+	* elf32-m68hc1x.c: Likewise.
+	* elf32-ppc.c: Likewise.
+	* elf64-alpha.c: Likewise.
+	* elf64-ppc.c: Likewise.
+	* elf64-sparc.c: Likewise.
+	* elfxx-mips.c: Likewise.
+	* i386linux.c: Likewise.
+	* m68klinux.c: Likewise.
+	* sparclinux.c: Likewise.
+	* sunos.c: Likewise.
+	* xcofflink.c: Likewise.
+	* linker.c: Likewise.
+	(_bfd_link_hash_table_init): Don't store creator.
+ld/
+	* ldmain.h (output_bfd): Delete.
+	* ldmain.c (output_bfd): Delete.
+	Replace all occurrences of output_bfd with link_info.output_bfd.
+	* ldcref.c: Likewise.
+	* ldctor.c: Likewise.
+	* ldemul.c: Likewise.
+	* ldexp.c: Likewise.
+	* ldfile.c: Likewise.
+	* ldlang.c: Likewise.
+	* ldmisc.c: Likewise.
+	* ldwrite.c: Likewise.
+	* pe-dll.c: Likewise.
+	* emultempl/aix.em: Likewise.
+	* emultempl/alphaelf.em: Likewise.
+	* emultempl/armcoff.em: Likewise.
+	* emultempl/armelf.em: Likewise.
+	* emultempl/avrelf.em: Likewise.
+	* emultempl/beos.em: Likewise.
+	* emultempl/elf-generic.em: Likewise.
+	* emultempl/elf32.em: Likewise.
+	* emultempl/gld960.em: Likewise.
+	* emultempl/hppaelf.em: Likewise.
+	* emultempl/irix.em: Likewise.
+	* emultempl/linux.em: Likewise.
+	* emultempl/lnk960.em: Likewise.
+	* emultempl/m68hc1xelf.em: Likewise.
+	* emultempl/mmix-elfnmmo.em: Likewise.
+	* emultempl/mmo.em: Likewise.
+	* emultempl/pe.em: Likewise.
+	* emultempl/pep.em: Likewise.
+	* emultempl/ppc32elf.em: Likewise.
+	* emultempl/ppc64elf.em: Likewise.
+	* emultempl/scoreelf.em: Likewise.
+	* emultempl/sh64elf.em: Likewise.
+	* emultempl/spuelf.em: Likewise.
+	* emultempl/sunos.em: Likewise.
+	* emultempl/vanilla.em: Likewise.
+	* emultempl/vxworks.em: Likewise.
+	* emultempl/xtensaelf.em: Likewise.
+	* emultempl/z80.em: Likewise.
+	* ldlang.c (open_output): Don't return output, instead write
+	link_info_output_bfd directly.
+	* emultempl/alphaelf.em: Replace occurrences of link_info.hash->creator
+	with link_info.output_bfd->xvec.
+	* emultempl/hppaelf.em: Likewise.
+	* emultempl/ppc32elf.em: Likewise.
+	* emultempl/ppc64elf.em: Likewise.
+	* emultempl/spuelf.em: Likewise.
+@
+text
+@d34 2
+a35 15
+      if (need_layout)
+	{
+	  lang_reset_memory_regions ();
+
+	  /* Resize the sections.  */
+	  lang_size_sections (NULL, TRUE);
+
+	  /* Redo special stuff.  */
+	  ldemul_after_allocation ();
+
+	  /* Do the assignments again.  */
+	  lang_do_assignments ();
+
+	  need_layout = FALSE;
+	}
+@
+
+
+1.6
+log
+@2007-07-19  Roland McGrath  <roland@@redhat.com>
+
+	* genscripts.sh (source_em, fragment): New sh functions.
+	Truncate e${EMULATION_NAME}.c file before .em script fills it.
+	Use source_em in place of . for the .em script.
+	* emultempl/generic.em: Use fragment and source_em functions.
+	* emultempl/aix.em: Likewise.
+	* emultempl/alphaelf.em: Likewise.
+	* emultempl/armcoff.em: Likewise.
+	* emultempl/armelf.em: Likewise.
+	* emultempl/avrelf.em: Likewise.
+	* emultempl/beos.em: Likewise.
+	* emultempl/cr16elf.em: Likewise.
+	* emultempl/crxelf.em: Likewise.
+	* emultempl/elf-generic.em: Likewise.
+	* emultempl/elf32.em: Likewise.
+	* emultempl/genelf.em: Likewise.
+	* emultempl/gld960.em: Likewise.
+	* emultempl/gld960c.em: Likewise.
+	* emultempl/hppaelf.em: Likewise.
+	* emultempl/ia64elf.em: Likewise.
+	* emultempl/irix.em: Likewise.
+	* emultempl/linux.em: Likewise.
+	* emultempl/lnk960.em: Likewise.
+	* emultempl/m68hc1xelf.em: Likewise.
+	* emultempl/m68kcoff.em: Likewise.
+	* emultempl/m68kelf.em: Likewise.
+	* emultempl/mipsecoff.em: Likewise.
+	* emultempl/mipself.em: Likewise.
+	* emultempl/mmix-elfnmmo.em: Likewise.
+	* emultempl/mmixelf.em: Likewise.
+	* emultempl/mmo.em: Likewise.
+	* emultempl/needrelax.em: Likewise.
+	* emultempl/netbsd.em: Likewise.
+	* emultempl/pe.em: Likewise.
+	* emultempl/pep.em: Likewise.
+	* emultempl/ppc32elf.em: Likewise.
+	* emultempl/ppc64elf.em: Likewise.
+	* emultempl/scoreelf.em: Likewise.
+	* emultempl/sh64elf.em: Likewise.
+	* emultempl/spuelf.em: Likewise.
+	* emultempl/sunos.em: Likewise.
+	* emultempl/ticoff.em: Likewise.
+	* emultempl/vanilla.em: Likewise.
+	* emultempl/vxworks.em: Likewise.
+	* emultempl/xtensaelf.em: Likewise.
+	* emultempl/z80.em: Likewise.
+@
+text
+@d2 1
+a2 1
+#   Copyright 2006, 2007 Free Software Foundation, Inc.
+d50 1
+a50 1
+      if (output_bfd->xvec->flavour == bfd_target_elf_flavour
+d55 1
+a55 1
+	  phdr_size = elf_tdata (output_bfd)->program_header_size;
+d59 3
+a61 2
+	    elf_tdata (output_bfd)->segment_map = NULL;
+	  if (!_bfd_elf_map_sections_to_segments (output_bfd, &link_info))
+d64 2
+a65 1
+	  if (phdr_size != elf_tdata (output_bfd)->program_header_size)
+d71 2
+a72 1
+	      else if (phdr_size < elf_tdata (output_bfd)->program_header_size)
+d76 2
+a77 1
+		elf_tdata (output_bfd)->program_header_size = phdr_size;
+@
+
+
+1.5
+log
+@Update sources to GPLv3
+@
+text
+@d25 1
+a25 1
+cat >>e${EMULATION_NAME}.c <<EOF
+@
+
+
+1.4
+log
+@bfd/
+	* elf.c (assign_file_positions_for_load_sections): We can
+	require fewer phdrs than expected.
+ld/
+	* emultempl/elf-generic.em (gdl_map_segments): Only allow header
+	shrinkage for the first few iterations.
+ld/testsuite/
+	* ld-elf/header.d: New.
+	* ld-elf/header.t: New.
+	* ld-elf/header.s: New.
+@
+text
+@d2 1
+a2 1
+#   Copyright 2006 Free Software Foundation, Inc.
+d4 1
+a4 1
+# This file is part of GLD, the Gnu Linker.
+d8 1
+a8 1
+# the Free Software Foundation; either version 2 of the License, or
+d17 3
+a19 2
+# along with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street - Fifth Floor, Boston, MA 02110-1301, USA.
+@
+
+
+1.3
+log
+@	* emultempl/elf-generic.em (map_segments): Reorganise loop so that
+	layout happens before segment map.  Don't do segment map on
+	relocatable link.
+@
+text
+@d63 11
+a73 1
+	    need_layout = TRUE;
+@
+
+
+1.2
+log
+@	* emultempl/elf-generic.em (gld${EMULATION_NAME}_map_segments): Limit
+	loop to ten iterations.  Throw away any previous linker generated
+	segment map.
+	* ldlang.c (lang_phdr_list): Make global.
+	* ldlang.h (lang_phdr_list): Declare.
+	* Makefile.am (ELF_GEN_DEPS): Define.  Use in emul deps.
+	* Makefile.in: Regenerate.
+@
+text
+@d31 1
+a31 1
+  while (tries)
+d33 18
+a50 1
+      if (output_bfd->xvec->flavour == bfd_target_elf_flavour)
+a64 17
+
+      if (!need_layout)
+	break;
+
+      lang_reset_memory_regions ();
+
+      /* Resize the sections.  */
+      lang_size_sections (NULL, TRUE);
+
+      /* Redo special stuff.  */
+      ldemul_after_allocation ();
+
+      /* Do the assignments again.  */
+      lang_do_assignments ();
+
+      need_layout = FALSE;
+      --tries;
+d66 1
+@
+
+
+1.1
+log
+@bfd/
+	* elf-bfd.h: Formatting.
+	(_bfd_elf_map_sections_to_segments): Declare.
+	* elf-eh-frame.c (_bfd_elf_discard_section_eh_frame_hdr): Don't
+	clear program_header_size.
+	* elf.c (get_program_header_size): Move.  Don't use or set saved
+	program_header_size here.
+	(elf_modify_segment_map): New function.  Split out from..
+	(assign_file_positions_for_load_sections): ..here.  Assert
+	header size is correct.  Remove dead code.
+	(_bfd_elf_map_sections_to_segments): Rename from
+	map_sections_to_segments.  Make global.  Use get_program_header_size
+	when we need estimate of header size.  Call elf_modify_segment_map.
+	Set program_header_size.
+	(print_segment_map): Delete.
+	(_bfd_elf_sizeof_headers): If segment_map available, get the
+	actual size.
+	* elf32-arm.c (elf32_arm_symbian_modify_segment_map): Make safe
+	for calling more than once.
+	* elf32-bfin.c (elf32_bfinfdpic_modify_segment_map): Likewise.
+	* elf32-frv.c (elf32_frvfdpic_modify_segment_map): Likewise.
+	* elfxx-mips.c (_bfd_mips_elf_modify_segment_map): Likewise.
+	* elf32-i370.c (elf_backend_add_symbol_hook): Delete.
+	(elf_backend_additional_program_headers): Delete.
+	(elf_backend_modify_segment_map): Delete.
+	* elf64-hppa.c (elf64_hppa_modify_segment_map): Convert to ISO C.
+	* elfxx-ia64.c (elfNN_ia64_modify_segment_map): Likewise.
+	* doc/bfdint.texi: Delete SIZEOF_HEADERS difficulties.
+ld/
+	* Makefile.am (ELF_DEPS): Define.  Use in emul file deps.  Fix
+	many ELF emul file deps that incorrectly said they needed elf32.em
+	instead of generic.em.  Add genelf.em as required.
+	* Makefile.in: Regenerate.
+	* ldlang.c (lang_process): Call ldemul_finish before
+	lang_check_section_addresses.
+	* emulparams/arcelf.sh: Generic elf target needs genelf.
+	* emulparams/d30v_e.sh: Likewise.
+	* emulparams/d30v_o.sh: Likewise.
+	* emulparams/d30velf.sh: Likewise.
+	* emulparams/elf32_dlx.sh: Likewise.
+	* emulparams/elf32_i860.sh: Likewise.
+	* emulparams/elf32fr30.sh: Likewise.
+	* emulparams/elf32frv.sh: Likewise.
+	* emulparams/elf32iq10.sh: Likewise.
+	* emulparams/elf32iq2000.sh: Likewise.
+	* emulparams/elf32mt.sh: Likewise.
+	* emulparams/mn10200.sh: Likewise.
+	* emulparams/or32.sh: Likewise.
+	* emulparams/or32elf.sh: Likewise.
+	* emulparams/pjelf.sh: Likewise.
+	* emulparams/msp430all.sh: Likewise.  Extract common entries.
+	* emulparams/pjlelf.sh: Include pjelf.sh.
+	* emulparams/elf32frvfd.sh (EXTRA_EM_FILE): Unset.
+	* emulparams/mn10300.sh (EXTRA_EM_FILE): Unset.
+	* emultempl/elf-generic.em: New file.
+	* emultempl/genelf.em: New file.
+	* emultempl/elf32.em: Include elf-generic.em.
+	(gld${EMULATION_NAME}_layout_sections_again): Delete.
+	(gld${EMULATION_NAME}_finish): Call gld${EMULATION_NAME}_map_segments.
+	* emultempl/hppaelf.em (hppaelf_layout_sections_again): Likewise.
+	(gld${EMULATION_NAME}_finish): Rename from hppaelf_finish.  Call
+	gld${EMULATION_NAME}_map_segments.
+	(LDEMUL_FINISH): Update.
+	* emultempl/mmo.em: Correct comment.  Include elf-bfd.h and
+	source elf-generic.em.
+	(mmo_finish): Call gld${EMULATION_NAME}_map_segments.
+	* emultempl/ppc64elf.em (ppc_layout_sections_again): Likewise.
+	(gld${EMULATION_NAME}_finish): Rename from ppc_finish.  Call
+	gld${EMULATION_NAME}_map_segments.
+	(LDEMUL_FINISH): Update.
+ld/testsuite/
+	* ld-elf/eh1.d: Update for fewer program headers.
+	* ld-elf/eh2.d: Likewise.
+	* ld-elf/eh3.d: Likewise.
+@
+text
+@d29 3
+a31 1
+  while (1)
+d38 4
+d64 1
+d66 3
+@
+

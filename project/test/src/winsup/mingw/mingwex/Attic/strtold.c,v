@@ -1,0 +1,686 @@
+head	1.4;
+access;
+symbols
+	cr-0x5f1:1.3.0.6
+	cv-branch:1.3.0.4
+	cr-0x3b58:1.3.0.2
+	cr-0x9e:1.1.0.12
+	cr-0x9d:1.1.0.10
+	corinna-01:1.1
+	cr-0x9c:1.1.0.8
+	cr-0x9b:1.1.0.6
+	cr-0x99:1.1
+	Z-emcb-cygwin_daemon:1.1.0.4
+	w32api-2_2:1.1
+	mingw-runtime-2_4:1.1
+	mingw-std-ns-branch:1.1.0.2;
+locks; strict;
+comment	@ * @;
+
+
+1.4
+date	2006.08.31.23.48.56;	author dannysmith;	state dead;
+branches;
+next	1.3;
+
+1.3
+date	2005.02.01.03.51.21;	author dannysmith;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2004.02.05.03.12.15;	author dannysmith;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2002.11.26.00.11.06;	author dannysmith;	state Exp;
+branches
+	1.1.2.1;
+next	;
+
+1.1.2.1
+date	2002.12.10.10.48.20;	author dannysmith;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.4
+log
+@	Import David Gay's gdtoa library.
+
+	* mingwex/gdtoa: New directory.
+	* mingwex/gdtoa/(arithchk.c, dmisc.c, dtoa.c, g__fmt.c, g_dfmt.c,
+	g_ffmt.c, g_xfmt.c, gd_arith.h, gd_qnan.h, gdtoa.c, gdtoa.h,
+	gdtoaimp.h, gethex.c, gmisc.c, hd_init.c, hexnan.c, misc.c, qnan.c,
+	README, smisc.c, strtodg.c, strtodnrp.c, strtof.c, strtopx.c, sum.c,
+	ulp.c): New files.
+	* mingwex/(strtof.c, strtold.c, ldtoa.c): Remove files.
+	* mingwex/math/(cephes-emath.c, cephes-emath.h): Remove files.
+	* mingwex/mb_wc_common.h (get_cp_from_locale); Rename to get_codepage().
+        * mingwex/(btowc.c, wctob.c, mbrtowc.c, wcrtomb.c): Adjust call to get_codepage().
+	* mingwex/wcstold.c: Avoid using strtold internals.
+	* mingwex/wcstof.c: Rewrite.
+	* mingwex/Makefile.in (GDTOA_DISTFILES): Add to distribution.
+	(GDTOA_OBJS): Add to library.
+	(DISTFILES): Remove strtof.c strtold.c ldtoa.c cephes-emath.c cephes-emath.h.
+	(STDLIB_OBJS): Remove.
+	(STDLIB_STUB_OBJS): Remove strtof.o wcstof,o.
+	(Q8_OBJS): Add wcstof.o wcstold.o.
+	* include/stdlib.h (strtof): Remove inline definition.
+	(wcstof): Likewise.
+	* include/wchar.h (wcstof): Remove inline definition.
+@
+text
+@/* This file is extracted from S L Moshier's  ioldoubl.c,
+ * modified for use in MinGW 
+ *
+ * Extended precision arithmetic functions for long double I/O.
+ * This program has been placed in the public domain.
+ */
+
+ 
+
+/*
+ * Revision history:
+ *
+ *  5 Jan 84	PDP-11 assembly language version
+ *  6 Dec 86	C language version
+ * 30 Aug 88	100 digit version, improved rounding
+ * 15 May 92    80-bit long double support
+ *
+ * Author:  S. L. Moshier.
+ *
+ * 6 Oct 02	Modified for MinGW by inlining utility routines,
+ * 		removing global variables and splitting out strtold
+ *		from _IO_ldtoa and _IO_ldtostr.
+ *
+ * 4 Feb 04	Reorganize __asctoe64 to fix setting error codes,
+ *		and handling special chars.
+ *	
+ *		Danny Smith <dannysmith@@users.sourceforge.net> 
+ */
+
+#include "math/cephes_emath.h"
+#if NE == 10
+
+/* 1.0E0 */
+static const unsigned short __eone[NE] =
+ {0x0000, 0x0000, 0x0000, 0x0000,
+  0x0000, 0x0000, 0x0000, 0x0000, 0x8000, 0x3fff,};
+#else
+static const unsigned short __eone[NE] = {
+0, 0000000,0000000,0000000,0100000,0x3fff,};
+#endif
+
+#if NE == 10
+static const unsigned short __etens[NTEN + 1][NE] =
+{
+  {0x6576, 0x4a92, 0x804a, 0x153f,
+   0xc94c, 0x979a, 0x8a20, 0x5202, 0xc460, 0x7525,},	/* 10**4096 */
+  {0x6a32, 0xce52, 0x329a, 0x28ce,
+   0xa74d, 0x5de4, 0xc53d, 0x3b5d, 0x9e8b, 0x5a92,},	/* 10**2048 */
+  {0x526c, 0x50ce, 0xf18b, 0x3d28,
+   0x650d, 0x0c17, 0x8175, 0x7586, 0xc976, 0x4d48,},
+  {0x9c66, 0x58f8, 0xbc50, 0x5c54,
+   0xcc65, 0x91c6, 0xa60e, 0xa0ae, 0xe319, 0x46a3,},
+  {0x851e, 0xeab7, 0x98fe, 0x901b,
+   0xddbb, 0xde8d, 0x9df9, 0xebfb, 0xaa7e, 0x4351,},
+  {0x0235, 0x0137, 0x36b1, 0x336c,
+   0xc66f, 0x8cdf, 0x80e9, 0x47c9, 0x93ba, 0x41a8,},
+  {0x50f8, 0x25fb, 0xc76b, 0x6b71,
+   0x3cbf, 0xa6d5, 0xffcf, 0x1f49, 0xc278, 0x40d3,},
+  {0x0000, 0x0000, 0x0000, 0x0000,
+   0xf020, 0xb59d, 0x2b70, 0xada8, 0x9dc5, 0x4069,},
+  {0x0000, 0x0000, 0x0000, 0x0000,
+   0x0000, 0x0000, 0x0400, 0xc9bf, 0x8e1b, 0x4034,},
+  {0x0000, 0x0000, 0x0000, 0x0000,
+   0x0000, 0x0000, 0x0000, 0x2000, 0xbebc, 0x4019,},
+  {0x0000, 0x0000, 0x0000, 0x0000,
+   0x0000, 0x0000, 0x0000, 0x0000, 0x9c40, 0x400c,},
+  {0x0000, 0x0000, 0x0000, 0x0000,
+   0x0000, 0x0000, 0x0000, 0x0000, 0xc800, 0x4005,},
+  {0x0000, 0x0000, 0x0000, 0x0000,
+   0x0000, 0x0000, 0x0000, 0x0000, 0xa000, 0x4002,},	/* 10**1 */
+};
+#else
+static const unsigned short __etens[NTEN+1][NE] = {
+{0xc94c,0x979a,0x8a20,0x5202,0xc460,0x7525,},/* 10**4096 */
+{0xa74d,0x5de4,0xc53d,0x3b5d,0x9e8b,0x5a92,},/* 10**2048 */
+{0x650d,0x0c17,0x8175,0x7586,0xc976,0x4d48,},
+{0xcc65,0x91c6,0xa60e,0xa0ae,0xe319,0x46a3,},
+{0xddbc,0xde8d,0x9df9,0xebfb,0xaa7e,0x4351,},
+{0xc66f,0x8cdf,0x80e9,0x47c9,0x93ba,0x41a8,},
+{0x3cbf,0xa6d5,0xffcf,0x1f49,0xc278,0x40d3,},
+{0xf020,0xb59d,0x2b70,0xada8,0x9dc5,0x4069,},
+{0x0000,0x0000,0x0400,0xc9bf,0x8e1b,0x4034,},
+{0x0000,0x0000,0x0000,0x2000,0xbebc,0x4019,},
+{0x0000,0x0000,0x0000,0x0000,0x9c40,0x400c,},
+{0x0000,0x0000,0x0000,0x0000,0xc800,0x4005,},
+{0x0000,0x0000,0x0000,0x0000,0xa000,0x4002,}, /* 10**1 */
+};
+#endif
+
+int __asctoe64(const char * __restrict__ ss, short unsigned int * __restrict__ y)
+{
+unsigned short yy[NI], xt[NI], tt[NI];
+int esign, decflg, nexp, exp, lost;
+int k, c;
+int valid_lead_string = 0;
+int have_non_zero_mant = 0;
+int prec = 0;
+/* int trail = 0; */
+long lexp;
+unsigned short nsign = 0;
+const unsigned short *p;
+char *sp,  *lstr;
+char *s;
+
+const char dec_sym = *(localeconv ()->decimal_point); 
+
+int lenldstr = 0;
+
+/* Copy the input string. */
+c = strlen (ss) + 2;
+lstr = (char *) alloca (c);
+s = (char *) ss;
+while( isspace ((int)(unsigned char)*s)) /* skip leading spaces */
+  {
+    ++s;
+    ++lenldstr;
+  }
+sp = lstr;
+for( k=0; k<c; k++ )
+	{
+	if( (*sp++ = *s++) == '\0' )
+		break;
+	}
+*sp = '\0';
+s = lstr;
+
+if (*s == '-')
+  {
+    nsign = 0xffff;
+    ++s;
+  }
+else if (*s == '+')
+  {
+   ++s;
+  }
+
+if (_strnicmp("INF", s , 3) == 0)
+ {
+    valid_lead_string = 1;
+    s += 3;
+    if ( _strnicmp ("INITY", s, 5) == 0)
+       s += 5;
+    __ecleaz(yy);
+    yy[E] = 0x7fff;  /* infinity */
+    goto aexit;
+ }
+else if(_strnicmp ("NAN", s, 3) == 0)
+ {
+   valid_lead_string = 1;
+   s += 3;
+   __enan_NI16( yy );
+   goto aexit;
+ }
+
+/* FIXME: Handle case of strtold ("NAN(n_char_seq)",endptr)  */ 
+
+/*  Now get some digits.  */
+lost = 0;
+decflg = 0;
+nexp = 0;
+exp = 0;
+__ecleaz( yy );
+
+/* Ignore leading zeros */
+while (*s == '0')
+  {
+    valid_lead_string = 1;
+    s++;
+  }
+
+nxtcom:
+
+k = *s - '0';
+if( (k >= 0) && (k <= 9) )
+	{
+#if 0
+/* The use of a special char as a flag for trailing zeroes causes problems when input
+   actually contains the char  */
+/* Identify and strip trailing zeros after the decimal point. */
+	if( (trail == 0) && (decflg != 0) )
+		{
+		sp = s;
+		while( (*sp >= '0') && (*sp <= '9') )
+			++sp;
+		--sp;
+		while( *sp == '0' )
+		   {	
+		     *sp-- = (char)-1;
+		     trail++;
+		   }
+		if( *s == (char)-1 )
+			goto donchr;
+		}
+#endif
+
+/* If enough digits were given to more than fill up the yy register,
+ * continuing until overflow into the high guard word yy[2]
+ * guarantees that there will be a roundoff bit at the top
+ * of the low guard word after normalization.
+ */
+	if( yy[2] == 0 )
+		{
+		if( decflg )
+			nexp += 1; /* count digits after decimal point */
+		__eshup1( yy );	/* multiply current number by 10 */
+		__emovz( yy, xt );
+		__eshup1( xt );
+		__eshup1( xt );
+		__eaddm( xt, yy );
+		__ecleaz( xt );
+		xt[NI-2] = (unsigned short )k;
+		__eaddm( xt, yy );
+		}
+	else
+		{
+		/* Mark any lost non-zero digit.  */
+		lost |= k;
+		/* Count lost digits before the decimal point.  */
+		if (decflg == 0)
+		        nexp -= 1;
+		}
+	have_non_zero_mant |= k;
+	prec ++;
+	/* goto donchr; */
+	}
+else if (*s == dec_sym)
+  {
+    if( decflg )
+      goto daldone;
+    ++decflg;
+  }
+else if ((*s == 'E') || (*s == 'e') )
+  {
+    if (prec || valid_lead_string)
+	goto expnt;
+     else	
+	goto daldone;
+  }
+
+#if 0
+else if (*s == (char)-1)
+  goto donchr;
+#endif
+
+else  /* an invalid char */
+    goto daldone;
+
+/* donchr: */
+++s;
+goto nxtcom;
+
+
+/* Exponent interpretation */
+expnt:
+
+esign = 1;
+exp = 0;
+/* Save position in case we need to fall back.  */
+sp = s;
+++s;
+/* check for + or - */
+if( *s == '-' )
+	{
+	esign = -1;
+	++s;
+	}
+if( *s == '+' )
+	++s;
+
+/* Check for valid exponent.  */
+if (!(*s >= '0' && *s <= '9'))
+  {
+    s = sp;
+    goto daldone;
+  }
+
+while( (*s >= '0') && (*s <= '9') )
+{
+  /* Stop modifying exp if we are going to overflow anyway,
+     but keep parsing the string. */	
+  if (exp < 4978)
+    {
+      exp *= 10;
+      exp += *s - '0';
+    }
+  s++;
+}
+
+if( esign < 0 )
+	exp = -exp;
+
+if (exp > 4977) /* maybe overflow */
+	{
+	__ecleaz(yy);
+	if (have_non_zero_mant)
+	  yy[E] = 0x7fff;
+	goto aexit;
+	}
+else if (exp < -4977) /* underflow */
+	{
+	__ecleaz(yy);
+	goto aexit;
+  	}
+
+daldone:
+
+nexp = exp - nexp;
+
+/* Pad trailing zeros to minimize power of 10, per IEEE spec. */
+while( (nexp > 0) && (yy[2] == 0) )
+	{
+	__emovz( yy, xt );
+	__eshup1( xt );
+	__eshup1( xt );
+	__eaddm( yy, xt );
+	__eshup1( xt );
+	if( xt[2] != 0 )
+		break;
+	nexp -= 1;
+	__emovz( xt, yy );
+	}
+if( (k = __enormlz(yy)) > NBITS )
+	{
+	__ecleaz(yy);
+	goto aexit;
+	}
+lexp = (EXONE - 1 + NBITS) - k;
+__emdnorm( yy, lost, 0, lexp, 64, NBITS );
+/* convert to external format */
+
+
+/* Multiply by 10**nexp.  If precision is 64 bits,
+ * the maximum relative error incurred in forming 10**n
+ * for 0 <= n <= 324 is 8.2e-20, at 10**180.
+ * For 0 <= n <= 999, the peak relative error is 1.4e-19 at 10**947.
+ * For 0 >= n >= -999, it is -1.55e-19 at 10**-435.
+ */
+lexp = yy[E];
+if( nexp == 0 )
+	{
+	k = 0;
+	goto expdon;
+	}
+esign = 1;
+if( nexp < 0 )
+	{
+	nexp = -nexp;
+	esign = -1;
+	if( nexp > 4096 )
+		{ /* Punt.  Can't handle this without 2 divides. */
+		__emovi( __etens[0], tt );
+		lexp -= tt[E];
+		k = __edivm( tt, yy );
+		lexp += EXONE;
+		nexp -= 4096;
+		}
+	}
+p = &__etens[NTEN][0];
+__emov( __eone, xt );
+exp = 1;
+do
+	{
+	if( exp & nexp )
+		__emul( p, xt, xt );
+	p -= NE;
+	exp = exp + exp;
+	}
+while( exp <= MAXP );
+
+__emovi( xt, tt );
+if( esign < 0 )
+	{
+	lexp -= tt[E];
+	k = __edivm( tt, yy );
+	lexp += EXONE;
+	}
+else
+	{
+	lexp += tt[E];
+	k = __emulm( tt, yy );
+	lexp -= EXONE - 1;
+	}
+
+expdon:
+
+/* Round and convert directly to the destination type */
+
+__emdnorm( yy, k, 0, lexp, 64, 64 );
+
+aexit:
+
+yy[0] = nsign;
+
+__toe64( yy, y );
+
+/* Check for overflow, undeflow  */
+if (have_non_zero_mant &&
+    (*((long double*) y) == 0.0L || isinf (*((long double*) y)))) 
+  errno = ERANGE;
+
+if (prec || valid_lead_string)
+  return (lenldstr + (s - lstr));
+return 0;
+}
+
+
+long double strtold (const char * __restrict__ s, char ** __restrict__ se)
+{
+  int lenldstr;
+  union
+  {
+    unsigned short int us[6];
+    long double ld;
+  } xx = {{0}};
+ 
+  lenldstr =  __asctoe64( s, xx.us);
+  if (se)
+    *se = (char*)s + lenldstr;
+
+  return xx.ld;
+}
+@
+
+
+1.3
+log
+@	* mingwex/strtold.c (__asctoe64): Set endptr to 'e' if exponent
+	string is not valid.
+@
+text
+@@
+
+
+1.2
+log
+@	* mingwex/strtold.c (__asctoe64) Reorganise. Fix setting error
+	codes and handling of special chars.
+@
+text
+@d258 2
+d270 7
+@
+
+
+1.1
+log
+@Add strtold and wcstold to libmingwex.a
+
+	* mingwex/strtold.c: New file.
+	* mingwex/wcstold.c: New file.
+	* mingwex/ldtoa.c: New file.
+	* mingwex/math/cephes_emath.h: New file.
+	* mingwex/math/cephes_emath.c: New file.
+	* mingwex/Makefile.in (DISTFILES): Add new files.
+	(MATH_DISTFILES): Ditto.
+	(STDLIB_OBJS): New. Define as strtold.c wcstold.c.
+	(MATH_OBJS): Add cephes_emath.o.
+	(LIB_OBJS): Add $(STDLIB_OBJS).
+	* include/stdlib.h (strtold, wcstold): Add prototypes.
+	* include/wchar.h (wcstold): Add prototype.
+
+Add missing ChangeLog entry for 2002-11-09.
+@
+text
+@d23 4
+a26 1
+ *  
+a29 1
+
+a30 1
+
+d93 6
+a98 2
+int esign, decflg, sgnflg, nexp, exp, prec, lost;
+int k, trail, c;
+d100 1
+a100 1
+unsigned short nsign;
+d105 1
+a105 1
+char dec_sym = *(localeconv ()->decimal_point); 
+d127 31
+a158 1
+nsign = 0;
+a159 1
+sgnflg = 0;
+a161 1
+prec = 0;
+d163 7
+a169 1
+trail = 0;
+d172 1
+d176 3
+a178 3
+/* Ignore leading zeros */
+	if( (prec == 0) && (decflg == 0) && (k == 0) )
+		goto donchr;
+d187 5
+a191 3
+			*sp-- = 'z';
+		trail = 1;
+		if( *s == 'z' )
+d194 2
+d222 3
+a224 2
+	prec += 1;
+	goto donchr;
+d226 1
+a226 1
+if (*s == dec_sym)
+d232 17
+a248 53
+else
+  switch( *s )
+    {
+	case 'z':
+		break;
+	case 'E':
+	case 'e':
+		goto expnt;
+	case '-':
+		nsign = 0xffff;
+		if( sgnflg )
+			goto daldone;
+		++sgnflg;
+		break;
+	case '+':
+		if( sgnflg )
+			goto daldone;
+		++sgnflg;
+		break;
+	case 'i':
+	case 'I':
+    	{
+	  s++;
+	  if (*s != 'n' && *s != 'N')
+	    goto zero;
+	  s++;
+	  if (*s != 'f' && *s != 'F')
+	    goto zero;
+	  s++;
+	  if ((*s == 'i' || *s == 'I') && (s[1] == 'n' || s[1] == 'N')
+	       && (s[2] == 'i' || s[2] == 'I')
+	       && (s[3] == 't' || s[3] == 'T')
+	       && (s[4] == 'y' || s[4] == 'Y'))
+	    s += 5;
+	  goto infinite;
+    	}
+	case 'n':
+	case 'N':
+    	{
+	  s++;
+	  if (*s != 'a' && *s != 'A')
+	    goto zero;
+	  s++;
+	  if (*s != 'n' && *s != 'N')
+	    goto zero;
+	  s++;
+	  __enan_NI16( yy );
+	  goto aexit;
+    	}
+	default:
+	  goto daldone;
+    }
+donchr:
+d252 1
+d267 13
+a279 5
+while( (*s >= '0') && (*s <= '9') && exp < 4978)
+	{
+	exp *= 10;
+	exp += *s++ - '0';
+	}
+d282 2
+a283 1
+if( exp > 4932 )
+a284 2
+	errno = ERANGE;
+infinite:
+d286 2
+a287 1
+	yy[E] = 0x7fff;  /* infinity */
+d290 1
+a290 1
+if( exp < -4977 )
+a291 2
+	errno = ERANGE;
+zero:
+d294 1
+a294 1
+	}
+d297 1
+d299 1
+d384 1
+d386 9
+a394 1
+return (lenldstr + s - lstr);
+d410 1
+@
+
+
+1.1.2.1
+log
+@	Merge from mingw trunk (changes since 2002-11-19).
+@
+text
+@@
+

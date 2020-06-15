@@ -1,0 +1,136 @@
+head	1.1;
+access;
+symbols
+	binutils-2_24-branch:1.1.0.8
+	binutils-2_24-branchpoint:1.1
+	binutils-2_23_2:1.1
+	binutils-2_23_1:1.1
+	binutils-2_23:1.1
+	binutils-2_23-branch:1.1.0.6
+	binutils-2_23-branchpoint:1.1
+	binutils-2_22_branch:1.1.0.4
+	binutils-2_22:1.1
+	binutils-2_22-branch:1.1.0.2
+	binutils-2_22-branchpoint:1.1
+	binutils_latest_snapshot:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.1
+date	2011.06.25.00.40.56;	author ian;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.1
+log
+@	* layout.cc: Include "object.h".
+	(ctors_sections_in_init_array): New static variable.
+	(Layout::is_ctors_in_init_array): New function.
+	(Layout::layout): Add entry to ctors_sections_in_init_array if
+	appropriate.
+	* layout.h (class Layout): Declare is_ctors_in_init_array.
+	* reloc.cc (Sized_relobj_file::do_relocate): Call reverse_words if
+	is_ctors_reverse_view is set.
+	(Sized_relobj_file::write_sections): Add layout parameter.  Change
+	all callers.  Set is_ctors_reverse_view field of View_size.
+	(Sized_relobj_file::reverse_words): New function.
+	* object.h (Sized_relobj_file::View_size): Add
+	is_ctors_reverse_view field.
+	(class Sized_relobj_file): Update declarations.
+	* testsuite/initpri3.c: New test.
+	* testsuite/Makefile.am: (check_PROGRAMS): Add initpri3a and
+	initpri3b.
+	(initpri3a_SOURCES, initpri3a_DEPENDENCIES): New variables.
+	(initpri3a_LDFLAGS, initpri3a_LDADD): New variables.
+	(initpri3b_SOURCES, initpri3b_DEPENDENCIES): New variables.
+	(initpri3b_LDFLAGS, initpri3b_LDADD): New variables.
+	* testsuite/Makefile.in: Rebuild.
+@
+text
+@/* initpri3.c -- test ctor odering when using init_array.
+
+   Copyright 2011 Free Software Foundation, Inc.
+   Written by Ian Lance Taylor <iant@@google.com>.
+
+   This file is part of gold.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+   MA 02110-1301, USA.  */
+
+/* This tests that the linker correctly orders .ctor entries when
+   putting them into .init_array, as is the default.  */
+
+#include <assert.h>
+
+int i = 1;
+
+static void
+ctor1 (void)
+{
+  assert (i == 1);
+  i = 2;
+}
+
+static void
+ctor2 (void)
+{
+  assert (i == 2);
+  i = 3;
+}
+
+static void
+dtor1 (void)
+{
+  assert (i == 3);
+  i = 2;
+}
+
+static void
+dtor2 (void)
+{
+  assert (i == 2);
+  i = 1;
+}
+
+/* The .ctors section is run in reverse order, the .dtors section in
+   run in forward order.  We give these arrays the "aligned" attribute
+   because the x86_64 ABI would otherwise give them a 16-byte
+   alignment, which may leave a hole in the section.  */
+
+void (*ctors[]) (void)
+  __attribute__ ((aligned (4), section (".ctors"))) = {
+  ctor2,
+  ctor1
+};
+
+void (*dtors[]) (void)
+  __attribute__ ((aligned (4), section (".dtors"))) = {
+  dtor1,
+  dtor2
+};
+
+int
+main (void)
+{
+  assert (i == 3);
+  return 0;
+}
+@

@@ -1,0 +1,412 @@
+head	1.4;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.3
+	gdb_7_6-2013-04-26-release:1.3
+	gdb_7_6-branch:1.3.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.3;
+locks; strict;
+comment	@ * @;
+
+
+1.4
+date	2013.10.11.13.48.19;	author brobecke;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2013.01.31.18.37.38;	author aristovski;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2013.01.01.06.33.00;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2012.12.12.21.20.13;	author mgherzan;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.4
+log
+@New GDB/MI commands to catch Ada exceptions
+
+This patch introduces two new GDB/MI commands implementing the equivalent
+of the "catch exception" and  "catch assert" GDB/CLI commands.
+
+gdb/ChangeLog:
+
+        * breakpoint.h (init_ada_exception_breakpoint): Add parameter
+        "enabled".
+        * breakpoint.c (init_ada_exception_breakpoint): Add parameter
+        "enabled".  Set B->ENABLE_STATE accordingly.
+        * ada-lang.h (ada_exception_catchpoint_kind): Move here from
+        ada-lang.c.
+        (create_ada_exception_catchpoint): Add declaration.
+        * ada-lang.c (ada_exception_catchpoint_kind): Move to ada-lang.h.
+        (create_ada_exception_catchpoint): Make non-static. Add new
+        parameter "disabled". Use it in call to
+        init_ada_exception_breakpoint.
+        (catch_ada_exception_command): Add parameter "enabled" in call
+        to create_ada_exception_catchpoint.
+        (catch_assert_command): Likewise.
+
+        * mi/mi-cmds.h (mi_cmd_catch_assert, mi_cmd_catch_exception):
+        Add declarations.
+        * mi/mi-cmds.c (mi_cmds): Add the "catch-assert" and
+        "catch-exception" commands.
+        * mi/mi-cmd-catch.c: Add #include "ada-lang.h".
+        (mi_cmd_catch_assert, mi_cmd_catch_exception): New functions.
+@
+text
+@/* MI Command Set - catch commands.
+   Copyright (C) 2012-2013 Free Software Foundation, Inc.
+
+   Contributed by Intel Corporation.
+
+   This file is part of GDB.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+#include "defs.h"
+#include "arch-utils.h"
+#include "breakpoint.h"
+#include "gdb.h"
+#include "libiberty.h"
+#include "ada-lang.h"
+#include "mi-cmds.h"
+#include "mi-getopt.h"
+#include "mi-cmd-break.h"
+
+/* Handler for the -catch-assert command.  */
+
+void
+mi_cmd_catch_assert (char *cmd, char *argv[], int argc)
+{
+  struct gdbarch *gdbarch = get_current_arch();
+  char *condition = NULL;
+  int enabled = 1;
+  int temp = 0;
+
+  int oind = 0;
+  char *oarg;
+
+  enum opt
+    {
+      OPT_CONDITION, OPT_DISABLED, OPT_TEMP,
+    };
+  static const struct mi_opt opts[] =
+    {
+      { "c", OPT_CONDITION, 1},
+      { "d", OPT_DISABLED, 0 },
+      { "t", OPT_TEMP, 0 },
+      { 0, 0, 0 }
+    };
+
+  for (;;)
+    {
+      int opt = mi_getopt ("-catch-assert", argc, argv, opts,
+			   &oind, &oarg);
+
+      if (opt < 0)
+        break;
+
+      switch ((enum opt) opt)
+        {
+	case OPT_CONDITION:
+	  condition = oarg;
+	  break;
+	case OPT_DISABLED:
+	  enabled = 0;
+	  break;
+	case OPT_TEMP:
+	  temp = 1;
+	  break;
+        }
+    }
+
+  /* This command does not accept any argument.  Make sure the user
+     did not provide any.  */
+  if (oind != argc)
+    error (_("Invalid argument: %s"), argv[oind]);
+
+  setup_breakpoint_reporting ();
+  create_ada_exception_catchpoint (gdbarch, ada_catch_assert,
+				   NULL, condition, temp, enabled, 0);
+}
+
+/* Handler for the -catch-exception command.  */
+
+void
+mi_cmd_catch_exception (char *cmd, char *argv[], int argc)
+{
+  struct gdbarch *gdbarch = get_current_arch();
+  char *condition = NULL;
+  int enabled = 1;
+  char *exception_name = NULL;
+  int temp = 0;
+  enum ada_exception_catchpoint_kind ex_kind = ada_catch_exception;
+
+  int oind = 0;
+  char *oarg;
+
+  enum opt
+    {
+      OPT_CONDITION, OPT_DISABLED, OPT_EXCEPTION_NAME, OPT_TEMP,
+      OPT_UNHANDLED,
+    };
+  static const struct mi_opt opts[] =
+    {
+      { "c", OPT_CONDITION, 1},
+      { "d", OPT_DISABLED, 0 },
+      { "e", OPT_EXCEPTION_NAME, 1 },
+      { "t", OPT_TEMP, 0 },
+      { "u", OPT_UNHANDLED, 0},
+      { 0, 0, 0 }
+    };
+
+  for (;;)
+    {
+      int opt = mi_getopt ("-catch-exception", argc, argv, opts,
+			   &oind, &oarg);
+
+      if (opt < 0)
+        break;
+
+      switch ((enum opt) opt)
+        {
+	case OPT_CONDITION:
+	  condition = oarg;
+	  break;
+	case OPT_DISABLED:
+	  enabled = 0;
+	  break;
+	case OPT_EXCEPTION_NAME:
+	  exception_name = oarg;
+	  break;
+	case OPT_TEMP:
+	  temp = 1;
+	  break;
+	case OPT_UNHANDLED:
+	  ex_kind = ada_catch_exception_unhandled;
+	  break;
+        }
+    }
+
+  /* This command does not accept any argument.  Make sure the user
+     did not provide any.  */
+  if (oind != argc)
+    error (_("Invalid argument: %s"), argv[oind]);
+
+  /* Specifying an exception name does not make sense when requesting
+     an unhandled exception breakpoint.  */
+  if (ex_kind == ada_catch_exception_unhandled && exception_name != NULL)
+    error (_("\"-e\" and \"-u\" are mutually exclusive"));
+
+  setup_breakpoint_reporting ();
+  create_ada_exception_catchpoint (gdbarch, ex_kind,
+				   exception_name, condition,
+				   temp, enabled, 0);
+}
+
+/* Common path for the -catch-load and -catch-unload.  */
+
+static void
+mi_catch_load_unload (int load, char *argv[], int argc)
+{
+  struct cleanup *back_to;
+  const char *actual_cmd = load ? "-catch-load" : "-catch-unload";
+  int temp = 0;
+  int enabled = 1;
+  int oind = 0;
+  char *oarg;
+  enum opt
+    {
+      OPT_TEMP,
+      OPT_DISABLED,
+    };
+  static const struct mi_opt opts[] =
+    {
+      { "t", OPT_TEMP, 0 },
+      { "d", OPT_DISABLED, 0 },
+      { 0, 0, 0 }
+    };
+
+  for (;;)
+    {
+      int opt = mi_getopt (actual_cmd, argc, argv, opts,
+                           &oind, &oarg);
+
+      if (opt < 0)
+        break;
+
+      switch ((enum opt) opt)
+        {
+        case OPT_TEMP:
+          temp = 1;
+          break;
+        case OPT_DISABLED:
+          enabled = 0;
+          break;
+        }
+    }
+
+  if (oind >= argc)
+    error (_("-catch-load/unload: Missing <library name>"));
+  if (oind < argc -1)
+    error (_("-catch-load/unload: Garbage following the <library name>"));
+
+  back_to = setup_breakpoint_reporting ();
+
+  add_solib_catchpoint (argv[oind], load, temp, enabled);
+
+  do_cleanups (back_to);
+}
+
+/* Handler for the -catch-load.  */
+
+void
+mi_cmd_catch_load (char *cmd, char *argv[], int argc)
+{
+  mi_catch_load_unload (1, argv, argc);
+}
+
+
+/* Handler for the -catch-unload.  */
+
+void
+mi_cmd_catch_unload (char *cmd, char *argv[], int argc)
+{
+  mi_catch_load_unload (0, argv, argc);
+}
+
+@
+
+
+1.3
+log
+@2013-01-31  Aleksandar Ristovski  <aristovski@@qnx.com>
+
+	* charset.c (intermediate_encoding): Remove unused i.
+	* completer.c (signal_completer): Remove unused i.
+	* continuations.c (discard_my_continuations_1): Remove unused
+	continuation_ptr.
+	* corelow.c (core_close): Remove unuseD name.
+	(get_core_siginfo): Remove unused pid.
+	* cp-namespace.c (cp_lookup_symbol_imports_or_template): Remove unused
+	i, cps.
+	* dwarf2loc.c (dwarf2_compile_expr_to_ax): Remove unused base_offset.
+	(loclist_describe_location): Remove unused first.
+	* event-top.c (command_line_handler): Remove unused got_eof.
+	* exec.c (exec_close_1): Remove unused need_symtab_cleanup.
+	(resize_section_table): Remove unused old_value.
+	* gdb_bfd.c (gdb_bfd_map_section): Remove unused header.
+	* gnu-v3-abi.c (compute_vtable_size): Remove unused addr.
+	* i386-tdep.c (i386_process_record): Remove unused rex.
+	* infcmd.c (get_return_value): Remove unused uiout.
+	* jv-lang.c (type_from_class): Remove unused is_array.
+	* jv-valprint.c (java_val_print): Remove unused i.
+	* linux-nat.c (linux_nat_stop_lwp): Remove unused ptid.
+	* linux-thread-db.c (thread_db_find_new_threads_2): Remove unuseD pid.
+	* m2-typeprint.c (m2_print_type): Remove unused code.
+	* macroexp.c (get_character_constant): Remove unused body_start.
+	(macro_stringify): Remove unused result.
+	* objc-lang.c (find_methods): Remove unused gdbarch.
+	* objfiles.c (filter_overlapping_sections): Remove unused abfd1, abfd2.
+	* regcache.c (regcache_cooked_read): Remove unused gdbarch.
+	* stack.c (print_frame_args): Remove unused summary.
+	* thread.c (thread_apply_command): Remove unused p.
+	* valarith.c (value_x_unop): Remove unused mangle_ptr.
+	* valops.c (search_struct_method): Remove unused skip.
+	* valprint.c (generic_val_print): Remove unused byte_order.
+	* varobj.c (varobj_update): Remove unused changed.
+	* cli/cli-cmds.c (complete_command): Remove unused next_item.
+	(alias_command): Remove unused c.
+	* mi/mi-cmd-catch.c (mi_catch_load_unload): Remove unused c.
+	* mi/mi-main.c (mi_cmd_data_write_register_values): Remove unused
+	format.
+	(mi_cmd_data_write_memory): Remove unused word_format.
+	(mi_cmd_data_write_memory_bytes): Remove unused r.
+	* python/py-gdb-readline.c (gdbpy_readline_wrapper): Remove unused
+	p_start, p_end.
+	* python/python.c (_initialize_python): Remove unused cmd_name, cmd.
+	* tui/tui-disasm.c (tui_set_disassem_content): Remove unused
+	line_width.
+
+Reference: http://sourceware.org/ml/gdb-patches/2013-01/msg00766.html
+@
+text
+@d26 1
+d31 130
+@
+
+
+1.2
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@a35 1
+  struct solib_catchpoint *c;
+@
+
+
+1.1
+log
+@MI: add the -catch-load and -catch-unload commands
+
+They are equivalent to "catch load" and "catch unload" from CLI.
+
+Rationale: GUIs might be interested in catching solib load or
+unload events.
+
+2012-11-16  Mircea Gherzan  <mircea.gherzan@@intel.com>
+
+	* Makefile.in (SUBDIR_MI_OBS): Add mi-cmd-catch.o.
+	(SUBDIR_MI_SRCS): Add mi/mi-cmd-catch.c.
+	* breakpoint.c (add_solib_catchpoint): New function that
+	can be used by both CLI and MI, factored out from
+	catch_load_or_unload.
+	(catch_load_or_unload): Strip it down and make it use the
+	new add_solib_catchpoint.
+	* breakpoint.h (add_solib_catchpoint): Declare it.
+	* mi/mi-cmd-break.h: New file.
+	* mi/mi-cmd-break.c: Include mi-cmd-break.h.
+	(setup_breakpoint_reporting): New function used for both
+	catchpoints and breakpoints.
+	(mi_cmd_break_insert): Use setup_breakpoint_reporting.
+	* mi/mi-cmd-catch.c: New file.
+	* mi/mi-cmds.c (mi_cmds): Add the handlers for -catch-load
+	and -catch-unload.
+	* mi/mi-cmds.h: Declare the handlers for -catch-load and
+	-catch-unload.
+@
+text
+@d2 1
+a2 1
+   Copyright (C) 2012 Free Software Foundation, Inc.
+@
+

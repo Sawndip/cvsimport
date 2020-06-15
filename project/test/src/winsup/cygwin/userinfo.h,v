@@ -1,0 +1,155 @@
+head	1.3;
+access;
+symbols
+	cygwin-1_7_35-release:1.3;
+locks; strict;
+comment	@ * @;
+
+
+1.3
+date	2015.02.24.20.52.57;	author corinna;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2015.02.23.21.01.55;	author corinna;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2015.02.23.20.51.12;	author corinna;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.3
+log
+@	* ldap.h: Remove index macros.
+	(class cyg_ldap): Remove members srch_msg and srch_entry.
+	(cyg_ldap::get_string_attribute): Remove private method taking index
+	argument.
+	(cyg_ldap::get_num_attribute): Ditto.  Add method taking attribute name.
+	(cyg_ldap::get_primary_gid): Adjust to aforementioned change.
+	(cyg_ldap::get_unix_uid): Ditto.
+	(cyg_ldap::get_unix_gid): Ditto.
+	* ldap.cc: Throughout, use msg and entry in place of srch_msg and
+	srch_entry.
+	(std_user_attr): Add sAMAccountName and objectSid.
+	(group_attr): Ditto.
+	(cyg_ldap::close): Drop handling of srch_msg and srch_entry.
+	(cyg_ldap::get_string_attribute): Move earlier in file.
+	(cyg_ldap::get_num_attribute): Ditto.
+	(cyg_ldap::enumerate_ad_accounts): Add comments for clarity.
+	Use group_attr or user_attr rather than sid_attr to fetch all desired
+	attributes for an account right away.
+	(cyg_ldap::next_account): Store found SID in last_fetched_sid to
+	skip calls to fetch_ad_account from fetch_account_from_windows.
+	(cyg_ldap::get_string_attribute): Remove method taking index argument.
+	(cyg_ldap::get_num_attribute): Ditto.
+	* pwdgrp.h (class pg_ent): Fix formatting.  Add member dom.
+	* passwd.cc (pg_ent::enumerate_ad): Store current flat domain name
+	in dom.  Construct fetch_acc_t argument from LDAP attributes and
+	call fetch_account_from_windows with that.
+	* userinfo.h (enum fetch_user_arg_type_t): Rename FULL_grp_arg to
+	FULL_acc_arg.  Change throughout.
+	(struct fetch_acc_t): Rename from fetch_full_grp_t.  Change throughout.
+	(struct fetch_user_arg_t): Rename full_grp to full_acc.  Change
+	throughout.
+@
+text
+@/* userinfo.h
+
+   Copyright 2015 Red Hat inc.
+
+This file is part of Cygwin.
+
+This software is a copyrighted work licensed under the terms of the
+Cygwin license.  Please consult the file "CYGWIN_LICENSE" for
+details. */
+
+#pragma once
+
+enum fetch_user_arg_type_t {
+  SID_arg,
+  NAME_arg,
+  ID_arg,
+  FULL_acc_arg,
+};
+
+#ifdef __INSIDE_CYGWIN__
+
+struct fetch_acc_t {
+  cygpsid sid;
+  PUNICODE_STRING name;
+  PUNICODE_STRING dom;
+  SID_NAME_USE acc_type;
+};
+
+struct fetch_user_arg_t
+{
+  fetch_user_arg_type_t type;
+  union {
+    cygpsid *sid;
+    const char *name;
+    uint32_t id;
+    fetch_acc_t *full_acc;
+  };
+  /* Only used in fetch_account_from_file/line. */
+  size_t len;
+};
+
+#endif
+@
+
+
+1.2
+log
+@	* userinfo.h (struct fetch_full_grp_t): Define only when building
+	Cygwin itself.
+	(struct fetch_user_arg_t): Ditto.
+@
+text
+@d17 1
+a17 1
+  FULL_grp_arg,
+d22 1
+a22 1
+struct fetch_full_grp_t {
+d36 1
+a36 1
+    fetch_full_grp_t *full_grp;
+@
+
+
+1.1
+log
+@	* autoload.cc (LsaLookupSids): Import.
+	* cygserver_pwdgrp.h: Include userinfo.h.  Drop workaround defining
+	fetch_user_arg_type_t locally.
+	* grp.cc (internal_getgrsid_cachedonly): New function.
+	(internal_getgrfull): Ditto.
+	(internal_getgroups): Rearrange function.  Center around fetching all
+	cached group info first, calling LsaLookupSids on all so far non-cached
+	groups second.  Pass all available info to new internal_getgrfull call.
+	* pwdgrp.h: Include userinfo.h.  Move definitions of
+	fetch_user_arg_type_t and fetch_user_arg_t there.
+	(pwdgrp::add_group_from_windows): Declare with getting full group info.
+	Called from internal_getgrfull.
+	* uinfo.cc (pwdgrp::add_group_from_windows): Define.
+	(pwdgrp::fetch_account_from_line): Add default case.
+	(pwdgrp::fetch_account_from_file): Ditto.
+	(pwdgrp::fetch_account_from_windows): Handle FULL_grp_arg.
+	(client_request_pwdgrp::client_request_pwdgrp): Add default case.
+	* userinfo.h: New header.
+	(enum fetch_user_arg_type_t): Add FULL_grp_arg.
+	(struct fetch_full_grp_t): New datatype.
+@
+text
+@d20 2
+d41 2
+@
+

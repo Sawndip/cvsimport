@@ -1,0 +1,88 @@
+head	1.1;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.1
+	gdb_7_6-2013-04-26-release:1.1
+	gdb_7_6-branch:1.1.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.1;
+locks; strict;
+comment	@-- @;
+
+
+1.1
+date	2013.03.12.09.03.11;	author hilfingr;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.1
+log
+@Allow 'thread' to be used as a variable name in expressions.
+
+GDB treats the identifiers 'if', 'thread', and 'task' unconditionally
+as expression delimiters in Ada mode, which is correct for 'if' and 'task',
+but wrong for 'thread' in cases such as
+
+      print thread
+
+Borrowing from c-exp.y, we observe that 'thread' must be followed by
+numerals, whereas identifiers never are and treat them as delimiters
+only in that case.
+
+In the process, the current also refactors and incidentally fixes the
+code for rewinding the input to before the delimiting tokens.  For
+example, the code
+
+      watch expr if i > 2
+
+fails because the input is only rewound to just before the 'i',
+leaving the 'if' as part of the expression (and thus making the
+rest look like trailing junk rather than a conditional clause).
+
+gdb/ChangeLog:
+
+    * ada-lex.l (rules): Only recognize 'thread' as a
+    delimiter when followed by numerals, as for c-exp.y.
+    Use new rewind_to_char function to rewind the input for
+    expression-delimiting tokens.
+    (rewind_to_char): New function.
+
+gdb/testsuite/ChangeLog:
+
+    * gdb.ada/expr_delims.exp: New file.
+    * gdb.ada/expr_delims/foo.adb: New file.
+    * gdb.ada/expr_delims/pck.ads: New file.
+    * gdb.ada/expr_delims/pck.adb: New file.
+@
+text
+@--  Copyright 2013 Free Software Foundation, Inc.
+--
+--  This program is free software; you can redistribute it and/or modify
+--  it under the terms of the GNU General Public License as published by
+--  the Free Software Foundation; either version 3 of the License, or
+--  (at your option) any later version.
+--
+--  This program is distributed in the hope that it will be useful,
+--  but WITHOUT ANY WARRANTY; without even the implied warranty of
+--  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+--  GNU General Public License for more details.
+--
+--  You should have received a copy of the GNU General Public License
+--  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+with Pck; use Pck;
+
+procedure Foo is
+   Thread: Integer;
+begin
+   Thread := 0;
+   for I in 1 .. 100 loop
+      Thread := Thread + I; -- STOP_HERE
+   end loop;
+   Put(Integer'Image(Thread));
+end Foo;
+@

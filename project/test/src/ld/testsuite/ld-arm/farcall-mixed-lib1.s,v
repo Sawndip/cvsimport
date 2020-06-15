@@ -1,0 +1,187 @@
+head	1.3;
+access;
+symbols
+	binutils-2_24-branch:1.3.0.10
+	binutils-2_24-branchpoint:1.3
+	binutils-2_21_1:1.3
+	binutils-2_23_2:1.3
+	binutils-2_23_1:1.3
+	binutils-2_23:1.3
+	binutils-2_23-branch:1.3.0.8
+	binutils-2_23-branchpoint:1.3
+	binutils-2_22_branch:1.3.0.6
+	binutils-2_22:1.3
+	binutils-2_22-branch:1.3.0.4
+	binutils-2_22-branchpoint:1.3
+	binutils-2_21:1.3
+	binutils-2_21-branch:1.3.0.2
+	binutils-2_21-branchpoint:1.3
+	binutils-2_20_1:1.2
+	binutils-2_20:1.2
+	binutils-2_20-branch:1.2.0.4
+	binutils-2_20-branchpoint:1.2
+	dje-cgen-play1-branch:1.2.0.2
+	dje-cgen-play1-branchpoint:1.2
+	binutils_latest_snapshot:1.3;
+locks; strict;
+comment	@# @;
+
+
+1.3
+date	2010.03.02.08.19.54;	author clyon;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2009.06.22.10.55.33;	author clyon;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2009.04.17.13.04.41;	author clyon;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.3
+log
+@2010-03-02  Christophe Lyon  <christophe.lyon@@st.com>
+	Alan Modra  <amodra@@gmail.com>
+
+	bfd/
+	* elf32-arm.c (a8_erratum_fix): Add st_type field to record the
+	destination mode of the a8 stub.
+	(elf32_arm_link_hash_table): Add top_id field.
+	(elf32_arm_link_hash_table_create): Initialize top_id.
+	(arm_type_of_stub): Update prototype, st_type can now be updated
+	by this function. Actual destination address in case of PLT is
+	computed here, to help factorizing code.
+	(elf32_arm_stub_name): Update prototype, use stub_type additional
+	parameter to build stub name.
+	(elf32_arm_get_stub_entry): Update prototype, use stub_type
+	additional parameter to build stub entry.
+	(arm_build_one_stub): Use bfd_put_16/bfd_put_32 instead of
+	put_thumb_insn/put_arm_insn as BE8 encoding is now handled later.
+	Call elf32_arm_final_link_relocate to process all in-stub
+	relocations.
+	(elf32_arm_setup_section_lists): Update top_id.
+	(cortex_a8_erratum_scan): Record stub destination mode.
+	(elf32_arm_size_stubs): Update call to arm_type_of_stub according
+	to new prototype.
+	(elf32_arm_final_link_relocate): Enable processing of in-stub
+	REL32 relocations. Rely on arm_type_of_stub to detect if a stub is
+	needed, enabling code factorization.
+	(elf32_arm_final_link): Process stub sections.
+	(elf32_arm_output_map_sym): Add entry to code/data map.
+
+	ld/testsuite/
+	* ld-arm/arm-elf.exp: Change .text start address for
+	farcall-thumb-arm tests. Add v4t variant for farcall-mixed-lib
+	test.
+	* ld-arm/farcall-mixed-lib-v4t.d: New test.
+	* ld-arm/farcall-mixed-lib1.s: Don't force armv5t.
+	* ld-arm/farcall-mixed-lib2.s: Likewise.
+	* ld-arm/arm-call.d: Update expected results.
+	* ld-arm/cortex-a8-far.d: Likewise.
+	* ld-arm/farcall-group-size2.d: Likewise.
+	* ld-arm/farcall-group.d: Likewise.
+	* ld-arm/farcall-mix.d: Likewise.
+	* ld-arm/farcall-mix2.d: Likewise.
+	* ld-arm/farcall-mixed-app-v5.d: Likewise.
+	* ld-arm/farcall-mixed-app.d: Likewise.
+	* ld-arm/farcall-mixed-lib.d: Likewise.
+	* ld-arm/farcall-thumb-arm.d: Likewise.
+	* ld-arm/farcall-thumb-arm-blx.d: Likewise.
+	* ld-arm/farcall-thumb-arm-pic-veneer.d: Likewise.
+	* ld-arm/farcall-thumb-arm-blx-pic-veneer.d: Likewise.
+	* ld-arm/farcall-thumb-arm.s: Update test. Add a new call to
+	potentially generate different types of stubs.
+@
+text
+@@@ Create a large shared library so that calls through PLT to an undef
+@@ symbol require insertion of a long branch stub.
+@@ Check also calls to an undef weak symbol.
+
+	.text
+
+	.p2align 4
+	.globl lib_func1
+	.type lib_func1, %function
+lib_func1:
+	mov	ip, sp
+	stmdb	sp!, {r11, ip, lr, pc}
+	bl	app_func
+	.weak	app_func_weak
+	bl	app_func_weak
+	bl	lib_func3
+	bl	lib_func4
+	ldmia	sp, {r11, sp, lr}
+	bx lr
+	.size lib_func1, . - lib_func1
+
+	.space 0x1000000
+	.p2align 4
+	.globl lib_func2
+	.type lib_func2, %function
+	.thumb_func
+	.code 16
+lib_func2:
+	bl	app_func
+	bl	app_func_weak
+	bl	lib_func3
+	bl	lib_func4
+	bx lr
+	.size lib_func2, . - lib_func2
+@
+
+
+1.2
+log
+@2009-06-22  Christophe Lyon  <christophe.lyon@@st.com>
+
+	bfd/
+	* elf32-arm.c (elf32_arm_size_stubs): Use PLT address as
+	destination for defined dynamic symbols when deciding whether to
+	insert a stub or not.
+	(allocate_dynrelocs): Make sure functions are not marked as Thumb
+	when actually accessed through a PLT, even when generating a
+	shared lib.
+
+	ld/testsuite:
+	* ld-arm/farcall-mixed-app.s: Add new references to check more
+	modes switching.
+	* ld-arm/farcall-mixed-lib1.s: Likewise.
+	* ld-arm/farcall-mixed-app-v5.d: Update expected result.
+	* farcall-mixed-app.d: Likewise.
+	* ld-arm/farcall-mixed-lib.d: Likewise.
+@
+text
+@a5 1
+	.arch armv5t
+@
+
+
+1.1
+log
+@2009-04-17  Christophe Lyon  <christophe.lyon@@st.com>
+
+	bfd/
+	* elf32-arm.c (elf32_arm_size_stubs): Handle long branches through
+	PLT entries to an undefined symbol when generating a shared
+	library.
+
+	testsuite/
+	* ld-arm/arm-elf.exp: Add new test farcall-mixed-lib.
+	* ld-arm/farcall-mixed-lib.d: Update expected output.
+	* ld-arm/farcall-mixed-lib1.s: New file.
+	* ld-arm/farcall-mixed-lib2.s: New file.
+@
+text
+@d17 2
+d32 2
+@
+

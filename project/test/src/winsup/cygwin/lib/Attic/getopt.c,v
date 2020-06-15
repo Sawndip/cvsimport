@@ -1,0 +1,1443 @@
+head	1.13;
+access;
+symbols
+	cr-0x99:1.12
+	Z-emcb-cygwin_daemon:1.12.0.2
+	w32api-2_2:1.10
+	mingw-runtime-2_4:1.10
+	pre-cgf-merge:1.12
+	cgf-dev-branch:1.9.0.50
+	predaemon:1.9
+	cygwin_daemon_merge_HEAD:1.9
+	pregp02r1:1.9.0.28
+	cygnus_cvs_20020108_pre:1.9
+	Z-cygwin_daemon_merge-new_HEAD:1.9
+	Z-cygwin_daemon_merge_HEAD:1.9
+	cygwin_daemon:1.7.0.2;
+locks; strict;
+comment	@ * @;
+
+
+1.13
+date	2003.09.10.19.13.05;	author corinna;	state dead;
+branches;
+next	1.12;
+
+1.12
+date	2003.03.03.04.30.09;	author cgf;	state Exp;
+branches;
+next	1.11;
+
+1.11
+date	2003.03.02.22.52.18;	author cgf;	state Exp;
+branches;
+next	1.10;
+
+1.10
+date	2003.01.30.01.14.30;	author cgf;	state Exp;
+branches;
+next	1.9;
+
+1.9
+date	2001.11.07.11.47.23;	author corinna;	state Exp;
+branches
+	1.9.50.1;
+next	1.8;
+
+1.8
+date	2001.11.05.06.09.15;	author cgf;	state Exp;
+branches
+	1.8.2.1;
+next	1.7;
+
+1.7
+date	2001.09.24.22.49.12;	author cgf;	state Exp;
+branches
+	1.7.2.1;
+next	1.6;
+
+1.6
+date	2001.09.19.16.24.10;	author cgf;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2001.09.19.16.08.33;	author corinna;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2001.09.19.15.54.12;	author cgf;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2001.09.19.01.07.11;	author cgf;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2000.10.28.05.41.44;	author cgf;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2000.07.01.03.51.55;	author cgf;	state Exp;
+branches;
+next	;
+
+1.7.2.1
+date	2002.01.04.03.56.16;	author rbcollins;	state Exp;
+branches;
+next	;
+
+1.8.2.1
+date	2001.11.07.18.33.18;	author cgf;	state Exp;
+branches;
+next	;
+
+1.9.50.1
+date	2003.01.30.02.46.42;	author cgf;	state Exp;
+branches;
+next	1.9.50.2;
+
+1.9.50.2
+date	2003.03.02.23.39.10;	author cgf;	state Exp;
+branches;
+next	1.9.50.3;
+
+1.9.50.3
+date	2003.03.03.04.29.22;	author cgf;	state Exp;
+branches;
+next	1.9.50.4;
+
+1.9.50.4
+date	2003.09.11.04.47.23;	author cgf;	state dead;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.13
+log
+@	* Makefile.in (DLL_OFILES): Add getopt.o and iruserok.o.
+	* cygwin.din: Export __check_rhosts_file, __rcmd_errstr, optarg,
+	opterr, optind, optopt, optreset, getopt, getopt_long, iruserok
+	and ruserok.
+	* getopt.c: Moved from lib to here.  Define opt* variables as
+	dllexport.
+	* iruserok.c: Moved from lib to here.  Rearrange function order.
+	Prefer using 64/32 bit functions.
+	* syscalls.cc (shell_fp): Define as struct __sFILE64.
+	(getusershell): Use fopen64 instead of fopen.
+	* winsup.h: Add declarations for seteuid32, fopen64,
+	cygwin_gethostbyname and cygwin_inet_addr.
+	* include/getopt.h: Declare opt* variables dllimport.
+	* include/cygwin/version.h: Bump API minor number.
+@
+text
+@/*	$NetBSD: getopt_long.c,v 1.15 2002/01/31 22:43:40 tv Exp $	*/
+
+/*-
+ * Copyright (c) 2000 The NetBSD Foundation, Inc.
+ * All rights reserved.
+ *
+ * This code is derived from software contributed to The NetBSD Foundation
+ * by Dieter Baron and Thomas Klausner.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ * 3. All advertising materials mentioning features or use of this software
+ *    must display the following acknowledgement:
+ *        This product includes software developed by the NetBSD
+ *        Foundation, Inc. and its contributors.
+ * 4. Neither the name of The NetBSD Foundation nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE NETBSD FOUNDATION, INC. AND CONTRIBUTORS
+ * ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+ * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE FOUNDATION OR CONTRIBUTORS
+ * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ */
+
+#include <assert.h>
+#include <errno.h>
+#include <stdlib.h>
+#include <string.h>
+#include <getopt.h>
+#include <stdarg.h>
+#include <stdio.h>
+
+#define REPLACE_GETOPT
+
+#define _DIAGASSERT(x) do {} while (0)
+
+#ifdef REPLACE_GETOPT
+#ifdef __weak_alias
+__weak_alias(getopt,_getopt)
+#endif
+int	opterr = 1;		/* if error message should be printed */
+int	optind = 1;		/* index into parent argv vector */
+int	optopt = '?';		/* character checked for validity */
+int	optreset;		/* reset getopt */
+char    *optarg;		/* argument associated with option */
+#endif
+
+#ifdef __weak_alias
+__weak_alias(getopt_long,_getopt_long)
+#endif
+
+#ifndef __CYGWIN__
+#define __progname __argv[0]
+#else
+extern char __declspec(dllimport) *__progname;
+#endif
+
+#define IGNORE_FIRST	(*options == '-' || *options == '+')
+#define PRINT_ERROR	((opterr) && ((*options != ':') \
+				      || (IGNORE_FIRST && options[1] != ':')))
+
+#define IS_POSIXLY_CORRECT (getenv("POSIXLY_INCORRECT_GETOPT") == NULL)
+
+#define PERMUTE         (!IS_POSIXLY_CORRECT && !IGNORE_FIRST)
+/* XXX: GNU ignores PC if *options == '-' */
+#define IN_ORDER        (!IS_POSIXLY_CORRECT && *options == '-')
+
+/* return values */
+#define	BADCH	(int)'?'
+#define	BADARG		((IGNORE_FIRST && options[1] == ':') \
+			 || (*options == ':') ? (int)':' : (int)'?')
+#define INORDER (int)1
+
+static char EMSG[1];
+
+static int getopt_internal (int, char * const *, const char *);
+static int gcd (int, int);
+static void permute_args (int, int, int, char * const *);
+
+static char *place = EMSG; /* option letter processing */
+
+/* XXX: set optreset to 1 rather than these two */
+static int nonopt_start = -1; /* first non option argument (for permute) */
+static int nonopt_end = -1;   /* first option after non options (for permute) */
+
+/* Error messages */
+static const char recargchar[] = "option requires an argument -- %c";
+static const char recargstring[] = "option requires an argument -- %s";
+static const char ambig[] = "ambiguous option -- %.*s";
+static const char noarg[] = "option doesn't take an argument -- %.*s";
+static const char illoptchar[] = "unknown option -- %c";
+static const char illoptstring[] = "unknown option -- %s";
+
+static void
+_vwarnx(const char *fmt, va_list ap)
+{
+  (void)fprintf(stderr, "%s: ", __progname);
+  if (fmt != NULL)
+    (void)vfprintf(stderr, fmt, ap);
+  (void)fprintf(stderr, "\n");
+}
+
+static void
+warnx(const char *fmt, ...)
+{
+  va_list ap;
+  va_start(ap, fmt);
+  _vwarnx(fmt, ap);
+  va_end(ap);
+}
+
+/*
+ * Compute the greatest common divisor of a and b.
+ */
+static int
+gcd(a, b)
+	int a;
+	int b;
+{
+	int c;
+
+	c = a % b;
+	while (c != 0) {
+		a = b;
+		b = c;
+		c = a % b;
+	}
+
+	return b;
+}
+
+/*
+ * Exchange the block from nonopt_start to nonopt_end with the block
+ * from nonopt_end to opt_end (keeping the same order of arguments
+ * in each block).
+ */
+static void
+permute_args(panonopt_start, panonopt_end, opt_end, nargv)
+	int panonopt_start;
+	int panonopt_end;
+	int opt_end;
+	char * const *nargv;
+{
+	int cstart, cyclelen, i, j, ncycle, nnonopts, nopts, pos;
+	char *swap;
+
+	_DIAGASSERT(nargv != NULL);
+
+	/*
+	 * compute lengths of blocks and number and size of cycles
+	 */
+	nnonopts = panonopt_end - panonopt_start;
+	nopts = opt_end - panonopt_end;
+	ncycle = gcd(nnonopts, nopts);
+	cyclelen = (opt_end - panonopt_start) / ncycle;
+
+	for (i = 0; i < ncycle; i++) {
+		cstart = panonopt_end+i;
+		pos = cstart;
+		for (j = 0; j < cyclelen; j++) {
+			if (pos >= panonopt_end)
+				pos -= nnonopts;
+			else
+				pos += nopts;
+			swap = nargv[pos];
+			/* LINTED const cast */
+			((char **) nargv)[pos] = nargv[cstart];
+			/* LINTED const cast */
+			((char **)nargv)[cstart] = swap;
+		}
+	}
+}
+
+/*
+ * getopt_internal --
+ *	Parse argc/argv argument vector.  Called by user level routines.
+ *  Returns -2 if -- is found (can be long option or end of options marker).
+ */
+static int
+getopt_internal(nargc, nargv, options)
+	int nargc;
+	char * const *nargv;
+	const char *options;
+{
+	char *oli;				/* option letter list index */
+	int optchar;
+
+	_DIAGASSERT(nargv != NULL);
+	_DIAGASSERT(options != NULL);
+
+	optarg = NULL;
+
+	/*
+	 * XXX Some programs (like rsyncd) expect to be able to
+	 * XXX re-initialize optind to 0 and have getopt_long(3)
+	 * XXX properly function again.  Work around this braindamage.
+	 */
+	if (optind == 0)
+		optind = 1;
+
+	if (optreset)
+		nonopt_start = nonopt_end = -1;
+start:
+	if (optreset || !*place) {		/* update scanning pointer */
+		optreset = 0;
+		if (optind >= nargc) {          /* end of argument vector */
+			place = EMSG;
+			if (nonopt_end != -1) {
+				/* do permutation, if we have to */
+				permute_args(nonopt_start, nonopt_end,
+				    optind, nargv);
+				optind -= nonopt_end - nonopt_start;
+			}
+			else if (nonopt_start != -1) {
+				/*
+				 * If we skipped non-options, set optind
+				 * to the first of them.
+				 */
+				optind = nonopt_start;
+			}
+			nonopt_start = nonopt_end = -1;
+			return -1;
+		}
+		if ((*(place = nargv[optind]) != '-')
+		    || (place[1] == '\0')) {    /* found non-option */
+			place = EMSG;
+			if (IN_ORDER) {
+				/*
+				 * GNU extension:
+				 * return non-option as argument to option 1
+				 */
+				optarg = nargv[optind++];
+				return INORDER;
+			}
+			if (!PERMUTE) {
+				/*
+				 * if no permutation wanted, stop parsing
+				 * at first non-option
+				 */
+				return -1;
+			}
+			/* do permutation */
+			if (nonopt_start == -1)
+				nonopt_start = optind;
+			else if (nonopt_end != -1) {
+				permute_args(nonopt_start, nonopt_end,
+				    optind, nargv);
+				nonopt_start = optind -
+				    (nonopt_end - nonopt_start);
+				nonopt_end = -1;
+			}
+			optind++;
+			/* process next argument */
+			goto start;
+		}
+		if (nonopt_start != -1 && nonopt_end == -1)
+			nonopt_end = optind;
+		if (place[1] && *++place == '-') {	/* found "--" */
+			place++;
+			return -2;
+		}
+	}
+	if ((optchar = (int)*place++) == (int)':' ||
+	    (oli = strchr(options + (IGNORE_FIRST ? 1 : 0), optchar)) == NULL) {
+		/* option letter unknown or ':' */
+		if (!*place)
+			++optind;
+		if (PRINT_ERROR)
+			warnx(illoptchar, optchar);
+		optopt = optchar;
+		return BADCH;
+	}
+	if (optchar == 'W' && oli[1] == ';') {		/* -W long-option */
+		/* XXX: what if no long options provided (called by getopt)? */
+		if (*place)
+			return -2;
+
+		if (++optind >= nargc) {	/* no arg */
+			place = EMSG;
+			if (PRINT_ERROR)
+				warnx(recargchar, optchar);
+			optopt = optchar;
+			return BADARG;
+		} else				/* white space */
+			place = nargv[optind];
+		/*
+		 * Handle -W arg the same as --arg (which causes getopt to
+		 * stop parsing).
+		 */
+		return -2;
+	}
+	if (*++oli != ':') {			/* doesn't take argument */
+		if (!*place)
+			++optind;
+	} else {				/* takes (optional) argument */
+		optarg = NULL;
+		if (*place)			/* no white space */
+			optarg = place;
+		/* XXX: disable test for :: if PC? (GNU doesn't) */
+		else if (oli[1] != ':') {	/* arg not optional */
+			if (++optind >= nargc) {	/* no arg */
+				place = EMSG;
+				if (PRINT_ERROR)
+					warnx(recargchar, optchar);
+				optopt = optchar;
+				return BADARG;
+			} else
+				optarg = nargv[optind];
+		}
+		place = EMSG;
+		++optind;
+	}
+	/* dump back option letter */
+	return optchar;
+}
+
+#ifdef REPLACE_GETOPT
+/*
+ * getopt --
+ *	Parse argc/argv argument vector.
+ *
+ * [eventually this will replace the real getopt]
+ */
+int
+getopt(nargc, nargv, options)
+	int nargc;
+	char * const *nargv;
+	const char *options;
+{
+	int retval;
+
+	_DIAGASSERT(nargv != NULL);
+	_DIAGASSERT(options != NULL);
+
+	if ((retval = getopt_internal(nargc, nargv, options)) == -2) {
+		++optind;
+		/*
+		 * We found an option (--), so if we skipped non-options,
+		 * we have to permute.
+		 */
+		if (nonopt_end != -1) {
+			permute_args(nonopt_start, nonopt_end, optind,
+				       nargv);
+			optind -= nonopt_end - nonopt_start;
+		}
+		nonopt_start = nonopt_end = -1;
+		retval = -1;
+	}
+	return retval;
+}
+#endif
+
+/*
+ * getopt_long --
+ *	Parse argc/argv argument vector.
+ */
+int
+getopt_long(nargc, nargv, options, long_options, idx)
+	int nargc;
+	char * const *nargv;
+	const char *options;
+	const struct option *long_options;
+	int *idx;
+{
+	int retval;
+
+	_DIAGASSERT(nargv != NULL);
+	_DIAGASSERT(options != NULL);
+	_DIAGASSERT(long_options != NULL);
+	/* idx may be NULL */
+
+	if ((retval = getopt_internal(nargc, nargv, options)) == -2) {
+		char *current_argv, *has_equal;
+		size_t current_argv_len;
+		int i, match;
+
+		current_argv = place;
+		match = -1;
+
+		optind++;
+		place = EMSG;
+
+		if (*current_argv == '\0') {		/* found "--" */
+			/*
+			 * We found an option (--), so if we skipped
+			 * non-options, we have to permute.
+			 */
+			if (nonopt_end != -1) {
+				permute_args(nonopt_start, nonopt_end,
+				    optind, nargv);
+				optind -= nonopt_end - nonopt_start;
+			}
+			nonopt_start = nonopt_end = -1;
+			return -1;
+		}
+		if ((has_equal = strchr(current_argv, '=')) != NULL) {
+			/* argument found (--option=arg) */
+			current_argv_len = has_equal - current_argv;
+			has_equal++;
+		} else
+			current_argv_len = strlen(current_argv);
+
+		for (i = 0; long_options[i].name; i++) {
+			/* find matching long option */
+			if (strncmp(current_argv, long_options[i].name,
+			    current_argv_len))
+				continue;
+
+			if (strlen(long_options[i].name) ==
+			    (unsigned)current_argv_len) {
+				/* exact match */
+				match = i;
+				break;
+			}
+			if (match == -1)		/* partial match */
+				match = i;
+			else {
+				/* ambiguous abbreviation */
+				if (PRINT_ERROR)
+					warnx(ambig, (int)current_argv_len,
+					     current_argv);
+				optopt = 0;
+				return BADCH;
+			}
+		}
+		if (match != -1) {			/* option found */
+			if (long_options[match].has_arg == no_argument
+			    && has_equal) {
+				if (PRINT_ERROR)
+					warnx(noarg, (int)current_argv_len,
+					     current_argv);
+				/*
+				 * XXX: GNU sets optopt to val regardless of
+				 * flag
+				 */
+				if (long_options[match].flag == NULL)
+					optopt = long_options[match].val;
+				else
+					optopt = 0;
+				return BADARG;
+			}
+			if (long_options[match].has_arg == required_argument ||
+			    long_options[match].has_arg == optional_argument) {
+				if (has_equal)
+					optarg = has_equal;
+				else if (long_options[match].has_arg ==
+				    required_argument) {
+					/*
+					 * optional argument doesn't use
+					 * next nargv
+					 */
+					optarg = nargv[optind++];
+				}
+			}
+			if ((long_options[match].has_arg == required_argument)
+			    && (optarg == NULL)) {
+				/*
+				 * Missing argument; leading ':'
+				 * indicates no error should be generated
+				 */
+				if (PRINT_ERROR)
+					warnx(recargstring, current_argv);
+				/*
+				 * XXX: GNU sets optopt to val regardless
+				 * of flag
+				 */
+				if (long_options[match].flag == NULL)
+					optopt = long_options[match].val;
+				else
+					optopt = 0;
+				--optind;
+				return BADARG;
+			}
+		} else {			/* unknown option */
+			if (PRINT_ERROR)
+				warnx(illoptstring, current_argv);
+			optopt = 0;
+			return BADCH;
+		}
+		if (long_options[match].flag) {
+			*long_options[match].flag = long_options[match].val;
+			retval = 0;
+		} else
+			retval = long_options[match].val;
+		if (idx)
+			*idx = match;
+	}
+	return retval;
+}
+@
+
+
+1.12
+log
+@* lib/getopt.c: Refresh from NetBSD sources.
+@
+text
+@@
+
+
+1.11
+log
+@* lib/getopt.c: Nuke use of unneeded BSDisms.
+@
+text
+@d1 1
+a1 1
+/*	$NetBSD: getopt_long.c,v 1.12 2001/04/24 09:07:43 joda Exp $	*/
+d88 1
+a88 1
+#define	EMSG	""
+d94 1
+a94 1
+static const char *place = EMSG; /* option letter processing */
+d152 3
+a154 3
+permute_args(nonopt_start, nonopt_end, opt_end, nargv)
+	int nonopt_start;
+	int nonopt_end;
+d166 2
+a167 2
+	nnonopts = nonopt_end - nonopt_start;
+	nopts = opt_end - nonopt_end;
+d169 1
+a169 1
+	cyclelen = (opt_end - nonopt_start) / ncycle;
+d172 1
+a172 1
+		cstart = nonopt_end+i;
+d175 1
+a175 1
+			if (pos >= nonopt_end)
+d194 4
+a197 1
+getopt_internal(int nargc, char *const * nargv, const char *options)
+d212 1
+a212 1
+	if (optind == 0 && optreset == 0)
+d312 1
+a312 1
+			optarg = (char *) place;
+d339 4
+a342 1
+getopt(int nargc, char * const *nargv, const char *options)
+d372 6
+a377 2
+getopt_long(int nargc, char * const *nargv, const char *options,
+	    const struct option *long_options, int *idx)
+d391 1
+a391 1
+		current_argv = (char *) place;
+@
+
+
+1.10
+log
+@* lib/getopt.c: Allow environment variable control of POSIXLY_INCORRECT behavior.
+@
+text
+@a38 4
+#include <sys/cdefs.h>
+
+/*#include "namespace.h"*/
+
+a40 1
+/*#include <err.h>*/
+d90 3
+a92 3
+static int getopt_internal __P((int, char * const *, const char *));
+static int gcd __P((int, int));
+static void permute_args __P((int, int, int, char * const *));
+@
+
+
+1.9
+log
+@	* lib/getopt.c (getopt_internal): Reset optind to 1 only if optreset
+	is not set.
+@
+text
+@d80 2
+a81 5
+#if defined(__CYGWIN__) || defined(__MINGW32__)
+# define IS_POSIXLY_CORRECT (1)
+#else
+# define IS_POSIXLY_CORRECT (getenv("POSIXLY_CORRECT") != NULL)
+#endif
+@
+
+
+1.9.50.1
+log
+@merge from trunk
+@
+text
+@d80 5
+a84 2
+
+#define IS_POSIXLY_CORRECT (getenv("POSIXLY_INCORRECT_GETOPT") == NULL)
+@
+
+
+1.9.50.2
+log
+@Merge from trunk.
+* Makefile.in (devicess.cc): Make generation dependent on cygwin-gperf.
+* cygheap.h (cygheap_fdmanip): Add fhandler_socket cast.
+* cygwin-gperf: Autogenerate references to network devices.
+* devices.h: Create separate device types for all network types.  Export
+references to global network device storage.
+* dtable.cc (dtable::release): Use generic determination to control when
+need_fixup_before needs to be decremented.
+(dtable::init_std_file_from_handle): Replace use of 'socket_dev' with
+'tcp_dev'.
+(build_fh_pc): Adapt to new socket types.  Don't increment fixup_before here.
+* fhandler.h (fhandler_base::need_fixup_before): Declare/define.
+(fhandler_socket::need_fixup_before): Ditto.
+* fhandler_socket.cc (fhandler_socket::accept): Accommodate new fdsock
+definition.
+* net.cc: Throughout, change use of fdsock to return true/false for
+success/failure and take cygheap_fdmanip type and device
+* select.cc (set_bits): Use 'is_socket ()' test rather than specificially
+testing device type.
+@
+text
+@d39 4
+d45 1
+d95 3
+a97 3
+static int getopt_internal (int, char * const *, const char *);
+static int gcd (int, int);
+static void permute_args (int, int, int, char * const *);
+@
+
+
+1.9.50.3
+log
+@* lib/getopt.c: Refresh from NetBSD sources.
+@
+text
+@d1 1
+a1 1
+/*	$NetBSD: getopt_long.c,v 1.15 2002/01/31 22:43:40 tv Exp $	*/
+d88 1
+a88 1
+static char EMSG[1];
+d94 1
+a94 1
+static char *place = EMSG; /* option letter processing */
+d152 3
+a154 3
+permute_args(panonopt_start, panonopt_end, opt_end, nargv)
+	int panonopt_start;
+	int panonopt_end;
+d166 2
+a167 2
+	nnonopts = panonopt_end - panonopt_start;
+	nopts = opt_end - panonopt_end;
+d169 1
+a169 1
+	cyclelen = (opt_end - panonopt_start) / ncycle;
+d172 1
+a172 1
+		cstart = panonopt_end+i;
+d175 1
+a175 1
+			if (pos >= panonopt_end)
+d194 1
+a194 4
+getopt_internal(nargc, nargv, options)
+	int nargc;
+	char * const *nargv;
+	const char *options;
+d209 1
+a209 1
+	if (optind == 0)
+d309 1
+a309 1
+			optarg = place;
+d336 1
+a336 4
+getopt(nargc, nargv, options)
+	int nargc;
+	char * const *nargv;
+	const char *options;
+d366 2
+a367 6
+getopt_long(nargc, nargv, options, long_options, idx)
+	int nargc;
+	char * const *nargv;
+	const char *options;
+	const struct option *long_options;
+	int *idx;
+d381 1
+a381 1
+		current_argv = place;
+@
+
+
+1.9.50.4
+log
+@merge from trunk
+@
+text
+@@
+
+
+1.8
+log
+@Eliminate excess whitespace.
+@
+text
+@d217 1
+a217 1
+	if (optind == 0)
+@
+
+
+1.8.2.1
+log
+@* lib/getopt.c (getopt_internal): Reset optind to 1 only if optreset is not
+set.
+@
+text
+@d217 1
+a217 1
+	if (optind == 0 && optreset == 0)
+@
+
+
+1.7
+log
+@* select.cc (peek_pipe): Only grab mutex when we actually got something from
+the pipe.
+@
+text
+@d150 1
+a150 1
+	   
+d248 1
+a248 1
+				 * GNU extension: 
+d294 1
+a294 1
+		if (*place) 
+d414 1
+a414 1
+	    
+d439 1
+a439 1
+		        if (long_options[match].has_arg == no_argument
+d495 1
+a495 1
+		} else 
+@
+
+
+1.7.2.1
+log
+@Merged changes from HEAD
+@
+text
+@d150 1
+a150 1
+
+d217 1
+a217 1
+	if (optind == 0 && optreset == 0)
+d248 1
+a248 1
+				 * GNU extension:
+d294 1
+a294 1
+		if (*place)
+d414 1
+a414 1
+
+d439 1
+a439 1
+			if (long_options[match].has_arg == no_argument
+d495 1
+a495 1
+		} else
+@
+
+
+1.6
+log
+@* lib/getopt.c (__progname): Don't declare if not compiling for cygwin.
+@
+text
+@d80 6
+a85 1
+#define IS_POSIXLY_CORRECT (getenv("POSIXLY_CORRECT") != NULL)
+@
+
+
+1.5
+log
+@        * lib/getopt.c (getopt_long): Avoid compiler warning.
+@
+text
+@d73 2
+a109 2
+
+extern char __declspec(dllimport) *__progname;
+@
+
+
+1.4
+log
+@* lib/getopt.c: Use __progname==__argv[0] when not compiling for cygwin.
+* scandir.cc (scandir): Use correct default when compar == NULL.
+@
+text
+@d384 1
+a384 1
+		current_argv = place;
+@
+
+
+1.3
+log
+@* cygwin.din (__argv): Export.
+(__argc): Ditto.
+(__progname): Ditto.
+* include/getopt.h (getopt_long): constify arguments.
+* lib/getopt.c: Import new file from NetBSD.
+@
+text
+@d71 3
+@
+
+
+1.2
+log
+@Whitespace cleanup.
+
+* configure.in: Eliminate subdir stuff.
+* configure: Regenerate.
+* include/getopt.h (option): Make name field 'const'.
+@
+text
+@d1 8
+a8 3
+/*
+ * Copyright (c) 1987, 1993, 1994, 1996
+ *	The Regents of the University of California.  All rights reserved.
+d20 5
+a24 5
+ *	This product includes software developed by the University of
+ *	California, Berkeley and its contributors.
+ * 4. Neither the name of the University nor the names of its contributors
+ *    may be used to endorse or promote products derived from this software
+ *    without specific prior written permission.
+d26 11
+a36 11
+ * THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+ * SUCH DAMAGE.
+d39 7
+a45 1
+#include <stdio.h>
+d48 5
+a52 1
+#include "getopt.h"
+d54 33
+a86 5
+int	  opterr = 1;	/* if error message should be printed */
+int	  optind = 1;	/* index into parent argv vector */
+int	  optopt;	/* character checked for validity */
+int	  optreset;	/* reset getopt */
+char	  *optarg;	/* argument associated with option */
+d88 17
+a104 2
+static char * __progname (char *);
+int getopt_internal (int, char * const *, const char *);
+d106 4
+a109 2
+static char * __progname(nargv0)
+    char * nargv0;
+d111 4
+a114 3
+    char * tmp = strrchr(nargv0, '/');
+    if (tmp) tmp++; else tmp = nargv0;
+    return(tmp);
+d117 28
+a144 3
+#define	BADCH	(int)'?'
+#define	BADARG	(int)':'
+#define	EMSG	""
+d147 3
+a149 2
+ * getopt --
+ *	Parse argc/argv argument vector.
+d151 5
+a155 3
+int
+getopt_internal(nargc, nargv, ostr)
+	int nargc;
+a156 1
+	const char *ostr;
+d158 38
+a195 1
+	static const char *place = EMSG;	/* option letter processing */
+d197 4
+d202 13
+d217 20
+a236 1
+		if (optind >= nargc || *(place = nargv[optind]) != '-') {
+d238 28
+a265 1
+			return (-1);
+d267 2
+d270 20
+a289 1
+			/* ++optind; */
+d291 6
+a296 5
+			return (-2);
+		}
+	}					/* option letter okay? */
+	if ((optopt = (int)*place++) == (int)':' ||
+	    !(oli = strchr(ostr, optopt))) {
+d298 2
+a299 2
+		 * if the user didn't specify '-' as an option,
+		 * assume it means -1.
+d301 3
+a303 2
+		if (optopt == (int)'-')
+			return (-1);
+d306 1
+a306 6
+		if (opterr && *ostr != ':')
+			(void)fprintf(stderr,
+			    "%s: illegal option -- %c\n", __progname(nargv[0]), optopt);
+		return (BADCH);
+	}
+	if (*++oli != ':') {			/* don't need argument */
+a307 3
+		if (!*place)
+			++optind;
+	} else {				/* need an argument */
+d309 12
+a320 10
+			optarg = (char *)place;
+		else if (nargc <= ++optind) {	/* no arg */
+			place = EMSG;
+			if ((opterr) && (*ostr != ':'))
+				(void)fprintf(stderr,
+				    "%s: option requires an argument -- %c\n",
+				    __progname(nargv[0]), optopt);
+			return (BADARG);
+		} else				/* white space */
+			optarg = nargv[optind];
+d324 2
+a325 1
+	return (optopt);			/* dump back option letter */
+d328 1
+d332 2
+d336 1
+a336 4
+getopt(nargc, nargv, ostr)
+	int nargc;
+	char * const *nargv;
+	const char *ostr;
+d340 15
+a354 1
+	if ((retval = getopt_internal(nargc, nargv, ostr)) == -2) {
+a355 1
+		++optind;
+d357 1
+a357 1
+	return(retval);
+d359 1
+d366 2
+a367 6
+getopt_long(nargc, nargv, options, long_options, index)
+     int nargc;
+     char ** nargv;
+     char * options;
+     struct option * long_options;
+     int * index;
+d371 5
+d377 1
+a377 2
+		char *current_argv = nargv[optind++] + 2, *has_equal;
+		int i, match = -1;
+d379 4
+d384 15
+a398 2
+		if (*current_argv == '\0') {
+			return(-1);
+d400 2
+a401 1
+		if ((has_equal = strchr(current_argv, '='))) {
+d406 1
+a406 1
+
+d408 3
+a410 1
+			if (strncmp(current_argv, long_options[i].name, current_argv_len))
+d413 3
+a415 1
+			if (strlen(long_options[i].name) == current_argv_len) {
+d419 1
+a419 1
+			if (match == -1)
+d421 8
+d430 18
+a447 2
+		if (match != -1) {
+			if (long_options[match].has_arg) {
+d450 23
+d474 3
+a476 1
+					optarg = nargv[optind++];
+d478 5
+a482 13
+			if ((long_options[match].has_arg == 1) && (optarg == NULL)) {
+				/* Missing option, leading : indecates no error */
+				if ((opterr) && (*options != ':'))
+					(void)fprintf(stderr,
+				      "%s: option requires an argument -- %s\n",
+				      __progname(nargv[0]), current_argv);
+				return (BADARG);
+			}
+		} else { /* No matching argument */
+			if ((opterr) && (*options != ':'))
+				(void)fprintf(stderr,
+				    "%s: illegal option -- %s\n", __progname(nargv[0]), current_argv);
+			return (BADCH);
+d487 1
+a487 1
+		} else
+d489 2
+a490 2
+		if (index)
+			*index = match;
+d492 1
+a492 1
+	return(retval);
+a493 181
+/*****************************************************************/
+
+
+
+
+
+
+#include <stdio.h>
+#include "getopt.h"
+
+/* Stuff for getopt */
+static struct option long_options[] = {
+	{ (char *)"simple", 0, NULL, 's' },
+	{ (char *)"t", 0, NULL, 't' },
+	{ (char *)"u", 1, NULL, 'u' },
+	{ (char *)"v", 0, NULL, 'v' },
+	/* Do not reorder the following */
+	{ (char *)"yy", 0, NULL, 'Y' },
+	{  (char *)"y", 0, NULL, 'y' },
+	{ (char *)"zz", 0, NULL, 'z' },
+	{ (char *)"zzz", 0, NULL, 'Z' },
+	{ NULL, 0, NULL, 0 }
+};
+extern char * optarg;
+extern int optreset;
+extern int optind;
+
+int test_getopt_long(args, expected_result)
+    char ** args, * expected_result;
+{
+	char actual_result[256];
+	int count, pass, i;
+
+	pass = 0;
+	optind = 1;
+	optreset = 1;
+	for (count = 0; args[count]; count++);
+	while ((i = getopt_long(count, args, (char *)"ab:", long_options, NULL)) != EOF) {
+		switch(i) {
+		case 'u':
+			if (strcmp(optarg, "bogus")) {
+				printf("--u option does not have bogus optarg.\n");
+				return(1);
+			}
+		case 'Y':
+		case 's':
+		case 't':
+		case 'v':
+		case 'y':
+		case 'z':
+			actual_result[pass++] = i;
+			break;
+		default:
+			actual_result[pass++] = '?';
+			break;
+		}
+	}
+
+	actual_result[pass] = '\0';
+	return(strcmp(actual_result, expected_result));
+
+}
+
+#if 0
+int usage(value)
+	int value;
+{
+	printf("test_getopt [-d]\n");
+	exit(value);
+}
+#endif
+
+#if 0
+
+/*
+ * Static arglists for individual tests
+ * This is ugly and maybe I should just use a variable arglist
+ */
+const char *argv1[] = { "Test simple", "--s", NULL };
+const char *argv2[] = { "Test multiple", "--s", "--t", NULL };
+const char *argv3[] = { "Test optarg with space", "--u", "bogus", NULL };
+const char *argv4[] = { "Test optarg with equal", "--u=bogus", NULL };
+const char *argv5[] = { "Test complex", "--s", "--t", "--u", "bogus", "--v", NULL };
+const char *argv6[] = { "Test exact", "--y", NULL };
+const char *argv7[] = { "Test abbr", "--z", NULL };
+const char *argv8[] = { "Test simple termination", "--z", "foo", "--z", NULL };
+const char *argv9[] = { "Test -- termination", "--z", "--", "--z", NULL };
+
+int debug = 0;
+int main(argc, argv)
+    int argc;
+    char ** argv;
+{
+	int i;
+
+	/* Of course if getopt() has a bug this won't work */
+	while ((i = getopt(argc, argv, "d")) != EOF) {
+		switch(i) {
+		case 'd':
+			debug++;
+			break;
+		default:
+			usage(1);
+			break;
+		}
+	}
+
+	/* Test getopt_long() */
+	{
+		if (test_getopt_long(argv1, "s")) {
+			printf("Test simple failed.\n");
+			exit(1);
+		}
+	}
+
+	/* Test multiple arguments */
+	{
+		if (test_getopt_long(argv2, "st")) {
+			printf("Test multiple failed.\n");
+			exit(1);
+		}
+	}
+
+	/* Test optarg with space */
+	{
+		if (test_getopt_long(argv3, "u")) {
+			printf("Test optarg with space failed.\n");
+			exit(1);
+		}
+	}
+
+	/* Test optarg with equal */
+	{
+		if (test_getopt_long(argv4, "u")) {
+			printf("Test optarg with equal failed.\n");
+			exit(1);
+		}
+	}
+
+	/* Test complex */
+	{
+		if (test_getopt_long(argv5, "stuv")) {
+			printf("Test complex failed.\n");
+			exit(1);
+		}
+	}
+
+	/* Test that exact matches override abbr matches */
+	{
+		if (test_getopt_long(argv6, "y")) {
+			printf("Test exact failed.\n");
+			exit(1);
+		}
+	}
+
+	/* Test that abbr matches are first match. */
+	{
+		if (test_getopt_long(argv7, "z")) {
+			printf("Test abbr failed.\n");
+			exit(1);
+		}
+	}
+
+	/* Test that option termination succeeds */
+	{
+		if (test_getopt_long(argv8, "z")) {
+			printf("Test simple termination failed.\n");
+			exit(1);
+		}
+	}
+
+	/* Test that "--" termination succeeds */
+	{
+		if (test_getopt_long(argv9, "z")) {
+			printf("Test -- termination failed.\n");
+			exit(1);
+		}
+	}
+	exit(0);
+}
+#endif
+@
+
+
+1.1
+log
+@* Makefile.in: Use variables rather than configure constructs where
+appropriate.
+(LIBCOS): Find additional stub library stuff in their own subdirectory.
+* dcrt0.cc: Convert user_data pointer to static __cygwin_user_data area.
+(do_global_ctors): Check magic_bisquit for initialization.
+(dll_crt0_1): First group of premain functions prior to fd initialization.  Run
+second group before calling main.
+(dll_crt0 ()): New function, called from new initialization code.
+(dll_crt0 (per_process *uptr)): Call new dll_crt0 () function on
+initialization.
+* debug.cc (thread_stub): Initialize bottom of stack with per-thread info.
+* environ.cc (parse_thing): Use binmode global to control CYGWIN=binmode
+behavior.
+* fhandler.cc (fhandler_base::open): Allow explicit setting of __fmode to
+O_BINARY or O_TEXT to override disk mount settings.
+* libcmain.cc: Move to lib subdirectory.
+* libccrt0.cc: Ditto.
+* dll_main.cc: Ditto.
+* dll_entry.cc: Ditto.
+* getopt.c: Ditto.
+* thread.cc (thread_init_wrapper): Call ExitThread explicitly rather than
+returning, as a preliminary step towards placing per thread info at the bottom
+of the stack.
+* winsup.h: Move per_process class to include/sys/cygwin.h.  Declare new
+dll_crt0().
+* include/cygwin/version.h: Bump API minor version.
+* binmode.c: New file.
+* textmode.c: Ditto.
+* lib/_cygwin_crt0_common.cc: Ditto.
+* lib/crt0.h: Ditto.
+* lib/cygwin_attach_dll.c: Ditto.
+* lib/cygwin_crt0.c: Ditto.
+* lib/dll_entry.cc: Ditto.
+* lib/dll_main.cc: Ditto.
+* lib/getopt.c: Ditto.
+* lib/libcmain.c: Ditto.
+* lib/premain0.c: Ditto.
+* lib/premain1.c: Ditto.
+* lib/premain2.c: Ditto.
+* lib/premain3.c: Ditto.
+@
+text
+@d43 1
+a43 1
+char 	  *optarg;	/* argument associated with option */
+d271 1
+a271 1
+	
+@
+

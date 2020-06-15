@@ -1,0 +1,188 @@
+head	1.2;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.2
+	gdb_7_6-2013-04-26-release:1.2
+	gdb_7_6-branch:1.2.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.2
+	gdb_7_5_1-2012-11-29-release:1.1
+	gdb_7_5-2012-08-17-release:1.1
+	gdb_7_5-branch:1.1.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.2
+date	2013.01.01.06.32.54;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2012.04.19.05.58.52;	author qiyao;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@/* Vector API for GDB.
+   Copyright (C) 2004-2013 Free Software Foundation, Inc.
+   Contributed by Nathan Sidwell <nathan@@codesourcery.com>
+
+   This file is part of GDB.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+#ifdef GDBSERVER
+#include "server.h"
+#else
+#include "defs.h"
+#endif
+
+#include "vec.h"
+
+struct vec_prefix
+{
+  unsigned num;
+  unsigned alloc;
+  void *vec[1];
+};
+
+/* Calculate the new ALLOC value, making sure that abs(RESERVE) slots
+   are free.  If RESERVE < 0 grow exactly, otherwise grow
+   exponentially.  */
+
+static inline unsigned
+calculate_allocation (const struct vec_prefix *pfx, int reserve)
+{
+  unsigned alloc = 0;
+  unsigned num = 0;
+
+  if (pfx)
+    {
+      alloc = pfx->alloc;
+      num = pfx->num;
+    }
+  else if (!reserve)
+    /* If there's no prefix, and we've not requested anything, then we
+       will create a NULL vector.  */
+    return 0;
+
+  /* We must have run out of room.  */
+  gdb_assert (alloc - num < (unsigned)(reserve < 0 ? -reserve : reserve));
+
+  if (reserve < 0)
+    /* Exact size.  */
+    alloc = num + -reserve;
+  else
+    {
+      /* Exponential growth.  */
+      if (!alloc)
+	alloc = 4;
+      else if (alloc < 16)
+	/* Double when small.  */
+	alloc = alloc * 2;
+      else
+	/* Grow slower when large.  */
+	alloc = (alloc * 3 / 2);
+
+      /* If this is still too small, set it to the right size.  */
+      if (alloc < num + reserve)
+	alloc = num + reserve;
+    }
+  return alloc;
+}
+
+/* Ensure there are at least abs(RESERVE) free slots in VEC.  If
+   RESERVE < 0 grow exactly, else grow exponentially.  As a special
+   case, if VEC is NULL, and RESERVE is 0, no vector will be created.  */
+
+void *
+vec_p_reserve (void *vec, int reserve)
+{
+  return vec_o_reserve (vec, reserve,
+			offsetof (struct vec_prefix, vec), sizeof (void *));
+}
+
+/* As vec_p_reserve, but for object vectors.  The vector's trailing
+   array is at VEC_OFFSET offset and consists of ELT_SIZE sized
+   elements.  */
+
+void *
+vec_o_reserve (void *vec, int reserve, size_t vec_offset, size_t elt_size)
+{
+  struct vec_prefix *pfx = vec;
+  unsigned alloc = calculate_allocation (pfx, reserve);
+
+  if (!alloc)
+    return NULL;
+
+  vec = xrealloc (vec, vec_offset + alloc * elt_size);
+  ((struct vec_prefix *)vec)->alloc = alloc;
+  if (!pfx)
+    ((struct vec_prefix *)vec)->num = 0;
+
+  return vec;
+}
+
+#if 0
+/* Example uses.  */
+DEF_VEC_I (int);
+typedef struct X
+{
+  int i;
+} obj_t;
+typedef obj_t *ptr_t;
+
+DEF_VEC_P (ptr_t);
+DEF_VEC_O (obj_t);
+#endif
+@
+
+
+1.1
+log
+@gdb:
+        * Makefile.in (SFILES): Add common/vec.c and remove vec.c.
+        (vec.o): New rule.
+        * vec.c: Move it ...
+        * common/vec.c: ... here.
+        * vec.h: Move it ...
+        * common/vec.h: ... here.
+
+gdb/gdbserver:
+
+        * Makefile.in (SFILES): Add common/vec.c.
+        (OBS): Add vec.o.
+        (vec.o): New rule.
+@
+text
+@d2 1
+a2 1
+   Copyright (C) 2004-2012 Free Software Foundation, Inc.
+@
+

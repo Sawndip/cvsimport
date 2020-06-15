@@ -1,0 +1,297 @@
+head	1.4;
+access;
+symbols
+	binutils-2_24-branch:1.4.0.10
+	binutils-2_24-branchpoint:1.4
+	binutils-2_21_1:1.4
+	binutils-2_23_2:1.4
+	binutils-2_23_1:1.4
+	binutils-2_23:1.4
+	binutils-2_23-branch:1.4.0.8
+	binutils-2_23-branchpoint:1.4
+	binutils-2_22_branch:1.4.0.6
+	binutils-2_22:1.4
+	binutils-2_22-branch:1.4.0.4
+	binutils-2_22-branchpoint:1.4
+	binutils-2_21:1.4
+	binutils-2_21-branch:1.4.0.2
+	binutils-2_21-branchpoint:1.4
+	binutils-2_20_1:1.2
+	binutils-2_20:1.2
+	binutils-arc-20081103-branch:1.1.0.6
+	binutils-arc-20081103-branchpoint:1.1
+	binutils-2_20-branch:1.2.0.4
+	binutils-2_20-branchpoint:1.2
+	dje-cgen-play1-branch:1.2.0.2
+	dje-cgen-play1-branchpoint:1.2
+	arc-20081103-branch:1.1.0.4
+	arc-20081103-branchpoint:1.1
+	binutils-2_19_1:1.1
+	binutils-2_19:1.1
+	binutils-2_19-branch:1.1.0.2
+	binutils-2_19-branchpoint:1.1
+	binutils_latest_snapshot:1.4;
+locks; strict;
+comment	@ * @;
+
+
+1.4
+date	2009.12.14.19.53.05;	author ian;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2009.12.11.13.42.12;	author nickc;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2009.02.04.15.18.51;	author ian;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2008.05.28.20.48.16;	author ian;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.4
+log
+@	Revert -Wshadow changes, all changes from:
+	2009-12-11  Doug Kwan  <dougkwan@@google.com>
+	2009-12-11  Nick Clifton  <nickc@@redhat.com>
+	* configure.ac: Remove -Wshadow when setting WARN_CXXFLAGS.
+@
+text
+@// reduced_debug_output.h -- reduce debugging information  -*- C++ -*-
+
+// Copyright 2008 Free Software Foundation, Inc.
+// Written by Caleb Howe <cshowe@@google.com>.
+
+// This file is part of gold.
+
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 3 of the License, or
+// (at your option) any later version.
+
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+// MA 02110-1301, USA.
+
+// Reduce the size of the debug sections by emitting only debug line number
+// information.  We still need to emit skeleton debug_info and debug_abbrev
+// sections for standard tools to parse the debug information correctly.  These
+// classes remove all debug information entries from the .debug_info section
+// except for those describing compilation units as these DIEs contain
+// references to the debug line information needed by most parsers.
+
+#ifndef GOLD_REDUCED_DEBUG_OUTPUT_H
+#define GOLD_REDUCED_DEBUG_OUTPUT_H
+
+#include <map>
+#include <utility>
+#include <vector>
+
+#include "output.h"
+
+namespace gold
+{
+
+class Output_reduced_debug_abbrev_section : public Output_section
+{
+ public:
+  Output_reduced_debug_abbrev_section(const char* name, elfcpp::Elf_Word flags,
+			              elfcpp::Elf_Xword type)
+    : Output_section(name, flags, type), sized_(false),
+      abbrev_count_(0), failed_(false)
+  { this->set_requires_postprocessing(); }
+
+  unsigned char* get_new_abbrev(uint64_t* abbrev_number,
+                                uint64_t abbrev_offset);
+
+ protected:
+  // Set the final data size.
+  void
+  set_final_data_size();
+
+  // Write out the new debug abbreviations
+  void
+  do_write(Output_file*);
+
+ private:
+  void
+  failed(std::string reason)
+  {
+    gold_warning("%s", reason.c_str());
+    failed_ = true;
+  }
+
+  // The reduced debug abbreviations
+  std::vector<unsigned char> data_;
+
+  // We map the abbreviation table offset and abbreviation number of the
+  // old abbreviation to the number and size of the new abbreviation.
+  std::map<std::pair<uint64_t, uint64_t>,
+           std::pair<uint64_t, uint64_t> > abbrev_mapping_;
+
+  bool sized_;
+
+  // The count of abbreviations in the output data
+  int abbrev_count_;
+
+  // Whether or not the debug reduction has failed for any reason
+  bool failed_;
+};
+
+class Output_reduced_debug_info_section : public Output_section
+{
+ public:
+  Output_reduced_debug_info_section(const char* name, elfcpp::Elf_Word flags,
+			            elfcpp::Elf_Xword type)
+    : Output_section(name, flags, type), failed_(false)
+  { this->set_requires_postprocessing(); }
+
+  void
+  set_abbreviations(Output_reduced_debug_abbrev_section* abbrevs)
+  { associated_abbrev_ = abbrevs; }
+
+ protected:
+  // Set the final data size.
+  void
+  set_final_data_size();
+
+  // Write out the new debug info
+  void
+  do_write(Output_file*);
+
+ private:
+  void
+  failed(std::string reason)
+  {
+    gold_warning("%s", reason.c_str());
+    this->failed_ = true;
+  }
+
+  // Given a pointer to the beginning of a die and the beginning of the
+  // associated abbreviation fills in die_end with the end of the information
+  // entry.  If successful returns true.  Get_die_end also takes a pointer to
+  // the end of the buffer containing the die. If die_end would be beyond the
+  // end of the buffer, or if an unsupported dwarf form is encountered returns
+  // false.
+  bool
+  get_die_end(unsigned char* die, unsigned char* abbrev,
+	      unsigned char** die_end, unsigned char* buffer_end,
+	      int address_size, bool is64);
+
+  // The reduced debug info
+  std::vector<unsigned char> data_;
+
+  // Each debug info section needs to be associated with a debug abbrev section
+  Output_reduced_debug_abbrev_section* associated_abbrev_;
+
+  // Whether or not the debug reduction has failed for any reason
+  bool failed_;
+};
+
+} // End namespace gold.
+
+#endif // !defined(GOLD_REDUCED_DEBUG_OUTPUT_H)
+@
+
+
+1.3
+log
+@Add -Wshadow to the gcc command line options used when compiling the binutils.
+Fix up all warnings generated by the addition of this switch.
+@
+text
+@d3 1
+a3 1
+// Copyright 2008, 2009 Free Software Foundation, Inc.
+d45 3
+a47 3
+  Output_reduced_debug_abbrev_section(const char* aname, elfcpp::Elf_Word aflags,
+			              elfcpp::Elf_Xword atype)
+    : Output_section(aname, aflags, atype), sized_(false),
+d91 3
+a93 3
+  Output_reduced_debug_info_section(const char* aname, elfcpp::Elf_Word aflags,
+			            elfcpp::Elf_Xword atype)
+    : Output_section(aname, aflags, atype), failed_(false)
+@
+
+
+1.2
+log
+@	PR 9812
+	* reduced_debug_output.h
+	(Output_reduced_debug_abbrev_section::failed): Use format for
+	gold_warning.
+	(Output_reduced_debug_info_section::faild): Likewise.
+@
+text
+@d3 1
+a3 1
+// Copyright 2008 Free Software Foundation, Inc.
+d45 3
+a47 3
+  Output_reduced_debug_abbrev_section(const char* name, elfcpp::Elf_Word flags,
+			              elfcpp::Elf_Xword type)
+    : Output_section(name, flags, type), sized_(false),
+d91 3
+a93 3
+  Output_reduced_debug_info_section(const char* name, elfcpp::Elf_Word flags,
+			            elfcpp::Elf_Xword type)
+    : Output_section(name, flags, type), failed_(false)
+@
+
+
+1.1
+log
+@elfcpp/:
+	* dwarf.h (enum DW_FORM): Define.
+gold/:
+	* reduced_debug_output.cc: New file.
+	* reduced_debug_output.h: New file.
+	* options.h (class General_optoins): Add --strip-debug-non-line.
+	* options.cc (General_options::finalize): Add strip_debug_non_line
+	to the strip heirarchy.
+	* layout.h (class Layout): Add debug_abbrev_ and debug_info_
+	fields.
+	* layout.cc: Include "reduced_debug_output.h".
+	(Layout::Layout): Initialize new fields.
+	(line_only_debug_sections): New static array.
+	(is_lines_only_debug_sections): New static inline function.
+	(Layout::include_section): Handle --strip-debug-non-line.
+	(Layout::make_output_section): If --strip-debug-non-line, build
+	new output sections for .debug_abbrev and .debug_info.
+	* dwarf_reader.cc (read_unsigned_LEB_128): Move to namespace
+	gold.  Warn about possible overflow.
+	(read_signed_LEB_128): Likewise.
+	* dwarf_reader.h: (read_unsigned_LEB_128): Declare.
+	(read_signed_LEB_128): Declare.
+	* Makefile.am (CCFILES): Add reduced_debug_output.cc.
+	(HFILES): Add reduced_debug_output.h.
+	* Makefile.in: Rebuild.
+@
+text
+@d67 1
+a67 1
+    gold_warning(reason.c_str());
+d113 1
+a113 1
+    gold_warning(reason.c_str());
+@
+

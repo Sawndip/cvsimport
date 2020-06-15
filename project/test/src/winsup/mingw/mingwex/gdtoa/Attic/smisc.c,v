@@ -1,0 +1,358 @@
+head	1.3;
+access;
+symbols
+	cygwin-1_7_17-release:1.2
+	cygwin-64bit-branch:1.2.0.2
+	cygwin-1_7_16-release:1.2
+	cygwin-1_7_15-release:1.2
+	cygwin-1_7_14_2-release:1.2
+	cygwin-1_7_14-release:1.2
+	cygwin-1_7_12-release:1.2
+	cygwin-1_7_11-release:1.2
+	cygwin-1_7_10-release:1.2
+	cygwin-1_7_9-release:1.2
+	cygwin-1_7_8-release:1.2
+	cygwin-1_7_7-release:1.2
+	cygwin-1_7_5-release:1.2
+	cygwin-1_7_4-release:1.2
+	cygwin-1_7_3-release:1.2
+	cygwin-1_7_2-release:1.2
+	cygwin-1_7_1-release:1.2
+	cv-branch-2:1.1.0.2;
+locks; strict;
+comment	@ * @;
+
+
+1.3
+date	2012.11.07.16.52.22;	author cgf;	state dead;
+branches;
+next	1.2;
+
+1.2
+date	2009.07.12.22.44.37;	author ironhead;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2006.08.31.23.48.56;	author dannysmith;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.3
+log
+@* mingw: Delete obsolete directory.
+* w32api: Ditto.
+@
+text
+@/****************************************************************
+
+The author of this software is David M. Gay.
+
+Copyright (C) 1998, 1999 by Lucent Technologies
+All Rights Reserved
+
+Permission to use, copy, modify, and distribute this software and
+its documentation for any purpose and without fee is hereby
+granted, provided that the above copyright notice appear in all
+copies and that both that the copyright notice and this
+permission notice and warranty disclaimer appear in supporting
+documentation, and that the name of Lucent or any of its entities
+not be used in advertising or publicity pertaining to
+distribution of the software without specific, written prior
+permission.
+
+LUCENT DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE,
+INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS.
+IN NO EVENT SHALL LUCENT OR ANY OF ITS ENTITIES BE LIABLE FOR ANY
+SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER
+IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
+ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
+THIS SOFTWARE.
+
+****************************************************************/
+
+/* Please send bug reports to David M. Gay (dmg at acm dot org,
+ * with " at " changed at "@@" and " dot " changed to ".").	*/
+
+#include "gdtoaimp.h"
+
+Bigint *s2b (const char *s, int nd0, int nd, ULong y9, int dplen)
+{
+	Bigint *b;
+	int i, k;
+	Long x, y;
+
+	x = (nd + 8) / 9;
+	for(k = 0, y = 1; x > y; y <<= 1, k++) ;
+#ifdef Pack_32
+	b = Balloc(k);
+	b->x[0] = y9;
+	b->wds = 1;
+#else
+	b = Balloc(k+1);
+	b->x[0] = y9 & 0xffff;
+	b->wds = (b->x[1] = y9 >> 16) ? 2 : 1;
+#endif
+
+	i = 9;
+	if (9 < nd0) {
+		s += 9;
+		do b = multadd(b, 10, *s++ - '0');
+			while(++i < nd0);
+		s += dplen;
+	}
+	else
+		s += dplen + 9;
+	for(; i < nd; i++)
+		b = multadd(b, 10, *s++ - '0');
+	return b;
+}
+
+double ratio (Bigint *a, Bigint *b)
+{
+	union _dbl_union da, db;
+	int k, ka, kb;
+
+	dval(&da) = b2d(a, &ka);
+	dval(&db) = b2d(b, &kb);
+	k = ka - kb + ULbits*(a->wds - b->wds);
+	if (k > 0)
+		word0(&da) += k*Exp_msk1;
+	else {
+		k = -k;
+		word0(&db) += k*Exp_msk1;
+	}
+	return dval(&da) / dval(&db);
+}
+
+#ifdef INFNAN_CHECK
+
+int match (const char **sp, char *t)
+{
+	int c, d;
+	const char *s = *sp;
+
+	while( (d = *t++) !=0) {
+		if ((c = *++s) >= 'A' && c <= 'Z')
+			c += 'a' - 'A';
+		if (c != d)
+			return 0;
+	}
+	*sp = s + 1;
+	return 1;
+}
+#endif /* INFNAN_CHECK */
+
+void copybits (ULong *c, int n, Bigint *b)
+{
+	ULong *ce, *x, *xe;
+#ifdef Pack_16
+	int nw, nw1;
+#endif
+
+	ce = c + ((n-1) >> kshift) + 1;
+	x = b->x;
+#ifdef Pack_32
+	xe = x + b->wds;
+	while(x < xe)
+		*c++ = *x++;
+#else
+	nw = b->wds;
+	nw1 = nw & 1;
+	for(xe = x + (nw - nw1); x < xe; x += 2)
+		Storeinc(c, x[1], x[0]);
+	if (nw1)
+		*c++ = *x;
+#endif
+	while(c < ce)
+		*c++ = 0;
+}
+
+ULong any_on (Bigint *b, int k)
+{
+	int n, nwds;
+	ULong *x, *x0, x1, x2;
+
+	x = b->x;
+	nwds = b->wds;
+	n = k >> kshift;
+	if (n > nwds)
+		n = nwds;
+	else if (n < nwds && (k &= kmask)) {
+		x1 = x2 = x[n];
+		x1 >>= k;
+		x1 <<= k;
+		if (x1 != x2)
+			return 1;
+	}
+	x0 = x;
+	x += n;
+	while(x > x0)
+		if (*--x)
+			return 1;
+	return 0;
+}
+@
+
+
+1.2
+log
+@2009-06-28  Ozkan Sezer  <sezero@@users.sourceforge.net>
+
+        * mingwex/gdtoa/README.mingw mingwex/gdtoa/gdtoa_fltrnds.h: New files.
+        * mingwex/gdtoa/README mingwex/gdtoa/dmisc.c mingwex/gdtoa/dtoa.c
+        mingwex/gdtoa/g__fmt.c mingwex/gdtoa/g_dfmt.c mingwex/gdtoa/g_ffmt.c
+        mingwex/gdtoa/g_xfmt.c mingwex/gdtoa/gd_arith.h mingwex/gdtoa/gd_qnan.h
+        mingwex/gdtoa/gdtoa.c mingwex/gdtoa/gdtoa.h mingwex/gdtoa/gdtoaimp.h
+        mingwex/gdtoa/gethex.c mingwex/gdtoa/gmisc.c mingwex/gdtoa/hd_init.c
+        mingwex/gdtoa/hexnan.c mingwex/gdtoa/misc.c mingwex/gdtoa/qnan.c
+        mingwex/gdtoa/smisc.c mingwex/gdtoa/strtodg.c mingwex/gdtoa/strtodnrp.c
+        mingwex/gdtoa/strtof.c mingwex/gdtoa/strtopx.c mingwex/gdtoa/sum.c
+        mingwex/gdtoa/ulp.c:  Update the gdtoa library to match the netlib.org
+        sources as of Apr. 20, 2009.  Update further to match the sources in
+        the mingw-w64 tree as of June 28, 2009, by removing IBM, CRAY and VAX
+        code, removing KR_headers, ANSI, Void and Char ifdefs, renaming the
+        double/ulong union from U to dbl_union for better grepping and white-
+        space tidy-ups.
+@
+text
+@@
+
+
+1.1
+log
+@	Import David Gay's gdtoa library.
+
+	* mingwex/gdtoa: New directory.
+	* mingwex/gdtoa/(arithchk.c, dmisc.c, dtoa.c, g__fmt.c, g_dfmt.c,
+	g_ffmt.c, g_xfmt.c, gd_arith.h, gd_qnan.h, gdtoa.c, gdtoa.h,
+	gdtoaimp.h, gethex.c, gmisc.c, hd_init.c, hexnan.c, misc.c, qnan.c,
+	README, smisc.c, strtodg.c, strtodnrp.c, strtof.c, strtopx.c, sum.c,
+	ulp.c): New files.
+	* mingwex/(strtof.c, strtold.c, ldtoa.c): Remove files.
+	* mingwex/math/(cephes-emath.c, cephes-emath.h): Remove files.
+	* mingwex/mb_wc_common.h (get_cp_from_locale); Rename to get_codepage().
+        * mingwex/(btowc.c, wctob.c, mbrtowc.c, wcrtomb.c): Adjust call to get_codepage().
+	* mingwex/wcstold.c: Avoid using strtold internals.
+	* mingwex/wcstof.c: Rewrite.
+	* mingwex/Makefile.in (GDTOA_DISTFILES): Add to distribution.
+	(GDTOA_OBJS): Add to library.
+	(DISTFILES): Remove strtof.c strtold.c ldtoa.c cephes-emath.c cephes-emath.h.
+	(STDLIB_OBJS): Remove.
+	(STDLIB_STUB_OBJS): Remove strtof.o wcstof,o.
+	(Q8_OBJS): Add wcstof.o wcstold.o.
+	* include/stdlib.h (strtof): Remove inline definition.
+	(wcstof): Likewise.
+	* include/wchar.h (wcstof): Remove inline definition.
+@
+text
+@d34 1
+a34 7
+ Bigint *
+s2b
+#ifdef KR_headers
+	(s, nd0, nd, y9) CONST char *s; int nd0, nd; ULong y9;
+#else
+	(CONST char *s, int nd0, int nd, ULong y9)
+#endif
+d57 2
+a58 2
+		s++;
+		}
+d60 1
+a60 1
+		s += 10;
+d64 1
+a64 1
+	}
+d66 1
+a66 7
+ double
+ratio
+#ifdef KR_headers
+	(a, b) Bigint *a, *b;
+#else
+	(Bigint *a, Bigint *b)
+#endif
+d68 1
+a68 1
+	double da, db;
+d71 2
+a72 2
+	dval(da) = b2d(a, &ka);
+	dval(db) = b2d(b, &kb);
+a73 13
+#ifdef IBM
+	if (k > 0) {
+		word0(da) += (k >> 2)*Exp_msk1;
+		if (k &= 3)
+			dval(da) *= 1 << k;
+		}
+	else {
+		k = -k;
+		word0(db) += (k >> 2)*Exp_msk1;
+		if (k &= 3)
+			dval(db) *= 1 << k;
+		}
+#else
+d75 1
+a75 1
+		word0(da) += k*Exp_msk1;
+d78 1
+a78 4
+		word0(db) += k*Exp_msk1;
+		}
+#endif
+	return dval(da) / dval(db);
+d80 2
+d85 1
+a85 7
+ int
+match
+#ifdef KR_headers
+	(sp, t) char **sp, *t;
+#else
+	(CONST char **sp, char *t)
+#endif
+d88 1
+a88 1
+	CONST char *s = *sp;
+d95 1
+a95 1
+		}
+d98 1
+a98 1
+	}
+d101 1
+a101 6
+ void
+#ifdef KR_headers
+copybits(c, n, b) ULong *c; int n; Bigint *b;
+#else
+copybits(ULong *c, int n, Bigint *b)
+#endif
+d124 1
+a124 1
+	}
+d126 1
+a126 6
+ ULong
+#ifdef KR_headers
+any_on(b, k) Bigint *b; int k;
+#else
+any_on(Bigint *b, int k)
+#endif
+d142 1
+a142 1
+		}
+d149 1
+a149 1
+	}
+@
+

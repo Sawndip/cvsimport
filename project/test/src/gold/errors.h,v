@@ -1,0 +1,420 @@
+head	1.9;
+access;
+symbols
+	binutils-2_24-branch:1.9.0.8
+	binutils-2_24-branchpoint:1.9
+	binutils-2_21_1:1.8
+	binutils-2_23_2:1.9
+	binutils-2_23_1:1.9
+	binutils-2_23:1.9
+	binutils-2_23-branch:1.9.0.6
+	binutils-2_23-branchpoint:1.9
+	binutils-2_22_branch:1.9.0.4
+	binutils-2_22:1.9
+	binutils-2_22-branch:1.9.0.2
+	binutils-2_22-branchpoint:1.9
+	binutils-2_21:1.8
+	binutils-2_21-branch:1.8.0.6
+	binutils-2_21-branchpoint:1.8
+	binutils-2_20_1:1.8
+	binutils-2_20:1.8
+	binutils-arc-20081103-branch:1.6.0.6
+	binutils-arc-20081103-branchpoint:1.6
+	binutils-2_20-branch:1.8.0.4
+	binutils-2_20-branchpoint:1.8
+	dje-cgen-play1-branch:1.8.0.2
+	dje-cgen-play1-branchpoint:1.8
+	arc-20081103-branch:1.6.0.4
+	arc-20081103-branchpoint:1.6
+	binutils-2_19_1:1.6
+	binutils-2_19:1.6
+	binutils-2_19-branch:1.6.0.2
+	binutils-2_19-branchpoint:1.6
+	binutils_latest_snapshot:1.9
+	added-to-binutils:1.4;
+locks; strict;
+comment	@ * @;
+
+
+1.9
+date	2011.06.08.04.43.28;	author ccoutant;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2009.03.24.04.50.32;	author ian;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2009.02.06.19.20.09;	author cgd;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2008.05.06.18.32.38;	author ian;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2008.04.17.22.45.47;	author ccoutant;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2008.03.13.21.04.21;	author iant;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2008.01.07.05.19.02;	author iant;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2007.11.22.00.05.51;	author iant;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2007.10.14.06.49.13;	author iant;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.9
+log
+@	* common.cc (Symbol_table::do_allocate_commons_list): Call
+	gold_fallback.
+	* errors.cc (Errors::fatal): Adjust call to gold_exit.
+	(Errors::fallback): New function.
+	(gold_fallback): New function.
+	* errors.h (Errors::fallback): New function.
+	* gold.cc (gold_exit): Change status parameter to enum; adjust
+	all callers.
+	(queue_initial_tasks): Call gold_fallback.
+	* gold.h: Include cstdlib.
+	(Exit_status): New enum type.
+	(gold_exit): Change status parameter to enum.
+	(gold_fallback): New function.
+	* layout.cc (Layout::set_section_offsets): Call gold_fallback.
+	(Layout::create_symtab_sections): Likewise.
+	(Layout::create_shdrs): Likewise.
+	* main.cc (main): Adjust call to gold_exit.
+	* output.cc (Output_data_got::add_got_entry): Call gold_fallback.
+	(Output_data_got::add_got_entry_pair): Likewise.
+	(Output_section::add_input_section): Likewise.
+	(Output_section::add_output_section_data): Likewise.
+	(Output_segment::set_section_list_addresses): Likewise.
+	* x86_64.cc (Output_data_plt_x86_64::add_entry): Likewise.
+@
+text
+@// errors.h -- handle errors for gold  -*- C++ -*-
+
+// Copyright 2006, 2007, 2008 Free Software Foundation, Inc.
+// Written by Ian Lance Taylor <iant@@google.com>.
+
+// This file is part of gold.
+
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 3 of the License, or
+// (at your option) any later version.
+
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+// MA 02110-1301, USA.
+
+#ifndef GOLD_ERRORS_H
+#define GOLD_ERRORS_H
+
+#include <cstdarg>
+
+#include "gold-threads.h"
+
+namespace gold
+{
+
+class Symbol;
+template<int size, bool big_endian>
+struct Relocate_info;
+
+// This class handles errors for gold.  There is a single instance
+// which is used by all threads.  If and when we make the gold code
+// more amenable to being used in a library, we will make this an
+// abstract interface class, and expect the caller to provide their
+// own instantiation.
+
+class Errors
+{
+ public:
+  Errors(const char* program_name);
+
+  // Report a fatal error.  After printing the error, this must exit.
+  void
+  fatal(const char* format, va_list) ATTRIBUTE_NORETURN;
+
+  // Report a fallback error.  After printing the error, this must exit
+  // with a special status code indicating that fallback to
+  // --incremental-full is required.
+  void
+  fallback(const char* format, va_list) ATTRIBUTE_NORETURN;
+
+  // Report an error and continue.
+  void
+  error(const char* format, va_list);
+
+  // Report a warning and continue.
+  void
+  warning(const char* format, va_list);
+
+  // Print an informational message and continue.
+  void
+  info(const char* format, va_list);
+
+  // Report an error at a reloc location.
+  template<int size, bool big_endian>
+  void
+  error_at_location(const Relocate_info<size, big_endian>* relinfo,
+		    size_t relnum, off_t reloffset,
+		    const char* format, va_list);
+
+  // Report a warning at a reloc location.
+  template<int size, bool big_endian>
+  void
+  warning_at_location(const Relocate_info<size, big_endian>* relinfo,
+		      size_t relnum, off_t reloffset,
+		      const char* format, va_list);
+
+  // Issue an undefined symbol error.  LOCATION is the location of
+  // the error (typically an object file name or relocation info).
+  void
+  undefined_symbol(const Symbol* sym, const std::string& location);
+
+  // Report a debugging message.
+  void
+  debug(const char* format, ...) ATTRIBUTE_PRINTF_2;
+
+  // Return the number of errors.
+  int
+  error_count() const
+  { return this->error_count_; }
+
+  // Return the number of warnings.
+  int
+  warning_count() const
+  { return this->warning_count_; }
+
+ private:
+  Errors(const Errors&);
+  Errors& operator=(const Errors&);
+
+  // Initialize the lock.  We don't do this in the constructor because
+  // lock initialization wants to know whether we are using threads or
+  // not.  This returns true if the lock is now initialized.
+  bool
+  initialize_lock();
+
+  // Increment a counter, holding the lock.
+  void
+  increment_counter(int*);
+
+  // The number of times we report an undefined symbol.
+  static const int max_undefined_error_report = 5;
+
+  // The name of the program.
+  const char* program_name_;
+  // This class can be accessed from multiple threads.  This lock is
+  // used to control access to the data structures.
+  Lock* lock_;
+  // Used to initialize the lock_ field exactly once.
+  Initialize_lock initialize_lock_;
+  // Numbers of errors reported.
+  int error_count_;
+  // Number of warnings reported.
+  int warning_count_;
+  // A map counting the numbers of times we have seen an undefined
+  // symbol.
+  Unordered_map<const Symbol*, int> undefined_symbols_;
+};
+
+} // End namespace gold.
+
+#endif // !defined(GOLD_ERRORS_H)
+@
+
+
+1.8
+log
+@2009-03-23  Ian Lance Taylor  <iant@@google.com>
+
+	* gold-threads.h (class Initialize_lock): Define.
+	* gold-threads.cc (class Initialize_lock_once): Define.
+	(initialize_lock_control): New static variable.
+	(initialize_lock_pointer): New static variable.
+	(initialize_lock_once): New static function.
+	(Initialize_lock::Initialize_lock): Define.
+	(Initialize_lock::initialize): Define.
+	* target-select.h: Include "gold-threads.h".
+	(class Target_selector): Add lock_ and initialize_lock_ fields.
+	Don't define instantiate_target, just declare it.
+	* target-select.cc (Target_selector::Target_selector): Initialize
+	new fields.
+	(Target_selector::instantiate_target): Define.
+	* descriptors.h: Include "gold-threads.h".
+	(class Descriptors): Add initialize_lock_ field.
+	* descriptors.cc (Descriptors::Descriptors): Initialize new
+	field.
+	(Descriptors::open): Use initialize_lock_ field
+	* errors.h (class Errors): Add initialize_lock_ field.
+	* errors.cc (Errors::Errors): Initialize new field.
+	(Errors::initialize_lock): Use initialize_lock_ field.
+	* powerpc.cc (class Target_selector_powerpc): Remove
+	instantiated_target_ field.  In do_recognize call
+	instantiate_target rather than do_instantiate_target.  In
+	do_instantiate_target just allocate a new target.
+	* sparc.cc (class Target_selector_sparc): Likewise.
+@
+text
+@d52 6
+@
+
+
+1.7
+log
+@2009-02-06  Chris Demetriou  <cgd@@google.com>
+
+	* gold.h (gold_undefined_symbol): Change to take only a Symbol
+	pointer and to report location as the file name associated with
+	the symbol.
+	(gold_undefined_symbol_at_location): New function to replace the
+	old gold_undefined_symbol functionality.
+	* target-reloc.h (relocate_section): Update to use
+	gold_undefined_symbol_at_location.
+	* symtab.cc (Symbol_table::warn_about_undefined_dynobj_symbol):
+	Call gold_undefined_symbol function rather than gold_error.
+	* errors.h (Errors::undefined_symbol): Take location as a
+	string, rather than calculating it from a relocation.
+	* errors.cc (Errors::fatal): Print "fatal error:" before the
+	formatted message.
+	(Errors::error, Errors::error_at_location): Print "error: "
+	before the formatted message.
+	(Errors::undefined_symbol): Take location as a string, rather
+	than calculating it from a relocation.
+	(gold_undefined_symbol_at_location): New function akin to
+	old gold_undefined_symbol, calculates location from relocation.
+	(gold_undefined_symbol): Change to take only a Symbol pointer
+	and to report location as the file name associated with the symbol.
+	* testsuite/debug_msg.sh: Update for changed error messages.
+	* testsuite/undef_symbol.sh: Likewise.
+@
+text
+@d119 2
+@
+
+
+1.6
+log
+@	* options.h (class General_options): Add --fatal-warnings.
+	* main.cc (main): Implement --fatal-warnings.
+	* errors.h (Errors::warning_count): New function.
+@
+text
+@d78 2
+a79 4
+  // Issue an undefined symbol error.  SYM is the undefined symbol.
+  // RELINFO is the general relocation info.  RELNUM is the number of
+  // the reloc, and RELOFFSET is the reloc's offset.
+  template<int size, bool big_endian>
+d81 1
+a81 3
+  undefined_symbol(const Symbol* sym,
+		   const Relocate_info<size, big_endian>* relinfo,
+		   size_t relnum, off_t reloffset);
+@
+
+
+1.5
+log
+@	* errors.cc (Errors::info): New function.
+	(gold_info): New function.
+	* errors.h (Errors::info): New function.
+	* gold.h (gold_info): New function.
+	* object.cc (Input_objects::add_object): Print trace output.
+	* options.cc (options::parse_set): New function.
+	(General_options::parse_wrap): Deleted.
+	(General_options::General_options): Deleted initializer.
+	* options.h (options::String_set): New typedef.
+	(options::parse_set): New function.
+	(DEFINE_set): New macro.
+	(General_options::wrap): Changed to use DEFINE_set. Changed
+	callers of any_wrap_symbols and is_wrap_symbol.
+	(General_options::trace, General_options::trace_symbol):
+	New options.
+	(General_options::any_wrap_symbols, General_options::is_wrap_symbol)
+	(General_options::wrap_symbols_): Deleted.
+	* symtab.cc (Symbol_table::add_from_object): Print trace output.
+@
+text
+@d96 5
+@
+
+
+1.4
+log
+@Update copyright years.  Update language files.
+@
+text
+@d60 4
+@
+
+
+1.3
+log
+@Report linker script errors with line numbers.  Ignore OUTPUT_FORMAT
+with three arguments, and ignore OUTPUT_ARCH.
+@
+text
+@d3 1
+a3 1
+// Copyright 2006, 2007 Free Software Foundation, Inc.
+@
+
+
+1.2
+log
+@Add threading support.
+@
+text
+@d98 5
+a102 1
+  // not.
+d104 1
+a104 1
+  initialize_lock();
+@
+
+
+1.1
+log
+@Run all error handling through an Errors object.  Delete output file
+on error.
+@
+text
+@d83 4
+d96 6
+d109 1
+a109 1
+  Lock lock_;
+@
+

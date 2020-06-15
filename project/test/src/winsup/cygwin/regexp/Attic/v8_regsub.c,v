@@ -1,0 +1,206 @@
+head	1.2;
+access;
+symbols
+	pre-ripout-set_console_state_for_spawn:1.1
+	EOL_registry_mounts:1.1
+	preoverlapped:1.1
+	drop_9x_support_start:1.1
+	cr-0x5f1:1.1.0.28
+	cv-branch:1.1.0.26
+	pre-ptymaster-archetype:1.1
+	cr-0x3b58:1.1.0.24
+	cr-0x5ef:1.1.0.22
+	after-mmap-privanon-noreserve:1.1
+	after-mmap-revamp:1.1
+	before-mmap-revamp:1.1
+	cgf-more-exit-sync:1.1
+	post_wait_sig_exit:1.1
+	pre_wait_sig_exit:1.1
+	reparent-point:1.1
+	noreparent:1.1.0.20
+	cr-0x5e6:1.1.0.18
+	cr-0x9e:1.1.0.16
+	cr-0x9d:1.1.0.14
+	cgf-deleteme:1.1.0.12
+	pre-sigrewrite:1.1
+	corinna-01:1.1
+	cr-0x9c:1.1.0.8
+	cr-0x9b:1.1.0.6
+	cr-0x99:1.1
+	Z-emcb-cygwin_daemon:1.1.0.4
+	w32api-2_2:1.1
+	mingw-runtime-2_4:1.1
+	pre-cgf-merge:1.1
+	cgf-dev-branch:1.1.0.32
+	predaemon:1.1
+	cygwin_daemon_merge_HEAD:1.1
+	pregp02r1:1.1.0.10
+	cygnus_cvs_20020108_pre:1.1
+	Z-cygwin_daemon_merge_HEAD:1.1
+	cygwin_daemon:1.1.0.2
+	Z-cygwin_daemon_merge-new_HEAD:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.2
+date	2008.07.29.10.40.37;	author corinna;	state dead;
+branches;
+next	1.1;
+
+1.1
+date	2001.12.20.02.55.11;	author cgf;	state Exp;
+branches
+	1.1.2.1;
+next	;
+
+1.1.2.1
+date	2002.01.04.03.56.17;	author rbcollins;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@	* Makefile.in (DLL_OFILES): Remove v8 regexp files.
+	(OBSOLETE_FUNCTIONS): Remove v8 regexp functions.
+	(NEW_FUNCTIONS): Remove POSIX regex functions.
+	* cygwin.din: Export POSIX regex functions with their correct symbol
+	name.  Export with posix_ prefix for backward compatibility.
+	* syscalls.cc (regfree): Remove ancient fake function.
+	* regex/regex.h: Remove renaming regex functions within Cygwin.
+	* regexp/*: Remove.
+	* include /cygwin/version,.h: Bump API minor number.
+@
+text
+@/*
+ * regsub
+ *
+ *	Copyright (c) 1986 by University of Toronto.
+ *	Written by Henry Spencer.  Not derived from licensed software.
+ *
+ *	Permission is granted to anyone to use this software for any
+ *	purpose on any computer system, and to redistribute it freely,
+ *	subject to the following restrictions:
+ *
+ *	1. The author is not responsible for the consequences of use of
+ *		this software, no matter how awful, even if they arise
+ *		from defects in it.
+ *
+ *	2. The origin of this software must not be misrepresented, either
+ *		by explicit claim or by omission.
+ *
+ *	3. Altered versions must be plainly marked as such, and must not
+ *		be misrepresented as being the original software.
+ */
+
+#if 0
+#ifndef lint
+static char *rcsid = "$Id: v8_regsub.c,v 1.1 2001/12/20 02:55:11 cgf Exp $";
+#endif /* not lint */
+#endif
+
+#include "winsup.h"
+#include "regexp.h"
+#include <stdio.h>
+#include <string.h>
+#include "regmagic.h"
+
+#ifndef CHARBITS
+#define	UCHARAT(p)	((int)*(unsigned char *)(p))
+#else
+#define	UCHARAT(p)	((int)*(p)&CHARBITS)
+#endif
+
+/*
+ - regsub - perform substitutions after a regexp match
+ */
+void __declspec(dllexport)
+regsub(prog, source, dest)
+const regexp *prog;
+const char *source;
+char *dest;
+{
+	register char *src;
+	register char *dst;
+	register char c;
+	register int no;
+	register int len;
+
+	if (prog == NULL || source == NULL || dest == NULL) {
+		regerror("NULL parm to regsub");
+		return;
+	}
+	if (UCHARAT(prog->program) != MAGIC) {
+		regerror("damaged regexp fed to regsub");
+		return;
+	}
+
+	src = (char *)source;
+	dst = dest;
+	while ((c = *src++) != '\0') {
+		if (c == '&')
+			no = 0;
+		else if (c == '\\' && '0' <= *src && *src <= '9')
+			no = *src++ - '0';
+		else
+			no = -1;
+		if (no < 0) {	/* Ordinary character. */
+			if (c == '\\' && (*src == '\\' || *src == '&'))
+				c = *src++;
+			*dst++ = c;
+		} else if (prog->startp[no] != NULL && prog->endp[no] != NULL) {
+			len = prog->endp[no] - prog->startp[no];
+			(void) strncpy(dst, prog->startp[no], len);
+			dst += len;
+			if (len != 0 && *(dst-1) == '\0') {	/* strncpy hit NUL. */
+				regerror("damaged match string");
+				return;
+			}
+		}
+	}
+	*dst++ = '\0';
+}
+@
+
+
+1.1
+log
+@* Makefile.in (VPATH): Add regex directory.
+(NM): new variable.
+(OBSOLETE_FUNCTIONS): Ditto.
+(NEW_FUNCTIONS): Ditto.
+(install-headers): Install regex.h.
+(install-man): New target.
+(install): Use new target.
+(DLL_OFILES): Add v8_reg* stuff.
+(new-cygwin1.dll): Eliminate stamp-cygwin-lib creation.
+(libcygwin.a): Remove obsolete functions from import lib.  Add new functions.
+* configure.in: Detect 'nm' tool.
+* configure: Regenerate.
+* cygwin.din: Export posix_reg* functions.  Eliminate export of v8 reg*
+functions.  This is now handled in object files themselves.
+* regex/*: New files.
+* regexp/v8_*.c: New files, renamed from non v8_ equivalents.
+@
+text
+@d24 1
+a24 1
+static char *rcsid = "$Id: regsub.c,v 1.2 1998/09/15 23:31:37 cgf Exp $";
+@
+
+
+1.1.2.1
+log
+@Merged changes from HEAD
+@
+text
+@d24 1
+a24 1
+static char *rcsid = "$Id$";
+@
+

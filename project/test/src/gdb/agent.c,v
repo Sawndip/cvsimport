@@ -1,0 +1,214 @@
+head	1.3;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.3
+	gdb_7_6-2013-04-26-release:1.3
+	gdb_7_6-branch:1.3.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.3
+	gdb_7_5_1-2012-11-29-release:1.2
+	gdb_7_5-2012-08-17-release:1.2
+	gdb_7_5-branch:1.2.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.2;
+locks; strict;
+comment	@ * @;
+
+
+1.3
+date	2013.01.01.06.32.37;	author brobecke;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2012.03.03.09.51.28;	author qiyao;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2012.03.03.03.32.44;	author qiyao;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.3
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@/* Copyright (C) 2012-2013 Free Software Foundation, Inc.
+
+   This file is part of GDB.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+#include "defs.h"
+#include "command.h"
+#include "gdbcmd.h"
+#include "target.h"
+#include "agent.h"
+
+/* Enum strings for "set|show agent".  */
+
+static const char can_use_agent_on[] = "on";
+static const char can_use_agent_off[] = "off";
+static const char *can_use_agent_enum[] =
+{
+  can_use_agent_on,
+  can_use_agent_off,
+  NULL,
+};
+
+static const char *can_use_agent = can_use_agent_off;
+
+static void
+show_can_use_agent (struct ui_file *file, int from_tty,
+		    struct cmd_list_element *c, const char *value)
+{
+  fprintf_filtered (file,
+		    _("Debugger's willingness to use agent in inferior "
+		      "as a helper is %s.\n"), value);
+}
+
+static void
+set_can_use_agent (char *args, int from_tty, struct cmd_list_element *c)
+{
+  if (target_use_agent (can_use_agent == can_use_agent_on) == 0)
+    /* Something wrong during setting, set flag to default value.  */
+    can_use_agent = can_use_agent_off;
+}
+
+/* -Wmissing-prototypes */
+extern initialize_file_ftype _initialize_agent;
+
+#include "observer.h"
+#include "objfiles.h"
+
+static void
+agent_new_objfile (struct objfile *objfile)
+{
+  if (objfile == NULL || agent_loaded_p ())
+    return;
+
+  agent_look_up_symbols (objfile);
+}
+
+void
+_initialize_agent (void)
+{
+  observer_attach_new_objfile (agent_new_objfile);
+
+  add_setshow_enum_cmd ("agent", class_run,
+			can_use_agent_enum,
+			&can_use_agent, _("\
+Set debugger's willingness to use agent as a helper."), _("\
+Show debugger's willingness to use agent as a helper."), _("\
+If on, GDB will delegate some of the debugging operations to the\n\
+agent, if the target supports it.  This will speed up those\n\
+operations that are supported by the agent.\n\
+If off, GDB will not use agent, even if such is supported by the\n\
+target."),
+			set_can_use_agent,
+			show_can_use_agent,
+			&setlist, &showlist);
+}
+@
+
+
+1.2
+log
+@gdb:
+	* common/agent.c (agent_look_up_symbols): Add one parameter 'arg'.
+	* common/agent.h: Update declaration.
+	* inf-child.c (inf_child_use_agent): New.
+	(inf_child_can_use_agent): New.
+	(inf_child_target): Initialize fields `to_use_agent'
+	and `to_can_use_agent'.
+	* agent.c (agent_new_objfile): New.
+        (_initialize_agent): Add agent_new_objfile to new_objfile
+	observer.
+
+	* linux-nat.c (linux_child_static_tracepoint_markers_by_strid):
+	New.
+        (linux_target_install_ops): Initialize field
+	`to_static_tracepoint_markers_by_strid'.
+	* remote.c (free_current_marker): Move it to ...
+	* tracepoint.c (free_current_marker): ... here.  New.
+	(cleanup_target_stop): New.
+	* tracepoint.h: Declare free_current_marker.
+	* NEWS: Add one entry about `info static-tracepoint-marker'.
+
+gdb/gdbserver:
+	* tracepoint.c (tracepoint_look_up_symbols): Update call to
+	agent_look_up_symbols.
+
+gdb/testsuite:
+	* gdb.trace/strace.exp: run strace_info_marker in linux native gdb.
+@
+text
+@d1 1
+a1 1
+/* Copyright (C) 2012 Free Software Foundation, Inc.
+@
+
+
+1.1
+log
+@gdb:
+	* target.h (struct target_ops) <to_use_agent>: New field.
+	(struct target_ops) <to_can_use_agent>: New field.
+	(target_use_agent, target_can_use_agent): New macro.
+	* target.c (update_current_target): Update.
+	* remote.c: New enum `PACKET_QAgent'.
+	(remote_protocol_features): Add a new element.
+	(remote_use_agent, remote_can_use_agent): New.
+	(init_remote_ops): Initialize field `can_use_agent' with
+	remote_can_use_agent.  Intiailize field `use_agent' with
+	remote_use_agent.
+	* common/agent.c (use_agent): New global.
+	* common/agent.h: Declare it.
+	* tracepoint.c (info_static_tracepoint_markers_command): Add
+	comment.
+	* Makefile.in (SFILES): Add common/agent.c and agent.c.
+	(COMMON_OBS): Add common/agent.o and agent.o
+	(common-agent.o): New rule.
+	* agent.c: New.
+
+gdb/doc:
+	* gdb.texinfo (In-Process Agent): New node.
+	Document new commands.
+	(General Query Packets): Add packet `QAgent'.
+
+gdb/gdbserver:
+	* linux-low.c (linux_supports_agent): New.
+	(linux_target_ops): Initialize field `supports_agent' with
+	linux_supports_agent.
+	* target.h (struct target_ops) <supports_agent>: New.
+	(target_supports_agent): New macro.
+	* server.c (handle_general_set): Handle packet 'QAgent'.
+	(handle_query): Send `QAgent+'.
+	* Makefile.in (server.o): Depends on agent.h.
+@
+text
+@d57 12
+d72 2
+@
+

@@ -1,0 +1,479 @@
+head	1.3;
+access;
+symbols
+	cygwin-1_7_35-release:1.3
+	cygwin-1_7_34-release:1.3
+	newlib-2_2_0:1.3.0.2
+	cygwin-1_7_33-release:1.3
+	cygwin-1_7_32-release:1.3
+	cygwin-1_7_31-release:1.3
+	cygwin-1_7_30-release:1.3
+	cygwin-1_7_29-release:1.3
+	cygwin-1_7_28-release:1.3
+	newlib-2_1_0:1.3
+	cygwin-1_7_27-release:1.3
+	cygwin-1_7_26-release:1.3
+	cygwin-1_7_25-release:1.2
+	cygwin-1_7_24-release:1.2
+	cygwin-1_7_23-release:1.2
+	cygwin-1_7_22-release:1.2
+	cygwin-1_7_21-release:1.2
+	cygwin-1_7_20-release:1.2
+	cygwin-1_7_19-release:1.2
+	cygwin-64bit-postmerge:1.2
+	cygwin-64bit-premerge-branch:1.2.0.4
+	cygwin-64bit-premerge:1.2
+	cygwin-1_7_18-release:1.2
+	newlib-2_0_0:1.2
+	cygwin-1_7_17-release:1.2
+	cygwin-64bit-branch:1.2.0.2
+	cygwin-1_7_16-release:1.2
+	cygwin-1_7_15-release:1.1
+	cygwin-1_7_14_2-release:1.1
+	cygwin-1_7_14-release:1.1
+	cygwin-1_7_12-release:1.1
+	cygwin-1_7_11-release:1.1
+	cygwin-1_7_10-release:1.1
+	newlib-1_20_0:1.1
+	cygwin-1_7_9-release:1.1
+	cygwin-1_7_8-release:1.1
+	newlib-1_19_0:1.1
+	cygwin-1_7_7-release:1.1
+	cygwin-1_7_5-release:1.1
+	cygwin-1_7_4-release:1.1
+	cygwin-1_7_3-release:1.1
+	cygwin-1_7_2-release:1.1
+	newlib-1_18_0:1.1
+	cygwin-1_7_1-release:1.1
+	newlib-1_17_0-arc:1.1.0.4
+	binutils-arc-20080908-branch:1.1.0.2
+	binutils-arc-20080908-branchpoint:1.1
+	newlib-1_17_0:1.1
+	newlib-1_16_0:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.3
+date	2013.10.23.10.04.43;	author corinna;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2012.05.30.08.58.42;	author corinna;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2007.06.04.18.10.17;	author ericb;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.3
+log
+@	* libc/include/stdio.h (funopen): Change prototype of
+	__readfn and __writefn parameter to match new definition of
+	FILE's _read and _write methods.
+	(_funopen_r): Ditto.
+	(funopen): Ditto.
+	(_funopen_r): Ditto.
+	* libc/include/sys/config.h (_READ_WRITE_BUFSIZE_TYPE) Define
+	as type int if not already defined.  Add comment to explain.
+	* libc/include/sys/reent.h: Include stddef.h.
+	(struct __sFILE): Change type of last parameter in declaration
+	of _read and _write methods to _READ_WRITE_BUFSIZE_TYPE.
+	(struct __sFILE64): Ditto.
+	* libc/stdio/local.h (__sread): Declare with last parameter set
+	to _READ_WRITE_BUFSIZE_TYPE.
+	(__seofread): Ditto.
+	(__swrite): Ditto.
+	(__swrite64): Ditto.
+	* libc/stdio/fvwrite.c (__sfvwrite_r): Change type of local
+	variables w and s to _READ_WRITE_RETURN_TYPE.
+	* libc/stdio/fflush.c (__sflush_r): Change type of local variables
+	n and t to _READ_WRITE_BUFSIZE_TYPE and _READ_WRITE_RETURN_TYPE.
+	Add local variables flags to keep _flags value.
+	* libc/stdio/fmemopen.c (fmemreader): Align to above change.
+	(fmemwriter): Ditto.
+	* libc/stdio/fopencookie.c (fcreader): Ditto.
+	(fcwriter): Ditto.
+	* libc/stdio/funopen.c (funread): Ditto.
+	(funwrite): Ditto.
+	(funreader): Ditto.
+	(funwriter): Ditto.
+	* libc/stdio/open_memstream.c (memwriter): Ditto.
+	* libc/stdio/stdio.c (__sread): Ditto.
+	(__seofread): Ditto.
+	(__swrite): Ditto.
+	* libc/stdio64/stdio64.c (__swrite64): Ditto.
+@
+text
+@/* Copyright (C) 2007 Eric Blake
+ * Permission to use, copy, modify, and distribute this software
+ * is freely granted, provided that this notice is preserved.
+ */
+
+/*
+FUNCTION
+<<funopen>>, <<fropen>>, <<fwopen>>---open a stream with custom callbacks
+
+INDEX
+	funopen
+INDEX
+	fropen
+INDEX
+	fwopen
+
+ANSI_SYNOPSIS
+	#include <stdio.h>
+	FILE *funopen(const void *<[cookie]>,
+	              int (*<[readfn]>) (void *cookie, char *buf, int n),
+	              int (*<[writefn]>) (void *cookie, const char *buf, int n),
+	              fpos_t (*<[seekfn]>) (void *cookie, fpos_t off, int whence),
+	              int (*<[closefn]>) (void *cookie));
+	FILE *fropen(const void *<[cookie]>,
+	             int (*<[readfn]>) (void *cookie, char *buf, int n));
+	FILE *fwopen(const void *<[cookie]>,
+	             int (*<[writefn]>) (void *cookie, const char *buf, int n));
+
+DESCRIPTION
+<<funopen>> creates a <<FILE>> stream where I/O is performed using
+custom callbacks.  At least one of <[readfn]> and <[writefn]> must be
+provided, which determines whether the stream behaves with mode <"r">,
+<"w">, or <"r+">.
+
+<[readfn]> should return -1 on failure, or else the number of bytes
+read (0 on EOF).  It is similar to <<read>>, except that <int> rather
+than <size_t> bounds a transaction size, and <[cookie]> will be passed
+as the first argument.  A NULL <[readfn]> makes attempts to read the
+stream fail.
+
+<[writefn]> should return -1 on failure, or else the number of bytes
+written.  It is similar to <<write>>, except that <int> rather than
+<size_t> bounds a transaction size, and <[cookie]> will be passed as
+the first argument.  A NULL <[writefn]> makes attempts to write the
+stream fail.
+
+<[seekfn]> should return (fpos_t)-1 on failure, or else the current
+file position.  It is similar to <<lseek>>, except that <[cookie]>
+will be passed as the first argument.  A NULL <[seekfn]> makes the
+stream behave similarly to a pipe in relation to stdio functions that
+require positioning.  This implementation assumes fpos_t and off_t are
+the same type.
+
+<[closefn]> should return -1 on failure, or 0 on success.  It is
+similar to <<close>>, except that <[cookie]> will be passed as the
+first argument.  A NULL <[closefn]> merely flushes all data then lets
+<<fclose>> succeed.  A failed close will still invalidate the stream.
+
+Read and write I/O functions are allowed to change the underlying
+buffer on fully buffered or line buffered streams by calling
+<<setvbuf>>.  They are also not required to completely fill or empty
+the buffer.  They are not, however, allowed to change streams from
+unbuffered to buffered or to change the state of the line buffering
+flag.  They must also be prepared to have read or write calls occur on
+buffers other than the one most recently specified.
+
+The functions <<fropen>> and <<fwopen>> are convenience macros around
+<<funopen>> that only use the specified callback.
+
+RETURNS
+The return value is an open FILE pointer on success.  On error,
+<<NULL>> is returned, and <<errno>> will be set to EINVAL if a
+function pointer is missing, ENOMEM if the stream cannot be created,
+or EMFILE if too many streams are already open.
+
+PORTABILITY
+This function is a newlib extension, copying the prototype from BSD.
+It is not portable.  See also the <<fopencookie>> interface from Linux.
+
+Supporting OS subroutines required: <<sbrk>>.
+*/
+
+#include <stdio.h>
+#include <errno.h>
+#include <sys/lock.h>
+#include "local.h"
+
+typedef int (*funread)(void *_cookie, char *_buf, _READ_WRITE_BUFSIZE_TYPE _n);
+typedef int (*funwrite)(void *_cookie, const char *_buf,
+			_READ_WRITE_BUFSIZE_TYPE _n);
+#ifdef __LARGE64_FILES
+typedef _fpos64_t (*funseek)(void *_cookie, _fpos64_t _off, int _whence);
+#else
+typedef fpos_t (*funseek)(void *_cookie, fpos_t _off, int _whence);
+#endif
+typedef int (*funclose)(void *_cookie);
+
+typedef struct funcookie {
+  void *cookie;
+  funread readfn;
+  funwrite writefn;
+  funseek seekfn;
+  funclose closefn;
+} funcookie;
+
+static _READ_WRITE_RETURN_TYPE
+_DEFUN(funreader, (ptr, cookie, buf, n),
+       struct _reent *ptr _AND
+       void *cookie _AND
+       char *buf _AND
+       _READ_WRITE_BUFSIZE_TYPE n)
+{
+  int result;
+  funcookie *c = (funcookie *) cookie;
+  errno = 0;
+  if ((result = c->readfn (c->cookie, buf, n)) < 0 && errno)
+    ptr->_errno = errno;
+  return result;
+}
+
+static _READ_WRITE_RETURN_TYPE
+_DEFUN(funwriter, (ptr, cookie, buf, n),
+       struct _reent *ptr _AND
+       void *cookie _AND
+       const char *buf _AND
+       _READ_WRITE_BUFSIZE_TYPE n)
+{
+  int result;
+  funcookie *c = (funcookie *) cookie;
+  errno = 0;
+  if ((result = c->writefn (c->cookie, buf, n)) < 0 && errno)
+    ptr->_errno = errno;
+  return result;
+}
+
+static _fpos_t
+_DEFUN(funseeker, (ptr, cookie, off, whence),
+       struct _reent *ptr _AND
+       void *cookie _AND
+       _fpos_t off _AND
+       int whence)
+{
+  funcookie *c = (funcookie *) cookie;
+#ifndef __LARGE64_FILES
+  fpos_t result;
+  errno = 0;
+  if ((result = c->seekfn (c->cookie, (fpos_t) off, whence)) < 0 && errno)
+    ptr->_errno = errno;
+#else /* __LARGE64_FILES */
+  _fpos64_t result;
+  errno = 0;
+  if ((result = c->seekfn (c->cookie, (_fpos64_t) off, whence)) < 0 && errno)
+    ptr->_errno = errno;
+  else if ((_fpos_t)result != result)
+    {
+      ptr->_errno = EOVERFLOW;
+      result = -1;
+    }
+#endif /* __LARGE64_FILES */
+  return result;
+}
+
+#ifdef __LARGE64_FILES
+static _fpos64_t
+_DEFUN(funseeker64, (ptr, cookie, off, whence),
+       struct _reent *ptr _AND
+       void *cookie _AND
+       _fpos64_t off _AND
+       int whence)
+{
+  _fpos64_t result;
+  funcookie *c = (funcookie *) cookie;
+  errno = 0;
+  if ((result = c->seekfn (c->cookie, off, whence)) < 0 && errno)
+    ptr->_errno = errno;
+  return result;
+}
+#endif /* __LARGE64_FILES */
+
+static int
+_DEFUN(funcloser, (ptr, cookie),
+       struct _reent *ptr _AND
+       void *cookie)
+{
+  int result = 0;
+  funcookie *c = (funcookie *) cookie;
+  if (c->closefn)
+    {
+      errno = 0;
+      if ((result = c->closefn (c->cookie)) < 0 && errno)
+	ptr->_errno = errno;
+    }
+  _free_r (ptr, c);
+  return result;
+}
+
+FILE *
+_DEFUN(_funopen_r, (ptr, cookie, readfn, writefn, seekfn, closefn),
+       struct _reent *ptr _AND
+       const void *cookie _AND
+       funread readfn _AND
+       funwrite writefn _AND
+       funseek seekfn _AND
+       funclose closefn)
+{
+  FILE *fp;
+  funcookie *c;
+
+  if (!readfn && !writefn)
+    {
+      ptr->_errno = EINVAL;
+      return NULL;
+    }
+  if ((fp = __sfp (ptr)) == NULL)
+    return NULL;
+  if ((c = (funcookie *) _malloc_r (ptr, sizeof *c)) == NULL)
+    {
+      _newlib_sfp_lock_start ();
+      fp->_flags = 0;		/* release */
+#ifndef __SINGLE_THREAD__
+      __lock_close_recursive (fp->_lock);
+#endif
+      _newlib_sfp_lock_end ();
+      return NULL;
+    }
+
+  _newlib_flockfile_start (fp);
+  fp->_file = -1;
+  c->cookie = (void *) cookie; /* cast away const */
+  fp->_cookie = c;
+  if (readfn)
+    {
+      c->readfn = readfn;
+      fp->_read = funreader;
+      if (writefn)
+	{
+	  fp->_flags = __SRW;
+	  c->writefn = writefn;
+	  fp->_write = funwriter;
+	}
+      else
+	{
+	  fp->_flags = __SRD;
+	  c->writefn = NULL;
+	  fp->_write = NULL;
+	}
+    }
+  else
+    {
+      fp->_flags = __SWR;
+      c->writefn = writefn;
+      fp->_write = funwriter;
+      c->readfn = NULL;
+      fp->_read = NULL;
+    }
+  c->seekfn = seekfn;
+  fp->_seek = seekfn ? funseeker : NULL;
+#ifdef __LARGE64_FILES
+  fp->_seek64 = seekfn ? funseeker64 : NULL;
+  fp->_flags |= __SL64;
+#endif
+  c->closefn = closefn;
+  fp->_close = funcloser;
+  _newlib_flockfile_end (fp);
+  return fp;
+}
+
+#ifndef _REENT_ONLY
+FILE *
+_DEFUN(funopen, (cookie, readfn, writefn, seekfn, closefn),
+       const void *cookie _AND
+       funread readfn _AND
+       funwrite writefn _AND
+       funseek seekfn _AND
+       funclose closefn)
+{
+  return _funopen_r (_REENT, cookie, readfn, writefn, seekfn, closefn);
+}
+#endif /* !_REENT_ONLY */
+@
+
+
+1.2
+log
+@	* libc/stdio/local.h (_newlib_flockfile_start): New macro to
+	secure stream related critical section against thread cancellation.
+	(_newlib_flockfile_exit): Ditto.
+	(_newlib_sfp_lock_end): Ditto.
+	(_newlib_sfp_lock_start): Ditto for the list of streams.
+	(_newlib_sfp_lock_exit): Ditto.
+	(_newlib_sfp_lock_end): Ditto.
+	Use aforementioned macros in place of _flockfile/_funlockfile
+	and __sfp_lock_acquire/__sfp_lock_release throughout the code.
+	* libc/stdio/fclose.c: Explicitely disable and re-enable thread
+	cancellation.  Explain why.
+	* libc/stdio/freopen.c: Ditto.
+	* libc/stdio64/freopen64.c: Ditto.
+@
+text
+@d88 3
+a90 2
+typedef int (*funread)(void *_cookie, char *_buf, int _n);
+typedef int (*funwrite)(void *_cookie, const char *_buf, int _n);
+d111 1
+a111 1
+       int n)
+d126 1
+a126 1
+       int n)
+@
+
+
+1.1
+log
+@Implement funopen, fopencookie.
+* libc/include/sys/reent.h (struct __sFILE, struct __sFILE64):
+Switch to reentrant callbacks.
+* libc/include/stdio.h (funopen): Fix declaration.
+(fopencookie): Declare.
+* libc/stdio/local.h (__sread, __swrite, __sseek, __sclose)
+(__sseek64, __swrite64): Fix prototypes.
+[__SCLE]: Pull in setmode declaration.
+* libc/stdio/stdio.c (__sread, __swrite, __sseek, __sclose): Fix
+reentrancy.
+* libc/stdio64/stdio64.c (__sseek64_r, __swrite64_r): Delete.
+(__sseek64, __swrite64): Fix reentrancy.
+* libc/stdio/fseek.c (_fseek_r): Account for overflow, and fix
+reentrancy.
+* libc/stdio/ftell.c (_ftell_r): Likewise.
+* libc/stdio/flags.c (__sflags): Don't lose __SAPP on "a+".
+* libc/stdio/fclose.c (_fclose_r): Fix reentrancy.
+* libc/stdio/freopen.c (_freopen_r): Likewise.
+* libc/stdio/fvwrite.c (__sfvwrite_r): Likewise.
+* libc/stdio/refill.c (__srefill_r): Likewise.
+* libc/stdio/siscanf.c (eofread): Likewise.
+* libc/stdio/sscanf.c (eofread): Likewise.
+* libc/stdio/vsiscanf.c (eofread1): Likewise.
+* libc/stdio/vsscanf.c (eofread1): Likewise.
+* libc/stdio64/freopen64.c (_freopen64_r): Likewise.
+* libc/stdio64/fseeko64.c (_fseeko64_r): Likewise.
+* libc/stdio64/ftello64.c (_ftello64_r): Likewise.
+* libc/stdio/fflush.c (fflush): Improve reentrancy, although more
+could be fixed.
+* libc/stdio/fopencookie.c (_fopencookie_r, fopencookie): New file.
+* libc/stdio/funopen.c (_funopen_r, funopen): New file.
+* libc/stdio/Makefile.am (ELIX_4_SOURCES, CHEWOUT_FILES): Build
+new files.
+* libc/stdio/Makefile.in: Regenerate.
+@
+text
+@d217 1
+a217 1
+      __sfp_lock_acquire ();
+d222 1
+a222 1
+      __sfp_lock_release ();
+d226 1
+a226 1
+  _flockfile (fp);
+d263 1
+a263 1
+  _funlockfile (fp);
+@
+

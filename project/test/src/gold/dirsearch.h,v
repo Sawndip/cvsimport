@@ -1,0 +1,452 @@
+head	1.10;
+access;
+symbols
+	binutils-2_24-branch:1.10.0.4
+	binutils-2_24-branchpoint:1.10
+	binutils-2_21_1:1.8
+	binutils-2_23_2:1.10
+	binutils-2_23_1:1.10
+	binutils-2_23:1.10
+	binutils-2_23-branch:1.10.0.2
+	binutils-2_23-branchpoint:1.10
+	binutils-2_22_branch:1.9.0.4
+	binutils-2_22:1.9
+	binutils-2_22-branch:1.9.0.2
+	binutils-2_22-branchpoint:1.9
+	binutils-2_21:1.8
+	binutils-2_21-branch:1.8.0.2
+	binutils-2_21-branchpoint:1.8
+	binutils-2_20_1:1.7
+	binutils-2_20:1.7
+	binutils-arc-20081103-branch:1.6.0.6
+	binutils-arc-20081103-branchpoint:1.6
+	binutils-2_20-branch:1.7.0.4
+	binutils-2_20-branchpoint:1.7
+	dje-cgen-play1-branch:1.7.0.2
+	dje-cgen-play1-branchpoint:1.7
+	arc-20081103-branch:1.6.0.4
+	arc-20081103-branchpoint:1.6
+	binutils-2_19_1:1.6
+	binutils-2_19:1.6
+	binutils-2_19-branch:1.6.0.2
+	binutils-2_19-branchpoint:1.6
+	binutils_latest_snapshot:1.10
+	added-to-binutils:1.6;
+locks; strict;
+comment	@ * @;
+
+
+1.10
+date	2011.11.17.17.46.54;	author sterling;	state Exp;
+branches;
+next	1.9;
+
+1.9
+date	2011.05.25.06.15.28;	author ian;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2010.08.25.08.36.54;	author nickc;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2009.03.14.05.56.46;	author ian;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2008.03.13.21.04.21;	author iant;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2007.12.14.19.00.21;	author iant;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2007.10.04.05.49.04;	author iant;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2007.09.22.21.02.10;	author iant;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2006.11.03.18.26.10;	author iant;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2006.08.04.23.10.59;	author iant;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.10
+log
+@2011-11-17  Sterling Augustine  <saugustine@@google.com>
+
+	* script.cc (script_include_directive): Implement.
+	(read_script_file): New local variables name and search_path. Update
+	comment. Call IS_ABSOLUTE_PATH and Dirsearch::find_file_in_dir_list.
+	* dirsearch.h (Dirsearch::find_file_in_dir_list): Declare new method.
+	* dirsearch.cc (Dirsearch::find_file_in_dir_list): Implement it.
+@
+text
+@// dirsearch.h -- directory searching for gold  -*- C++ -*-
+
+// Copyright 2006, 2007, 2008, 2009, 2010, 2011 Free Software Foundation, Inc.
+// Written by Ian Lance Taylor <iant@@google.com>.
+
+// This file is part of gold.
+
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 3 of the License, or
+// (at your option) any later version.
+
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+// MA 02110-1301, USA.
+
+#ifndef GOLD_DIRSEARCH_H
+#define GOLD_DIRSEARCH_H
+
+#include <string>
+#include <list>
+
+#include "options.h"
+#include "token.h"
+
+namespace gold
+{
+
+class General_options;
+class Workqueue;
+
+// A simple interface to manage directories to be searched for
+// libraries.
+
+class Dirsearch
+{
+ public:
+  Dirsearch()
+    : directories_(NULL), token_(true)
+  { }
+
+  // Set the list of directories to search.
+  void
+  initialize(Workqueue*, const General_options::Dir_list*);
+
+  // Search for a file, giving one or two names to search for (the
+  // second one may be empty).  Return a full path name for the file,
+  // or the empty string if it could not be found.  This may only be
+  // called if the token is not blocked.  Set *IS_IN_SYSROOT if the
+  // file was found in a directory which is in the sysroot.  *PINDEX
+  // should be set to zero the first time this is called; it will be
+  // updated with the index of the directory where the file is found,
+  // and that value plus one may be used to find the next file with
+  // the same name(s).
+  std::string
+  find(const std::vector<std::string>& names, bool* is_in_sysroot,
+       int* pindex, std::string *found_name) const;
+
+  // Return the blocker token which controls access.
+  Task_token*
+  token()
+  { return &this->token_; }
+
+  // Search for a file in a directory list.  This is a low-level function and
+  // therefore can be used before options and parameters are set.
+  static std::string
+  find_file_in_dir_list(const std::string& name,
+                        const General_options::Dir_list& directories,
+                        const std::string& extra_search_dir);
+
+ private:
+  // We can not copy this class.
+  Dirsearch(const Dirsearch&);
+  Dirsearch& operator=(const Dirsearch&);
+
+  // Directories to search.
+  const General_options::Dir_list* directories_;
+  // Blocker token to control access from tasks.
+  Task_token token_;
+};
+
+} // End namespace gold.
+
+#endif // !defined(GOLD_DIRSEARCH_H)
+@
+
+
+1.9
+log
+@	* dirsearch.cc (Dirsearch::find): Replace n1 and n2 parameters
+	with name parameter.  Add found_name parameter.
+	* fileread.cc (Input_file::find_file): Adjust code accordingly.
+	* dirsearch.h (class Dirsearch): Update declaration.
+@
+text
+@d70 7
+@
+
+
+1.8
+log
+@        * archive.cc: Formatting fixes: Remove whitespace between
+        typename and following asterisk.  Remove whitespace between
+        function name and opening parenthesis.
+        * archive.h: Likewise.
+        * arm.cc: Likewise.
+        * attributes.cc: Likewise.
+        * attributes.h: Likewise.
+        * common.cc: Likewise.
+        * copy-relocs.cc: Likewise.
+        * dirsearch.h: Likewise.
+        * dynobj.cc: Likewise.
+        * ehframe.cc: Likewise.
+        * ehframe.h: Likewise.
+        * expression.cc: Likewise.
+        * fileread.cc: Likewise.
+        * fileread.h: Likewise.
+        * gc.h: Likewise.
+        * gold-threads.cc: Likewise.
+        * gold.cc: Likewise.
+        * i386.cc: Likewise.
+        * icf.h: Likewise.
+        * incremental-dump.cc: Likewise.
+        * incremental.cc: Likewise.
+        * layout.cc: Likewise.
+        * layout.h: Likewise.
+        * main.cc: Likewise.
+        * merge.cc: Likewise.
+        * merge.h: Likewise.
+        * object.cc: Likewise.
+        * object.h: Likewise.
+        * options.cc: Likewise.
+        * options.h: Likewise.
+        * output.cc: Likewise.
+        * output.h: Likewise.
+        * plugin.cc: Likewise.
+        * plugin.h: Likewise.
+        * powerpc.cc: Likewise.
+        * reloc.cc: Likewise.
+        * script-c.h: Likewise.
+        * script-sections.cc: Likewise.
+        * script.cc: Likewise.
+        * stringpool.cc: Likewise.
+        * symtab.cc: Likewise.
+        * symtab.h: Likewise.
+        * target.cc: Likewise.
+        * timer.cc: Likewise.
+        * timer.h: Likewise.
+        * version.cc: Likewise.
+        * x86_64.cc: Likewise.
+@
+text
+@d3 1
+a3 1
+// Copyright 2006, 2007, 2008 Free Software Foundation, Inc.
+d62 2
+a63 2
+  find(const std::string&, const std::string& n2, bool* is_in_sysroot,
+       int* pindex) const;
+@
+
+
+1.7
+log
+@	* readsyms.cc (Read_symbols::incompatible_warning): New function.
+	(Read_symbols::requeue): New function.
+	(Read_symbols::do_read_symbols): If make_elf_object fails because
+	the target type is not configured, and the file was searched for,
+	issue a warning and retry with the next directory.
+	(Add_symbols::run): If the file has an incompatible format, and
+	it was searched for, requeue the Read_symbols task.  On error,
+	release the object.
+	* readsyms.h (class Read_symbols): Add dirindex_ field.  Add
+	dirindex parameter to constructor.  Change all callers.  Declare
+	incompatible_warning and requeue.
+	(class Add_symbols): Add dirpath_, dirindex_, mapfile_,
+	input_argument_ and input_group_ fields.  Add them to
+	constructor.  Change all callers.
+	(class Read_script): Add dirindex_ field.  Add it to constructor.
+	Change all callers.
+	* archive.cc (Archive::setup): Remove input_objects parameter.
+	Change all callers.
+	(Archive::get_file_and_offset): Likewise.
+	(Archive::read_all_symbols): Likewise.
+	(Archive::read_symbols): Likewise.
+	(Archive::get_elf_object_for_member): Remove input_objects
+	parameter.  Add punconfigured parameter.  Change all callers.
+	(Archive::add_symbols): Change return type to bool.  Check return
+	value of include_member.
+	(Archive::include_all_members): Likewise.
+	(Archive::include_member): Change return type to bool.  Return
+	false if first included object has incompatible target.  Set
+	included_member_ field.
+	(Add_archive_symbols::run): If add_symbols returns false, requeue
+	Read_symbols task.
+	* archive.h (class Archive): Add included_member_ field.
+	Initialize it in constructor.  Add input_file and searched_for
+	methods.  Update declarations.
+	(class Add_archive_symbols): Add dirpath_, dirindex_, and
+	input_argument_ fields.  Add them to constructor.  Change all
+	callers.
+	* script.cc: Include "target-select.h".
+	(class Parser_closure): Add skip_on_incompatible_target_ and
+	found_incompatible_target_ fields.  Add
+	skip_on_incompatible_target parameter to constructor.  Change all
+	callers.  Add methods skip_on_incompatible_target,
+	clear_skip_on_incompatible_target, found_incompatible_target, and
+	set_found_incompatible_target.
+	(read_input_script): Add dirindex parameter.  Change all callers.
+	If parser finds an incompatible target, requeue Read_symbols
+	task.
+	(script_set_symbol): Clear skip_on_incompatible_target in
+	closure.
+	(script_add_assertion, script_parse_option): Likewise.
+	(script_start_sections, script_add_phdr): Likewise.
+	(script_check_output_format): New function.
+	* script.h (read_input_script): Update declaration.
+	* script-c.h (script_check_output_format): Declare.
+	* yyscript.y (file_cmd): Handle OUTPUT_FORMAT.
+	(ignore_cmd): Remove OUTPUT_FORMAT.
+	* fileread.cc (Input_file::Input_file): Add explicit this.
+	(Input_file::will_search_for): New function.
+	(Input_file::open): Add pindex parameter.  Change all callers.
+	* fileread.h (class Input_file): Add input_file_argument method.
+	Declare will_search_for.  Update declarations.
+	* object.cc (make_elf_object): Add punconfigured parameter.
+	Change all callers.
+	* object.h (class Object): Make input_file public.  Add
+	searched_for method.
+	(make_elf_object): Update declaration.
+	* dirsearch.cc (Dirsearch::find): Add pindex parameter.  Use it to
+	restart search.
+	* dirsearch.h (class Dirsearch): Update declaration.
+	* options.h (class General_options): Add --warn-search-mismatch.
+	* parameters.cc (Parameters::is_compatible_target): New function.
+	* parameters.h (class Parameters): Declare is_compatible_target.
+	* workqueue.cc (Workqueue::add_blocker): New function.
+	* workqueue.h (class Workqueue): Declare add_blocker.
+@
+text
+@d62 1
+a62 1
+  find(const std::string&, const std::string& n2, bool *is_in_sysroot,
+@
+
+
+1.6
+log
+@Update copyright years.  Update language files.
+@
+text
+@d56 5
+a60 1
+  // file was found in a directory which is in the sysroot.
+d62 2
+a63 1
+  find(const std::string&, const std::string& n2, bool *is_in_sysroot) const;
+@
+
+
+1.5
+log
+@Rewrite workqueue.  This version eliminates the master thread, and
+reduces the amount of locking required to find a new thread to run.
+@
+text
+@d3 1
+a3 1
+// Copyright 2006, 2007 Free Software Foundation, Inc.
+@
+
+
+1.4
+log
+@Full support for --sysroot.
+@
+text
+@d29 2
+a30 1
+#include "workqueue.h"
+d36 1
+d45 1
+a45 1
+    : directories_(NULL), token_()
+d60 4
+a63 4
+  // Return a reference to the blocker token which controls access.
+  const Task_token&
+  token() const
+  { return this->token_; }
+@
+
+
+1.3
+log
+@Add licensing text to every source file.
+@
+text
+@d42 3
+a44 1
+  Dirsearch();
+d46 1
+a46 1
+  // Add a directory to the search path.
+d48 1
+a48 5
+  add(Workqueue*, const char*);
+
+  // Add a list of directories to the search path.
+  void
+  add(Workqueue*, const General_options::Dir_list&);
+d53 2
+a54 1
+  // called if the token is not blocked.
+d56 1
+a56 1
+  find(const std::string&, const std::string& n2 = std::string()) const;
+d69 1
+a69 1
+  std::list<const char*> directories_;
+@
+
+
+1.2
+log
+@Can now do a full static link of hello, world in C or C++
+@
+text
+@d3 20
+@
+
+
+1.1
+log
+@Initial CVS checkin of gold
+@
+text
+@a8 1
+#include "options.h"
+d13 2
+@
+

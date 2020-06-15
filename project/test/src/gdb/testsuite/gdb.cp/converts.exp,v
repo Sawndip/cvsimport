@@ -1,0 +1,561 @@
+head	1.9;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.9
+	gdb_7_6-2013-04-26-release:1.9
+	gdb_7_6-branch:1.9.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.9
+	gdb_7_5_1-2012-11-29-release:1.6
+	gdb_7_5-2012-08-17-release:1.6
+	gdb_7_5-branch:1.6.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.6
+	gdb_7_4_1-2012-04-26-release:1.4.2.1
+	gdb_7_4-2012-01-24-release:1.4.2.1
+	gdb_7_4-branch:1.4.0.2
+	gdb_7_4-2011-12-13-branchpoint:1.4
+	gdb_7_3_1-2011-09-04-release:1.3
+	gdb_7_3-2011-07-26-release:1.3
+	gdb_7_3-branch:1.3.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.3;
+locks; strict;
+comment	@# @;
+
+
+1.9
+date	2013.01.01.06.33.27;	author brobecke;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2012.09.10.17.12.53;	author kseitz;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2012.08.17.17.37.03;	author kseitz;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2012.07.10.15.18.18;	author tromey;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2012.01.04.08.17.46;	author brobecke;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2011.10.14.20.22.50;	author kseitz;	state Exp;
+branches
+	1.4.2.1;
+next	1.3;
+
+1.3
+date	2011.01.01.15.33.43;	author brobecke;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2010.10.19.16.07.25;	author swagiaal;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2010.10.14.16.13.43;	author swagiaal;	state Exp;
+branches;
+next	;
+
+1.4.2.1
+date	2012.01.06.04.44.02;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.9
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@# Copyright 2008-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+standard_testfile .cc
+
+if { [prepare_for_testing ${testfile}.exp ${testfile} ${srcfile} {debug c++}] } {
+     return -1
+}
+
+############################################
+
+if ![runto_main] then {
+    perror "couldn't run to breakpoint main"
+    continue
+}
+
+gdb_breakpoint [gdb_get_line_number "end of main"]
+gdb_continue_to_breakpoint "end of main"
+
+gdb_test "p foo0_1 (ta)"   "= 1"              "typedef to another typedef"
+gdb_test "p foo0_2 (ta)"   "= 2"              "typedef to typedef of a typedef"
+gdb_test "p foo0_3 (bppp)" "Cannot resolve.*" \
+ "Pointer-to-pointer-to-pointer derived to Pointer-to-pointer-to-pointer base."
+
+gdb_test "p foo1_1 (a)"  "= 11"             "pointer to pointer"
+gdb_test "p foo1_2 (a)"  "= 12"             "pointer to array"
+gdb_test "p foo1_3 (a)"  "Cannot resolve.*" "pointer to pointer of wrong type"
+gdb_test "p foo1_3 (bp)" "Cannot resolve.*" "pointer to pointer of wrong type"
+gdb_test "p foo1_4 (bp)" "= 14"             "pointer to ancestor pointer"
+gdb_test "p foo1_5 (bp)" "= 15"             "pointer to void pointer"
+gdb_test "p foo1_6 (bp)" "Cannot resolve.*"     "pointer to void pointer pointer"
+gdb_test "p foo1_7 (bp)" "= 17"                 "pointer to boolean"
+gdb_test "p foo1_8 (bp)" "Using non-standard.*" "pointer to long int"
+
+gdb_test "p foo1_5 (b)" "= 15"             "pointer pointer to void pointer"
+gdb_test "p foo2_1 (b)" "= 21"             "pointer pointer to pointer pointer"
+gdb_test "p foo2_2 (b)" "Cannot resolve.*" "pointer pointer to array of arrays"
+gdb_test "p foo2_3 (b)" "= 23"             "pointer pointer to array of pointers"
+gdb_test "p foo2_4 (b)" "Cannot resolve.*" "pointer pointer to array of wrong pointers"
+
+gdb_test "p foo3_1 ((char *) 0, ta)" "Cannot resolve.*" \
+    "check all parameters for badness"
+
+# Tests for null pointer conversion
+global gdb_prompt
+set nl {[\r\n]+}
+set t "null pointer conversion"
+gdb_test_multiple "p foo3_1 (0, 0)" $t {
+  -re "warning: Using non-standard conversion.*$nl$gdb_prompt $" {
+    fail "$t (warning issued)"
+  }
+
+  -re "Cannot resolve function foo3_1 to any overloaded instance$nl$gdb_prompt $" {
+    fail "$t (conversion failed)"
+  }
+
+  -re "\\$\[0-9\]+ = 31$nl$gdb_prompt $" {
+    pass $t
+  }
+}
+
+gdb_test "p foo3_1 (0, 1)" \
+    "Cannot resolve function foo3_1 to any overloaded instance"
+gdb_test "p foo3_1 (0, (const char**) 1)" " = 31"
+gdb_test "p foo3_2 (0, 0)" "= 32"
+gdb_test "p foo3_2 (0, (char const**) 0)" " = 320"
+
+# Tests for boolean conversions allowed by the standard
+gdb_test "p foo1_7(0)" " = 17"
+gdb_test "p foo1_7(integer)" " = 17"
+gdb_test "p foo1_7(long_int)" " = 17"
+gdb_test "p foo1_7(*a)" " = 17"
+gdb_test "p foo1_7(MY_A)" " = 17"
+gdb_test "p foo1_7(&foo1_7)" " = 17"
+gdb_test "p foo1_7(&A::member_)" " = 17"
+gdb_test "p foo1_7(a)" " = 17"
+gdb_test "p foo1_7(fp)" " = 17"
+gdb_test "p foo1_7(dp)" " = 17"
+gdb_test "p foo1_7(-1.23)" " = 17"
+gdb_test "p foo1_7(ta)" \
+    "Cannot resolve function foo1_7 to any overloaded instance"
+
+# Test for strict type checking
+set error_str "Cannot resolve function %s to any overloaded instance"
+gdb_test "show check type" "Strict type checking is on\."
+gdb_test "p foo1_type_check (123)" [format $error_str "foo1_type_check"]
+gdb_test "p foo2_type_check (0, 1)" [format $error_str "foo2_type_check"]
+gdb_test "p foo2_type_check (1, 0)" [format $error_str "foo2_type_check"]
+gdb_test "p foo2_type_check (1, 1)" [format $error_str "foo2_type_check"]
+gdb_test "p foo3_type_check (0, 0, 1)" [format $error_str "foo3_type_check"]
+gdb_test "p foo3_type_check (0, 1, 0)" [format $error_str "foo3_type_check"]
+gdb_test "p foo3_type_check (1, 0, 0)" [format $error_str "foo3_type_check"]
+gdb_test "p foo3_type_check (0, 1, 1)" [format $error_str "foo3_type_check"]
+gdb_test "p foo3_type_check (1, 1, 0)" [format $error_str "foo3_type_check"]
+gdb_test "p foo3_type_check (1, 1, 1)" [format $error_str "foo3_type_check"]
+
+gdb_test_no_output "set check type off"
+gdb_test "show check type" "Strict type checking is off\."
+gdb_test "p foo1_type_check (123)" " = 1000"
+gdb_test "p foo2_type_check (0, 1)" " = 1001"
+gdb_test "p foo2_type_check (1, 0)" " = 1001"
+gdb_test "p foo2_type_check (1, 1)" " = 1001"
+gdb_test "p foo3_type_check (0, 0, 1)" " = 1002"
+gdb_test "p foo3_type_check (0, 1, 0)" " = 1002"
+gdb_test "p foo3_type_check (1, 0, 0)" " = 1002"
+gdb_test "p foo3_type_check (0, 1, 1)" " = 1002"
+gdb_test "p foo3_type_check (1, 1, 0)" " = 1002"
+gdb_test "p foo3_type_check (1, 1, 1)" " = 1002"
+gdb_test "p foo3_2 (1,1)" " = 32"
+@
+
+
+1.8
+log
+@	PR gdb/13483
+	* gdbtypes.h (BOOL_PTR_CONVERSION_BADNESS): Rename to ...
+	(BOOL_CONVERSION_BADNESS): ... this.
+	* gdbtypes.c (BOOL_PTR_CONVERSION_BADNESS): Likewise.
+	(rank_one_type): Allow all boolean conversions
+	permitted by the standard.
+
+	* gdb.cp/converts.cc (A::A): Add ctor.
+	(A::member_): Add member.
+	(enum my_enum): New enumeration.
+	(main): Add calls to foo1_7 with various
+	permitted arguments.
+	* gdb.cp/converts.exp: Add tests for boolean
+	conversions permitted by the standard.
+@
+text
+@d1 1
+a1 1
+# Copyright 2008, 2011-2012 Free Software Foundation, Inc.
+@
+
+
+1.7
+log
+@	PR c++/13356
+	* gdbtypes.c (strict_type_checking): New variable.
+	(show_strict_type_checking): New function.
+	(rank_one_type): Return NS_POINTER_INTEGER_CONVERSION_BADNESS
+	if strict type checking is disabled.
+	(_initialize_gdbtypes): Add "check type" subcommand.
+	* gdbtypes.h (NS_INTEGER_POINTER_CONVERSION_BADNESS): New struct.
+
+	PR c++/13356
+	* gdb.base/default.exp: Update all "check type" tests.
+	* gdb.base/help.exp: Likewise.
+	* gdb.base/setshow.exp: Likewise.
+	* gdb.cp/converts.cc (foo1_type_check): New function.
+	(foo2_type_check): New function.
+	(foo3_type_check): New function.
+	(main): Call new functions.
+	* converts.exp: Add tests for integer-to-pointer conversions
+	with/without strict type-checking.
+
+	PR c++/13356
+	* gdb.texinfo (Type and Range Checking): Remove warning.
+	Remove spurious commas.
+	Update text and examples for re-implementation of set/show
+	check type.
+	(C and C++ Type and Range Checks): Likewise.
+
+	* language.h (type_mode): Remove.
+	(type_check): Remove.
+	(struct language_defn): Remove la_type_check.
+	(STRICT_TYPE): Remove unused macro.
+	(type_error): Remove.
+	* language.c (set_type_range_case): Renamed to ...
+	(set_range_case): ... this.  Update all callers.
+	Remove type_mode/type_check.
+	(type_mode): Remove.
+	(type_check): Remove.
+	(show_type_command): Remove.
+	(set_type_command): Remove.
+	(language_info): Remove type checking output.
+	(type_error): Remove unused function.
+	(range_error): Update comment.
+	(unknown_language_defn): Remove la_type_check.
+	(auto_language_defn): Likewise.
+	(local_language_defn): Likewise.
+	(_initialize_language): Remove "check type" subcommand.
+	* ada-lang.c (ada_language_defn): Remove la_type_check.
+	* c-lang.c (c_language_defn): Likewise.
+	(cplus_language_defn): Likewise.
+	(asm_language_defn): Likewise.
+	(minimal_language_defn): Likewise.
+	* d-lang.c (d_language_defn): Likewise.
+	* f-lang.c (f_language_defn): Likewise.
+	* go-lang.c (go_language_defn): Likewise.
+	* jv-lang.c (java_language_defn): Likewise.
+	* m2-lang.c (m2_language_defn): Likewise.
+	* objc-lang.c (objc_language_defn): Likewise.
+	* opencl-lang.c (opencl_language_defn): Likewise.
+	* p-lang.c (pascal_language_defn): Likewise.
+@
+text
+@d80 15
+@
+
+
+1.6
+log
+@	* gdb.cp/abstract-origin.exp: Use standard_testfile.
+	* gdb.cp/ambiguous.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/annota2.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/annota3.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/anon-ns.exp: Use standard_testfile.
+	* gdb.cp/anon-struct.exp: Use standard_testfile.
+	* gdb.cp/anon-union.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/arg-reference.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/bool.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/breakpoint.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/bs15503.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/call-c.exp: Use standard_testfile, clean_restart,
+	standard_output_file.
+	* gdb.cp/casts.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/class2.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/classes.exp: Use standard_testfile, prepare_for_testing.
+	(test_static_members): Update.
+	* gdb.cp/cmpd-minsyms.exp: Use standard_testfile.
+	* gdb.cp/converts.exp: Use standard_testfile.
+	* gdb.cp/cp-relocate.exp: Use standard_testfile.
+	* gdb.cp/cpcompletion.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/cpexprs.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/cplabel.exp: Use standard_testfile.
+	* gdb.cp/cplusfuncs.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/ctti.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/derivation.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/destrprint.exp: Use standard_testfile.
+	* gdb.cp/dispcxx.exp: Use standard_testfile.
+	* gdb.cp/exception.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/expand-psymtabs-cxx.exp: Use standard_testfile.
+	* gdb.cp/extern-c.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/formatted-ref.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/fpointer.exp: Use standard_testfile.
+	* gdb.cp/gdb1355.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/gdb2384.exp: Use standard_testfile, clean_restart,
+	standard_output_file.
+	* gdb.cp/gdb2495.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/hang.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/infcall-dlopen.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.cp/inherit.exp: Use standard_testfile, prepare_for_testing.
+	(do_tests): Update.
+	* gdb.cp/koenig.exp: Use standard_testfile.
+	* gdb.cp/local.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/m-data.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/m-static.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/mb-ctor.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/mb-inline.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/mb-templates.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/member-ptr.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/meth-typedefs.exp: Use standard_testfile.
+	* gdb.cp/method.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/method2.exp: Use standard_testfile.
+	* gdb.cp/minsym-fallback.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.cp/misc.exp: Use standard_testfile, prepare_for_testing.
+	(do_tests): Update.
+	* gdb.cp/namespace-enum.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/namespace-nested-import.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/namespace.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/nextoverthrow.exp: Use standard_testfile.
+	* gdb.cp/no-dmgl-verbose.exp: Use standard_testfile.
+	* gdb.cp/nsdecl.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/nsimport.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/nsnested.exp: Use standard_testfile.
+	* gdb.cp/nsnoimports.exp: Use standard_testfile.
+	* gdb.cp/nsrecurs.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/nsstress.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/nsusing.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/operator.exp: Use standard_testfile.
+	* gdb.cp/oranking.exp: Use standard_testfile.
+	* gdb.cp/overload-const.exp: Use standard_testfile.
+	* gdb.cp/overload.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/ovldbreak.exp: Use standard_testfile.
+	* gdb.cp/ovsrch.exp: Use standard_testfile.
+	* gdb.cp/paren-type.exp: Use standard_testfile.
+	* gdb.cp/pass-by-ref.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/pr-1023.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/pr-1210.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/pr-574.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/pr10687.exp: Use standard_testfile, clean_restart.
+	* gdb.cp/pr10728.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.cp/pr12028.exp: Use standard_testfile.
+	* gdb.cp/pr9067.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/pr9167.exp: Use standard_testfile.
+	* gdb.cp/pr9631.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/printmethod.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/psmang.exp: Use standard_testfile, clean_restart.
+	* gdb.cp/psymtab-parameter.exp: Use standard_testfile.
+	* gdb.cp/ptype-cv-cp.exp: Use standard_testfile.
+	* gdb.cp/re-set-overloaded.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.cp/readnow-language.exp: Use standard_testfile.
+	* gdb.cp/ref-params.exp: Use standard_testfile, build_executable.
+	(gdb_start_again): Use clean_restart.
+	* gdb.cp/ref-types.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/rtti.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/shadow.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/smartp.exp: Use standard_testfile.
+	* gdb.cp/static-method.exp: Use standard_testfile.
+	* gdb.cp/static-print-quit.exp: Use standard_testfile.
+	* gdb.cp/temargs.exp: Use standard_testfile.
+	* gdb.cp/templates.exp: Use standard_testfile,
+	prepare_for_testing.
+	(do_tests): Update.
+	* gdb.cp/try_catch.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/typedef-operator.exp: Use standard_testfile.
+	* gdb.cp/userdef.exp: Use standard_testfile, prepare_for_testing.
+	* gdb.cp/virtbase.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.cp/virtfunc.exp: Use standard_testfile,
+	prepare_for_testing.
+	(do_tests): Update.
+	* gdb.cp/virtfunc2.exp: Use standard_testfile,
+	prepare_for_testing.
+@
+text
+@d73 1
+d80 27
+@
+
+
+1.5
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d16 2
+a17 2
+set testfile converts
+set srcfile ${testfile}.cc
+@
+
+
+1.4
+log
+@	PR c++/13225
+	* gdb.cp/converts.cc (foo3_1): New function.
+	(foo3_2): New functions.
+	* gdb.cp/converts.exp: Add tests for int to pointer conversion
+	and null pointer conversions of integer constant zero.
+	Add test to check if all arguments are checked for incompatible
+	conversion BADNESS.
+@
+text
+@d1 1
+a1 1
+# Copyright 2008, 2011 Free Software Foundation, Inc.
+@
+
+
+1.4.2.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d1 1
+a1 1
+# Copyright 2008, 2011-2012 Free Software Foundation, Inc.
+@
+
+
+1.3
+log
+@run copyright.sh for 2011.
+@
+text
+@d52 27
+@
+
+
+1.2
+log
+@Support pointer to bool conversion.
+
+2010-10-19  Sami Wagiaalla  <swagiaal@@redhat.com>
+
+	* gdbtypes.h: Introduce BOOL_PTR_CONVERSION_BADNESS.
+	* gdbtypes.c (rank_one_type): Use BOOL_PTR_CONVERSION_BADNESS
+	for conversion.
+	Make all other conversions illegal.
+
+2010-10-19  Sami Wagiaalla  <swagiaal@@redhat.com>
+
+	* gdb.cp/converts.exp: Test pointer to bool conversion.
+	Test pointer to long conversion.
+	* gdb.cp/oranking.exp: Removed relevant kfail.
+@
+text
+@d1 1
+a1 1
+# Copyright 2008 Free Software Foundation, Inc.
+@
+
+
+1.1
+log
+@Fixed void* vs int* overload issue (PR C++/10343).
+
+2010-10-14  Sami Wagiaalla  <swagiaal@@redhat.com>
+
+	* gdbtypes.h: Create BASE_PTR_CONVERSION_BADNESS.
+	* gdbtypes.c (rank_one_type): Move type comparison code out of here
+	to...
+	(types_equal): ...here. And changed it as follows:
+	Outside of typedefs type must be of the same TYPE_CODE.
+	When compairing two pointers or references they are equal if their
+	targets are equal.
+	Correct pointer conversions.
+
+2010-10-14  Sami Wagiaalla  <swagiaal@@redhat.com>
+
+	* gdb.cp/converts.cc: New test program.
+	* gdb.cp/converts.exp: New test.
+	* gdb.cp/overload.exp: Added test for void* vs int*.
+	* gdb.cp/overload.exp: Ditto.
+	* gdb.cp/oranking.exp: Removed related kfail.
+@
+text
+@d43 3
+@
+

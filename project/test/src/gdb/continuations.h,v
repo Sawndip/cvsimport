@@ -1,0 +1,256 @@
+head	1.4;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.4
+	gdb_7_6-2013-04-26-release:1.4
+	gdb_7_6-branch:1.4.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.4
+	gdb_7_5_1-2012-11-29-release:1.3
+	gdb_7_5-2012-08-17-release:1.3
+	gdb_7_5-branch:1.3.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.3
+	gdb_7_4_1-2012-04-26-release:1.2.2.1
+	gdb_7_4-2012-01-24-release:1.2.2.1
+	gdb_7_4-branch:1.2.0.2
+	gdb_7_4-2011-12-13-branchpoint:1.2;
+locks; strict;
+comment	@ * @;
+
+
+1.4
+date	2013.01.01.06.32.40;	author brobecke;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2012.01.04.08.17.00;	author brobecke;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2011.05.30.18.04.32;	author palves;	state Exp;
+branches
+	1.2.2.1;
+next	1.1;
+
+1.1
+date	2011.05.27.18.28.18;	author palves;	state Exp;
+branches;
+next	;
+
+1.2.2.1
+date	2012.01.06.04.43.06;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.4
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@/* Continuations for GDB, the GNU debugger.
+
+   Copyright (C) 1999-2013 Free Software Foundation, Inc.
+
+   This file is part of GDB.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+#ifndef CONTINUATIONS_H
+#define CONTINUATIONS_H
+
+struct thread_info;
+struct inferior;
+
+/* To continue the execution commands when running gdb asynchronously.
+   A continuation structure contains a pointer to a function to be called
+   to finish the command, once the target has stopped.  Such mechanism is
+   used by the finish and until commands, and in the remote protocol
+   when opening an extended-remote connection.  */
+
+/* Prototype of the continuation callback functions.  ARG is the
+   continuation argument registered in the corresponding
+   add_*_continuation call.  ERR is true when the command should be
+   cancelled instead of finished normally.  In that case, the
+   continuation should clean up whatever state had been set up for the
+   command in question (e.g., remove momentary breakpoints).  This
+   happens e.g., when an error was thrown while handling a target
+   event, or when the inferior thread the command was being executed
+   on exits.  */
+typedef void (continuation_ftype) (void *arg, int err);
+
+/* Prototype of the function responsible for releasing the argument
+   passed to the continuation callback functions, either when the
+   continuation is called, or discarded.  */
+typedef void (continuation_free_arg_ftype) (void *);
+
+/* Thread specific continuations.  */
+
+extern void add_continuation (struct thread_info *,
+			      continuation_ftype *, void *,
+			      continuation_free_arg_ftype *);
+extern void do_all_continuations (int err);
+extern void do_all_continuations_thread (struct thread_info *, int err);
+extern void discard_all_continuations (void);
+extern void discard_all_continuations_thread (struct thread_info *);
+
+extern void add_intermediate_continuation (struct thread_info *,
+					   continuation_ftype *, void *,
+					   continuation_free_arg_ftype *);
+extern void do_all_intermediate_continuations (int err);
+extern void do_all_intermediate_continuations_thread (struct thread_info *, int err);
+extern void discard_all_intermediate_continuations (void);
+extern void discard_all_intermediate_continuations_thread (struct thread_info *);
+
+/* Inferior specific (any thread) continuations.  */
+
+extern void add_inferior_continuation (continuation_ftype *,
+				       void *,
+				       continuation_free_arg_ftype *);
+extern void do_all_inferior_continuations (int err);
+extern void discard_all_inferior_continuations (struct inferior *inf);
+
+#endif
+@
+
+
+1.3
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d3 1
+a3 1
+   Copyright (C) 1999-2005, 2007-2012 Free Software Foundation, Inc.
+@
+
+
+1.2
+log
+@2011-05-30  Pedro Alves  <pedro@@codesourcery.com>
+
+	gdb/
+	* continuations.h (continuation_ftype): Add `err' parameter.
+	Document parameters.
+	(do_all_continuations, do_all_continuations_thread)
+	(do_all_intermediate_continuations)
+	(do_all_intermediate_continuations_thread)
+	(do_all_inferior_continuations): Add `err' parameter.
+	* continuations.c (do_my_continuations_1, do_my_continuations)
+	(do_all_inferior_continuations, do_all_continuations_ptid)
+	(do_all_continuations_thread_callback)
+	(do_all_continuations_thread, do_all_continuations)
+	(do_all_intermediate_continuations_thread_callback)
+	(do_all_intermediate_continuations_thread)
+	(do_all_intermediate_continuations): Add `err' parameter, and pass
+	it down all the way to the continuations proper.
+	* inf-loop.c (inferior_event_handler): If fetching an inferior
+	event throws an error, don't pop the target, and still call the
+	continuations, but with `err' set.  Adjust all other continuation
+	calls.
+	* breakpoint.c (until_break_command_continuation): Add `err'
+	parameter.
+	* infcmd.c (step_1_continuation): Add `err' parameter.  Don't
+	issue another step if `err' is set.
+	(struct until_next_continuation_args): New.
+	(until_next_continuation): Add `err' parameter.  Adjust.
+	(until_next_command): Adjust.
+	(struct finish_command_continuation_args): Add `thread' field.
+	(finish_command_continuation): Add `err' parameter.  Handle it.
+	(finish_forward): Adjust.
+	(attach_command_continuation): Add `err' parameter.  Handle it.
+	* infrun.c (infrun_thread_stop_requested_callback): Adjust to
+	cancel the continuations.
+	* interps.c (interp_set): Adjust to cancel the continuations.
+	* thread.c (clear_thread_inferior_resources): Adjust to cancel the
+	continuations rather than discarding.
+	(free_thread): Don't clear thread inferior resources here.
+	(delete_thread_1): Do it here instead.  And do it before removing
+	the thread from the threads list.  Tag the thread as exited before
+	clearing thread inferior resources.
+@
+text
+@d3 1
+a3 2
+   Copyright (C) 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2007, 2008,
+   2009, 2010, 2011 Free Software Foundation, Inc.
+@
+
+
+1.2.2.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d3 2
+a4 1
+   Copyright (C) 1999-2005, 2007-2012 Free Software Foundation, Inc.
+@
+
+
+1.1
+log
+@2011-05-27  Pedro Alves  <pedro@@codesourcery.com>
+
+	* defs.h (struct continuation, continuation_ftype)
+	(continuation_free_arg_ftype, add_continuation)
+	(do_all_continuations, do_all_continuations_thread)
+	(discard_all_continuations, discard_all_continuations_thread)
+	(add_intermediate_continuation, do_all_intermediate_continuations)
+	(do_all_intermediate_continuations_thread)
+	(discard_all_intermediate_continuations)
+	(discard_all_intermediate_continuations_thread)
+	(add_inferior_continuation, do_all_inferior_continuations)
+	(discard_all_inferior_continuations): Move to ...
+	* continuations.h: ... this new file.
+	* breakpoint.c, continuations.c, event-top.c, inf-loop.c,
+	infcmd.c, inferior.c, infrun.c, interps.c: Include
+	continuations.h.
+@
+text
+@d33 10
+a42 2
+/* Prototype of the continuation callback functions.  */
+typedef void (continuation_ftype) (void *);
+d54 2
+a55 2
+extern void do_all_continuations (void);
+extern void do_all_continuations_thread (struct thread_info *);
+d62 2
+a63 2
+extern void do_all_intermediate_continuations (void);
+extern void do_all_intermediate_continuations_thread (struct thread_info *);
+d72 1
+a72 1
+extern void do_all_inferior_continuations (void);
+@
+

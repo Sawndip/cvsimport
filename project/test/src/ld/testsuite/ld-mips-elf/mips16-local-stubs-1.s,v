@@ -1,0 +1,118 @@
+head	1.1;
+access;
+symbols
+	binutils-2_24-branch:1.1.0.22
+	binutils-2_24-branchpoint:1.1
+	binutils-2_21_1:1.1
+	binutils-2_23_2:1.1
+	binutils-2_23_1:1.1
+	binutils-2_23:1.1
+	binutils-2_23-branch:1.1.0.20
+	binutils-2_23-branchpoint:1.1
+	binutils-2_22_branch:1.1.0.18
+	binutils-2_22:1.1
+	binutils-2_22-branch:1.1.0.16
+	binutils-2_22-branchpoint:1.1
+	binutils-2_21:1.1
+	binutils-2_21-branch:1.1.0.14
+	binutils-2_21-branchpoint:1.1
+	binutils-2_20_1:1.1
+	binutils-2_20:1.1
+	binutils-arc-20081103-branch:1.1.0.12
+	binutils-arc-20081103-branchpoint:1.1
+	binutils-2_20-branch:1.1.0.10
+	binutils-2_20-branchpoint:1.1
+	dje-cgen-play1-branch:1.1.0.8
+	dje-cgen-play1-branchpoint:1.1
+	arc-20081103-branch:1.1.0.6
+	arc-20081103-branchpoint:1.1
+	binutils-2_19_1:1.1
+	binutils-2_19:1.1
+	binutils-2_19-branch:1.1.0.4
+	binutils-2_19-branchpoint:1.1
+	binutils-2_18:1.1
+	binutils-2_18-branch:1.1.0.2
+	binutils-2_18-branchpoint:1.1
+	binutils_latest_snapshot:1.1;
+locks; strict;
+comment	@# @;
+
+
+1.1
+date	2007.06.25.10.13.57;	author rsandifo;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.1
+log
+@bfd/
+	* elfxx-mips.c (mips_elf_calculate_relocation): Allow local stubs
+	to be used for calls from MIPS16 code.
+
+gas/
+	* config/tc-mips.h (TC_SYMFIELD_TYPE): New.
+	* config/tc-mips.c (append_insn): Record which symbols have
+	R_MIPS16_26 relocations against them.
+	(mips_fix_adjustable): Don't reduce relocations against such symbols.
+
+ld/testsuite/
+	* ld-mips-elf/mips16-local-stubs-1.s,
+	* ld-mips-elf/mips16-local-stubs-1.d: New tests.
+	* ld-mips-elf/mips-elf.exp: Run them.
+@
+text
+@	.macro	makestub,type,func,section
+	.text
+	.set	\type
+	.type	\func,@@function
+	.ent	\func
+\func:
+	jr	$31
+	.end	\func
+
+	.section \section,"ax",@@progbits
+	.set	nomips16
+	.type	stub_for_\func,@@function
+	.ent	stub_for_\func
+stub_for_\func:
+	.set	noat
+	la	$1,\func
+	jr	$1
+	.set	at
+	.end	stub_for_\func
+	.endm
+
+	.macro	makestubs,id
+	makestub nomips16,f\id,.mips16.call.F\id
+	makestub nomips16,g\id,.mips16.call.fp.G\id
+	makestub mips16,h\id,.mips16.fn.H\id
+	.endm
+
+	.macro	makecaller,type,func
+	.text
+	.set	\type
+	.globl	\func
+	.type	\func,@@function
+	.ent	\func
+\func:
+	jal	f1
+	jal	f2
+	jal	g1
+	jal	g2
+	jal	h1
+	jal	h2
+	.end	\func
+	.endm
+
+	makestubs 1
+	makestubs 2
+	makestubs 3
+
+	makecaller nomips16,caller1
+	makecaller mips16,caller2
+@

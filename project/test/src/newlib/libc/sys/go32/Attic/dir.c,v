@@ -1,0 +1,157 @@
+head	1.2;
+access;
+symbols
+	cygnus_cvs_20020108_pre:1.1.1.1
+	newlib-1_10_0:1.1.1.1
+	cygwin-1-3-6-4:1.1.1.1.0.2
+	newlib-1_9_0:1.1.1.1
+	cygwin-1_1_1:1.1.1.1
+	newlib-2000-02-17:1.1.1.1
+	SNAPSHOT:1.1.1;
+locks; strict;
+comment	@ * @;
+expand	@o@;
+
+
+1.2
+date	2002.12.20.02.29.00;	author jjohnstn;	state dead;
+branches;
+next	1.1;
+
+1.1
+date	2000.02.17.19.39.49;	author cgf;	state Exp;
+branches
+	1.1.1.1;
+next	;
+
+1.1.1.1
+date	2000.02.17.19.39.49;	author cgf;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@
+2002-12-19  Jeff Johnston  <jjohnstn@@redhat.com>
+
+        * configure.host: Remove references to go32.
+        * libc/sys/go32/*: Removed.
+@
+text
+@#include <string.h>
+
+#include "sys/dir.h"
+#include "sys/dirent.h"
+#include <errno.h>
+
+DIR *opendir(char *name)
+{
+  int length;
+  DIR *dir = (DIR *)malloc(sizeof(DIR));
+  dir->num_read = 0;
+  dir->name = (char *)malloc(strlen(name)+6);
+  strcpy(dir->name, name);
+
+  /* Append a "." if we got only the device name */
+  if (dir->name[1] == ':' && strlen(dir->name) == 2)
+      strcat(dir->name, ".");
+
+  /* Strip trailing slashes, so we can append "/*.*" */
+  while (1)
+  {
+      length = strlen(dir->name);
+      if (length == 0) break;
+      if (dir->name[length - 1] == '/' ||
+	  dir->name[length - 1] == '\\')
+	  dir->name[length - 1] = '\0';
+      else
+	  break;
+  }
+
+  strcat(dir->name, "/*.*");
+  return dir;
+}
+
+
+
+static char *strlwr(char *s)
+{
+  char *p = s;
+  while (*s)
+  {
+    if ((*s >= 'A') && (*s <= 'Z'))
+      *s += 'a'-'A';
+    s++;
+  }
+  return p;
+}
+
+struct dirent *readdir(DIR *dir)
+{
+  int done;
+  int oerrno = errno;
+  if (dir->num_read)
+    done = findnext(&dir->ff);
+  else
+    done = findfirst(dir->name, &dir->ff,
+		     FA_ARCH|FA_RDONLY|FA_DIREC|FA_HIDDEN|FA_SYSTEM);
+  if (done)
+  {
+    if (errno == ENMFILE)
+      errno = oerrno;
+    return 0;
+  }
+  dir->num_read ++;
+  dir->de.d_namlen = strlen(dir->ff.ff_name);
+  strcpy(dir->de.d_name,dir->ff.ff_name);
+  strlwr(dir->de.d_name);
+  return &dir->de;
+}
+
+long telldir(DIR *dir)
+{
+  return dir->num_read;
+}
+
+void seekdir(DIR *dir, long loc)
+{
+  int i;
+  rewinddir(dir);
+  for (i=0; i<loc; i++)
+    readdir(dir);
+}
+
+void rewinddir(DIR *dir)
+{
+  dir->num_read = 0;
+}
+
+int closedir(DIR *dir)
+{
+  free(dir->name);
+  free(dir);
+  return 0;
+}
+
+@
+
+
+1.1
+log
+@Initial revision
+@
+text
+@@
+
+
+1.1.1.1
+log
+@import newlib-2000-02-17 snapshot
+@
+text
+@@

@@ -1,0 +1,195 @@
+head	1.4;
+access;
+symbols
+	binutils-2_24-branch:1.4.0.20
+	binutils-2_24-branchpoint:1.4
+	binutils-2_21_1:1.4
+	binutils-2_23_2:1.4
+	binutils-2_23_1:1.4
+	binutils-2_23:1.4
+	binutils-2_23-branch:1.4.0.18
+	binutils-2_23-branchpoint:1.4
+	binutils-2_22_branch:1.4.0.16
+	binutils-2_22:1.4
+	binutils-2_22-branch:1.4.0.14
+	binutils-2_22-branchpoint:1.4
+	binutils-2_21:1.4
+	binutils-2_21-branch:1.4.0.12
+	binutils-2_21-branchpoint:1.4
+	binutils-2_20_1:1.4
+	binutils-2_20:1.4
+	binutils-arc-20081103-branch:1.4.0.10
+	binutils-arc-20081103-branchpoint:1.4
+	binutils-2_20-branch:1.4.0.8
+	binutils-2_20-branchpoint:1.4
+	dje-cgen-play1-branch:1.4.0.6
+	dje-cgen-play1-branchpoint:1.4
+	arc-20081103-branch:1.4.0.4
+	arc-20081103-branchpoint:1.4
+	binutils-2_19_1:1.4
+	binutils-2_19:1.4
+	binutils-2_19-branch:1.4.0.2
+	binutils-2_19-branchpoint:1.4
+	binutils_latest_snapshot:1.4
+	added-to-binutils:1.1;
+locks; strict;
+comment	@// @;
+
+
+1.4
+date	2008.07.29.22.58.03;	author ian;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2008.04.11.20.44.52;	author ian;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2008.04.11.18.49.40;	author davem;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2008.02.04.05.43.05;	author iant;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.4
+log
+@	* script.cc (Script_options::finalize_symbols): Finalize SECTIONS
+	symbols before other symbols.
+	* testsuite/script_test_2.cc (test_addr): Declare.
+	(test_addr_alias): Declare.
+	(main): Check that test_addr and test_addr_alias have the right
+	values.
+	* testsuite/script_test_2.t: Define test_addr_alias and
+	test_addr.
+@
+text
+@// script_test_2.cc -- linker script test 2 for gold  -*- C++ -*-
+
+// Copyright 2008 Free Software Foundation, Inc.
+// Written by Ian Lance Taylor <iant@@google.com>.
+
+// This file is part of gold.
+
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 3 of the License, or
+// (at your option) any later version.
+
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+// MA 02110-1301, USA.
+
+// A test of some uses of the SECTIONS clause.  Look at
+// script_test_2.t to make sense of this test.
+
+#include <cassert>
+#include <cstddef>
+#include <cstring>
+#include <stdint.h>
+
+extern char start_test_area[];
+extern char start_test_area_1[];
+extern char start_data[];
+extern char end_data[];
+extern char start_fill[];
+extern char end_fill[];
+extern char end_test_area[];
+extern char test_addr[];
+extern char test_addr_alias[];
+
+int
+main(int, char**)
+{
+  assert(reinterpret_cast<uintptr_t>(start_test_area) == 0x20000001);
+  assert(reinterpret_cast<uintptr_t>(start_test_area_1) == 0x20000010);
+
+  // We should see the string from script_test_2b.o next.  The
+  // subalign should move it up to 0x20000020.
+  for (int i = 0; i < 16; ++i)
+    assert(start_test_area_1[i] == 0);
+  assert(strcmp(start_test_area_1 + 16, "test bb") == 0);
+
+  // Next the string from script_test_2a.o, after the subalign.
+  for (int i = 16 + 7; i < 48; ++i)
+    assert(start_test_area_1[i] == 0);
+  assert(strcmp(start_test_area_1 + 48, "test aa") == 0);
+
+  // Move four bytes forward to start_data.
+  assert(reinterpret_cast<uintptr_t>(start_test_area_1 + 48 + 8 + 4)
+	 == reinterpret_cast<uintptr_t>(start_data));
+  assert(memcmp(start_data, "\1\2\0\4\0\0\0\010\0\0\0\0\0\0\0", 15) == 0
+	 || memcmp(start_data, "\1\0\2\0\0\0\4\0\0\0\0\0\0\0\010", 15) == 0);
+  assert(end_data == start_data + 15);
+
+  // Check that FILL works as expected.
+  assert(start_fill == end_data);
+  assert(memcmp(start_fill, "\x12\x34\x56\x78\x12\x34\x56\0", 8) == 0);
+  assert(end_fill == start_fill + 8);
+
+  assert(end_test_area == end_fill);
+
+  assert(test_addr == start_test_area_1);
+  assert(test_addr_alias == test_addr);
+}
+@
+
+
+1.3
+log
+@	* testsuite/Makefile.am (justsyms_2r.o): Add dependency on
+	justsyms.t.
+	* testsuite/Makefile.in: Rebuild.
+
+	* testsuite/script_test_2a.cc (script_test_string_a): Make 8 bytes
+	long.
+	* testsuite/script_test_2.cc (main): Adjust test.
+@
+text
+@d38 2
+d71 3
+@
+
+
+1.2
+log
+@	* testsuite/justsyms.t: Start at 0x100.
+	* testsuite/justsyms_1.cc: Adjust justsyms_string assertion.
+	* script_test_2b.cc (script_test_string_b): Make 8 bytes long.
+	* script_test_2.cc: Adjust string and section length checks.
+@
+text
+@d54 1
+a54 1
+  assert(strcmp(start_test_area_1 + 48, "test a") == 0);
+@
+
+
+1.1
+log
+@Fully implement the SECTIONS clause.
+@
+text
+@d49 1
+a49 1
+  assert(strcmp(start_test_area_1 + 16, "test b") == 0);
+d57 1
+a57 1
+  assert(reinterpret_cast<uintptr_t>(start_test_area_1 + 48 + 7 + 4)
+@
+

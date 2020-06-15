@@ -1,0 +1,379 @@
+head	1.6;
+access;
+symbols
+	cygwin-1_7_35-release:1.6
+	cygwin-1_7_34-release:1.6
+	cygwin-1_7_33-release:1.6
+	cygwin-1_7_32-release:1.6
+	cygwin-1_7_31-release:1.6
+	cygwin-1_7_30-release:1.6
+	cygwin-1_7_29-release:1.6
+	cygwin-1_7_29-release-branchpoint:1.6.0.2
+	cygwin-pre-user-db:1.6
+	cygwin-1_7_28-release:1.6
+	cygwin-1_7_27-release:1.6
+	cygwin-1_7_26-release:1.6
+	cygwin-1_7_25-release:1.6
+	cygwin-1_7_24-release:1.6
+	cygwin-1_7_23-release:1.6
+	cygwin-1_7_22-release:1.6
+	cygwin-1_7_21-release:1.6
+	cygwin-1_7_20-release:1.6
+	cygwin-1_7_19-release:1.6
+	cygwin-64bit-postmerge:1.6
+	cygwin-64bit-premerge-branch:1.5.0.8
+	cygwin-64bit-premerge:1.5
+	cygwin-1_7_18-release:1.5
+	post-ptmalloc3:1.5.6.3
+	pre-ptmalloc3:1.5.6.3
+	cygwin-1_7_17-release:1.5
+	cygwin-64bit-branch:1.5.0.6
+	cygwin-1_7_16-release:1.5
+	cygwin-1_7_15-release:1.5
+	cygwin-1_7_14_2-release:1.5
+	cygwin-1_7_14-release:1.5
+	cygwin-1_7_12-release:1.5
+	cygwin-1_7_11-release:1.5
+	cygwin-1_7_10-release:1.5
+	signal-rewrite:1.5.0.4
+	pre-notty:1.5
+	cygwin-1_7_9-release:1.5
+	cv-post-1_7_9:1.5.0.2
+	cygwin-1_7_8-release:1.5
+	cygwin-1_7_7-release:1.4
+	cygwin-1_7_5-release:1.4
+	cygwin-1_7_4-release:1.4
+	cygwin-1_7_3-release:1.4
+	cygwin-1_7_2-release:1.4
+	fifo_doover3:1.3.0.4
+	cygwin-1_7_1-release:1.3
+	prefifo:1.3
+	cv-branch-2:1.3.0.2;
+locks; strict;
+comment	@# @;
+
+
+1.6
+date	2013.04.23.09.44.33;	author corinna;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2011.02.11.18.00.55;	author cgf;	state Exp;
+branches
+	1.5.6.1;
+next	1.4;
+
+1.4
+date	2010.02.26.19.37.43;	author cgf;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2009.04.18.17.23.45;	author cgf;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2009.04.12.05.11.08;	author cgf;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2009.04.12.03.19.52;	author cgf;	state Exp;
+branches;
+next	;
+
+1.5.6.1
+date	2013.01.30.19.42.17;	author corinna;	state Exp;
+branches;
+next	1.5.6.2;
+
+1.5.6.2
+date	2013.02.11.07.51.13;	author corinna;	state Exp;
+branches;
+next	1.5.6.3;
+
+1.5.6.3
+date	2013.02.21.12.02.52;	author corinna;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.6
+log
+@	* Merge in cygwin-64bit-branch.
+@
+text
+@#!/usr/bin/perl
+use strict;
+use File::Temp qw'tempdir';
+use File::Spec;
+use Getopt::Long;
+my $dir = tempdir(CLEANUP => 1);
+
+my ($cpu, $ar, $as, $nm, $objcopy, %replace);
+GetOptions('cpu=s'=>\$cpu, 'ar=s'=>\$ar, 'as=s'=>\$as,'nm=s'=>\$nm, 'objcopy=s'=>\$objcopy, 'replace=s'=>\%replace);
+
+# Args::
+#   1) import lib to create
+#   2) input dll
+#   3...) extra objects to add
+
+$_ = File::Spec->rel2abs($_) for @@ARGV;
+
+my $libdll = shift;
+my $inpdll = shift;
+
+open my $nm_fd, '-|', $nm, '-Apg', '--defined-only', $inpdll;
+my %text = ();
+my %import = ();
+my %symfile = ();
+
+my $is64bit = ($cpu eq 'x86_64' ? 1 : 0);
+my $sym_prefix = ($is64bit ? '' : '_');
+
+while (<$nm_fd>) {
+    chomp;
+    my ($fn, $type, $sym) = /^$inpdll:(.*?):\S+\s+(\S)\s+(\S+)$/o;
+    next unless $fn;
+    $text{$fn} = $sym if $type eq 'T';
+    $import{$fn} = $sym if $type eq 'I';
+    $symfile{$sym} = $fn;
+}
+close $nm_fd or exit 1;
+
+for my $sym (keys %replace) {
+    my $fn;
+    my $_sym = $sym_prefix . $sym;
+    if (!defined($fn = $symfile{$_sym})) {
+	$fn = "$sym.o";
+	$text{$fn} = $_sym;
+    }
+    my $imp_sym = '__imp_' . $sym_prefix . $replace{$sym};
+    $import{$fn} = $imp_sym;
+}
+
+for my $f (keys %text) {
+    my $imp_sym = delete $import{$f};
+    my $glob_sym = $text{$f};
+    if (!defined $imp_sym) {
+	delete $text{$f};
+    } elsif ($imp_sym eq '__imp_' . $sym_prefix) {
+	$text{$f} = 0;
+    } else {
+	$text{$f} = 1;
+	open my $as_fd, '|-', $as, '-o', "$dir/t-$f", "-";
+	if ($is64bit) {
+	    print $as_fd <<EOF;
+	.text
+	.extern	$imp_sym
+	.global	$glob_sym
+$glob_sym:
+	jmp	*$imp_sym(%rip)
+EOF
+	} else {
+	    print $as_fd <<EOF;
+	.text
+	.extern	$imp_sym
+	.global	$glob_sym
+$glob_sym:
+	jmp	*$imp_sym
+EOF
+	}
+	close $as_fd or exit 1;
+    }
+}
+
+chdir $dir or die "$0: couldn't cd to $dir - $!\n";
+system $ar, 'x', $inpdll;
+exit 1 if $?;
+
+for my $f (keys %text) {
+    if (!$text{$f}) {
+	unlink $f;
+    } else {
+	system $objcopy, '-R', '.text', $f and exit 1;
+	system $objcopy, '-R', '.bss', '-R', '.data', "t-$f" and exit 1;
+    }
+}
+
+unlink $libdll;
+system $ar, 'crus', $libdll, glob('*.o'), @@ARGV;
+unlink glob('*.o');
+exit 1 if $?;
+
+END {
+    chdir '/tmp';	# Allow $dir directory removal on Windows
+}
+@
+
+
+1.5
+log
+@* mkstatic: Make sure that we are not cd'ed to temporary directory on exit to
+avoid bogus warnings on directory cleanup.
+* speclib: Ditto.
+* mkimport: Ditto.
+@
+text
+@d8 2
+a9 2
+my ($ar, $as, $nm, $objcopy, %replace);
+GetOptions('ar=s'=>\$ar, 'as=s'=>\$as,'nm=s'=>\$nm, 'objcopy=s'=>\$objcopy, 'replace=s'=>\%replace);
+d25 4
+d41 1
+a41 1
+    my $_sym = '_' . $sym;
+d46 1
+a46 1
+    my $imp_sym = '__imp__' . $replace{$sym};
+d55 1
+a55 1
+    } elsif ($imp_sym eq '__imp__') {
+d60 10
+a69 1
+	print $as_fd <<EOF;
+d76 1
+@
+
+
+1.5.6.1
+log
+@	* Makefile.in ($(LIB_NAME)): Add --target option to mkimport call.
+	* gendef: Drop -w option.  Make callto sigfe function pc-relative
+	on x86_64.
+	* miscfuncs.cc (__import_address): Drop comment and misguide attempt
+	to handle absolute addressing in x86_64 mode.
+	* mkimport: Add --target option.  Handle x86_64 target, especially
+	create pc-relative jmp calls.
+@
+text
+@d8 2
+a9 2
+my ($target, $ar, $as, $nm, $objcopy, %replace);
+GetOptions('target=s'=>\$target, 'ar=s'=>\$ar, 'as=s'=>\$as,'nm=s'=>\$nm, 'objcopy=s'=>\$objcopy, 'replace=s'=>\%replace);
+a24 4
+
+my $is64bit = ($target =~ /^x86_64\-/ ? 1 : 0);
+my $sym_prefix = ($is64bit ? '' : '_');
+
+d37 1
+a37 1
+    my $_sym = $sym_prefix . $sym;
+d56 1
+a56 10
+	if ($is64bit) {
+	    print $as_fd <<EOF;
+	.text
+	.extern	$imp_sym
+	.global	$glob_sym
+$glob_sym:
+	jmp	*$imp_sym(%rip)
+EOF
+	} else {
+	    print $as_fd <<EOF;
+a62 1
+	}
+@
+
+
+1.5.6.2
+log
+@	* cygwin64.din: Add missing symbols.
+	* mkimport: Make sure to use and test against platform dependent
+	"imp" prefix.
+@
+text
+@d46 1
+a46 1
+    my $imp_sym = '__imp_' . $sym_prefix . $replace{$sym};
+d55 1
+a55 1
+    } elsif ($imp_sym eq '__imp_' . $sym_prefix) {
+@
+
+
+1.5.6.3
+log
+@	* Makefile.in (target_cpu): Define.  Check for target_cpu rather than
+	target_alias for conditional compilation issues.
+	(toolopts): Change --target into --cpu option and use $target_cpu as
+	argument.
+	($(DEF_FILE)): Call gendef with $(target_cpu) as argument, rather than
+	with $(target_alias).
+	* gendef: Accommodate change from --target to --cpu option.
+	* mkimport: Ditto.
+	* speclib: Ditto.
+@
+text
+@d8 2
+a9 2
+my ($cpu, $ar, $as, $nm, $objcopy, %replace);
+GetOptions('cpu=s'=>\$cpu, 'ar=s'=>\$ar, 'as=s'=>\$as,'nm=s'=>\$nm, 'objcopy=s'=>\$objcopy, 'replace=s'=>\%replace);
+d26 1
+a26 1
+my $is64bit = ($cpu eq 'x86_64' ? 1 : 0);
+@
+
+
+1.4
+log
+@* mkimport: cd away from temp directory or Windows will have problems removing
+the directory.
+@
+text
+@a82 1
+chdir '/tmp';	# Allow $dir directory removal on Windows
+d84 4
+@
+
+
+1.3
+log
+@* mkimport: Specify .text for stub explicitly.
+* speclib: Add a dummy '.idata$7' section referring to the dll associated with
+the real import library.
+@
+text
+@d83 1
+@
+
+
+1.2
+log
+@* speclib: Initial stab at cleaning up temp files.  More work needed.
+* mkimport: Ditto.
+@
+text
+@d57 1
+@
+
+
+1.1
+log
+@* mkimport: New script to perform all operations necessary to create
+libcygwin.a.
+* rmsym: Delete.
+* newsym: Delete.
+* Makefile.in (toolopts): New variable which holds options relating to
+binutils/gcc tools.
+(speclib): Use toolopts.  Add symbols to avoid copying to special libraries.
+(OBSOLETE_FUNCTIONS): Delete.
+(NEW_FUNCTIONS): Change to represent an argument to new mkimport script.
+(libcygwin.a): Use only new mkimport script to create libcygwin.a.  Only rely
+on ${LIBCOS}.
+(*/lib*.a): Simplify speclib dependencies.
+(speclib): Accept toolchain options.  Convert every argument to absolute path.
+Simplify parsing of nm output.  Accommodate new exclude option.
+@
+text
+@d80 3
+a82 1
+exec $ar, 'crus', $libdll, glob('*.o'), @@ARGV;
+@
+

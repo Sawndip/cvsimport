@@ -1,0 +1,189 @@
+head	1.4;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.3
+	gdb_7_6-2013-04-26-release:1.3
+	gdb_7_6-branch:1.3.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.3
+	gdb_7_5_1-2012-11-29-release:1.1.2.1
+	gdb_7_5-2012-08-17-release:1.1.2.1
+	gdb_7_5-branch:1.1.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.1;
+locks; strict;
+comment	@# @;
+
+
+1.4
+date	2013.06.27.18.47.53;	author tromey;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2013.01.01.06.33.25;	author brobecke;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2012.08.14.18.47.37;	author jkratoch;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2012.03.13.15.02.25;	author jkratoch;	state Exp;
+branches
+	1.1.2.1;
+next	;
+
+1.1.2.1
+date	2012.08.14.18.48.57;	author jkratoch;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.4
+log
+@test suite update - gdb.base/[ab]
+
+Convert files gdb.base/[ab]*.exp to use standard_output_file et al.
+
+	* a2-run.exp, all-bin.exp, annota1.exp, annota3.exp, anon.exp,
+	args.exp, arithmet.exp, arrayidx.exp, assign.exp, async-shell.exp,
+	async.exp, attach-pie-misread.exp, attach-pie-noexec.exp,
+	attach-twice.exp, attach.exp, auxv.exp, bang.exp, bfp-test.exp,
+	bigcore.exp, bitfields.exp, bitfields2.exp, break-entry.exp,
+	break-interp.exp, break-on-linker-gcd-function.exp,
+	breakpoint-shadow.exp: Use standard_testfile,
+	standard_output_file, prepare_for_testing, clean_restart.
+@
+text
+@# Copyright (C) 2012-2013 Free Software Foundation, Inc.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# Manipulation with PID on target is not supported.
+if [is_remote target] then {
+    return 0
+}
+
+standard_testfile
+set executable ${testfile}
+
+if { [prepare_for_testing ${testfile}.exp $executable] } {
+    return -1
+}
+
+set testpid [eval exec $binfile &]
+exec sleep 2
+
+set parentpid 0
+
+set test "attach"
+gdb_test_multiple "attach $testpid" $test {
+    -re "Attaching to program: \[^\r\n\]*, process $testpid\r\n.*warning: process $testpid is already traced by process (\[0-9\]+)\r\n.*ptrace: Operation not permitted\\.\r\n$gdb_prompt $" {
+	set parentpid $expect_out(1,string)
+	pass $test
+    }
+    -re "Attaching to program: \[^\r\n\]*, process $testpid\r\n.*ptrace: Operation not permitted\\.\r\n$gdb_prompt $" {
+	fail $test
+    }
+    -re "\r\n$gdb_prompt $" {
+	xfail $test
+    }
+}
+
+if {$parentpid != 0} {
+  eval exec kill -9 $parentpid
+}
+eval exec kill -9 $testpid
+@
+
+
+1.3
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@d21 1
+a21 1
+set testfile attach-twice
+a22 1
+set binfile ${objdir}/${subdir}/${executable}
+@
+
+
+1.2
+log
+@gdb/testsuite/
+	* gdb.base/attach-twice.exp: Remove excessive ps exec.
+@
+text
+@d1 1
+a1 1
+# Copyright (C) 2012 Free Software Foundation, Inc.
+@
+
+
+1.1
+log
+@gdb/
+	* common/linux-procfs.c (linux_proc_get_int): New, from
+	linux_proc_get_tgid, change its LWPID type to pid_t, add parameter
+	field.
+	(linux_proc_get_tgid): Only call linux_proc_get_int.
+	(linux_proc_get_tracerpid): New.
+	(linux_proc_pid_has_state): New, from linux_proc_pid_is_zombie.
+	(linux_proc_pid_is_stopped, linux_proc_pid_is_zombie): Only call
+	linux_proc_pid_has_state.
+	* common/linux-procfs.h (linux_proc_get_tracerpid): New declaration.
+	* common/linux-ptrace.c: Include linux-procfs.h and buffer.h.
+	(linux_ptrace_attach_warnings): New.
+	* common/linux-ptrace.h (struct buffer, linux_ptrace_attach_warnings):
+	New declaration.
+	* linux-nat.c: Include exceptions.h, linux-ptrace.h and buffer.h.
+	(linux_nat_attach): New variables ex, buffer, message and message_s.
+	Wrap to_attach by TRY_CATCH and call linux_ptrace_attach_warnings.
+
+gdb/gdbserver/
+	* linux-low.c (linux_attach_lwp_1): New variable buffer.  Call
+	linux_ptrace_attach_warnings.
+
+gdb/testsuite/
+	* gdb.base/attach-twice.c: New files.
+	* gdb.base/attach-twice.exp: New files.
+@
+text
+@a47 1
+eval exec ps xfw
+@
+
+
+1.1.2.1
+log
+@gdb/testsuite/
+	* gdb.base/attach-twice.exp: Remove excessive ps exec.
+@
+text
+@d48 1
+@
+
+

@@ -1,0 +1,760 @@
+head	1.12;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.9
+	gdb_7_6-2013-04-26-release:1.9
+	gdb_7_6-branch:1.9.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.9
+	gdb_7_5_1-2012-11-29-release:1.8
+	gdb_7_5-2012-08-17-release:1.8
+	gdb_7_5-branch:1.8.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.8
+	gdb_7_4_1-2012-04-26-release:1.4.2.1
+	gdb_7_4-2012-01-24-release:1.4.2.1
+	gdb_7_4-branch:1.4.0.2
+	gdb_7_4-2011-12-13-branchpoint:1.4
+	gdb_7_3_1-2011-09-04-release:1.3
+	gdb_7_3-2011-07-26-release:1.3
+	gdb_7_3-branch:1.3.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.3
+	gdb_7_2-2010-09-02-release:1.2
+	gdb_7_2-branch:1.2.0.2
+	gdb_7_2-2010-07-07-branchpoint:1.2;
+locks; strict;
+comment	@# @;
+
+
+1.12
+date	2013.09.20.21.47.04;	author devans;	state Exp;
+branches;
+next	1.11;
+
+1.11
+date	2013.06.27.18.47.53;	author tromey;	state Exp;
+branches;
+next	1.10;
+
+1.10
+date	2013.06.07.17.31.07;	author palves;	state Exp;
+branches;
+next	1.9;
+
+1.9
+date	2013.01.01.06.33.25;	author brobecke;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2012.02.21.22.01.09;	author palves;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2012.02.21.21.55.39;	author palves;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2012.01.13.18.39.31;	author ppluzhnikov;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2012.01.04.08.17.45;	author brobecke;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2011.10.28.17.32.30;	author jkratoch;	state Exp;
+branches
+	1.4.2.1;
+next	1.3;
+
+1.3
+date	2011.01.01.15.33.40;	author brobecke;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2010.07.05.18.01.53;	author jkratoch;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2010.07.05.18.00.40;	author jkratoch;	state Exp;
+branches;
+next	;
+
+1.4.2.1
+date	2012.01.06.04.43.59;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.12
+log
+@	* lib/future.exp (gdb_find_objcopy, gdb_find_readelf): New procs.
+	* lib/gdb.exp (build_id_debug_filename_get): Update to use them.
+	(gdb_gnu_strip_debug): Ditto.
+	* lib/prelink-support.exp (section_get, prelink_no): Ditto.
+	* gdb.arch/altivec-abi.exp: Ditto.
+	* gdb.base/attach-pie-misread.exp: Ditto.
+	* gdb.base/comprdebug.exp: Ditto.
+	* gdb.base/dup-sect.exp: Ditto.
+	* gdb.base/gnu-debugdata.exp: Ditto.
+	* gdb.base/step-symless.exp: Ditto.
+	* gdb.dwarf2/dw2-inline-param.exp: Ditto.
+	* gdb.dwarf2/dw2-skip-prologue.exp: Ditto.
+	* gdb.dwarf2/gdb-index.exp: Ditto.
+@
+text
+@# Copyright 2010-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# This test only works on GNU/Linux.
+if { ![isnative] || [is_remote host] || [target_info exists use_gdb_stub]
+     || ![istarget *-linux*] || [skip_shlib_tests]} {
+    continue
+}
+
+load_lib prelink-support.exp
+
+standard_testfile .c
+set genfile [standard_output_file ${testfile}-gen.h]
+set executable $testfile
+
+if {[build_executable_own_libs ${testfile}.exp $executable $srcfile [list additional_flags=-fPIE ldflags=-pie]] == ""} {
+    return -1
+}
+
+# Program Headers:
+#   Type           Offset   VirtAddr           PhysAddr           FileSiz  MemSiz   Flg Align
+#   LOAD           0x000000 0x0000000000400000 0x0000000000400000 0x134f5ec 0x134f5ec R E 0x200000
+#   LOAD           0x134f5f0 0x000000000194f5f0 0x000000000194f5f0 0x1dbc60 0x214088 RW  0x200000
+#   DYNAMIC        0x134f618 0x000000000194f618 0x000000000194f618 0x000200 0x000200 RW  0x8
+#
+proc read_phdr {binfile test} {
+    set readelf_program [gdb_find_readelf]
+    set command "exec $readelf_program -Wl $binfile"
+    verbose -log "command is $command"
+    set result [catch $command output]
+    verbose -log "result is $result"
+    verbose -log "output is $output"
+    if {$result != 0} {
+	fail $test
+	return
+    }
+    if ![regexp {\nProgram Headers:\n *Type [^\n]* Align\n(.*?)\n\n} $output trash phdr] {
+	fail "$test (no Program Headers)"
+	return
+    }
+    if ![regexp -line {^ *DYNAMIC +0x[0-9a-f]+ +(0x[0-9a-f]+) } $phdr trash dynamic_vaddr] {
+	fail "$test (no DYNAMIC found)"
+	return
+    }
+    verbose -log "dynamic_vaddr is $dynamic_vaddr"
+    set align_max -1
+    foreach {trash align} [regexp -line -all -inline {^ *LOAD .* (0x[0-9]+)$} $phdr] {
+	if {$align_max < $align} {
+	    set align_max $align
+	}
+    }
+    verbose -log "align_max is $align_max"
+    if {$align_max == -1} {
+	fail "$test (no LOAD found)"
+	return
+    }
+    pass $test
+    return [list $dynamic_vaddr $align_max]
+}
+
+set phdr [read_phdr $binfile "readelf initial scan"]
+set dynamic_vaddr [lindex $phdr 0]
+set align_max [lindex $phdr 1]
+
+set stub_size [format 0x%x [expr "2 * $align_max - ($dynamic_vaddr & ($align_max - 1))"]]
+verbose -log "stub_size is $stub_size"
+
+# On x86_64 it is commonly about 4MB.
+if {$stub_size > 25000000} {
+    xfail "stub size $stub_size is too large"
+    return
+}
+
+set test "generate stub"
+set command "exec $binfile $stub_size >$genfile"
+verbose -log "command is $command"
+set result [catch $command output]
+verbose -log "result is $result"
+verbose -log "output is $output"
+if {$result == 0} {
+    pass $test
+} else {
+    fail $test
+}
+
+set prelink_args [build_executable_own_libs ${test}.exp $executable $srcfile [list "additional_flags=-fPIE -DGEN=\"$genfile\"" "ldflags=-pie"]]
+if {$prelink_args == ""} {
+    return -1
+}
+
+# x86_64 file has 25MB, no need to keep it.
+file delete -- $genfile
+
+set phdr [read_phdr $binfile "readelf rebuilt with stub_size"]
+set dynamic_vaddr_prelinkno [lindex $phdr 0]
+
+if ![prelink_yes $prelink_args] {
+    return -1
+}
+
+set phdr [read_phdr $binfile "readelf with prelink -R"]
+set dynamic_vaddr_prelinkyes [lindex $phdr 0]
+
+set first_offset [format 0x%x [expr $dynamic_vaddr_prelinkyes - $dynamic_vaddr_prelinkno]]
+verbose -log "first_offset is $first_offset"
+
+set test "first offset is non-zero"
+if {$first_offset == 0} {
+    fail "$test (-fPIE -pie in effect?)"
+} else {
+    pass $test
+}
+
+set test "start inferior"
+gdb_exit
+
+set res [remote_spawn host $binfile]
+if { $res < 0 || $res == "" } {
+    perror "Spawning $binfile failed."
+    fail $test
+    return
+}
+set pid [exp_pid -i $res]
+gdb_expect {
+    -re "sleeping\r\n" {
+	pass $test
+    }
+    eof {
+	fail "$test (eof)"
+	remote_exec host "kill -9 $pid"
+	return
+    }
+    timeout {
+	fail "$test (timeout)"
+	remote_exec host "kill -9 $pid"
+	return
+    }
+}
+
+# Due to alignments it was reproducible with 1 on x86_64 but 2 on i686.
+foreach align_mult {1 2} { with_test_prefix "shift-by-$align_mult" {
+
+    # FIXME: We believe there is enough room under FIRST_OFFSET.
+    set shifted_offset [format 0x%x [expr "$first_offset - $align_mult * $align_max"]]
+    verbose -log "shifted_offset is $shifted_offset"
+
+    # For normal prelink (prelink_yes call), we need to supply $prelink_args.
+    # For the prelink `-r' option below, $prelink_args is not required.
+    # Moreover, if it was used, the problem would not longer be reproducible
+    # as the libraries would also get relocated.
+    set command "exec /usr/sbin/prelink -q -N --no-exec-shield -r $shifted_offset $binfile"
+    verbose -log "command is $command"
+    set result [catch $command output]
+    verbose -log "result is $result"
+    verbose -log "output is $output"
+
+    set test "prelink -r"
+    if {$result == 0 && $output == ""} {
+	pass $test
+    } else {
+	fail $test
+    }
+
+    clean_restart $executable
+
+    set test "attach"
+    gdb_test_multiple "attach $pid" $test {
+	-re "Attaching to program: .*, process $pid\r\n" {
+	    # Missing "$gdb_prompt $" is intentional.
+	    pass $test
+	}
+    }
+
+    set test "error on Cannot access memory at address"
+    gdb_test_multiple "" $test {
+	-re "\r\nCannot access memory at address .*$gdb_prompt $" {
+	    fail $test
+	}
+	-re "$gdb_prompt $" {
+	    pass $test
+	}
+    }
+
+    gdb_test "detach" "Detaching from program: .*"
+}}
+
+remote_exec host "kill -9 $pid"
+@
+
+
+1.11
+log
+@test suite update - gdb.base/[ab]
+
+Convert files gdb.base/[ab]*.exp to use standard_output_file et al.
+
+	* a2-run.exp, all-bin.exp, annota1.exp, annota3.exp, anon.exp,
+	args.exp, arithmet.exp, arrayidx.exp, assign.exp, async-shell.exp,
+	async.exp, attach-pie-misread.exp, attach-pie-noexec.exp,
+	attach-twice.exp, attach.exp, auxv.exp, bang.exp, bfp-test.exp,
+	bigcore.exp, bitfields.exp, bitfields2.exp, break-entry.exp,
+	break-interp.exp, break-on-linker-gcd-function.exp,
+	breakpoint-shadow.exp: Use standard_testfile,
+	standard_output_file, prepare_for_testing, clean_restart.
+@
+text
+@d39 1
+a39 1
+    set readelf_program [transform readelf]
+@
+
+
+1.10
+log
+@Remove superfluous semicolons from testsuite throughout.
+
+A few months ago semicolons after "return" were removed throughout the
+testsuite.  However, as I pointed out in review, they're unnecessary
+not just after "return", but pretty much after any tcl command.  ';'
+is the command separator, and you only need it if there's another
+command on the same line afterwards.
+
+This patch was written by running:
+
+ $ find . -name "*.exp" | xargs grep -l ";\s*$" | xargs sed -i 's/\([^#][^\s*;]*\)\s*;\s*$/\1/'
+
+and then undoing changes to comments, and lib/future.exp.
+
+Tested on x86_64 Fedora 17.
+
+gdb/testsuite/
+2013-06-07  Pedro Alves  <palves@@redhat.com>
+
+	* boards/native-extended-gdbserver.exp: Remove semicolon.
+	* config/arm-ice.exp: Likewise.
+	* config/bfin.exp: Likewise.
+	* config/cygmon.exp: Likewise.
+	* config/h8300.exp: Likewise.
+	* config/monitor.exp: Likewise.
+	* config/sid.exp: Likewise.
+	* config/sim.exp: Likewise.
+	* config/slite.exp: Likewise.
+	* config/vx.exp: Likewise.
+	* gdb.arch/i386-bp_permanent.exp: Likewise.
+	* gdb.asm/asm-source.exp: Likewise.
+	* gdb.base/args.exp: Likewise.
+	* gdb.base/attach-pie-misread.exp: Likewise.
+	* gdb.base/auxv.exp: Likewise.
+	* gdb.base/bigcore.exp: Likewise.
+	* gdb.base/bitfields2.exp: Likewise.
+	* gdb.base/bitfields.exp: Likewise.
+	* gdb.base/break.exp: Likewise.
+	* gdb.base/break-interp.exp: Likewise.
+	* gdb.base/callfuncs.exp: Likewise.
+	* gdb.base/call-sc.exp: Likewise.
+	* gdb.base/commands.exp: Likewise.
+	* gdb.base/corefile.exp: Likewise.
+	* gdb.base/dbx.exp: Likewise.
+	* gdb.base/ending-run.exp: Likewise.
+	* gdb.base/exprs.exp: Likewise.
+	* gdb.base/funcargs.exp: Likewise.
+	* gdb.base/hbreak2.exp: Likewise.
+	* gdb.base/huge.exp: Likewise.
+	* gdb.base/list.exp: Likewise.
+	* gdb.base/memattr.exp: Likewise.
+	* gdb.base/overlays.exp: Likewise.
+	* gdb.base/printcmds.exp: Likewise.
+	* gdb.base/recurse.exp: Likewise.
+	* gdb.base/remotetimeout.exp: Likewise.
+	* gdb.base/reread.exp: Likewise.
+	* gdb.base/savedregs.exp: Likewise.
+	* gdb.base/scope.exp: Likewise.
+	* gdb.base/sepdebug.exp: Likewise.
+	* gdb.base/setshow.exp: Likewise.
+	* gdb.base/setvar.exp: Likewise.
+	* gdb.base/sigaltstack.exp: Likewise.
+	* gdb.base/siginfo-addr.exp: Likewise.
+	* gdb.base/siginfo.exp: Likewise.
+	* gdb.base/siginfo-obj.exp: Likewise.
+	* gdb.base/sigrepeat.exp: Likewise.
+	* gdb.base/sigstep.exp: Likewise.
+	* gdb.base/structs.exp: Likewise.
+	* gdb.base/testenv.exp: Likewise.
+	* gdb.base/twice.exp: Likewise.
+	* gdb.base/valgrind-db-attach.exp: Likewise.
+	* gdb.base/valgrind-infcall.exp: Likewise.
+	* gdb.base/varargs.exp: Likewise.
+	* gdb.base/watchpoint.exp: Likewise.
+	* gdb.cp/gdb1355.exp: Likewise.
+	* gdb.cp/misc.exp: Likewise.
+	* gdb.disasm/hppa.exp: Likewise.
+	* gdb.disasm/t01_mov.exp: Likewise.
+	* gdb.disasm/t02_mova.exp: Likewise.
+	* gdb.disasm/t03_add.exp: Likewise.
+	* gdb.disasm/t04_sub.exp: Likewise.
+	* gdb.disasm/t05_cmp.exp: Likewise.
+	* gdb.disasm/t06_ari2.exp: Likewise.
+	* gdb.disasm/t07_ari3.exp: Likewise.
+	* gdb.disasm/t08_or.exp: Likewise.
+	* gdb.disasm/t09_xor.exp: Likewise.
+	* gdb.disasm/t10_and.exp: Likewise.
+	* gdb.disasm/t11_logs.exp: Likewise.
+	* gdb.disasm/t12_bit.exp: Likewise.
+	* gdb.disasm/t13_otr.exp: Likewise.
+	* gdb.gdb/selftest.exp: Likewise.
+	* gdb.hp/gdb.base-hp/callfwmall.exp: Likewise.
+	* gdb.mi/mi-reverse.exp: Likewise.
+	* gdb.pascal/floats.exp: Likewise.
+	* gdb.python/py-inferior.exp: Likewise.
+	* gdb.threads/attach-into-signal.exp: Likewise.
+	* gdb.threads/pthreads.exp: Likewise.
+	* gdb.threads/thread_events.exp: Likewise.
+	* gdb.threads/watchthreads.exp: Likewise.
+	* gdb.trace/actions-changed.exp: Likewise.
+	* gdb.trace/actions.exp: Likewise.
+	* gdb.trace/ax.exp: Likewise.
+	* gdb.trace/backtrace.exp: Likewise.
+	* gdb.trace/change-loc.exp: Likewise.
+	* gdb.trace/deltrace.exp: Likewise.
+	* gdb.trace/disconnected-tracing.exp: Likewise.
+	* gdb.trace/ftrace.exp: Likewise.
+	* gdb.trace/infotrace.exp: Likewise.
+	* gdb.trace/passc-dyn.exp: Likewise.
+	* gdb.trace/passcount.exp: Likewise.
+	* gdb.trace/pending.exp: Likewise.
+	* gdb.trace/qtro.exp: Likewise.
+	* gdb.trace/range-stepping.exp: Likewise.
+	* gdb.trace/report.exp: Likewise.
+	* gdb.trace/save-trace.exp: Likewise.
+	* gdb.trace/status-stop.exp: Likewise.
+	* gdb.trace/strace.exp: Likewise.
+	* gdb.trace/tfile.exp: Likewise.
+	* gdb.trace/tfind.exp: Likewise.
+	* gdb.trace/trace-break.exp: Likewise.
+	* gdb.trace/tracecmd.exp: Likewise.
+	* gdb.trace/trace-mt.exp: Likewise.
+	* gdb.trace/tspeed.exp: Likewise.
+	* gdb.trace/tsv.exp: Likewise.
+	* gdb.trace/while-stepping.exp: Likewise.
+	* lib/gdb.exp: Likewise.
+	* lib/gdbserver-support.exp: Likewise.
+	* lib/java.exp: Likewise.
+	* lib/mi-support.exp: Likewise.
+	* lib/pascal.exp: Likewise.
+	* lib/prompt.exp: Likewise.
+	* lib/trace-support.exp: Likewise.
+@
+text
+@d24 3
+a26 5
+set test "attach-pie-misread"
+set srcfile ${test}.c
+set genfile ${objdir}/${subdir}/${test}-gen.h
+set executable ${test}
+set binfile ${objdir}/${subdir}/${executable}
+d28 1
+a28 1
+if {[build_executable_own_libs ${test}.exp $executable $srcfile [list additional_flags=-fPIE ldflags=-pie]] == ""} {
+@
+
+
+1.9
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@d131 1
+a131 1
+set res [remote_spawn host $binfile];
+@
+
+
+1.8
+log
+@2012-02-21  Pedro Alves  <palves@@redhat.com>
+
+	* gdb.arch/altivec-abi.exp (altivec_abi_tests): Don't do
+	with_test_prefix here.
+	(top level): Do it here instead.  Remove `:' from the
+	with_test_prefix string.
+	* gdb.base/attach-pie-misread.exp: Remove the leading space the
+	the suffix `:' from the with_test_prefix prefix string.
+	* gdb.base/break-interp.exp: Ditto.
+	* gdb.base/catch-load.exp: Ditto.
+	* gdb.base/disp-step-syscall.exp: Ditto.
+	* gdb.base/jit-so.exp: Ditto.
+	* gdb.base/jit.exp: Ditto.
+	* gdb.base/sepdebug.exp: Ditto.
+	* gdb.base/solib-display.exp: Ditto.
+	* gdb.base/solib-overlap.exp: Ditto.
+	* gdb.base/watch-cond-infcall.exp: Ditto.
+	* gdb.base/watchpoint.exp: Ditto.
+	* gdb.dwarf2/dw2-noloc.exp: Ditto.
+	* gdb.mi/mi-watch.exp: Ditto.
+	* gdb.mi/mi2-watch.exp: Ditto.
+	* gdb.threads/non-ldr-exc-1.exp: Ditto.
+	* gdb.threads/non-ldr-exc-2.exp: Ditto.
+	* gdb.threads/non-ldr-exc-3.exp: Ditto.
+	* gdb.threads/non-ldr-exc-4.exp: Ditto.
+	* gdb.threads/watchpoint-fork.exp: Ditto.
+	* gdb.threads/watchthreads-reorder.exp: Ditto.
+	* gdb.trace/change-loc.exp: Ditto.
+	* gdb.trace/pending.exp: Ditto.
+	* gdb.trace/status-stop.exp: Ditto.
+	* gdb.trace/strace.exp: Ditto.
+	* gdb.trace/trace-break.exp: Ditto.
+	* gdb.trace/unavailable.exp: Ditto.
+	* lib/gdb.exp (with_test_prefix): Always prefix with space and
+	suffix with colon.  Adjust leading comments.
+@
+text
+@d1 1
+a1 1
+# Copyright 2010-2012 Free Software Foundation, Inc.
+@
+
+
+1.7
+log
+@2012-02-21  Pedro Alves  <palves@@redhat.com>
+	    Tom Tromey  <tromey@@redhat.com>
+
+	* lib/gdb.exp: Add description of test prefixes.
+	(with_test_prefix): New procedure.
+	* gdb.arch/altivec-abi.exp: Use with_test_prefix.
+	* gdb.base/attach-pie-misread.exp: Use with_test_prefix.
+	* gdb.base/break-interp.exp: Use with_test_prefix.  Use append
+	instead of lappend to append to pf_prefix.
+	* gdb.base/catch-load.exp: Use with_test_prefix.
+	* gdb.base/disp-step-syscall.exp: Use with_test_prefix.
+	* gdb.base/jit-so.exp: Use with_test_prefix.
+	* gdb.base/jit.exp: Use with_test_prefix.
+	* gdb.base/return-nodebug.exp (do_test): Use append instead of
+	lappend to append to pf_prefix.
+	* gdb.base/sepdebug.exp: Use with_test_prefix.
+	* gdb.base/solib-display.exp: Use with_test_prefix.
+	* gdb.base/solib-overlap.exp: Use with_test_prefix.
+	* gdb.base/watch-cond-infcall.exp: Use with_test_prefix.
+	* gdb.base/watchpoint.exp: Use with_test_prefix.
+	* gdb.dwarf2/dw2-noloc.exp: Use with_test_prefix.
+	* gdb.mi/mi-watch.exp: Use with_test_prefix.
+	* gdb.mi/mi2-watch.exp: Use with_test_prefix.
+	* gdb.threads/non-ldr-exc-1.exp: Use with_test_prefix.
+	* gdb.threads/non-ldr-exc-2.exp: Use with_test_prefix.
+	* gdb.threads/non-ldr-exc-3.exp: Use with_test_prefix.
+	* gdb.threads/non-ldr-exc-4.exp: Use with_test_prefix.
+	* gdb.threads/watchpoint-fork.exp: Use with_test_prefix.  Use
+	append instead of lappend to append to pf_prefix.
+	* gdb.threads/watchthreads-reorder.exp: Use with_test_prefix.
+	* gdb.trace/change-loc.exp: Use with_test_prefix.
+	* gdb.trace/pending.exp: Use with_test_prefix.
+	* gdb.trace/status-stop.exp: Use with_test_prefix.
+	* gdb.trace/strace.exp: Use with_test_prefix.
+	* gdb.trace/trace-break.exp: Use with_test_prefix.
+	* gdb.trace/unavailable.exp: Use with_test_prefix.  Use append
+	instead of lappend to append to pf_prefix.
+@
+text
+@d155 1
+a155 1
+foreach align_mult {1 2} { with_test_prefix " shift-by-$align_mult:" {
+@
+
+
+1.6
+log
+@2012-01-13  Paul Pluzhnikov  <ppluzhnikov@@google.com>
+
+	* gdb.base/attach-pie-misread.exp: Pass -pie only to the linker.
+	* gdb.base/pie-execl.exp: Likewise.
+@
+text
+@d155 1
+a155 3
+foreach align_mult {1 2} {
+    set old_ldprefix $pf_prefix
+    lappend pf_prefix "shift-by-$align_mult:"
+d199 1
+a199 3
+
+    set pf_prefix $old_ldprefix
+}
+@
+
+
+1.5
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d30 1
+a30 1
+if {[build_executable_own_libs ${test}.exp $executable $srcfile [list "additional_flags=-fPIE -pie"]] == ""} {
+d100 1
+a100 1
+set prelink_args [build_executable_own_libs ${test}.exp $executable $srcfile [list "additional_flags=-fPIE -pie -DGEN=\"$genfile\""]]
+@
+
+
+1.4
+log
+@gdb/testsuite/
+	* gdb.base/async-shell.exp: Skip the testfile for use_gdb_stub.
+	* gdb.base/attach-pie-misread.exp: Likewise.
+	* gdb.base/break-interp.exp: Likewise.
+	* gdb.base/default.exp (attach, run "r" abbreviation, run): Skip these
+	testcases for use_gdb_stub.
+	* gdb.dwarf2/dw2-restore.exp: Fix the run for use_gdb_stub.
+	(continue): New testcase.
+	* gdb.python/py-events.exp: Skip the testfile for use_gdb_stub.
+	* gdb.threads/attach-into-signal.exp: Likewise.
+	* gdb.threads/attach-stopped.exp: Likewise.
+	* gdb.threads/attachstop-mt.exp: Likewise.
+@
+text
+@d1 1
+a1 1
+# Copyright 2010, 2011 Free Software Foundation, Inc.
+@
+
+
+1.4.2.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d1 1
+a1 1
+# Copyright 2010-2012 Free Software Foundation, Inc.
+@
+
+
+1.3
+log
+@run copyright.sh for 2011.
+@
+text
+@d17 2
+a18 1
+if { ![isnative] || [is_remote host] || ![istarget *-linux*] || [skip_shlib_tests]} {
+@
+
+
+1.2
+log
+@gdb/testsuite/
+	* gdb.base/attach-pie-misread.exp: Load prelink-support.exp.  Replace
+	build_executable by build_executable_own_libs.  Replace "prelink -R"
+	execution by a call of prelink_yes.  Comment why "prelink -r" needs no
+	change.
+	* gdb.base/break-interp.exp: Load prelink-support.exp.  Rename calls of
+	copy to file_copy.  Move setting opts --dynamic-linker and -rpath,
+	mkdir $dir and ldd its parsing and copying to lib/prelink-support.exp.
+	Replace build_executable by build_executable_own_libs's function
+	build_executable_own_libs.
+	(prelinkNO): Create new stub to call prelink_no.
+	(prelinkYES): Create new stub to call prelink_yes.
+	(test_attach): Rename calls of copy to file_copy.
+	(section_get, prelinkNO_run, prelinkNO, prelinkYES, symlink_resolve)
+	(copy): Move to ...
+	* lib/prelink-support.exp: ... a new file.  Rename prelinkNO to
+	prelink_no, prelinkYES to prelink_yes, copy to file_copy.
+	* gdb.base/prelink.exp: Disable testcase also for is_remote and
+	skip_shlib_tests.  Load prelink-support.exp.  Replace gdb_compile with
+	special flags by gdb_compile_shlib.  Replace second gdb_compile by
+	build_executable_own_libs.  Replace "prelink -R" execution by a call of
+	prelink_yes.  Replace "prelink -u" and second "prelink -R" execution by
+	a second call of prelink_yes.  Replace restart commands by
+	clean_restart.
+	(prelink): Rename to ...
+	(seen displacement message): ... this test.  Extend its expectation
+	strictness.
+@
+text
+@d1 1
+a1 1
+# Copyright 2010 Free Software Foundation, Inc.
+@
+
+
+1.1
+log
+@gdb/
+	* auxv.c (memory_xfer_auxv): Update attach comment.
+	* solib-svr4.c (svr4_special_symbol_handling): Remove the call to
+	svr4_relocate_main_executable.
+	(svr4_solib_create_inferior_hook): Make the call to
+	svr4_relocate_main_executable unconditional.
+
+gdb/testsuite/
+	* gdb.base/attach-pie-misread.exp, gdb.base/attach-pie-misread.c: New.
+	* gdb.base/break-interp.exp (reach, test_core, test_ld): Require each
+	displacement message exactly once.
+@
+text
+@d21 2
+d29 1
+a29 1
+if {[build_executable ${test}.exp $executable $srcfile [list "additional_flags=-fPIE -pie"]] == -1} {
+d99 2
+a100 1
+if {[build_executable ${test}.exp $executable $srcfile [list "additional_flags=-fPIE -pie -DGEN=\"$genfile\""]] == -1} {
+d110 1
+a110 11
+set command "exec /usr/sbin/prelink -q -N --no-exec-shield -R $binfile"
+verbose -log "command is $command"
+set result [catch $command output]
+verbose -log "result is $result"
+verbose -log "output is $output"
+
+set test "prelink -R"
+if {$result == 0 && $output == ""} {
+    pass $test
+} elseif {$result == 1 && [regexp {^(couldn't execute "/usr/sbin/prelink[^\r\n]*": no such file or directory\n?)*$} $output]} {
+    untested attach-pie-misread.exp
+a111 2
+} else {
+    fail $test
+d162 4
+@
+

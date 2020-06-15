@@ -1,0 +1,361 @@
+head	1.7;
+access;
+symbols
+	binutils-2_24-branch:1.7.0.2
+	binutils-2_24-branchpoint:1.7
+	binutils-2_21_1:1.4
+	binutils-2_23_2:1.5
+	binutils-2_23_1:1.5
+	binutils-2_23:1.5
+	binutils-2_23-branch:1.5.0.6
+	binutils-2_23-branchpoint:1.5
+	binutils-2_22_branch:1.5.0.4
+	binutils-2_22:1.5
+	binutils-2_22-branch:1.5.0.2
+	binutils-2_22-branchpoint:1.5
+	binutils-2_21:1.4
+	binutils-2_21-branch:1.4.0.2
+	binutils-2_21-branchpoint:1.4
+	binutils-2_20_1:1.1.2.1
+	binutils-2_20:1.1.2.1
+	binutils-2_20-branch:1.1.0.2
+	binutils_latest_snapshot:1.7;
+locks; strict;
+comment	@# @;
+
+
+1.7
+date	2013.03.12.22.46.19;	author amodra;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2012.09.15.17.11.28;	author walt;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2011.03.21.20.55.33;	author tmsriram;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2010.09.17.23.51.42;	author dougkwan;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2010.03.04.01.33.22;	author tmsriram;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2010.02.13.02.04.21;	author tmsriram;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2009.10.13.21.17.43;	author tmsriram;	state Exp;
+branches
+	1.1.2.1;
+next	;
+
+1.1.2.1
+date	2009.10.16.05.51.18;	author ian;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.7
+log
+@	* powerpc.cc (is_branch_reloc): Forward declare.
+	(Target_powerpc::do_can_check_for_function_pointers): New predicate.
+	(Target_powerpc::Scan::local_reloc_may_be_function_pointer): Return
+	false for 64-bit, true for 32-bit non-branch relocs.
+	(Target_powerpc::Scan::global_reloc_may_be_function_pointer): Likewise.
+	* testsuite/Makefile.am (icf_test): Use linker map file instead of
+	nm output.
+	(icf_safe_test): Generate linker map file as well as nm output.
+	(icf_safe_so_test): Likewise.
+	* testsuite/Makefile.in: Regenerate.
+	* testsuite/icf_test.sh: Parse linker map file to determine
+	section folding.
+	* testsuite/icf_safe_test.sh: Likewise.  Expect folding for PowerPC.
+	* testsuite/icf_safe_so_test.sh: Likewise.
+	(X86_32_or_ARM_specific_safe_fold): Merge into..
+	(arch_specific_safe_fold): ..this.
+	(X86_64_specific_safe_fold): Delete unused function.
+@
+text
+@#!/bin/sh
+
+# icf_safe_test.sh -- test --icf=safe
+
+# Copyright 2009 Free Software Foundation, Inc.
+# Written by Sriraman Tallam <tmsriram@@google.com>.
+
+# This file is part of gold.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+# MA 02110-1301, USA.
+
+# The goal of this program is to verify if --icf=safe  works as expected.
+# File icf_safe_test.cc is in this test. This program checks if only
+# ctors and dtors are folded, except for x86 (32 and 64 bit), which
+# uses relocation types to detect if function pointers are taken.
+
+check_nofold()
+{
+    func_addr_1=`grep $2 $1 | awk '{print $1}'`
+    func_addr_2=`grep $3 $1 | awk '{print $1}'`
+    if [ $func_addr_1 = $func_addr_2 ]
+    then
+        echo "Safe Identical Code Folding folded" $2 "and" $3
+	exit 1
+    fi
+}
+
+check_fold()
+{
+    awk "
+BEGIN { discard = 0; }
+/^Discarded input/ { discard = 1; }
+/^Memory map/ { discard = 0; }
+/.*\\.text\\..*($2|$3).*/ { act[discard] = act[discard] \" \" \$0; }
+END {
+      # printf \"kept\" act[0] \"\\nfolded\" act[1] \"\\n\";
+      if (length(act[0]) == 0 || length(act[1]) == 0)
+	{
+	  printf \"Safe Identical Code Folding did not fold $2 and $3\\n\"
+	  exit 1;
+	}
+    }" $1
+}
+
+arch_specific_safe_fold()
+{
+    grep_x86=`grep -q -e "Advanced Micro Devices X86-64" -e "Intel 80386" -e "ARM" -e "TILE" -e "PowerPC" $2`
+    if [ $? -eq 0 ];
+    then
+      check_fold $3 $4 $5
+    else
+      check_nofold $1 $4 $5
+    fi
+}
+
+arch_specific_safe_fold icf_safe_test_1.stdout icf_safe_test_2.stdout \
+  icf_safe_test.map "kept_func_1" "kept_func_2"
+check_fold   icf_safe_test.map "_ZN1AD2Ev" "_ZN1AC2Ev"
+check_nofold icf_safe_test_1.stdout "kept_func_3" "kept_func_1"
+check_nofold icf_safe_test_1.stdout "kept_func_3" "kept_func_2"
+@
+
+
+1.6
+log
+@Add support for tilegx in gold.
+	* configure.ac (ENABLE_GOLD): support tilegx*
+	* configure: rebuild
+elfcpp:
+	* tilegx.h: New file.
+	* elfcpp.h: add EM_TILEGX.
+gold:
+	* tilegx.cc: New file.
+	* Makefile.am (TARGETSOURCES): Add tilegx.cc
+	(ALL_TARGETOBJS): Add tilegx.$(OBJEXT)
+	* configure.tgt: Add entries for tilegx*.
+	* configure.ac: Likewise.
+	* Makefile.in: Rebuild.
+	* configure: Likewise.
+	* testsuite/icf_safe_test.sh (arch_specific_safe_fold): Handle
+	tilegx.
+@
+text
+@d43 13
+a55 7
+    func_addr_1=`grep $2 $1 | awk '{print $1}'`
+    func_addr_2=`grep $3 $1 | awk '{print $1}'`
+    if [ $func_addr_1 != $func_addr_2 ]
+    then
+        echo "Safe Identical Code Folding did not fold " $2 "and" $3
+	exit 1
+    fi
+d60 1
+a60 1
+    grep_x86=`grep -q -e "Advanced Micro Devices X86-64" -e "Intel 80386" -e "ARM" -e "TILE" $2`
+d63 1
+a63 1
+      check_fold $1 $3 $4
+d65 1
+a65 1
+      check_nofold $1 $3 $4
+d70 2
+a71 2
+ "kept_func_1" "kept_func_2"
+check_fold   icf_safe_test_1.stdout "_ZN1AD1Ev" "_ZN1AC1Ev"
+@
+
+
+1.5
+log
+@	* testsuite/icf_safe_so_test.sh: Add #!/bin/sh to start.
+	Change == to -eq.
+	* testsuite/icf_string_merge_test.sh: Add #!/bin/sh to start.
+	* testsuite/icf_safe_test.sh: Add #!/bin/sh to start.
+	Change == to -eq.
+	* testsuite/icf_sht_rel_addend_test.sh: Add #!/bin/sh to start.
+	* testsuite/icf_preemptible_functions_test.sh: Add #!/bin/sh to start.
+@
+text
+@d54 1
+a54 1
+    grep_x86=`grep -q -e "Advanced Micro Devices X86-64" -e "Intel 80386" -e "ARM" $2`
+@
+
+
+1.4
+log
+@2010-09-17  Doug Kwan  <dougkwan@@google.com>
+
+	* arm.cc (Target_arm::Relocate::relocate): Ignore symbol type and
+	defintion if relocation uses GOT entries of the symbol.
+	* testsuite/icf_safe_test.sh: Fix test.
+	* testsuite/icf_safe_so_test.sh: Fix test.
+@
+text
+@d1 2
+d55 1
+a55 1
+    if [ $? == 0 ];
+@
+
+
+1.3
+log
+@	* i386.cc (Target_i386::can_check_for_function_pointers): New function.
+	(Scan::possible_function_pointer_reloc): New function.
+	(Scan::local_reloc_may_be_function_pointer): Change to call
+	possible_function_pointer_reloc.
+	(Scan::global_reloc_may_be_function_pointer): Ditto.
+	* icf.h (Icf::check_section_for_function_pointers): Change to reject
+	relocations in ".data.rel.ro._ZTV" section.
+	* testsuite/icf_safe_so_test.sh: Change to pass i386.
+	* testsuite/icf_safe_so_test.cc: Ditto.
+	* testsuite/icf_safe_test.cc: Ditto.
+	* testsuite/icf_safe_test.sh: Ditto.
+@
+text
+@d52 1
+a52 1
+    grep_x86=`grep -q -e "Advanced Micro Devices X86-64" -e "Intel 80386" $2`
+@
+
+
+1.2
+log
+@2010-02-12  Sriraman Tallam  <tmsriram@@google.com>
+
+	* arm.cc (Scan::local_reloc_may_be_function_pointer): New function.
+	(Scan::global_reloc_may_be_function_pointer): New function.
+	* sparc.cc (Scan::local_reloc_may_be_function_pointer): New function.
+	(Scan::global_reloc_may_be_function_pointer): New function.
+	* powerpc.cc (Scan::local_reloc_may_be_function_pointer): New function.
+	(Scan::global_reloc_may_be_function_pointer): New function.
+	* i386.cc (Scan::local_reloc_may_be_function_pointer): New function.
+	(Scan::global_reloc_may_be_function_pointer): New function.
+	* x86_64.cc (Scan::local_reloc_may_be_function_pointer): New function.
+	(Scan::global_reloc_may_be_function_pointer): New function.
+	(Scan::possible_function_pointer_reloc): New function.
+	(Target_x86_64::can_check_for_function_pointers): New function.
+	* gc.h (gc_process_relocs): Scan relocation types to determine if
+	function pointers were taken for targets that support it.
+	* icf.cc (Icf::find_identical_sections): Include functions for
+	folding in safe ICF whose pointer is not taken.
+	* icf.h (Secn_fptr_taken_set): New typedef.
+	(fptr_section_id_): New member.
+	(section_has_function_pointers): New function.
+	(set_section_has_function_pointers): New function.
+	(check_section_for_function_pointers): New function.
+	* options.h: Fix comment for safe ICF option.
+	* target.h (can_check_for_function_pointers): New function.
+	* testsuite/Makefile.am: Add icf_safe_so_test test case.
+	Modify icf_safe_test for X86-64.
+	* testsuite/Makefile.in: Regenerate.
+	* testsuite/icf_safe_so_test.cc: New file.
+	* testsuite/icf_safe_so_test.sh: New file.
+	* testsuite/icf_safe_test.cc (kept_func_3): New function.
+	(main): Change to take pointer to function kept_func_3.
+	* testsuite/icf_safe_test.sh (arch_specific_safe_fold): Check if safe
+	folding is done correctly for X86-64.
+@
+text
+@d25 2
+a26 2
+# ctors and dtors are folded, except for x86-64, which uses relocation
+# types to detect if function pointers are taken.
+d52 1
+a52 1
+    grep_x86_64=`grep -q "Advanced Micro Devices X86-64" $2`
+@
+
+
+1.1
+log
+@	* gc.h (gc_process_relocs): Check if icf is enabled using new
+	function.
+	* gold.cc (queue_initial_tasks): Likewise.
+	(queue_middle_tasks): Likewise.
+	* object.cc (do_layout): Likewise.
+	* symtab.cc (is_section_folded): Likewise.
+	* main.cc (main): Likewise.
+	* reloc.cc (Read_relocs::run): Likewise.
+	(Sized_relobj::do_scan_relocs): Likewise.
+	* icf.cc (is_function_ctor_or_dtor): New function.
+	(Icf::find_identical_sections): Check if function is ctor or dtor when
+	safe icf is chosen.
+	* options.h (General_options::icf): Change option to be an enum.
+	(Icf_status): New enum.
+	(icf_enabled): New method.
+	(icf_safe_folding): New method.
+	(set_icf_status): New method.
+	(icf_status_): New variable.
+	* (options.cc) (General_options::finalize): Set icf_status_.
+	* testsuite/Makefile.am: Add commands to build icf_safe_test. Modify
+	icf_test and icf_keep_unique_test to use the --icf enum flag.
+	* testsuite/icf_safe_test.sh: New file.
+	* testsuite/icf_safe_test.cc: New file.
+@
+text
+@d25 2
+a26 1
+# ctors and dtors are folded.
+d50 16
+a65 2
+check_nofold icf_safe_test.stdout "kept_func_1" "kept_func_2"
+check_fold   icf_safe_test.stdout "_ZN1AD1Ev" "_ZN1AC1Ev"
+@
+
+
+1.1.2.1
+log
+@Merge elfcpp and gold from trunk.
+@
+text
+@@
+

@@ -1,0 +1,428 @@
+head	1.6;
+access;
+symbols
+	binutils-2_24-branch:1.6.0.2
+	binutils-2_24-branchpoint:1.6
+	binutils_latest_snapshot:1.6;
+locks; strict;
+comment	@# @;
+
+
+1.6
+date	2013.06.04.19.24.09;	author roland;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2013.02.07.02.15.30;	author hjl;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2013.01.21.02.38.37;	author amodra;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2013.01.18.00.21.52;	author hjl;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2013.01.18.00.01.52;	author hjl;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2013.01.17.04.28.48;	author hjl;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.6
+log
+@ld/testsuite/
+	* ld-size/size.exp: For *-*-nacl* targets, use options_regsub(ld)
+	to massage -m arguments into _nacl variants.
+	* ld/testsuite/ld-size/size32-1-i386.d: Loosen regexps so they
+	don't care what the exact addresses are.
+	* ld/testsuite/ld-size/size32-1-x32.d: Likewise.
+	* ld/testsuite/ld-size/size32-1-x86-64.d: Likewise.
+	* ld/testsuite/ld-size/size32-2-i386.d: Likewise.
+	* ld/testsuite/ld-size/size32-2-x32.d: Likewise.
+	* ld/testsuite/ld-size/size32-2-x86-64.d: Likewise.
+	* ld/testsuite/ld-size/size64-1-x32.d: Likewise.
+	* ld/testsuite/ld-size/size64-1-x86-64.d: Likewise.
+	* ld/testsuite/ld-size/size64-2-x32.d: Likewise.
+	* ld/testsuite/ld-size/size64-2-x86-64.d: Likewise.
+@
+text
+@# Expect script for linker support of size relocations.
+#
+#   Copyright 2013 Free Software Foundation, Inc.
+#
+# This file is part of the GNU Binutils.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+# MA 02110-1301, USA.
+#
+
+
+# Size relications have only been implemented for the ix86 and x86_64,
+# so far.
+if {!(([istarget "i?86-*-*"]
+       || [istarget "x86_64-*-*"])
+      && ([istarget "*-*-elf*"]
+	  || [istarget "*-*-nacl*"]
+	  || (([istarget "*-*-linux*"]
+	       || [istarget "*-*-gnu*"])
+	      && ![istarget "*-*-*aout*"]
+	      && ![istarget "*-*-*oldld*"]))) } {
+    verbose "Size relocations tests not run - no target support"
+    return
+}
+
+# So as to avoid rewriting every last test case here in a nacl variant,
+# we use black magic to massage the generic cases into nacl-variant cases.
+if [istarget "*-*-nacl*"] {
+    # Change all the -melf_i386 to -melf_i386_nacl so linking can succeed.
+    set options_regsub(ld) {-m(\\S+) -m\\1_nacl}
+}
+
+set test_list [lsort [glob -nocomplain $srcdir/$subdir/*.d]]
+foreach t $test_list {
+    # We need to strip the ".d", but can leave the dirname.
+    verbose [file rootname $t]
+    run_dump_test [file rootname $t]
+}
+
+# We need a native system.
+if ![isnative] {
+    verbose "Native size relocation tests not run - not a native toolchain"
+    return
+}
+
+# We need a working compiler.
+if { [which $CC] == 0 } {
+    verbose "Native size relocation tests not run - no compiler available"
+    return
+}
+
+set build_tests {
+  {"Build libsize-1.so"
+   "-shared" "-fPIC"
+   {size-1a.c size-1b.c} {} "libsize-1.so"}
+  {"Build libsize-2.so"
+   "-shared" "-fPIC"
+   {size-2a.c size-2b.c} {} "libsize-2.so"}
+  {"Build libsize-3a.so"
+   "-shared" "-fPIC"
+   {size-3a.c} {} "libsize-3a.so"}
+  {"Build libsize-3b.so"
+   "-shared" "-fPIC"
+   {size-3b.c} {} "libsize-3b.so"}
+  {"Build libsize-3c.so"
+   "-shared" "-fPIC"
+   {size-3c.c} {} "libsize-3c.so"}
+  {"Build libsize-6b.so"
+   "-shared" "-fPIC"
+   {size-6b.c} {} "libsize-6b.so"}
+  {"Build libsize-7.so"
+   "-shared" "-fPIC"
+   {size-7b.c} {} "libsize-7.so"}
+  {"Build size-7"
+   "-Wl,--no-as-needed tmpdir/libsize-7.so" ""
+   {size-7a.c} {{readelf -rW size-7.rd}} "size-7.exe"}
+  {"Build libsize-8.so"
+   "-shared" "-fPIC"
+   {size-8b.c} {} "libsize-8.so"}
+  {"Build size-8"
+   "-Wl,--no-as-needed tmpdir/libsize-8.so" ""
+   {size-8a.c} {{readelf -rW size-8.rd}} "size-8.exe"}
+  {"Build libsize-9.so"
+   "-shared" "-fPIC"
+   {size-9b.c} {{readelf -rW size-9.rd}} "libsize-9.so"}
+  {"Build libsize-10.so"
+   "-shared" "-fPIC"
+   {size-10b.c} {{readelf -rW size-10.rd}} "libsize-10.so"}
+}
+
+run_cc_link_tests $build_tests
+
+set run_tests {
+    {"Run size-1"
+     "tmpdir/libsize-1.so" ""
+     {size-1.c} "size-1" "size-1.out"}
+    {"Run size-2"
+     "tmpdir/libsize-2.so" ""
+     {size-2.c} "size-2" "size-2.out"}
+    {"Run size-3a"
+     "" ""
+     {size-3.c size-3a.c} "size-3a" "size-3.out"}
+    {"Run size-3b"
+     "tmpdir/libsize-3a.so" ""
+     {size-3.c} "size-3b" "size-3.out"}
+    {"Run size-3c"
+     "" ""
+     {size-3.c size-3b.c} "size-3c" "size-3.out"}
+    {"Run size-3d"
+     "tmpdir/libsize-3b.so" ""
+     {size-3.c} "size-3d" "size-3.out"}
+    {"Run size-3d"
+     "" ""
+     {size-3.c size-3c.c} "size-3d" "size-3.out"}
+    {"Run size-3e"
+     "tmpdir/libsize-3c.so" ""
+     {size-3.c} "size-3e" "size-3.out"}
+    {"Run size-4a"
+     "" ""
+     {size-4a.c size-4b.c} "size-4a" "size-4.out"}
+    {"Run size-4b"
+     "" ""
+     {size-4b.c size-4a.c} "size-4b" "size-4.out"}
+    {"Run size-5a"
+     "" ""
+     {size-5a.c size-5b.c} "size-5a" "size-5.out"}
+    {"Run size-5b"
+     "" ""
+     {size-5b.c size-5a.c} "size-5b" "size-5.out"}
+    {"Run size-6"
+     "tmpdir/libsize-6b.so" ""
+     {size-6a.c} "size-6" "size-6.out"}
+}
+
+run_ld_link_exec_tests [] $run_tests
+
+# Check if size relocation works at run-time.
+catch "exec tmpdir/size-7.exe > tmpdir/dump.out" exec_output
+if ![string match "" $exec_output] then {
+    send_log "No run-time size relocation support: $exec_output\n"
+    verbose "No run-time size relocation support: $exec_output" 1
+    return
+}
+
+if { [regexp_diff "tmpdir/dump.out" "$srcdir/$subdir/size-7.out" ] } then {
+    verbose "output is [file_contents "tmpdir/dump.out"]" 2
+    fail "Run-time size relocation"
+    return
+}
+
+# Run-time size relocation tests.
+set run_time_tests {
+    {"Run size-8"
+     "tmpdir/libsize-8.so --hash-styl=gnu" ""
+     {size-8a.c} "size-8" "size-8.out"}
+    {"Run size-9"
+     "tmpdir/libsize-9.so" ""
+     {size-9a.c} "size-9" "size-9.out"}
+    {"Run size-10"
+     "tmpdir/libsize-10.so" ""
+     {size-10a.c} "size-10" "size-10.out"}
+}
+
+run_ld_link_exec_tests [] $run_time_tests
+@
+
+
+1.5
+log
+@Don't resolve size relocation against non-zero TLS symbol
+
+bfd/
+
+	* elf32-i386.c (elf_i386_allocate_dynrelocs): Don't clear pc_count
+	for non-zero TLS symbol.
+	(elf_i386_relocate_section): Don't resolve size relocation against
+	non-zero TLS symbol.
+	* elf64-x86-64.c (elf_x86_64_allocate_dynrelocs): Don't clear
+	pc_count for non-zero TLS symbol.
+	(elf_x86_64_relocate_section): Don't resolve size relocation
+	against non-zero TLS symbol.
+
+ld/testsuite/
+
+	* ld-size/size-10.rd: Updated.
+	* ld-size/size-8.rd: Likewise.
+	* ld-size/size32-2-i386.d: Likewise.
+	* ld-size/size32-2-x32.d: Likewise.
+	* ld-size/size32-2-x86-64.d: Likewise.
+	* ld-size/size64-2-x32.d: Likewise.
+	* ld-size/size64-2-x86-64.d: Likewise.
+
+	* ld-size/size.exp (run_time_tests): Pass --hash-styl=gnu to
+	linker for size-8 test.
+@
+text
+@d38 7
+d54 1
+a54 1
+    verbose "Natibe size relocation tests not run - not a native toolchain"
+@
+
+
+1.4
+log
+@	* ld-size/size.exp (build_tests <size-7, size-8>): Pass
+	--no-as-needed in cflags.
+@
+text
+@d159 1
+a159 1
+     "tmpdir/libsize-8.so" ""
+@
+
+
+1.3
+log
+@Verify run-time size relocations if supported
+
+	* ld-size/size-7.out: New file.
+	* ld-size/size-8.out: Likewise.
+	* ld-size/size-9.out: Likewise.
+	* ld-size/size-9.rd: Likewise.
+	* ld-size/size-9a.c: Likewise.
+	* ld-size/size-9b.c: Likewise.
+	* ld-size/size-10.out: Likewise.
+	* ld-size/size-10.rd: Likewise.
+	* ld-size/size-10a.c: Likewise.
+	* ld-size/size-10b.c: Likewise.
+
+	* ld-size/size.exp (build_tests): Build libsize-9.so and
+	libsize-10.so.
+	Run-time size relocation tests if supported.
+	(run_time_tests): New.
+@
+text
+@d80 1
+a80 1
+   "tmpdir/libsize-7.so" ""
+d86 1
+a86 1
+   "tmpdir/libsize-8.so" ""
+@
+
+
+1.2
+log
+@Add size-1 and size-2 tests
+
+	* ld-size/size-1.c: New file.
+	* ld-size/size-1.out: Likewise.
+	* ld-size/size-1a.c: Likewise.
+	* ld-size/size-1b.c: Likewise.
+	* ld-size/size-2.c: Likewise.
+	* ld-size/size-2.out: Likewise.
+	* ld-size/size-2a.c: Likewise.
+	* ld-size/size-2b.c: Likewise.
+
+	* ld-size/size.exp (build_tests): Build libsize-1.so and
+	libsize-2.so.
+	(run_tests): Run size-1 and size-2.
+@
+text
+@d88 6
+d141 29
+@
+
+
+1.1
+log
+@Add x86 size relocation support to gas
+
+gas/
+
+	* config/tc-i386.c (reloc): Support BFD_RELOC_SIZE32.
+	(tc_i386_fix_adjustable): Keep symbol for BFD_RELOC_32_SIZE and
+	BFD_RELOC_64_SIZE relocations.
+	(lex_got): Support "symbol@@SIZE" and don't create GOT symbol
+	for it.
+	(tc_gen_reloc): Resolve BFD_RELOC_SIZE32 and BFD_RELOC_SIZE64
+	relocations against local symbols.
+
+gas/testsuite/
+
+	* gas/i386/i386.exp: Run size-1, size-2, size-3, size-4,
+	x86-64-size-1, x86-64-size-2, x86-64-size-3, x86-64-size-4,
+	x86-64-size-5 and x86-64-size-inval-1.
+
+	* gas/i386/size-1.d: New file.
+	* gas/i386/size-1.s: Likewise.
+	* gas/i386/size-2.d: Likewise.
+	* gas/i386/size-2.s: Likewise.
+	* gas/i386/size-3.d: Likewise.
+	* gas/i386/size-3.s: Likewise.
+	* gas/i386/size-4.d: Likewise.
+	* gas/i386/size-4.s: Likewise.
+	* gas/i386/x86-64-size-1.d: Likewise.
+	* gas/i386/x86-64-size-2.d: Likewise.
+	* gas/i386/x86-64-size-3.d: Likewise.
+	* gas/i386/x86-64-size-4.d: Likewise.
+	* gas/i386/x86-64-size-5.d: Likewise.
+	* gas/i386/x86-64-size-5.s: Likewise.
+	* gas/i386/x86-64-size-inval-1.l: Likewise.
+	* gas/i386/x86-64-size-inval-1.s: Likewise.
+	* gas/i386/ilp32/x86-64-size-1.d: Likewise.
+	* gas/i386/ilp32/x86-64-size-2.d: Likewise.
+	* gas/i386/ilp32/x86-64-size-3.d: Likewise.
+	* gas/i386/ilp32/x86-64-size-4.d: Likewise.
+	* gas/i386/ilp32/x86-64-size-5.d: Likewise.
+
+ld/testsuite/
+
+	* ld-size/size.exp: New file.
+	* ld-size/size32-1-i386.d: Likewise.
+	* ld-size/size32-1-x32.d: Likewise.
+	* ld-size/size32-1-x86-64.d: Likewise.
+	* ld-size/size32-1.s: Likewise.
+	* ld-size/size32-2-i386.d: Likewise.
+	* ld-size/size32-2-x32.d: Likewise.
+	* ld-size/size32-2-x86-64.d: Likewise.
+	* ld-size/size32-2.s: Likewise.
+	* ld-size/size64-1-x32.d: Likewise.
+	* ld-size/size64-1-x86-64.d: Likewise.
+	* ld-size/size64-1.s: Likewise.
+	* ld-size/size64-2-x32.d: Likewise.
+	* ld-size/size64-2-x86-64.d: Likewise.
+	* ld-size/size64-2.s: Likewise.
+	* ld-size/size-3.c: Likewise.
+	* ld-size/size-3.out: Likewise.
+	* ld-size/size-3a.c: Likewise.
+	* ld-size/size-3b.c: Likewise.
+	* ld-size/size-3c.c: Likewise.
+	* ld-size/size-4.out: Likewise.
+	* ld-size/size-4a.c: Likewise.
+	* ld-size/size-4b.c: Likewise.
+	* ld-size/size-5.out: Likewise.
+	* ld-size/size-5a.c: Likewise.
+	* ld-size/size-5b.c: Likewise.
+	* ld-size/size-6.out: Likewise.
+	* ld-size/size-6a.c: Likewise.
+	* ld-size/size-6b.c: Likewise.
+	* ld-size/size-7.rd: Likewise.
+	* ld-size/size-7a.c: Likewise.
+	* ld-size/size-7b.c: Likewise.
+	* ld-size/size-8.rd: Likewise.
+	* ld-size/size-8a.c: Likewise.
+	* ld-size/size-8b.c: Likewise.
+@
+text
+@d58 6
+d93 6
+@
+

@@ -1,0 +1,475 @@
+head	1.9;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.5
+	gdb_7_6-2013-04-26-release:1.5
+	gdb_7_6-branch:1.5.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.5;
+locks; strict;
+comment	@# @;
+
+
+1.9
+date	2013.09.20.21.47.05;	author devans;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2013.09.11.08.31.44;	author jkratoch;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2013.09.11.08.28.04;	author jkratoch;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2013.08.26.18.30.02;	author devans;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2013.02.01.19.39.04;	author jkratoch;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2013.01.01.06.33.25;	author brobecke;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2012.12.05.17.07.56;	author uweigand;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2012.11.29.20.53.24;	author tromey;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2012.11.26.19.23.55;	author tromey;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.9
+log
+@	* lib/future.exp (gdb_find_objcopy, gdb_find_readelf): New procs.
+	* lib/gdb.exp (build_id_debug_filename_get): Update to use them.
+	(gdb_gnu_strip_debug): Ditto.
+	* lib/prelink-support.exp (section_get, prelink_no): Ditto.
+	* gdb.arch/altivec-abi.exp: Ditto.
+	* gdb.base/attach-pie-misread.exp: Ditto.
+	* gdb.base/comprdebug.exp: Ditto.
+	* gdb.base/dup-sect.exp: Ditto.
+	* gdb.base/gnu-debugdata.exp: Ditto.
+	* gdb.base/step-symless.exp: Ditto.
+	* gdb.dwarf2/dw2-inline-param.exp: Ditto.
+	* gdb.dwarf2/dw2-skip-prologue.exp: Ditto.
+	* gdb.dwarf2/gdb-index.exp: Ditto.
+@
+text
+@# Copyright 2012-2013 Free Software Foundation, Inc.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+standard_testfile
+
+if [build_executable ${testfile}.exp $testfile] {
+    return -1
+}
+
+set pipeline_counter 0
+
+set objcopy_program [gdb_find_objcopy]
+
+# Run a pipeline of processes through 'run_on_host'.
+# TEST is the base name of the test, it is modified and passed to 'run_on_host'.
+# Each subsequent argument is a list of the form {PROGRAM [ARG]...}.
+# It is passed to 'run_on_host'.  However, before being passed, if input and
+# output files are not specified in the list, then this proc provides them.
+# Each program in the pipeline takes its input from the previous
+# program's output.
+
+proc pipeline {test args} {
+    global pipeline_counter
+
+    set input_file {}
+    foreach arglist $args {
+	verbose "raw args are $arglist"
+
+	set program [lindex $arglist 0]
+	set arguments [lindex $arglist 1]
+	set input [lindex $arglist 2]
+	set output [lindex $arglist 3]
+
+	if {$input == ""} {
+	    set input $input_file
+	}
+	if {$output == ""} {
+	    set output [standard_output_file pipe.[pid].$pipeline_counter]
+	    incr pipeline_counter
+	}
+	verbose "cooked args are [list $program $arguments $input $output]"
+
+	if {[run_on_host "$test - invoke $program" $program $arguments \
+		 $input $output]} {
+	    return -1
+	}
+
+	set input_file $output
+    }
+    return 0
+}
+
+# Extract the dynamic symbols from the main binary, there is no need
+# to also have these in the normal symbol table.
+remote_file host delete ${binfile}.dynsyms
+if {[pipeline "nm -D" \
+	 [list [transform nm] "-D ${binfile} --format=posix --defined-only"] \
+	 [list awk "\\{print\\ \\\$1\\}"] \
+	 [list sort "" "" "${binfile}.dynsyms"]]} {
+    return -1
+}
+
+# Extract all the text (i.e. function) symbols from the debuginfo.
+# (Note that we actually also accept "D" symbols, for the benefit
+# of platforms like PowerPC64 that use function descriptors.)
+remote_file host delete ${binfile}.funcsyms
+if {[pipeline "nm" \
+	 [list [transform nm] "${binfile} --format=posix --defined-only"] \
+	 [list awk "\\{if(\\\$2==\"T\"||\\\$2==\"t\"||\\\$2==\"D\")print\\ \\\$1\\}"] \
+	 [list sort "" "" "${binfile}.funcsyms"]]} {
+    return -1
+}
+
+# Keep all the function symbols not already in the dynamic symbol
+# table.
+remote_file host delete ${binfile}.keep_symbols
+if {[run_on_host "comm" "comm" "-13 ${binfile}.dynsyms ${binfile}.funcsyms" "" \
+	 "${binfile}.keep_symbols"]} {
+    return -1
+}
+
+# GDB specific - we do not have split executable in advance.
+remote_file host delete ${binfile}.strip
+if {[run_on_host "strip" [transform strip] \
+	 "--strip-all -R .comment -o ${binfile}.strip ${binfile}"]} {
+    return -1
+}
+
+# Separate full debug info into ${binfile}.debug.
+remote_file host delete ${binfile}.debug
+if {[run_on_host "copydebug" ${objcopy_program} \
+	 "--only-keep-debug ${binfile} ${binfile}.debug"]} {
+    return -1
+}
+
+# Copy the full debuginfo, keeping only a minimal set of symbols and
+# removing some unnecessary sections.
+remote_file host delete ${binfile}.mini_debuginfo
+if {[run_on_host "objcopy 1" ${objcopy_program} "-S --remove-section .gdb_index --remove-section .comment --keep-symbols=${binfile}.keep_symbols ${binfile}.debug ${binfile}.mini_debuginfo"]} {
+    return -1
+}
+
+# Add the .gnu_debuglink section to the .gnu_debugdata file.
+# .gnu_debuglink is normally not present in the .gnu_debugdata section but in
+# some files there may be PT_NOTE with NT_GNU_BUILD_ID and GDB could look up
+# the .debug file from it.  This is only an additional test of GDB, such link
+# is not present in usual MiniDebugInfo sections.
+if {[run_on_host "addlink" ${objcopy_program} \
+	 "--add-gnu-debuglink=${binfile}.debug ${binfile}.mini_debuginfo ${binfile}.mini_debuginfo-debuglink"]} {
+    return -1
+}
+
+# Inject the compressed data into the .gnu_debugdata section of the
+# original binary.
+remote_file host delete ${binfile}.mini_debuginfo-debuglink.xz
+if {[run_on_host "xz" "xz" "-k ${binfile}.mini_debuginfo-debuglink"]} {
+    return -1
+}
+remote_file host delete ${binfile}.test
+if {[run_on_host "objcopy 2" ${objcopy_program} "--add-section .gnu_debugdata=${binfile}.mini_debuginfo-debuglink.xz ${binfile}.strip ${binfile}.test"]} {
+    return -1
+}
+
+clean_restart "$testfile.strip"
+
+gdb_test "p debugdata_function" \
+    {No symbol table is loaded\.  Use the "file" command\.} \
+    "no symtab"
+
+clean_restart "$testfile.test"
+
+if {$gdb_file_cmd_debug_info == "lzma"} {
+    unsupported "LZMA support not available in this gdb"
+} else {
+    gdb_test "p debugdata_function" \
+	{ = {<text variable, no debug info>} 0x[0-9a-f]+ <debugdata_function>} \
+	"have symtab"
+}
+
+# Be sure to test the 'close' method on the MiniDebugInfo BFD.
+if {[gdb_unload]} {
+    fail "unload MiniDebugInfo"
+} else {
+    pass "unload MiniDebugInfo"
+}
+
+gdb_exit
+@
+
+
+1.8
+log
+@minidebuginfo: Fix stripping/debuginfo
+
+gdb/doc/
+2013-09-11  Jan Kratochvil  <jan.kratochvil@@redhat.com>
+
+	* gdb.texinfo (MiniDebugInfo): Prepare file debug and use it to create
+	mini_debuginfo.  Strip binary before adding mini_debuginfo to it.
+
+gdb/testsuite/
+2013-09-11  Jan Kratochvil  <jan.kratochvil@@redhat.com>
+
+	* gdb.base/gnu-debugdata.exp (objcopy 1): Move it lower and use only
+	debug part of the binary.
+@
+text
+@d24 2
+d103 1
+a103 1
+if {[run_on_host "copydebug" [transform objcopy] \
+d111 1
+a111 1
+if {[run_on_host "objcopy 1" [transform objcopy] "-S --remove-section .gdb_index --remove-section .comment --keep-symbols=${binfile}.keep_symbols ${binfile}.debug ${binfile}.mini_debuginfo"]} {
+d120 1
+a120 1
+if {[run_on_host "addlink" [transform objcopy] \
+d132 1
+a132 1
+if {[run_on_host "objcopy 2" [transform objcopy] "--add-section .gnu_debugdata=${binfile}.mini_debuginfo-debuglink.xz ${binfile}.strip ${binfile}.test"]} {
+@
+
+
+1.7
+log
+@minidebuginfo: Obvious changes
+
+gdb/doc/
+2013-09-11  Jan Kratochvil  <jan.kratochvil@@redhat.com>
+
+	* gdb.texinfo (MiniDebugInfo): Fix two trailing dots.
+
+gdb/testsuite/
+2013-09-11  Jan Kratochvil  <jan.kratochvil@@redhat.com>
+
+	* gdb.base/gnu-debugdata.exp (strip): Add -R .comment.
+	(addlink): Add comment.
+@
+text
+@a91 7
+# Copy the full debuginfo, keeping only a minimal set of symbols and
+# removing some unnecessary sections.
+remote_file host delete ${binfile}.mini_debuginfo
+if {[run_on_host "objcopy 1" [transform objcopy] "-S --remove-section .gdb_index --remove-section .comment --keep-symbols=${binfile}.keep_symbols ${binfile} ${binfile}.mini_debuginfo"]} {
+    return -1
+}
+
+d106 7
+@
+
+
+1.6
+log
+@	* lib/gdb.exp (run_on_host): Moved here from gnu-debugdata.exp.
+	* gdb.base/gnu-debugdata.exp (run): Moved to gdb.exp and renamed to
+	run_on_host.  All callers updated.
+@
+text
+@d102 1
+a102 1
+	 "--strip-all -o ${binfile}.strip ${binfile}"]} {
+d116 2
+a117 1
+# the .debug file from it.
+@
+
+
+1.5
+log
+@gdb/
+	* elfread.c (elf_symfile_read): Limit separate debug info additions to
+	files with no separate debug info.
+	* objfiles.c (add_separate_debug_objfile): Add gdb_assert calls.
+	* symfile.c (read_symbols): Call find_separate_debug_file_in_section
+	only for files with no separate debug info.
+
+gdb/testsuite/
+	* gdb.base/gnu-debugdata.exp): Create ${binfile}.debug,
+	${binfile}.mini_debuginfo-debuglink, add -k to xz, use now
+	${binfile}.mini_debuginfo-debuglink and
+	${binfile}.mini_debuginfo-debuglink.xz.
+@
+text
+@a21 25
+# A wrapper for 'remote_exec host' that passes or fails a test.
+# Returns 0 if all went well, nonzero on failure.
+# TEST is the name of the test, other arguments are as for
+# remote_exec.
+proc run {test program args} {
+    verbose "cmdline is remote_exec host $program $args"
+    # remote_exec doesn't work properly if the output is set but the
+    # input is the empty string -- so replace an empty input with
+    # /dev/null.
+    if {[llength $args] > 1 && [lindex $args 1] == ""} {
+	set args [lreplace $args 1 1 "/dev/null"]
+    }
+    set result [eval remote_exec host [list $program] $args]
+    verbose "result is $result"
+    set status [lindex $result 0]
+    set output [lindex $result 1]
+    if {$status == 0} {
+ 	pass $test
+ 	return 0
+    } else {
+	fail $test
+	return -1
+    }
+}
+
+d24 2
+a25 2
+# Run a pipeline of processes through 'run'.
+# TEST is the base name of the test, it is modified and passed to 'run'.
+d27 2
+a28 2
+# It is passed to 'run'.  However, before being passed, if input and output
+# files are not specified in the list, then this proc provides them.
+d31 1
+d53 1
+a53 1
+	if {[run "$test - invoke $program" $program $arguments \
+d87 1
+a87 1
+if {[run "comm" "comm" "-13 ${binfile}.dynsyms ${binfile}.funcsyms" "" \
+d95 1
+a95 1
+if {[run "objcopy 1" [transform objcopy] "-S --remove-section .gdb_index --remove-section .comment --keep-symbols=${binfile}.keep_symbols ${binfile} ${binfile}.mini_debuginfo"]} {
+d101 1
+a101 1
+if {[run "strip" [transform strip] \
+d108 1
+a108 1
+if {[run "copydebug" [transform objcopy] \
+d117 1
+a117 1
+if {[run "addlink" [transform objcopy] \
+d125 1
+a125 1
+if {[run "xz" "xz" "-k ${binfile}.mini_debuginfo-debuglink"]} {
+d129 1
+a129 1
+if {[run "objcopy 2" [transform objcopy] "--add-section .gnu_debugdata=${binfile}.mini_debuginfo-debuglink.xz ${binfile}.strip ${binfile}.test"]} {
+@
+
+
+1.4
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@d130 16
+d148 2
+a149 2
+remote_file host delete ${binfile}.mini_debuginfo.xz
+if {[run "xz" "xz" "${binfile}.mini_debuginfo"]} {
+d153 1
+a153 1
+if {[run "objcopy 2" [transform objcopy] "--add-section .gnu_debugdata=${binfile}.mini_debuginfo.xz ${binfile}.strip ${binfile}.test"]} {
+@
+
+
+1.3
+log
+@	* gdb.base/gnu-debugdata.exp: Also include "D" symbols in
+	${binfile}.funcsyms list.
+@
+text
+@d1 1
+a1 1
+# Copyright 2012 Free Software Foundation, Inc.
+@
+
+
+1.2
+log
+@	* gdb.base/gnu-debugdata.exp (run, pipeline): Don't use lassign.
+@
+text
+@d98 2
+d103 1
+a103 1
+	 [list awk "\\{if(\\\$2==\"T\"||\\\$2==\"t\")print\\ \\\$1\\}"] \
+@
+
+
+1.1
+log
+@2012-11-26  Alexander Larsson  <alexl@@redhat.com>
+	    Jan Kratochvil  <jan.kratochvil@@redhat.com>
+	    Tom Tromey  <tromey@@redhat.com>
+
+	* NEWS: Mention mini debuginfo feature.
+	* minidebug.c: New file.
+	* configure.ac: Check for lzma.
+	* configure, config.in: Rebuild.
+	* Makefile.in (LIBLZMA): New variable.
+	(CLIBS): Include LIBLZMA.
+	(SFILES): Mention minidebug.c.
+	(COMMON_OBS): Mention minidebug.o.
+	* symfile.c (read_symbols): New function.
+	(syms_from_objfile, reread_symbols): Call it.
+	* symfile.h (find_separate_debug_file_in_section): Declare.
+doc
+	* gdb.texinfo (MiniDebugInfo): New node.
+	(GDB Files): Update.
+testsuite
+	* gdb.base/gnu-debugdata.exp: New file.
+	* gdb.base/gnu-debugdata.c: New file.
+	* lib/gdb.exp (gdb_file_cmd): Handle LZMA warning.
+	(gdb_unload): Return 0 on success.
+@
+text
+@d36 2
+a37 1
+    lassign $result status output
+d62 5
+a66 1
+	lassign $arglist program arguments input output
+@
+

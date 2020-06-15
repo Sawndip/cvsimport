@@ -1,0 +1,252 @@
+head	1.4;
+access;
+symbols
+	cygwin-1_7_35-release:1.4
+	cygwin-1_7_34-release:1.4
+	cygwin-1_7_33-release:1.3.8.1
+	cygwin-1_7_32-release:1.3.8.1
+	cygwin-1_7_31-release:1.3.8.1
+	cygwin-1_7_30-release:1.3.8.1
+	cygwin-1_7_29-release:1.3.8.1
+	cygwin-1_7_29-release-branchpoint:1.3.0.8
+	cygwin-1_7_28-release:1.3
+	cygwin-1_7_27-release:1.3
+	cygwin-1_7_26-release:1.3
+	cygwin-1_7_25-release:1.3
+	cygwin-1_7_24-release:1.3
+	cygwin-1_7_23-release:1.3
+	cygwin-1_7_22-release:1.3
+	cygwin-1_7_21-release:1.3
+	cygwin-1_7_20-release:1.3
+	cygwin-1_7_19-release:1.3
+	cygwin-64bit-postmerge:1.3
+	cygwin-64bit-premerge-branch:1.3.0.6
+	cygwin-64bit-premerge:1.3
+	cygwin-1_7_18-release:1.3
+	cygwin-1_7_17-release:1.3
+	cygwin-64bit-branch:1.3.0.4
+	cygwin-1_7_16-release:1.3
+	cygwin-1_7_15-release:1.3
+	cygwin-1_7_14_2-release:1.3
+	cygwin-1_7_14-release:1.3
+	cygwin-1_7_12-release:1.3
+	cygwin-1_7_11-release:1.3
+	cygwin-1_7_10-release:1.3
+	cygwin-1_7_9-release:1.3
+	cygwin-1_7_8-release:1.3
+	cygwin-1_7_7-release:1.3
+	cygwin-1_7_5-release:1.3
+	cygwin-1_7_4-release:1.3
+	cygwin-1_7_3-release:1.3
+	cygwin-1_7_2-release:1.3
+	cygwin-1_7_1-release:1.3
+	cv-branch-2:1.3.0.2;
+locks; strict;
+comment	@// @;
+
+
+1.4
+date	2014.03.06.17.02.18;	author corinna;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2008.12.15.18.05.50;	author corinna;	state Exp;
+branches
+	1.3.8.1;
+next	1.2;
+
+1.2
+date	2008.12.15.17.39.21;	author corinna;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2008.11.26.10.18.53;	author corinna;	state Exp;
+branches;
+next	;
+
+1.3.8.1
+date	2014.04.07.11.12.59;	author corinna;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.4
+log
+@	* setpwd.cc (client_request_setpwd::serve): Use RtlSecureZeroMemory to
+	delete password from memory.
+@
+text
+@/* setpwd.cc: Set LSA private data password for current user.
+
+   Copyright 2008, 2014 Red Hat, Inc.
+
+This file is part of Cygwin.
+
+This software is a copyrighted work licensed under the terms of the
+Cygwin license.  Please consult the file "CYGWIN_LICENSE" for
+details. */
+
+#ifdef __OUTSIDE_CYGWIN__
+#include "woutsup.h"
+
+#include <errno.h>
+#include <pthread.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+#include <wchar.h>
+
+#include <ntsecapi.h>
+#include <ntdef.h>
+#include "ntdll.h"
+
+#include "cygserver.h"
+#include "process.h"
+#include "transport.h"
+
+#include "cygserver_setpwd.h"
+
+client_request_setpwd::client_request_setpwd ()
+  : client_request (CYGSERVER_REQUEST_SETPWD,
+		    &_parameters, sizeof (_parameters))
+{ 
+}
+
+void
+client_request_setpwd::serve (transport_layer_base *const conn,
+			      process_cache *const cache)
+{
+  HANDLE tok;
+  PTOKEN_USER user;
+  WCHAR sidbuf[128], key_name [128 + wcslen (CYGWIN_LSA_KEY_PREFIX)];
+  UNICODE_STRING sid, key, data;
+
+  syscall_printf ("Request to set private data");
+  if (msglen () != sizeof (_parameters.in))
+    {
+      syscall_printf ("bad request body length: expecting %lu bytes, got %lu",
+		      sizeof (_parameters), msglen ());
+      error_code (EINVAL);
+      msglen (0);
+      return;
+    }
+  msglen (0);
+  if (!conn->impersonate_client ())
+    {
+      error_code (EACCES);
+      return;
+    }
+  if (!OpenThreadToken (GetCurrentThread (), TOKEN_READ, TRUE, &tok))
+    {
+      conn->revert_to_self ();
+      error_code (EACCES);
+      return;
+    }
+  /* Get uid from user SID in token. */
+  user = (PTOKEN_USER) get_token_info (tok, TokenUser);
+  CloseHandle (tok);
+  conn->revert_to_self ();
+  if (!user)
+    {
+      error_code (EACCES);
+      return;
+    }
+  LSA_OBJECT_ATTRIBUTES oa = { 0, 0, 0, 0, 0, 0 };
+  HANDLE lsa;
+  NTSTATUS status = LsaOpenPolicy (NULL, &oa, POLICY_CREATE_SECRET, &lsa);
+  if (!NT_SUCCESS (status))
+    {
+      error_code (LsaNtStatusToWinError (status));
+      return;
+    }
+  RtlInitEmptyUnicodeString (&sid, sidbuf, sizeof sidbuf);
+  RtlConvertSidToUnicodeString (&sid, user->User.Sid, FALSE);
+  free (user);
+  RtlInitEmptyUnicodeString (&key, key_name, sizeof key_name);
+  RtlAppendUnicodeToString (&key, CYGWIN_LSA_KEY_PREFIX);
+  RtlAppendUnicodeStringToString (&key, &sid);
+  RtlInitUnicodeString (&data, _parameters.in.passwd);
+  status = LsaStorePrivateData (lsa, &key, data.Length ? &data : NULL);
+  if (data.Length)
+    RtlSecureZeroMemory (data.Buffer, data.Length);
+  /* Success or we're trying to remove a password entry which doesn't exist. */
+  if (NT_SUCCESS (status)
+      || (data.Length == 0 && status == STATUS_OBJECT_NAME_NOT_FOUND))
+    error_code (0);
+  else
+    error_code (LsaNtStatusToWinError (status));
+  syscall_printf ("Request to set private data returns error %d", error_code ());
+  LsaClose (lsa);
+}
+#endif /* __OUTSIDE_CYGWIN__ */
+@
+
+
+1.3
+log
+@	* setpwd.cc (client_request_setpwd::serve): Don't treat removing
+	non-existant private data as error.
+@
+text
+@d3 1
+a3 1
+   Copyright 2008 Red Hat, Inc.
+d94 1
+a94 1
+    memset (data.Buffer, 0, data.Length);
+@
+
+
+1.3.8.1
+log
+@	* Throughout, fix format specifiers in debug statements to accommodate
+	x86_64.
+
+	* setpwd.cc (client_request_setpwd::serve): Use RtlSecureZeroMemory to
+	delete password from memory.
+@
+text
+@d3 1
+a3 1
+   Copyright 2008, 2014 Red Hat, Inc.
+d94 1
+a94 1
+    RtlSecureZeroMemory (data.Buffer, data.Length);
+@
+
+
+1.2
+log
+@	* setpwd.cc (client_request_setpwd::serve): Explicitely erase password
+	buffer content after usage.
+@
+text
+@d95 3
+a97 1
+  if (NT_SUCCESS (status))
+@
+
+
+1.1
+log
+@	* Makefile.in (OBJS): Add setpwd.o.
+	* README: Explain new service to store passwords in the LSA registry
+	area.
+	* bsd_helper.cc (get_token_info): Make externally available.
+	* bsd_helper.h (get_token_info): Declare.
+	* client.cc (client_request::handle_request): Add case for
+	CYGSERVER_REQUEST_SETPWD request.
+	* setpwd.cc: New file implementing the CYGSERVER_REQUEST_SETPWD
+	request.
+@
+text
+@d93 2
+@
+

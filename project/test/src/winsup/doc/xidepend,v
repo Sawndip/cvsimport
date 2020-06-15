@@ -1,0 +1,114 @@
+head	1.3;
+access;
+symbols
+	cygwin-1_7_35-release:1.3
+	cygwin-1_7_34-release:1.3
+	cygwin-1_7_33-release:1.2
+	cygwin-1_7_32-release:1.2
+	cygwin-1_7_31-release:1.2
+	cygwin-1_7_30-release:1.2
+	cygwin-1_7_29-release:1.2
+	cygwin-1_7_29-release-branchpoint:1.2.0.2
+	cygwin-1_7_28-release:1.2
+	cygwin-1_7_27-release:1.2
+	cygwin-1_7_26-release:1.2
+	cygwin-1_7_25-release:1.2
+	cygwin-1_7_24-release:1.2
+	cygwin-1_7_23-release:1.2
+	cygwin-1_7_22-release:1.2
+	cygwin-1_7_21-release:1.2
+	cygwin-1_7_20-release:1.2
+	cygwin-1_7_19-release:1.2;
+locks; strict;
+comment	@# @;
+
+
+1.3
+date	2014.10.28.11.01.32;	author corinna;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2013.06.04.11.50.41;	author corinna;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2013.05.23.19.02.46;	author tangent;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.3
+log
+@	* xidepend: Make PDF file dependent on the same input files as the
+	HTML file of the same name to trigger automatic rebuild of PDFs on
+	source file changes as well.
+@
+text
+@#!/bin/sh
+if [ "$1" = "-r" ]
+then
+	# We're being called recursively by another xidepend instance, so
+	# suppress outputs that only happen at the top level.
+	shift
+	subproc=1
+else
+	subproc=0
+fi
+
+for f in "$@@"
+do
+	if fgrep -q 'xi:include' "$f"
+	then
+		# This file uses XIncludes.  Let's chase its deps recursively.
+		base=`basename "$f" .xml`
+		if [ $subproc -eq 0 ] ; then echo -n "$base/$base.html $base/$base.pdf:" ; fi
+
+		deps=`grep 'xi:include.*href' "$f" | cut -f2 -d\" | tr '\n' ' '`
+		echo -n " $deps"
+		for d in $deps
+		do
+			# Call ourselves recursively to continue to collect deps.
+			# The -r flag tells our subprocess that it is merely
+			# contributing to a dependency line in progress.
+			$0 -r $d
+		done
+
+		# If we're at the top recursion level, we have nothing else to
+		# add to this dependency line other than the newline.
+		if [ $subproc -eq 0 ] ; then echo ; fi
+	fi
+done
+@
+
+
+1.2
+log
+@	* Makefile.in: Add rule to rebuild Makefile if Makefile.in changes.
+	Include Makefile.dep last.
+	(Makefile.dep): Run xidepend within source dir.  Temporarily drop
+	faq.xml from dependencies.
+	* xidepend: Fix creating base filename to accommodate VPATH.
+@
+text
+@d18 1
+a18 1
+		if [ $subproc -eq 0 ] ; then echo -n "$base/$base.html:" ; fi
+@
+
+
+1.1
+log
+@Created xidepend mechanism
+@
+text
+@d17 1
+a17 1
+		base=`echo $f | sed -e s/\.xml//`
+@
+

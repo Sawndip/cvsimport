@@ -1,0 +1,381 @@
+head	1.7;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.7
+	gdb_7_6-2013-04-26-release:1.7
+	gdb_7_6-branch:1.7.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.7
+	gdb_7_5_1-2012-11-29-release:1.6
+	gdb_7_5-2012-08-17-release:1.6
+	gdb_7_5-branch:1.6.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.6
+	gdb_7_4_1-2012-04-26-release:1.5.2.1
+	gdb_7_4-2012-01-24-release:1.5.2.1
+	gdb_7_4-branch:1.5.0.2
+	gdb_7_4-2011-12-13-branchpoint:1.5;
+locks; strict;
+comment	@# @;
+
+
+1.7
+date	2013.01.01.06.41.22;	author brobecke;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2012.01.04.08.17.51;	author brobecke;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2011.09.12.18.07.22;	author devans;	state Exp;
+branches
+	1.5.2.1;
+next	1.4;
+
+1.4
+date	2011.09.08.17.40.53;	author jkratoch;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2011.07.22.15.31.52;	author tromey;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2011.05.13.17.17.22;	author tromey;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2011.05.12.17.40.55;	author tromey;	state Exp;
+branches;
+next	;
+
+1.5.2.1
+date	2012.01.06.04.44.06;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.7
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@# Copyright 2011-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+load_lib dwarf.exp
+
+set test "typeddwarf"
+
+# This test can only be run on targets which support DWARF-2 and use gas.
+if ![dwarf2_support] {
+    return 0  
+}
+
+# This test can only be run on x86 and amd64 targets (and not x32).
+if { [is_x86_like_target] } {
+    set sfile ${test}.S
+} elseif {[istarget "x86_64-*-*"] && [is_lp64_target]} {
+    set sfile ${test}-amd64.S
+} else {
+    return 0
+}
+
+if { [prepare_for_testing "${test}.exp" "${test}" ${sfile} {nodebug additional_flags=-nostdlib}] } {
+    return -1
+}
+
+if ![runto_main] {
+    return -1
+}
+
+# Initialize tests to be an empty array.
+unset -nocomplain tests
+array set tests {}
+
+proc gdb-test {line var value} {
+    global tests
+
+    lappend tests($line) [list $var $value 0]
+}
+
+# Add an XFAIL'd test.  If ARCH_PATTERN is given, and does not match
+# the target, then the test is simply added and not XFAIL'd.
+proc xfail-gdb-test {line var value {arch_pattern ""}} {
+    global tests
+
+    set flag 1
+    if {$arch_pattern != ""} {
+	if {! [istarget $arch_pattern]} {
+	    set flag 0
+	}
+    }
+
+    lappend tests($line) [list $var $value $flag]
+}
+
+proc scan_gdb_tests {} {
+    global srcdir subdir test
+
+    set file "$srcdir/$subdir/$test.c"
+
+    set fd [open "$file"]
+    while {![eof $fd]} {
+	set line [gets $fd]
+	if {! [regexp "\{ (gdb-test .+) \} \}" $line ignore test_cmd]} {
+	    continue
+	}
+
+	eval $test_cmd
+    }
+    close $fd
+}
+
+scan_gdb_tests
+
+foreach line [lsort [array names tests]] {
+    gdb_test "break typeddwarf.c:$line" "Breakpoint .*" \
+	"set breakpoint at typeddwarf.c:$line"
+    gdb_continue_to_breakpoint "continue to typeddwarf.c:$line"
+
+    foreach test $tests($line) {
+	set var [lindex $test 0]
+	set value [lindex $test 1]
+	set should_xfail [lindex $test 2]
+
+	if {$should_xfail} {
+	    setup_xfail *-*-*
+	}
+
+	gdb_test "print $var" \
+	    " = $value" \
+	    "check value of $var at typeddwarf.c:$line"
+    }
+}
+@
+
+
+1.6
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d1 1
+a1 1
+# Copyright 2011-2012 Free Software Foundation, Inc.
+@
+
+
+1.5
+log
+@	* gdb.dwarf2/clztest.exp: Fix initialization of tests array.
+	* gdb.dwarf2/typeddwarf.exp: Ditto.
+@
+text
+@d1 1
+a1 1
+# Copyright 2011 Free Software Foundation, Inc.
+@
+
+
+1.5.2.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d1 1
+a1 1
+# Copyright 2011-2012 Free Software Foundation, Inc.
+@
+
+
+1.4
+log
+@gdb/testsuite/
+	Fix compatibility with x32 arch.
+	* testsuite/gdb.dwarf2/typeddwarf.exp: Check also is_lp64_target.
+	* testsuite/gdb.trace/backtrace.exp: Use is_amd64_regs_target and
+	is_x86_like_target.
+	* testsuite/gdb.trace/collection.exp: Likewise.
+	* testsuite/gdb.trace/report.exp: Likewise.
+	* testsuite/gdb.trace/unavailable.exp: Likewise.
+	* testsuite/gdb.trace/while-dyn.exp: Likewise.
+	* testsuite/lib/gdb.exp (is_amd64_regs_target): New function.
+	(is_x86_like_target): Check also is_amd64_regs_target.
+@
+text
+@d42 3
+a44 3
+global tests
+set tests(_) -
+unset tests(_)
+@
+
+
+1.3
+log
+@gdb
+	* amd64-tdep.c (amd64_pseudo_register_read_value): Rename
+	from amd64_pseudo_register_read.  Change arguments.  Call
+	mark_value_bytes_unavailable when needed.
+	(amd64_init_abi): Use set_gdbarch_pseudo_register_read_value, not
+	set_gdbarch_pseudo_register_read.
+	* sentinel-frame.c (sentinel_frame_prev_register): Use
+	regcache_cooked_read_value.
+	* regcache.h (regcache_cooked_read_value): Declare.
+	* regcache.c (regcache_cooked_read_value): New function.
+	(regcache_cooked_read): Call
+	gdbarch_pseudo_register_read_value if available.
+	* i386-tdep.h (i386_pseudo_register_read_value): Declare.
+	(i386_pseudo_register_read): Remove.
+	* i386-tdep.c (i386_pseudo_register_read_into_value): Rename from
+	i386_pseudo_register_read.  Change arguments.  Call
+	mark_value_bytes_unavailable when needed.
+	(i386_pseudo_register_read_value): New function.
+	(i386_gdbarch_init): Call set_gdbarch_pseudo_register_read_value,
+	not set_gdbarch_pseudo_register_read.
+	* gdbarch.sh (pseudo_register_read_value): New method.
+	* gdbarch.c, gdbarch.h: Rebuild.
+	* findvar.c (value_from_register): Call get_frame_register_value.
+gdb/testsuite
+	* gdb.dwarf2/typeddwarf.c: XFAIL 'z' on x86-64.
+	* gdb.dwarf2/typeddwarf.exp (xfail-gdb-test): Add arch_pattern
+	argument.
+	* gdb.dwarf2/typeddwarf-amd64.S: New file.
+@
+text
+@d25 1
+a25 1
+# This test can only be run on x86 and amd64 targets.
+d28 1
+a28 1
+} elseif {[istarget "x86_64-*-*"]} {
+@
+
+
+1.2
+log
+@	* lib/gdb.exp (is_x86_like_target): New proc.
+	* gdb.dwarf2/watch-notconst.exp: Use is_x86_like_target.
+	* gdb.dwarf2/valop.exp: Use is_x86_like_target.
+	* gdb.dwarf2/typeddwarf.exp: Use is_x86_like_target.  Pass
+	-nostdlib to compiler.
+	* gdb.dwarf2/typeddwarf.S (_start): Rename from 'main'.
+	* gdb.dwarf2/pieces.exp: Use is_x86_like_target.
+	* gdb.dwarf2/implptr.exp: Use is_x86_like_target.
+	* gdb.dwarf2/dw2-restore.exp: Check for LP64.
+	* gdb.dwarf2/callframecfa.exp: Use is_x86_like_target.
+@
+text
+@d25 6
+a30 2
+# This test can only be run on x86 targets.
+if { ![is_x86_like_target] } {
+d34 1
+a34 1
+if { [prepare_for_testing "${test}.exp" "${test}" ${test}.S {nodebug additional_flags=-nostdlib}] } {
+d52 3
+a54 1
+proc xfail-gdb-test {line var value} {
+d57 8
+a64 1
+    lappend tests($line) [list $var $value 1]
+@
+
+
+1.1
+log
+@gdb
+	PR gdb/12617:
+	* value.h (value_from_contents): Declare.
+	* value.c (value_from_contents): New function.
+	* dwarf2read.c (dwarf_stack_op_name): Add new values.
+	(dwarf2_get_die_type): New function.
+	* dwarf2loc.c (dwarf_expr_get_base_type): New function.
+	(allocate_piece_closure): Acquire reference to values.
+	(read_pieced_value): Update for value-based expressions.
+	(write_pieced_value): Likewise.
+	(free_pieced_value_closure): Call value_free as needed.
+	(dwarf2_evaluate_loc_desc_full): Set get_base_type field.
+	Update for value-based expressions.
+	* dwarf2loc.h (dwarf2_get_die_type): Declare.
+	* dwarf2expr.h (struct dwarf_stack_value) <value>: Change type.
+	<get_base_type>: New field.
+	(struct dwarf_expr_piece) <v.value>: Change type.
+	<v.regno>: New field.
+	(struct dwarf_expr_context) <mark>: New field.
+	(dwarf_expr_piece, dwarf_expr_fetch): Update.
+	(dwarf_expr_pop, dwarf_expr_push): Remove.
+	(dwarf_expr_push_address): Declare.
+	* dwarf2expr.c (dwarf_arch_cookie): New global.
+	(struct dwarf_gdbarch_types): New.
+	(dwarf_gdbarch_types_init, dwarf_expr_address_type): New
+	functions.
+	(dwarf_expr_push): Change type of 'value' argument.  Update.  Now
+	static.
+	(dwarf_expr_push_address): New function.
+	(dwarf_expr_pop): Now static.
+	(dwarf_expr_fetch): Change return type.
+	(dwarf_require_integral): New function.
+	(dwarf_expr_fetch): Simplify.
+	(add_piece): Update.
+	(base_types_equal_p, dwarf_get_base_type, get_unsigned_type): New
+	functions.
+	(execute_stack_op) <sign_ext>: Remove.
+	Use values for DWARF stack.
+	<DW_OP_GNU_const_type, DW_OP_GNU_deref_type,
+	DW_OP_GNU_regval_type, DW_OP_GNU_convert, DW_OP_GNU_reinterpret>:
+	New cases.
+	(_initialize_dwarf2expr): New function.
+	(add_piece): Update.
+	(new_dwarf_expr_context): Set new field.
+	(free_dwarf_expr_context): Call value_free_to_mark.
+	* dwarf2-frame.c (no_base_type): New function.
+	(execute_stack_op): Set get_base_type field.  Update.
+gdb/testsuite
+	* gdb.dwarf2/typeddwarf.S: New file.
+	* gdb.dwarf2/typeddwarf.c: New file.
+	* gdb.dwarf2/typeddwarf.exp: New file.
+@
+text
+@d26 1
+a26 1
+if { ![istarget i?86-*] } {
+d30 1
+a30 1
+if { [prepare_for_testing "${test}.exp" "${test}" ${test}.S {nodebug}] } {
+@
+

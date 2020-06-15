@@ -1,0 +1,218 @@
+head	1.3;
+access;
+symbols
+	cygwin-1_7_35-release:1.3
+	cygwin-1_7_34-release:1.3
+	cygwin-1_7_33-release:1.3
+	cygwin-1_7_32-release:1.3
+	cygwin-1_7_31-release:1.3
+	cygwin-1_7_30-release:1.3
+	cygwin-1_7_29-release:1.3
+	cygwin-1_7_29-release-branchpoint:1.3.0.4
+	cygwin-pre-user-db:1.3
+	cygwin-1_7_28-release:1.3
+	cygwin-1_7_27-release:1.3
+	cygwin-1_7_26-release:1.3
+	cygwin-1_7_25-release:1.3
+	cygwin-1_7_24-release:1.3
+	cygwin-1_7_23-release:1.3
+	cygwin-1_7_22-release:1.3
+	cygwin-1_7_21-release:1.3
+	cygwin-1_7_20-release:1.3
+	cygwin-1_7_19-release:1.3
+	cygwin-64bit-postmerge:1.3
+	cygwin-64bit-premerge-branch:1.3.0.2
+	cygwin-64bit-premerge:1.3
+	cygwin-1_7_18-release:1.3
+	post-ptmalloc3:1.2.4.1
+	pre-ptmalloc3:1.2.4.1
+	cygwin-1_7_17-release:1.2
+	cygwin-64bit-branch:1.2.0.4
+	cygwin-1_7_16-release:1.2
+	cygwin-1_7_15-release:1.2
+	cygwin-1_7_14_2-release:1.2
+	cygwin-1_7_14-release:1.2
+	cygwin-1_7_12-release:1.2
+	cygwin-1_7_11-release:1.2
+	cygwin-1_7_10-release:1.2
+	signal-rewrite:1.2.0.2
+	pre-notty:1.2
+	cygwin-1_7_9-release:1.1
+	cv-post-1_7_9:1.1.0.6
+	cygwin-1_7_8-release:1.1
+	cygwin-1_7_7-release:1.1
+	cygwin-1_7_5-release:1.1
+	cygwin-1_7_4-release:1.1
+	cygwin-1_7_3-release:1.1
+	cygwin-1_7_2-release:1.1
+	fifo_doover3:1.1.0.4
+	cygwin-1_7_1-release:1.1
+	prefifo:1.1
+	cv-branch-2:1.1.0.2
+	pre-ripout-set_console_state_for_spawn:1.1
+	EOL_registry_mounts:1.1
+	preoverlapped:1.1
+	drop_9x_support_start:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.3
+date	2013.01.21.04.38.27;	author cgf;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2011.06.06.05.02.11;	author cgf;	state Exp;
+branches
+	1.2.4.1;
+next	1.1;
+
+1.1
+date	2006.08.10.14.15.00;	author cgf;	state Exp;
+branches;
+next	;
+
+1.2.4.1
+date	2013.01.21.13.52.08;	author corinna;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.3
+log
+@Throughout, update copyrights to reflect dates which correspond to main-branch
+checkins.  Regularize copyright format.
+@
+text
+@/* mmap_helper.h
+
+   Copyright 2006, 2011 Red Hat, Inc.
+
+This file is part of Cygwin.
+
+This software is a copyrighted work licensed under the terms of the
+Cygwin license.  Please consult the file "CYGWIN_LICENSE" for
+details. */
+
+#ifndef _MMAP_HELPER_H
+#define _MMAP_HELPER_H
+#define _MMIOWRAP(__ptr, __len, __func) \
+({ \
+  BOOL __res; \
+  for (int __i = 0; __i < 2; __i++) \
+    { \
+      __res = __func; \
+      if (__res || __i > 0) \
+	break; \
+      DWORD __errcode = GetLastError (); \
+      if (__errcode != ERROR_NOACCESS) \
+	break; \
+      switch (mmap_is_attached_or_noreserve (__ptr, __len)) \
+	{ \
+	case MMAP_NORESERVE_COMMITED: \
+	  continue; \
+	case MMAP_RAISE_SIGBUS: \
+	  raise(SIGBUS); \
+	default: \
+	  break; \
+	} \
+      break; \
+    } \
+  __res; \
+})
+
+#define _MMSOCKWRAP(__ptr, __count, __func) \
+({ \
+  int __res; \
+  for (int __i = 0; __i < 2; __i++) \
+    { \
+      __res = __func; \
+      if (!__res || __i > 0) \
+	break; \
+      DWORD __errcode = WSAGetLastError (); \
+      if (__errcode != WSAEFAULT) \
+	break; \
+      for (unsigned __j = 0; __j < __count; __j++) \
+	switch (mmap_is_attached_or_noreserve (__ptr[__j].buf, __ptr[__j].len)) \
+	  { \
+	  case MMAP_NORESERVE_COMMITED: \
+	    goto keeptrying; \
+	  case MMAP_RAISE_SIGBUS: \
+	    raise(SIGBUS); \
+	  default: \
+	    break; \
+	  } \
+      break; \
+    keeptrying: \
+      continue; \
+    } \
+  __res; \
+})
+
+extern inline BOOL
+mmReadFile (HANDLE hFile, LPVOID lpBuffer, DWORD nNumberOfBytesToRead,
+	    LPDWORD lpNumberOfBytesRead, LPOVERLAPPED lpOverlapped)
+{
+  return _MMIOWRAP (lpBuffer, nNumberOfBytesToRead,
+		    (ReadFile (hFile, lpBuffer, nNumberOfBytesToRead,
+			       lpNumberOfBytesRead, lpOverlapped)));
+}
+
+#ifdef _WINSOCK_H
+extern inline int
+mmWSARecvFrom (SOCKET s, LPWSABUF lpBuffers, DWORD dwBufferCount,
+	    LPDWORD lpNumberOfBytesRecvd, LPDWORD lpFlags,
+	    struct sockaddr* lpFrom,
+	    LPINT lpFromlen, LPWSAOVERLAPPED lpOverlapped,
+	    LPWSAOVERLAPPED_COMPLETION_ROUTINE lpCompletionRoutine)
+{
+  return _MMSOCKWRAP (lpBuffers, dwBufferCount,
+		      (mmWSARecvFrom(s, lpBuffers, dwBufferCount,
+				     lpNumberOfBytesRecvd, lpFlags, lpFrom,
+				     lpFromlen, lpOverlapped,
+				     lpCompletionRoutine)));
+}
+#endif /*_WINSOCK_H*/
+
+#endif /*_MMAP_HELPER_H*/
+@
+
+
+1.2
+log
+@whitespace elimination
+@
+text
+@d3 1
+a3 1
+   Copyright 2006 Red Hat, Inc.
+@
+
+
+1.2.4.1
+log
+@Pull in changes from HEAD
+@
+text
+@d3 1
+a3 1
+   Copyright 2006, 2011 Red Hat, Inc.
+@
+
+
+1.1
+log
+@* winsup.h: Turn on DEBUGGING by default for now.
+@
+text
+@d30 2
+a31 2
+ 	default: \
+ 	  break; \
+@
+

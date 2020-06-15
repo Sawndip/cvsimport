@@ -1,0 +1,442 @@
+head	1.8;
+access;
+symbols
+	cygwin-1_7_17-release:1.7
+	cygwin-64bit-branch:1.7.0.2
+	cygwin-1_7_16-release:1.6
+	cygwin-1_7_15-release:1.6
+	cygwin-1_7_14_2-release:1.6
+	cygwin-1_7_14-release:1.6
+	cygwin-1_7_12-release:1.6
+	cygwin-1_7_11-release:1.6
+	cygwin-1_7_10-release:1.6
+	cygwin-1_7_9-release:1.6
+	cygwin-1_7_8-release:1.6
+	cygwin-1_7_7-release:1.6
+	cygwin-1_7_5-release:1.6
+	cygwin-1_7_4-release:1.6
+	cygwin-1_7_3-release:1.6
+	cygwin-1_7_2-release:1.6
+	cygwin-1_7_1-release:1.6
+	cv-branch-2:1.6.0.2
+	cr-0x5f1:1.5.0.6
+	cv-branch:1.5.0.4
+	cr-0x3b58:1.5.0.2
+	cr-0x9e:1.3.0.12
+	cr-0x9d:1.3.0.10
+	corinna-01:1.3
+	cr-0x9c:1.3.0.8
+	cr-0x9b:1.3.0.4
+	cr-0x99:1.3
+	Z-emcb-cygwin_daemon:1.3.0.2
+	w32api-2_2:1.3
+	mingw-runtime-2_4:1.3
+	mingw-std-ns-branch:1.3.0.6
+	mingw-runtime-2_0:1.2
+	mingwex:1.2.0.10
+	cygnus_cvs_20020108_pre:1.2
+	Z-cygwin_daemon_merge-new_HEAD:1.1.1.1
+	Z-cygwin_daemon_merge_HEAD:1.1.1.1
+	cygwin_daemon:1.1.1.1.0.10;
+locks; strict;
+comment	@ * @;
+expand	@o@;
+
+
+1.8
+date	2012.11.07.16.52.16;	author cgf;	state dead;
+branches;
+next	1.7;
+
+1.7
+date	2012.08.01.16.46.01;	author earnie;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2007.02.18.09.46.48;	author dannysmith;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2004.04.20.22.49.32;	author earnie;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2004.03.11.09.41.08;	author dannysmith;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2002.06.18.04.13.18;	author dannysmith;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2001.12.05.15.01.05;	author earnie;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2000.02.17.19.38.31;	author cgf;	state Exp;
+branches
+	1.1.1.1;
+next	;
+
+1.1.1.1
+date	2000.02.17.19.38.31;	author cgf;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.8
+log
+@* mingw: Delete obsolete directory.
+* w32api: Ditto.
+@
+text
+@/* 
+ * excpt.h
+ * This file has no copyright assigned and is placed in the Public Domain.
+ * This file is a part of the mingw-runtime package.
+ * No warranty is given; refer to the file DISCLAIMER within the package.
+ *
+ * Support for operating system level structured exception handling.
+ *
+ * NOTE: This is very preliminary stuff. I am also pretty sure it is
+ *       completely Intel specific.
+ *
+ */
+
+#ifndef	_EXCPT_H_
+#define	_EXCPT_H_
+
+/* All the headers include this file. */
+#include <_mingw.h>
+
+#include <windef.h>
+
+/*
+ * NOTE: The constants structs and typedefs below should be defined in the
+ *       Win32 API headers.
+ */
+#define	EH_NONCONTINUABLE	0x01
+#define	EH_UNWINDING		0x02
+#define	EH_EXIT_UNWIND		0x04
+#define	EH_STACK_INVALID	0x08
+#define	EH_NESTED_CALL		0x10
+
+#ifndef	RC_INVOKED
+
+typedef enum {
+	ExceptionContinueExecution,
+	ExceptionContinueSearch,
+	ExceptionNestedException,
+	ExceptionCollidedUnwind
+} EXCEPTION_DISPOSITION;
+
+
+/*
+ * End of stuff that should be in the Win32 API files.
+ */
+
+
+#ifdef	__cplusplus
+extern "C" {
+#endif
+
+/*
+ * The type of function that is expected as an exception handler to be
+ * installed with __try1.
+ */
+typedef EXCEPTION_DISPOSITION (*PEXCEPTION_HANDLER)
+		(struct _EXCEPTION_RECORD*, void*, struct _CONTEXT*, void*);
+
+/*
+ * This is not entirely necessary, but it is the structure installed by
+ * the __try1 primitive below.
+ */
+typedef struct _EXCEPTION_REGISTRATION
+{
+	struct _EXCEPTION_REGISTRATION*	prev;
+	PEXCEPTION_HANDLER		handler;
+} EXCEPTION_REGISTRATION, *PEXCEPTION_REGISTRATION;
+
+typedef EXCEPTION_REGISTRATION EXCEPTION_REGISTRATION_RECORD;
+typedef PEXCEPTION_REGISTRATION PEXCEPTION_REGISTRATION_RECORD;
+
+/*
+ * A macro which installs the supplied exception handler.
+ * Push the pointer to the new handler onto the stack,
+ * then push the pointer to the old registration structure (at fs:0)
+ * onto the stack, then put a pointer to the new registration
+ * structure (i.e. the current stack pointer) at fs:0.
+ */
+#ifdef _WIN64
+# define __try1(pHandler) \
+	__asm__ __volatile__ ("pushq %0;pushq %%gs:0;movq %%rsp,%%gs:0;" : : \
+	"g" (pHandler));
+#else
+# define __try1(pHandler) \
+	__asm__ __volatile__ ("pushl %0;pushl %%fs:0;movl %%esp,%%fs:0;" : : \
+	"g" (pHandler));
+#endif
+
+/*
+ * A macro which (despite its name) *removes* an installed
+ * exception handler. Should be used only in conjunction with the above
+ * install routine __try1.
+ * Move the pointer to the old reg. struct (at the current stack
+ * position) to fs:0, replacing the pointer we installed above,
+ * then add 8 to the stack pointer to get rid of the space we
+ * used when we pushed on our new reg. struct above. Notice that
+ * the stack must be in the exact state at this point that it was
+ * after we did __try1 or this will smash things.
+ */
+#ifdef _WIN64
+# define	__except1	\
+	__asm__ __volatile__ ("movq (%%rsp),%%rax;movq %%rax,%%gs:0;addq \
+	$16,%%rsp;" : : : "%rax");
+#else
+# define __except1	\
+	__asm__ __volatile__ ("movl (%%esp),%%eax;movl %%eax,%%fs:0;addl \
+	$8,%%esp;" : : : "%eax");
+#endif
+
+#ifdef	__cplusplus
+}
+#endif
+
+#endif	/* Not RC_INVOKED */
+
+#endif	/* _EXCPT_H_ not defined */
+@
+
+
+1.7
+log
+@	* include/excpt.h (__try1): Define based on _WIN64 definition.
+	(__except1): Ditto.
+@
+text
+@@
+
+
+1.6
+log
+@2007-02-18  Aurimas Cernius  <aurisc4@@gmail.com>
+
+	* include/excpt.h:  Replace "_try1" in comments  with "__try1".
+@
+text
+@d78 9
+a86 2
+#define __try1(pHandler) \
+	__asm__ ("pushl %0;pushl %%fs:0;movl %%esp,%%fs:0;" : : "g" (pHandler));
+d99 9
+a107 3
+#define	__except1	\
+	__asm__ ("movl (%%esp),%%eax;movl %%eax,%%fs:0;addl $8,%%esp;" \
+	 : : : "%eax");
+@
+
+
+1.5
+log
+@
+	* CONTRIBUTORS: New file.
+	* DISCLAIMER: Ditto.
+	* CRT_noglob.c: Reword copyright and disclaimer.  Move Contributors
+	section CONTRIBUTORS file.  Remove RCS tags.
+	* CRTFmode.c: Ditto.
+	* CRTglob.c: Ditto.
+	* CRTinit.c: Ditto.
+	* crt1.c: Ditto.
+	* crtdll.dev: Ditto.
+	* dllcrt1.c: Ditto.
+	* dllmain.c: Ditto.
+	* gccmain.c: Ditto.
+	* init.c: Ditto.
+	* isascii.c: Ditto.
+	* iscsym.c: Ditto.
+	* iscsymf.c: Ditto.
+	* jamfile: Ditto.
+	* main.c: Ditto.
+	* msvcrt.def.in: Ditto.
+	* strcasecmp.c: Ditto.
+	* toascii.c: Ditto.
+	* wcscmpi.c: Ditto.
+	* include/assert.h: Ditto.
+	* include/conio.h: Ditto.
+	* include/ctype.h: Ditto.
+	* include/direct.h: Ditto.
+	* include/dirent.h: Ditto.
+	* include/dos.h: Ditto.
+	* include/errno.h: Ditto.
+	* include/excpt.h: Ditto.
+	* include/fcntl.h: Ditto.
+	* include/float.h: Ditto.
+	* include/io.h: Ditto.
+	* include/locale.h: Ditto.
+	* include/malloc.h: Ditto.
+	* include/math.h: Ditto.
+	* include/process.h: Ditto.
+	* include/setjmp.h: Ditto.
+	* include/share.h: Ditto.
+	* include/signal.h: Ditto.
+	* include/stdio.h: Ditto.
+	* include/stdlib.h: Ditto.
+	* include/string.h: Ditto.
+	* include/tchar.h: Ditto.
+	* include/time.h: Ditto.
+	* include/wchar.h: Ditto.
+	* include/sys/locking.h: Ditto.
+	* include/sys/param.h: Ditto.
+	* include/sys/stat.h: Ditto.
+	* include/sys/timeb.h: Ditto.
+	* include/sys/types.h: Ditto.
+	* include/sys/utime.h: Ditto.
+	* mingwex/dirent.c: Ditto.
+@
+text
+@d53 1
+a53 1
+ * installed with _try1.
+d60 1
+a60 1
+ * the _try1 primitive below.
+d90 1
+a90 1
+ * after we did _try1 or this will smash things.
+@
+
+
+1.4
+log
+@	* include/conio.h: Remove __STRICT_ANSI__ guard from non-ANSI header.
+	* include/direct.h:  Ditto.
+	* include/dirent.h:  Ditto.
+	* include/dos.h:  Ditto.
+	* include/excpt.h:  Ditto.
+	* inlude/fcntl,h
+	* include/io.h:  Ditto.
+	* inlude/mem.h:  Ditto.
+	* include/memory.h:  Ditto.
+	* include/process.h:  Ditto.
+	* inlude/search.h:  Ditto.
+	* include/share.h:  Ditto.
+	* include/unistd.h:  Ditto.
+	* include/sys/fcntl.h:  Ditto.
+	* include/file.h:  Ditto.
+	* include/sys/locking.h:  Ditto.
+	* include/sys/param.h:  Ditto.
+	* include/sys/stat,h
+	* include/sys/time.h:  Ditto.
+	* include/sys/timeb.h:  Ditto.
+	* include/sys/types.h:  Ditto.
+	* include/sys/unistd.h:  Ditto.
+	* include/sys/utime.h:  Ditto.
+@
+text
+@d3 3
+a10 20
+ *
+ * This file is part of the Mingw32 package.
+ *
+ * Contributors:
+ *  Created by Colin Peters <colin@@bird.fu.is.saga-u.ac.jp>
+ *  Based on code by Mikey <jeffdb@@netzone.com>
+ *
+ *  THIS SOFTWARE IS NOT COPYRIGHTED
+ *
+ *  This source code is offered for use in the public domain. You may
+ *  use, modify or distribute it freely.
+ *
+ *  This code is distributed in the hope that it will be useful but
+ *  WITHOUT ANY WARRANTY. ALL WARRANTIES, EXPRESS OR IMPLIED ARE HEREBY
+ *  DISCLAIMED. This includes but is not limited to warranties of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ *
+ * $Revision: 1.3 $
+ * $Author: dannysmith $
+ * $Date: 2001/11/29 04:26:33 $
+@
+
+
+1.3
+log
+@2002-06-18  Casper S. Hornstrup  <chorns@@users.sourceforge.net>
+
+	* include/_mingw.h (__MINGW_IMPORT): Check for prior definition before
+	defining.
+	* include/excpt.h (): Include windef.h not windows.h.
+	* include/fcntl.h (_O_SHORT_LIVED): Add define.
+	(_chmod): Add prototype.
+        (_creat): Correct prototype.
+	(SH_DENY*): Rename defines to _SH_DENY*.
+	(SH_DENY*): Add Non-ANSI names for _SH_DENY*.
+	include/stdio.h (_IOMYBUF, _IOEOF, _IOERR, _IOSTRG,
+	_IOAPPEND): Add defines.
+	(_wfindfirst): Correct prototype.
+	(_wfdopen): Add prototype.
+	* include/stdlib.h (_rotl, _rotr, _lrotl, _lrotr): Add
+	prototypes.
+	* include/string.h (_mbschr, _mbstok, _mbsncat): Remove
+	 prototypes.
+	(_wcsdup): Correct prototype.
+	* include/mbstring.h: Remove comments about _mbschr, _mbstok,
+	 _mbsncat being in string.h.
+	* include/wchar.h (_wfindfirst): Correct prototype.
+	* include/tchar.h (_tfdopen): Add _UNICODE mappings.
+@
+text
+@a36 2
+#ifndef	__STRICT_ANSI__
+
+a117 2
+
+#endif	/* Not strict ANSI */
+@
+
+
+1.2
+log
+@Merge MinGW CVS differences
+@
+text
+@d39 1
+a39 1
+#include <windows.h>
+@
+
+
+1.1
+log
+@Initial revision
+@
+text
+@d22 1
+a22 1
+ *  DISCLAMED. This includes but is not limited to warranties of
+d25 3
+a27 3
+ * $Revision: 1.4 $
+ * $Author: cgf $
+ * $Date: 2000/02/05 04:04:53 $
+d101 1
+a101 1
+ * A macro which (dispite its name) *removes* an installed
+@
+
+
+1.1.1.1
+log
+@import winsup-2000-02-17 snapshot
+@
+text
+@@

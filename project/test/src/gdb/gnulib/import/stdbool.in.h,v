@@ -1,0 +1,283 @@
+head	1.2;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.2
+	gdb_7_6-2013-04-26-release:1.2
+	gdb_7_6-branch:1.2.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.2
+	gdb_7_5_1-2012-11-29-release:1.1
+	gdb_7_5-2012-08-17-release:1.1
+	gdb_7_5-branch:1.1.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.2
+date	2012.12.18.06.00.54;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2012.07.02.11.52.39;	author jkratoch;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@Update gnulib to current HEAD.
+
+gdb/ChangeLog:
+
+        * gnulib/update-gnulib.sh (GNULIB_COMMIT_SHA1): Set to
+        8d5bd1402003bd0153984b138735adf537d960b0.
+        * gnulib/aclocal.m4, configure, config.in: Regenerate.
+        * gnulib/import/m4/extern-inline.m4: Import.
+        * gnulib/import/wctype-h.c: Import.
+        * gnulib/import/Makefile.am: Update.
+        * gnulib/import/Makefile.in: Update.
+        * gnulib/import/alloca.in.h: Update.
+        * gnulib/import/extra/snippet/warn-on-use.h: Update.
+        * gnulib/import/localcharset.c: Update.
+        * gnulib/import/m4/fcntl-o.m4: Update.
+        * gnulib/import/m4/gnulib-cache.m4: Update.
+        * gnulib/import/m4/gnulib-comp.m4: Update.
+        * gnulib/import/m4/wctype_h.m4: Update.
+        * gnulib/import/stdbool.in.h: Update.
+        * gnulib/import/verify.h: Update.
+        * gnulib/import/wctype.in.h: Update.
+@
+text
+@/* Copyright (C) 2001-2003, 2006-2012 Free Software Foundation, Inc.
+   Written by Bruno Haible <haible@@clisp.cons.org>, 2001.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3, or (at your option)
+   any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program; if not, see <http://www.gnu.org/licenses/>.  */
+
+#ifndef _GL_STDBOOL_H
+#define _GL_STDBOOL_H
+
+/* ISO C 99 <stdbool.h> for platforms that lack it.  */
+
+/* Usage suggestions:
+
+   Programs that use <stdbool.h> should be aware of some limitations
+   and standards compliance issues.
+
+   Standards compliance:
+
+       - <stdbool.h> must be #included before 'bool', 'false', 'true'
+         can be used.
+
+       - You cannot assume that sizeof (bool) == 1.
+
+       - Programs should not undefine the macros bool, true, and false,
+         as C99 lists that as an "obsolescent feature".
+
+   Limitations of this substitute, when used in a C89 environment:
+
+       - <stdbool.h> must be #included before the '_Bool' type can be used.
+
+       - You cannot assume that _Bool is a typedef; it might be a macro.
+
+       - Bit-fields of type 'bool' are not supported.  Portable code
+         should use 'unsigned int foo : 1;' rather than 'bool foo : 1;'.
+
+       - In C99, casts and automatic conversions to '_Bool' or 'bool' are
+         performed in such a way that every nonzero value gets converted
+         to 'true', and zero gets converted to 'false'.  This doesn't work
+         with this substitute.  With this substitute, only the values 0 and 1
+         give the expected result when converted to _Bool' or 'bool'.
+
+       - C99 allows the use of (_Bool)0.0 in constant expressions, but
+         this substitute cannot always provide this property.
+
+   Also, it is suggested that programs use 'bool' rather than '_Bool';
+   this isn't required, but 'bool' is more common.  */
+
+
+/* 7.16. Boolean type and values */
+
+/* BeOS <sys/socket.h> already #defines false 0, true 1.  We use the same
+   definitions below, but temporarily we have to #undef them.  */
+#if defined __BEOS__ && !defined __HAIKU__
+# include <OS.h> /* defines bool but not _Bool */
+# undef false
+# undef true
+#endif
+
+#ifdef __cplusplus
+# define _Bool bool
+# define bool bool
+#else
+# if defined __BEOS__ && !defined __HAIKU__
+  /* A compiler known to have 'bool'.  */
+  /* If the compiler already has both 'bool' and '_Bool', we can assume they
+     are the same types.  */
+#  if !@@HAVE__BOOL@@
+typedef bool _Bool;
+#  endif
+# else
+#  if !defined __GNUC__
+   /* If @@HAVE__BOOL@@:
+        Some HP-UX cc and AIX IBM C compiler versions have compiler bugs when
+        the built-in _Bool type is used.  See
+          http://gcc.gnu.org/ml/gcc-patches/2003-12/msg02303.html
+          http://lists.gnu.org/archive/html/bug-coreutils/2005-11/msg00161.html
+          http://lists.gnu.org/archive/html/bug-coreutils/2005-10/msg00086.html
+        Similar bugs are likely with other compilers as well; this file
+        wouldn't be used if <stdbool.h> was working.
+        So we override the _Bool type.
+      If !@@HAVE__BOOL@@:
+        Need to define _Bool ourselves. As 'signed char' or as an enum type?
+        Use of a typedef, with SunPRO C, leads to a stupid
+          "warning: _Bool is a keyword in ISO C99".
+        Use of an enum type, with IRIX cc, leads to a stupid
+          "warning(1185): enumerated type mixed with another type".
+        Even the existence of an enum type, without a typedef,
+          "Invalid enumerator. (badenum)" with HP-UX cc on Tru64.
+        The only benefit of the enum, debuggability, is not important
+        with these compilers.  So use 'signed char' and no enum.  */
+#   define _Bool signed char
+#  else
+   /* With this compiler, trust the _Bool type if the compiler has it.  */
+#   if !@@HAVE__BOOL@@
+   /* For the sake of symbolic names in gdb, define true and false as
+      enum constants, not only as macros.
+      It is tempting to write
+         typedef enum { false = 0, true = 1 } _Bool;
+      so that gdb prints values of type 'bool' symbolically.  But then
+      values of type '_Bool' might promote to 'int' or 'unsigned int'
+      (see ISO C 99 6.7.2.2.(4)); however, '_Bool' must promote to 'int'
+      (see ISO C 99 6.3.1.1.(2)).  So add a negative value to the
+      enum; this ensures that '_Bool' promotes to 'int'.  */
+typedef enum { _Bool_must_promote_to_int = -1, false = 0, true = 1 } _Bool;
+#   endif
+#  endif
+# endif
+# define bool _Bool
+#endif
+
+/* The other macros must be usable in preprocessor directives.  */
+#ifdef __cplusplus
+# define false false
+# define true true
+#else
+# define false 0
+# define true 1
+#endif
+
+#define __bool_true_false_are_defined 1
+
+#endif /* _GL_STDBOOL_H */
+@
+
+
+1.1
+log
+@gdb/
+	Add fnmatch-gnu module.
+	* gnulib/Makefile.in (aclocal_m4_deps): Add new files and remove one.
+	* gnulib/configure.ac (AC_INIT): Use now import/memmem.c.
+	* gnulib/aclocal.m4: Regenerate.
+	* gnulib/config.in: Regenerate.
+	* gnulib/configure: Regenerate.
+	* gnulib/import/dummy.c: Remove.
+	* gnulib/import/Makefile.am: Regenerate.
+	* gnulib/import/Makefile.in: Likewise.
+	* gnulib/import/m4/gnulib-cache.m4: Likewise.
+	* gnulib/import/m4/gnulib-comp.m4: Likewise.
+	* gnulib/import/alloca.c: New file.
+	* gnulib/import/alloca.in.h: Likewise.
+	* gnulib/import/config.charset: Likewise.
+	* gnulib/import/fnmatch.c: Likewise.
+	* gnulib/import/fnmatch.in.h: Likewise.
+	* gnulib/import/fnmatch_loop.c: Likewise.
+	* gnulib/import/localcharset.c: Likewise.
+	* gnulib/import/localcharset.h: Likewise.
+	* gnulib/import/m4/alloca.m4: Likewise.
+	* gnulib/import/m4/codeset.m4: Likewise.
+	* gnulib/import/m4/configmake.m4: Likewise.
+	* gnulib/import/m4/fcntl-o.m4: Likewise.
+	* gnulib/import/m4/fnmatch.m4: Likewise.
+	* gnulib/import/m4/glibc21.m4: Likewise.
+	* gnulib/import/m4/localcharset.m4: Likewise.
+	* gnulib/import/m4/locale-fr.m4: Likewise.
+	* gnulib/import/m4/locale-ja.m4: Likewise.
+	* gnulib/import/m4/locale-zh.m4: Likewise.
+	* gnulib/import/m4/mbrtowc.m4: Likewise.
+	* gnulib/import/m4/mbsinit.m4: Likewise.
+	* gnulib/import/m4/mbsrtowcs.m4: Likewise.
+	* gnulib/import/m4/mbstate_t.m4: Likewise.
+	* gnulib/import/m4/stdbool.m4: Likewise.
+	* gnulib/import/m4/wchar_h.m4: Likewise.
+	* gnulib/import/m4/wctype_h.m4: Likewise.
+	* gnulib/import/m4/wint_t.m4: Likewise.
+	* gnulib/import/mbrtowc.c: Likewise.
+	* gnulib/import/mbsinit.c: Likewise.
+	* gnulib/import/mbsrtowcs-impl.h: Likewise.
+	* gnulib/import/mbsrtowcs-state.c: Likewise.
+	* gnulib/import/mbsrtowcs.c: Likewise.
+	* gnulib/import/ref-add.sin: Likewise.
+	* gnulib/import/ref-del.sin: Likewise.
+	* gnulib/import/stdbool.in.h: Likewise.
+	* gnulib/import/streq.h: Likewise.
+	* gnulib/import/strnlen1.c: Likewise.
+	* gnulib/import/strnlen1.h: Likewise.
+	* gnulib/import/verify.h: Likewise.
+	* gnulib/import/wchar.in.h: Likewise.
+	* gnulib/import/wctype.in.h: Likewise.
+@
+text
+@d69 5
+a73 10
+/* For the sake of symbolic names in gdb, we define true and false as
+   enum constants, not only as macros.
+   It is tempting to write
+      typedef enum { false = 0, true = 1 } _Bool;
+   so that gdb prints values of type 'bool' symbolically. But if we do
+   this, values of type '_Bool' may promote to 'int' or 'unsigned int'
+   (see ISO C 99 6.7.2.2.(4)); however, '_Bool' must promote to 'int'
+   (see ISO C 99 6.3.1.1.(2)).  So we add a negative value to the
+   enum; this ensures that '_Bool' promotes to 'int'.  */
+#if defined __cplusplus || (defined __BEOS__ && !defined __HAIKU__)
+d77 1
+a77 1
+# if !@@HAVE__BOOL@@
+d79 3
+a81 3
+# endif
+#else
+# if !defined __GNUC__
+d101 2
+a102 2
+#  define _Bool signed char
+# else
+d104 10
+a113 1
+#  if !@@HAVE__BOOL@@
+d115 1
+d118 1
+a119 1
+#define bool _Bool
+d122 8
+a129 2
+#define false 0
+#define true 1
+@
+

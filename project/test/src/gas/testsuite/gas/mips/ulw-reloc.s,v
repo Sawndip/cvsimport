@@ -1,0 +1,143 @@
+head	1.1;
+access;
+symbols
+	binutils-2_24-branch:1.1.0.2
+	binutils-2_24-branchpoint:1.1
+	binutils_latest_snapshot:1.1;
+locks; strict;
+comment	@# @;
+
+
+1.1
+date	2013.07.07.11.32.31;	author rsandifo;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.1
+log
+@include/opcode/
+	* mips.h (M_ACLR_OB, M_ASET_OB, M_CACHE_OB, M_CACHEE_OB, M_L_DOB)
+	(M_LB_A, M_LBE_OB, M_LBU_A, M_LBUE_OB, M_LD_A, M_LD_OB, M_LDC2_OB)
+	(M_LDL_OB, M_LDM_OB, M_LDP_OB, M_LDR_OB, M_LH_A, M_LHE_OB, M_LHU_A)
+	(M_LHUE_OB, M_LL_OB, M_LLD_OB, M_LLE_OB, M_LS_A, M_LW_A, M_LWE_OB)
+	(M_LWC0_A, M_LWC1_A, M_LWC2_A, M_LWC2_OB, M_LWC3_A, M_LWL_A, M_LWL_OB)
+	(M_LWLE_OB, M_LWM_OB, M_LWP_OB, M_LWR_A, M_LWR_OB, M_LWRE_OB, M_LWU_OB)
+	(M_PREF_OB, M_PREFE_OB, M_S_DOB, M_SAA_OB, M_SAAD_OB, M_SC_OB)
+	(M_SCD_OB, M_SCE_OB, M_SD_A, M_SD_OB, M_SDC2_OB, M_SDL_OB, M_SDM_OB)
+	(M_SDP_OB, M_SDR_OB, M_SB_A, M_SBE_OB, M_SH_A, M_SHE_OB, M_SW_A)
+	(M_SWE_OB, M_SWC0_A, M_SWC1_A, M_SWC2_A, M_SWC2_OB, M_SWC3_A, M_SWL_A)
+	(M_SWL_OB, M_SWLE_OB, M_SWM_OB, M_SWP_OB, M_SWR_A, M_SWR_OB, M_SWRE_OB)
+	(M_ULD, M_ULH, M_ULHU, M_ULW, M_USH, M_USW, M_USD): Delete.
+	(M_ULD_A, M_ULH_A, M_ULHU_A, M_ULW_A, M_USH_A, M_USW_A, M_USD_A):
+	Rename to...
+	(M_ULD_AB, M_ULH_AB, M_ULHU_AB, M_ULW_AB, M_USH_AB, M_USW_AB)
+	(M_USD_AB): ...these.
+
+opcodes/
+	* mips-opc.c (mips_builtin_opcodes): Remove o(b) macros.  Move LD
+	and SD A(B) macros up.
+	* micromips-opc.c (micromips_opcodes): Likewise.
+
+gas/
+	* config/tc-mips.c (gprel16_reloc_p): New function.
+	(macro_read_relocs): Assume BFD_RELOC_LO16 if all relocs are
+	BFD_RELOC_UNUSED.
+	(offset_high_part, small_offset_p): New functions.
+	(nacro): Use them.  Remove *_OB and *_DOB cases.  For single-
+	register load and store macros, handle the 16-bit offset case first.
+	If a 16-bit offset is not suitable for the instruction we're
+	generating, load it into the temporary register using
+	ADDRESS_ADDI_INSN.  Make the M_LI_DD code fall through into the
+	M_L_DAB code once the address has been constructed.  For double load
+	and store macros, again handle the 16-bit offset case first.
+	If the second register cannot be accessed from the same high
+	part as the first, load it into AT using ADDRESS_ADDI_INSN.
+	Fix the handling of LD in cases where the first register is the
+	same as the base.  Also handle the case where the offset is
+	not 16 bits and the second register cannot be accessed from the
+	same high part as the first.  For unaligned loads and stores,
+	fuse the offbits == 12 and old "ab" handling.  Apply this handling
+	whenever the second offset needs a different high part from the first.
+	Construct the offset using ADDRESS_ADDI_INSN where possible,
+	for offbits == 16 as well as offbits == 12.  Use offset_reloc
+	when constructing the individual loads and stores.
+	(mips_ip): Set up imm_expr, imm2_expr, offset_expr, imm_reloc
+	and offset_reloc before matching against a particular opcode.
+	Handle elided 'A' constants.  Allow 'A' constants to use
+	relocation operators.
+
+gas/testsuite/
+	* gas/mips/ldstla-32.d: Avoid "lui at,0x0" sequences for
+	truncated constants.
+	* gas/mips/ldstla-32-shared.d: Likewise.
+	* gas/mips/mcu.d: Use ADDIU in preference to LI+ADDU when adding
+	16-bit constants to the base.
+	* gas/mips/micromips@@mcu.d: Likewise.
+	* gas/mips/micromips@@cache.d: Likewise.
+	* gas/mips/micromips@@pref.d: Likewise.
+	* gas/mips/micromips.d, gas/mips/micromips-insn32.d,
+	gas/mips/micromips-noinsn32.d, gas/mips/micromips-trap.d: Likewise.
+	Allow the full 16-bit offset range to be used for SB, LB and LBU in
+	USH and ULH sequences.  Fix the expected output for LD and SD when
+	the two LW and SW offsets need different high parts.
+	* gas/mips/eva.s: Test PREFE with relocation operators.
+	* gas/mips/eva.d: Use ADDIU in preference to LI+ADDU for 16-bit
+	constants.  Update after eva.s change.
+	* gas/mips/micromips@@eva.d: Likewise.
+	* gas/mips/ld-reloc.s, gas/mips/ld-reloc.d, gas/mips/l_d-reloc.s,
+	gas/mips/l_d-reloc.d, gas/mips/ulw-reloc.s, gas/mips/ulw-reloc.d,
+	gas/mips/micromips@@ulw-reloc.d, gas/mips/ulh-reloc.s,
+	gas/mips/ulh-reloc.d: New tests.
+	* gas/mips/mips.exp: Run them.
+@
+text
+@	.ent	func
+func:
+	ulw	$4,($4)
+	ulw	$4,0x7fc($4)
+	ulw	$4,0x7fd($4)
+	ulw	$4,0x7ff($4)
+	ulw	$4,0x800($4)
+	ulw	$4,0x7ffc($4)
+	ulw	$4,0x7ffd($4)
+	ulw	$4,0x7fff($4)
+	ulw	$4,0x8000($4)
+
+	ulw	$4,($5)
+	ulw	$4,0x7fc($5)
+	ulw	$4,0x7fd($5)
+	ulw	$4,0x7ff($5)
+	ulw	$4,0x800($5)
+	ulw	$4,0x7ffc($5)
+	ulw	$4,0x7ffd($5)
+	ulw	$4,0x7fff($5)
+	ulw	$4,0x8000($5)
+	ulw	$4,0x37ffc($5)
+	ulw	$4,0x37ffd($5)
+	ulw	$4,0x37fff($5)
+	ulw	$4,0x38000($5)
+
+	ulw	$4,%lo(foo)
+	ulw	$4,%hi(foo)
+	ulw	$4,%gp_rel(foo)
+	ulw	$4,%lo(0x12348765)
+	ulw	$4,%hi(0x12348765)
+
+	ulw	$4,%lo(foo)($4)
+	ulw	$4,%hi(foo)($4)
+	ulw	$4,%gp_rel(foo)($4)
+
+	ulw	$4,%lo(foo)($5)
+	ulw	$4,%hi(foo)($5)
+	ulw	$4,%gp_rel(foo)($5)
+	ulw	$4,%lo(0x12348765)($5)
+	ulw	$4,%hi(0x12348765)($5)
+	ulw	$4,%lo(foo+0x12348765)($5)
+	ulw	$4,%hi(foo+0x12348765)($5)
+	.end	func
+@

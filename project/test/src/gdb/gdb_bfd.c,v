@@ -1,0 +1,1691 @@
+head	1.20;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.16
+	gdb_7_6-2013-04-26-release:1.16
+	gdb_7_6-branch:1.16.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.16;
+locks; strict;
+comment	@ * @;
+
+
+1.20
+date	2013.10.07.19.31.13;	author tromey;	state Exp;
+branches;
+next	1.19;
+
+1.19
+date	2013.04.22.16.46.14;	author tromey;	state Exp;
+branches;
+next	1.18;
+
+1.18
+date	2013.04.08.20.04.42;	author tromey;	state Exp;
+branches;
+next	1.17;
+
+1.17
+date	2013.03.14.20.26.19;	author tromey;	state Exp;
+branches;
+next	1.16;
+
+1.16
+date	2013.01.31.18.37.37;	author aristovski;	state Exp;
+branches;
+next	1.15;
+
+1.15
+date	2013.01.01.06.32.42;	author brobecke;	state Exp;
+branches;
+next	1.14;
+
+1.14
+date	2012.11.28.18.48.37;	author tromey;	state Exp;
+branches;
+next	1.13;
+
+1.13
+date	2012.11.08.19.52.41;	author tromey;	state Exp;
+branches;
+next	1.12;
+
+1.12
+date	2012.08.22.15.50.38;	author tromey;	state Exp;
+branches;
+next	1.11;
+
+1.11
+date	2012.08.15.14.33.40;	author tromey;	state Exp;
+branches;
+next	1.10;
+
+1.10
+date	2012.08.11.00.05.55;	author sergiodj;	state Exp;
+branches;
+next	1.9;
+
+1.9
+date	2012.07.25.15.47.09;	author tromey;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2012.07.24.13.14.37;	author jkratoch;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2012.07.23.15.01.50;	author tromey;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2012.07.23.14.57.54;	author tromey;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2012.07.23.14.56.10;	author tromey;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2012.07.18.19.57.21;	author tromey;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2012.07.18.19.49.33;	author tromey;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2012.07.18.19.34.57;	author tromey;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2012.07.18.19.33.33;	author tromey;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.20
+log
+@don't share per-BFD data if relocations are needed
+
+Right now we always share per-BFD data across objfiles, if there is a
+BFD.  This works fine.  However, we're going to start sharing more
+data, and sometimes this data will come directly from sections of the
+BFD.  If such a section has SEC_RELOC set, then the data coming from
+that section will not be truly sharable -- the section will be
+program-space-dependent, and re-read by gdb for each objfile.
+
+This patch disallows per-BFD sharing in this case.  This is a bit
+"heavy" in that we could in theory examine each bit of shared data for
+suitability.  However, that is more complicated, and SEC_RELOC is rare
+enough that I think we needn't bother.
+
+Note that the "no sharing" case is equivalent to "gdb works as it
+historically did".  That is, the sharing is a new(-ish) optimization.
+
+Built and regtested on x86-64 Fedora 18.
+
+	* gdb_bfd.c (struct gdb_bfd_data) <relocation_computed,
+	needs_relocations>: New fields.
+	(gdb_bfd_requires_relocations): New function.
+	* gdb_bfd.h (gdb_bfd_requires_relocations): Declare.
+	* objfiles.c (get_objfile_bfd_data): Disallow sharing if
+	the BFD needs relocations applied.
+@
+text
+@/* Definitions for BFD wrappers used by GDB.
+
+   Copyright (C) 2011-2013 Free Software Foundation, Inc.
+
+   This file is part of GDB.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+#include "defs.h"
+#include "gdb_bfd.h"
+#include "gdb_assert.h"
+#include "gdb_string.h"
+#include "ui-out.h"
+#include "gdbcmd.h"
+#include "hashtab.h"
+#include "filestuff.h"
+#ifdef HAVE_ZLIB_H
+#include <zlib.h>
+#endif
+#ifdef HAVE_MMAP
+#include <sys/mman.h>
+#ifndef MAP_FAILED
+#define MAP_FAILED ((void *) -1)
+#endif
+#endif
+
+/* An object of this type is stored in the section's user data when
+   mapping a section.  */
+
+struct gdb_bfd_section_data
+{
+  /* Size of the data.  */
+  bfd_size_type size;
+  /* If the data was mmapped, this is the length of the map.  */
+  bfd_size_type map_len;
+  /* The data.  If NULL, the section data has not been read.  */
+  void *data;
+  /* If the data was mmapped, this is the map address.  */
+  void *map_addr;
+};
+
+/* A hash table holding every BFD that gdb knows about.  This is not
+   to be confused with 'gdb_bfd_cache', which is used for sharing
+   BFDs; in contrast, this hash is used just to implement
+   "maint info bfd".  */
+
+static htab_t all_bfds;
+
+/* See gdb_bfd.h.  */
+
+void
+gdb_bfd_stash_filename (struct bfd *abfd)
+{
+  char *name = bfd_get_filename (abfd);
+  char *data;
+
+  data = bfd_alloc (abfd, strlen (name) + 1);
+  strcpy (data, name);
+
+  /* Unwarranted chumminess with BFD.  */
+  abfd->filename = data;
+}
+
+/* An object of this type is stored in each BFD's user data.  */
+
+struct gdb_bfd_data
+{
+  /* The reference count.  */
+  int refc;
+
+  /* The mtime of the BFD at the point the cache entry was made.  */
+  time_t mtime;
+
+  /* This is true if we have determined whether this BFD has any
+     sections requiring relocation.  */
+  unsigned int relocation_computed : 1;
+
+  /* This is true if any section needs relocation.  */
+  unsigned int needs_relocations : 1;
+
+  /* This is true if we have successfully computed the file's CRC.  */
+  unsigned int crc_computed : 1;
+
+  /* The file's CRC.  */
+  unsigned long crc;
+
+  /* If the BFD comes from an archive, this points to the archive's
+     BFD.  Otherwise, this is NULL.  */
+  bfd *archive_bfd;
+
+  /* The registry.  */
+  REGISTRY_FIELDS;
+};
+
+#define GDB_BFD_DATA_ACCESSOR(ABFD) \
+  ((struct gdb_bfd_data *) bfd_usrdata (ABFD))
+
+DEFINE_REGISTRY (bfd, GDB_BFD_DATA_ACCESSOR)
+
+/* A hash table storing all the BFDs maintained in the cache.  */
+
+static htab_t gdb_bfd_cache;
+
+/* The type of an object being looked up in gdb_bfd_cache.  We use
+   htab's capability of storing one kind of object (BFD in this case)
+   and using a different sort of object for searching.  */
+
+struct gdb_bfd_cache_search
+{
+  /* The filename.  */
+  const char *filename;
+  /* The mtime.  */
+  time_t mtime;
+};
+
+/* A hash function for BFDs.  */
+
+static hashval_t
+hash_bfd (const void *b)
+{
+  const bfd *abfd = b;
+
+  /* It is simplest to just hash the filename.  */
+  return htab_hash_string (bfd_get_filename (abfd));
+}
+
+/* An equality function for BFDs.  Note that this expects the caller
+   to search using struct gdb_bfd_cache_search only, not BFDs.  */
+
+static int
+eq_bfd (const void *a, const void *b)
+{
+  const bfd *abfd = a;
+  const struct gdb_bfd_cache_search *s = b;
+  struct gdb_bfd_data *gdata = bfd_usrdata (abfd);
+
+  return (gdata->mtime == s->mtime
+	  && strcmp (bfd_get_filename (abfd), s->filename) == 0);
+}
+
+/* See gdb_bfd.h.  */
+
+struct bfd *
+gdb_bfd_open (const char *name, const char *target, int fd)
+{
+  hashval_t hash;
+  void **slot;
+  bfd *abfd;
+  struct gdb_bfd_cache_search search;
+  struct stat st;
+
+  if (gdb_bfd_cache == NULL)
+    gdb_bfd_cache = htab_create_alloc (1, hash_bfd, eq_bfd, NULL,
+				       xcalloc, xfree);
+
+  if (fd == -1)
+    {
+      fd = gdb_open_cloexec (name, O_RDONLY | O_BINARY, 0);
+      if (fd == -1)
+	{
+	  bfd_set_error (bfd_error_system_call);
+	  return NULL;
+	}
+    }
+
+  search.filename = name;
+  if (fstat (fd, &st) < 0)
+    {
+      /* Weird situation here.  */
+      search.mtime = 0;
+    }
+  else
+    search.mtime = st.st_mtime;
+
+  /* Note that this must compute the same result as hash_bfd.  */
+  hash = htab_hash_string (name);
+  /* Note that we cannot use htab_find_slot_with_hash here, because
+     opening the BFD may fail; and this would violate hashtab
+     invariants.  */
+  abfd = htab_find_with_hash (gdb_bfd_cache, &search, hash);
+  if (abfd != NULL)
+    {
+      close (fd);
+      gdb_bfd_ref (abfd);
+      return abfd;
+    }
+
+  abfd = bfd_fopen (name, target, FOPEN_RB, fd);
+  if (abfd == NULL)
+    return NULL;
+
+  slot = htab_find_slot_with_hash (gdb_bfd_cache, &search, hash, INSERT);
+  gdb_assert (!*slot);
+  *slot = abfd;
+
+  gdb_bfd_stash_filename (abfd);
+  gdb_bfd_ref (abfd);
+  return abfd;
+}
+
+/* A helper function that releases any section data attached to the
+   BFD.  */
+
+static void
+free_one_bfd_section (bfd *abfd, asection *sectp, void *ignore)
+{
+  struct gdb_bfd_section_data *sect = bfd_get_section_userdata (abfd, sectp);
+
+  if (sect != NULL && sect->data != NULL)
+    {
+#ifdef HAVE_MMAP
+      if (sect->map_addr != NULL)
+	{
+	  int res;
+
+	  res = munmap (sect->map_addr, sect->map_len);
+	  gdb_assert (res == 0);
+	}
+      else
+#endif
+	xfree (sect->data);
+    }
+}
+
+/* Close ABFD, and warn if that fails.  */
+
+static int
+gdb_bfd_close_or_warn (struct bfd *abfd)
+{
+  int ret;
+  char *name = bfd_get_filename (abfd);
+
+  bfd_map_over_sections (abfd, free_one_bfd_section, NULL);
+
+  ret = bfd_close (abfd);
+
+  if (!ret)
+    warning (_("cannot close \"%s\": %s"),
+	     name, bfd_errmsg (bfd_get_error ()));
+
+  return ret;
+}
+
+/* See gdb_bfd.h.  */
+
+void
+gdb_bfd_ref (struct bfd *abfd)
+{
+  struct gdb_bfd_data *gdata;
+  void **slot;
+
+  if (abfd == NULL)
+    return;
+
+  gdata = bfd_usrdata (abfd);
+
+  if (gdata != NULL)
+    {
+      gdata->refc += 1;
+      return;
+    }
+
+  /* Ask BFD to decompress sections in bfd_get_full_section_contents.  */
+  abfd->flags |= BFD_DECOMPRESS;
+
+  gdata = bfd_zalloc (abfd, sizeof (struct gdb_bfd_data));
+  gdata->refc = 1;
+  gdata->mtime = bfd_get_mtime (abfd);
+  gdata->archive_bfd = NULL;
+  bfd_usrdata (abfd) = gdata;
+
+  bfd_alloc_data (abfd);
+
+  /* This is the first we've seen it, so add it to the hash table.  */
+  slot = htab_find_slot (all_bfds, abfd, INSERT);
+  gdb_assert (slot && !*slot);
+  *slot = abfd;
+}
+
+/* See gdb_bfd.h.  */
+
+void
+gdb_bfd_unref (struct bfd *abfd)
+{
+  struct gdb_bfd_data *gdata;
+  struct gdb_bfd_cache_search search;
+  bfd *archive_bfd;
+
+  if (abfd == NULL)
+    return;
+
+  gdata = bfd_usrdata (abfd);
+  gdb_assert (gdata->refc >= 1);
+
+  gdata->refc -= 1;
+  if (gdata->refc > 0)
+    return;
+
+  archive_bfd = gdata->archive_bfd;
+  search.filename = bfd_get_filename (abfd);
+
+  if (gdb_bfd_cache && search.filename)
+    {
+      hashval_t hash = htab_hash_string (search.filename);
+      void **slot;
+
+      search.mtime = gdata->mtime;
+      slot = htab_find_slot_with_hash (gdb_bfd_cache, &search, hash,
+				       NO_INSERT);
+
+      if (slot && *slot)
+	htab_clear_slot (gdb_bfd_cache, slot);
+    }
+
+  bfd_free_data (abfd);
+  bfd_usrdata (abfd) = NULL;  /* Paranoia.  */
+
+  htab_remove_elt (all_bfds, abfd);
+
+  gdb_bfd_close_or_warn (abfd);
+
+  gdb_bfd_unref (archive_bfd);
+}
+
+/* A helper function that returns the section data descriptor
+   associated with SECTION.  If no such descriptor exists, a new one
+   is allocated and cleared.  */
+
+static struct gdb_bfd_section_data *
+get_section_descriptor (asection *section)
+{
+  struct gdb_bfd_section_data *result;
+
+  result = bfd_get_section_userdata (section->owner, section);
+
+  if (result == NULL)
+    {
+      result = bfd_zalloc (section->owner, sizeof (*result));
+      bfd_set_section_userdata (section->owner, section, result);
+    }
+
+  return result;
+}
+
+/* See gdb_bfd.h.  */
+
+const gdb_byte *
+gdb_bfd_map_section (asection *sectp, bfd_size_type *size)
+{
+  bfd *abfd;
+  struct gdb_bfd_section_data *descriptor;
+  bfd_byte *data;
+
+  gdb_assert ((sectp->flags & SEC_RELOC) == 0);
+  gdb_assert (size != NULL);
+
+  abfd = sectp->owner;
+
+  descriptor = get_section_descriptor (sectp);
+
+  /* If the data was already read for this BFD, just reuse it.  */
+  if (descriptor->data != NULL)
+    goto done;
+
+#ifdef HAVE_MMAP
+  if (!bfd_is_section_compressed (abfd, sectp))
+    {
+      /* The page size, used when mmapping.  */
+      static int pagesize;
+
+      if (pagesize == 0)
+	pagesize = getpagesize ();
+
+      /* Only try to mmap sections which are large enough: we don't want
+	 to waste space due to fragmentation.  */
+
+      if (bfd_get_section_size (sectp) > 4 * pagesize)
+	{
+	  descriptor->size = bfd_get_section_size (sectp);
+	  descriptor->data = bfd_mmap (abfd, 0, descriptor->size, PROT_READ,
+				       MAP_PRIVATE, sectp->filepos,
+				       &descriptor->map_addr,
+				       &descriptor->map_len);
+
+	  if ((caddr_t)descriptor->data != MAP_FAILED)
+	    {
+#if HAVE_POSIX_MADVISE
+	      posix_madvise (descriptor->map_addr, descriptor->map_len,
+			     POSIX_MADV_WILLNEED);
+#endif
+	      goto done;
+	    }
+
+	  /* On failure, clear out the section data and try again.  */
+	  memset (descriptor, 0, sizeof (*descriptor));
+	}
+    }
+#endif /* HAVE_MMAP */
+
+  /* Handle compressed sections, or ordinary uncompressed sections in
+     the no-mmap case.  */
+
+  descriptor->size = bfd_get_section_size (sectp);
+  descriptor->data = NULL;
+
+  data = NULL;
+  if (!bfd_get_full_section_contents (abfd, sectp, &data))
+    error (_("Can't read data for section '%s' in file '%s'"),
+	   bfd_get_section_name (abfd, sectp),
+	   bfd_get_filename (abfd));
+  descriptor->data = data;
+
+ done:
+  gdb_assert (descriptor->data != NULL);
+  *size = descriptor->size;
+  return descriptor->data;
+}
+
+/* Return 32-bit CRC for ABFD.  If successful store it to *FILE_CRC_RETURN and
+   return 1.  Otherwise print a warning and return 0.  ABFD seek position is
+   not preserved.  */
+
+static int
+get_file_crc (bfd *abfd, unsigned long *file_crc_return)
+{
+  unsigned long file_crc = 0;
+
+  if (bfd_seek (abfd, 0, SEEK_SET) != 0)
+    {
+      warning (_("Problem reading \"%s\" for CRC: %s"),
+	       bfd_get_filename (abfd), bfd_errmsg (bfd_get_error ()));
+      return 0;
+    }
+
+  for (;;)
+    {
+      gdb_byte buffer[8 * 1024];
+      bfd_size_type count;
+
+      count = bfd_bread (buffer, sizeof (buffer), abfd);
+      if (count == (bfd_size_type) -1)
+	{
+	  warning (_("Problem reading \"%s\" for CRC: %s"),
+		   bfd_get_filename (abfd), bfd_errmsg (bfd_get_error ()));
+	  return 0;
+	}
+      if (count == 0)
+	break;
+      file_crc = bfd_calc_gnu_debuglink_crc32 (file_crc, buffer, count);
+    }
+
+  *file_crc_return = file_crc;
+  return 1;
+}
+
+/* See gdb_bfd.h.  */
+
+int
+gdb_bfd_crc (struct bfd *abfd, unsigned long *crc_out)
+{
+  struct gdb_bfd_data *gdata = bfd_usrdata (abfd);
+
+  if (!gdata->crc_computed)
+    gdata->crc_computed = get_file_crc (abfd, &gdata->crc);
+
+  if (gdata->crc_computed)
+    *crc_out = gdata->crc;
+  return gdata->crc_computed;
+}
+
+
+
+/* See gdb_bfd.h.  */
+
+bfd *
+gdb_bfd_fopen (const char *filename, const char *target, const char *mode,
+	       int fd)
+{
+  bfd *result = bfd_fopen (filename, target, mode, fd);
+
+  if (result)
+    {
+      gdb_bfd_stash_filename (result);
+      gdb_bfd_ref (result);
+    }
+
+  return result;
+}
+
+/* See gdb_bfd.h.  */
+
+bfd *
+gdb_bfd_openr (const char *filename, const char *target)
+{
+  bfd *result = bfd_openr (filename, target);
+
+  if (result)
+    {
+      gdb_bfd_stash_filename (result);
+      gdb_bfd_ref (result);
+    }
+
+  return result;
+}
+
+/* See gdb_bfd.h.  */
+
+bfd *
+gdb_bfd_openw (const char *filename, const char *target)
+{
+  bfd *result = bfd_openw (filename, target);
+
+  if (result)
+    {
+      gdb_bfd_stash_filename (result);
+      gdb_bfd_ref (result);
+    }
+
+  return result;
+}
+
+/* See gdb_bfd.h.  */
+
+bfd *
+gdb_bfd_openr_iovec (const char *filename, const char *target,
+		     void *(*open_func) (struct bfd *nbfd,
+					 void *open_closure),
+		     void *open_closure,
+		     file_ptr (*pread_func) (struct bfd *nbfd,
+					     void *stream,
+					     void *buf,
+					     file_ptr nbytes,
+					     file_ptr offset),
+		     int (*close_func) (struct bfd *nbfd,
+					void *stream),
+		     int (*stat_func) (struct bfd *abfd,
+				       void *stream,
+				       struct stat *sb))
+{
+  bfd *result = bfd_openr_iovec (filename, target,
+				 open_func, open_closure,
+				 pread_func, close_func, stat_func);
+
+  if (result)
+    {
+      gdb_bfd_ref (result);
+      gdb_bfd_stash_filename (result);
+    }
+
+  return result;
+}
+
+/* See gdb_bfd.h.  */
+
+void
+gdb_bfd_mark_parent (bfd *child, bfd *parent)
+{
+  struct gdb_bfd_data *gdata;
+
+  gdb_bfd_ref (child);
+  /* No need to stash the filename here, because we also keep a
+     reference on the parent archive.  */
+
+  gdata = bfd_usrdata (child);
+  if (gdata->archive_bfd == NULL)
+    {
+      gdata->archive_bfd = parent;
+      gdb_bfd_ref (parent);
+    }
+  else
+    gdb_assert (gdata->archive_bfd == parent);
+}
+
+/* See gdb_bfd.h.  */
+
+bfd *
+gdb_bfd_openr_next_archived_file (bfd *archive, bfd *previous)
+{
+  bfd *result = bfd_openr_next_archived_file (archive, previous);
+
+  if (result)
+    gdb_bfd_mark_parent (result, archive);
+
+  return result;
+}
+
+/* See gdb_bfd.h.  */
+
+bfd *
+gdb_bfd_fdopenr (const char *filename, const char *target, int fd)
+{
+  bfd *result = bfd_fdopenr (filename, target, fd);
+
+  if (result)
+    {
+      gdb_bfd_ref (result);
+      gdb_bfd_stash_filename (result);
+    }
+
+  return result;
+}
+
+
+
+gdb_static_assert (ARRAY_SIZE (_bfd_std_section) == 4);
+
+/* See gdb_bfd.h.  */
+
+int
+gdb_bfd_section_index (bfd *abfd, asection *section)
+{
+  if (section == NULL)
+    return -1;
+  else if (section == bfd_com_section_ptr)
+    return bfd_count_sections (abfd) + 1;
+  else if (section == bfd_und_section_ptr)
+    return bfd_count_sections (abfd) + 2;
+  else if (section == bfd_abs_section_ptr)
+    return bfd_count_sections (abfd) + 3;
+  else if (section == bfd_ind_section_ptr)
+    return bfd_count_sections (abfd) + 4;
+  return section->index;
+}
+
+/* See gdb_bfd.h.  */
+
+int
+gdb_bfd_count_sections (bfd *abfd)
+{
+  return bfd_count_sections (abfd) + 4;
+}
+
+/* See gdb_bfd.h.  */
+
+int
+gdb_bfd_requires_relocations (bfd *abfd)
+{
+  struct gdb_bfd_data *gdata = bfd_usrdata (abfd);
+
+  if (gdata->relocation_computed == 0)
+    {
+      asection *sect;
+
+      for (sect = abfd->sections; sect != NULL; sect = sect->next)
+	if ((sect->flags & SEC_RELOC) != 0)
+	  {
+	    gdata->needs_relocations = 1;
+	    break;
+	  }
+
+      gdata->relocation_computed = 1;
+    }
+
+  return gdata->needs_relocations;
+}
+
+
+
+/* A callback for htab_traverse that prints a single BFD.  */
+
+static int
+print_one_bfd (void **slot, void *data)
+{
+  bfd *abfd = *slot;
+  struct gdb_bfd_data *gdata = bfd_usrdata (abfd);
+  struct ui_out *uiout = data;
+  struct cleanup *inner;
+
+  inner = make_cleanup_ui_out_tuple_begin_end (uiout, NULL);
+  ui_out_field_int (uiout, "refcount", gdata->refc);
+  ui_out_field_string (uiout, "addr", host_address_to_string (abfd));
+  ui_out_field_string (uiout, "filename", bfd_get_filename (abfd));
+  ui_out_text (uiout, "\n");
+  do_cleanups (inner);
+
+  return 1;
+}
+
+/* Implement the 'maint info bfd' command.  */
+
+static void
+maintenance_info_bfds (char *arg, int from_tty)
+{
+  struct cleanup *cleanup;
+  struct ui_out *uiout = current_uiout;
+
+  cleanup = make_cleanup_ui_out_table_begin_end (uiout, 3, -1, "bfds");
+  ui_out_table_header (uiout, 10, ui_left, "refcount", "Refcount");
+  ui_out_table_header (uiout, 18, ui_left, "addr", "Address");
+  ui_out_table_header (uiout, 40, ui_left, "filename", "Filename");
+
+  ui_out_table_body (uiout);
+  htab_traverse (all_bfds, print_one_bfd, uiout);
+
+  do_cleanups (cleanup);
+}
+
+/* -Wmissing-prototypes */
+extern initialize_file_ftype _initialize_gdb_bfd;
+
+void
+_initialize_gdb_bfd (void)
+{
+  all_bfds = htab_create_alloc (10, htab_hash_pointer, htab_eq_pointer,
+				NULL, xcalloc, xfree);
+
+  add_cmd ("bfds", class_maintenance, maintenance_info_bfds, _("\
+List the BFDs that are currently open."),
+	   &maintenanceinfolist);
+}
+@
+
+
+1.19
+log
+@	PR gdb/7912:
+	* Makefile.in (SFILES): Add filestuff.c
+	(COMMON_OBS): Add filestuff.o.
+	(filestuff.o): New target.
+	* auto-load.c (auto_load_objfile_script_1): Use
+	gdb_fopen_cloexec.
+	* auxv.c (procfs_xfer_auxv): Use gdb_open_cloexec.
+	* cli/cli-cmds.c (shell_escape): Call close_most_fds.
+	* cli/cli-dump.c (fopen_with_cleanup): Use gdb_fopen_cloexec.
+	* common/agent.c (gdb_connect_sync_socket): Use
+	gdb_socket_cloexec.
+	* common/filestuff.c: New file.
+	* common/filestuff.h: New file.
+	* common/linux-osdata.c (linux_common_core_of_thread)
+	(command_from_pid, commandline_from_pid, print_source_lines)
+	(linux_xfer_osdata_shm, linux_xfer_osdata_sem)
+	(linux_xfer_osdata_msg, linux_xfer_osdata_modules): Use
+	gdb_fopen_cloexec.
+	* common/linux-procfs.c (linux_proc_get_int)
+	(linux_proc_pid_has_state): Use gdb_fopen_cloexec.
+	* config.in, configure: Rebuild.
+	* configure.ac: Don't check for sys/socket.h.  Check for
+	fdwalk, pipe2.
+	* corelow.c (core_open): Use gdb_open_cloexec.
+	* dwarf2read.c (write_psymtabs_to_index): Use gdb_fopen_cloexec.
+	* fork-child.c (fork_inferior): Call close_most_fds.
+	* gdb_bfd.c (gdb_bfd_open): Use gdb_open_cloexec.
+	* inf-child.c (inf_child_fileio_readlink): Use gdb_open_cloexec.
+	* linux-nat.c (linux_nat_thread_name, linux_proc_pending_signals):
+	Use gdb_fopen_cloexec.
+	(linux_proc_xfer_partial, linux_proc_xfer_spu): Use
+	gdb_open_cloexec.
+	(linux_async_pipe): Use gdb_pipe_cloexec.
+	* remote-fileio.c (remote_fileio_func_open): Use
+	gdb_open_cloexec.
+	* remote.c (remote_file_put, remote_file_get): Use
+	gdb_fopen_cloexec.
+	* ser-pipe.c (pipe_open): Use gdb_socketpair_cloexec,
+	close_most_fds.
+	* ser-tcp.c (net_open): Use gdb_socket_cloexec.
+	* ser-unix.c (hardwire_open): Use gdb_open_cloexec.
+	* solib.c (solib_find): Use gdb_open_cloexec.
+	* source.c (openp, find_and_open_source): Use gdb_open_cloexec.
+	* tracepoint.c (tfile_start): Use gdb_fopen_cloexec.
+	(tfile_open): Use gdb_open_cloexec.
+	* tui/tui-io.c (tui_initialize_io): Use gdb_pipe_cloexec.
+	* ui-file.c (gdb_fopen): Use gdb_fopen_cloexec.
+	* xml-support.c (xml_fetch_content_from_file): Use
+	gdb_fopen_cloexec.
+	* main.c (captured_main): Call notice_open_fds.
+gdbserver
+	* Makefile.in (SFILES): Add filestuff.c.
+	(OBS): Add filestuff.o.
+	(filestuff.o): New target.
+	* config.in, configure: Rebuild.
+	* configure.ac: Check for fdwalk, pipe2.
+@
+text
+@d85 7
+d644 24
+@
+
+
+1.18
+log
+@	* coffread.c (cs_to_section): Use gdb_bfd_section_index.
+	* elfread.c (record_minimal_symbol, elf_symtab_read): Use
+	gdb_bfd_section_index.
+	* gdb_bfd.c (gdb_bfd_section_index, gdb_bfd_count_sections):
+	New functions.
+	* gdb_bfd.h (gdb_bfd_section_index, gdb_bfd_count_sections):
+	Declare.
+	* machoread.c (macho_symtab_add_minsym, macho_symfile_offsets):
+	Update.
+	* objfiles.c (add_to_objfile_sections_full): New function.
+	(add_to_objfile_sections): Use it.
+	(build_section_table): Rewrite.
+	(objfile_relocate1): Use gdb_bfd_section_index.  Update.
+	* objfiles.h (obj_section_offset): Use gdb_bfd_section_index.
+	(struct objfile) <sections>: Update comment.
+	(ALL_OBJFILE_OSECTIONS): Skip sections where the_bfd_section
+	is NULL.
+	(ALL_OBJSECTIONS): Use it.
+	* solib-dsbt.c (dsbt_relocate_main_executable): Update.
+	* solib-frv.c (frv_relocate_main_executable): Update.
+	* solib-target.c (solib_target_relocate_section_addresses):
+	Use gdb_bfd_section_index.
+	* symfile.c (build_section_addr_info_from_section_table):
+	Use gdb_bfd_section_index.
+	(build_section_addr_info_from_bfd, place_section): Likewise.
+	* symtab.c (fixup_section): Update.
+	* xcoffread.c (find_targ_sec): Use gdb_bfd_section_index.
+@
+text
+@d27 1
+d162 1
+a162 1
+      fd = open (name, O_RDONLY | O_BINARY);
+@
+
+
+1.17
+log
+@	* gdb_bfd.c (struct gdb_bfd_data) <crc_computed, crc>:
+	New fields.
+	(get_file_crc): Move from symfile.c.
+	(gdb_bfd_crc): New function.
+	* gdb_bfd.h (gdb_bfd_crc): Declare.
+	* objfiles.h (struct objfile) <crc32, crc32_p>: Remove.
+	* symfile.c (get_file_crc): Move to gdb_bfd.c.
+	(separate_debug_file_exists): Use gdb_bfd_crc.
+@
+text
+@d608 30
+@
+
+
+1.16
+log
+@2013-01-31  Aleksandar Ristovski  <aristovski@@qnx.com>
+
+	* charset.c (intermediate_encoding): Remove unused i.
+	* completer.c (signal_completer): Remove unused i.
+	* continuations.c (discard_my_continuations_1): Remove unused
+	continuation_ptr.
+	* corelow.c (core_close): Remove unuseD name.
+	(get_core_siginfo): Remove unused pid.
+	* cp-namespace.c (cp_lookup_symbol_imports_or_template): Remove unused
+	i, cps.
+	* dwarf2loc.c (dwarf2_compile_expr_to_ax): Remove unused base_offset.
+	(loclist_describe_location): Remove unused first.
+	* event-top.c (command_line_handler): Remove unused got_eof.
+	* exec.c (exec_close_1): Remove unused need_symtab_cleanup.
+	(resize_section_table): Remove unused old_value.
+	* gdb_bfd.c (gdb_bfd_map_section): Remove unused header.
+	* gnu-v3-abi.c (compute_vtable_size): Remove unused addr.
+	* i386-tdep.c (i386_process_record): Remove unused rex.
+	* infcmd.c (get_return_value): Remove unused uiout.
+	* jv-lang.c (type_from_class): Remove unused is_array.
+	* jv-valprint.c (java_val_print): Remove unused i.
+	* linux-nat.c (linux_nat_stop_lwp): Remove unused ptid.
+	* linux-thread-db.c (thread_db_find_new_threads_2): Remove unuseD pid.
+	* m2-typeprint.c (m2_print_type): Remove unused code.
+	* macroexp.c (get_character_constant): Remove unused body_start.
+	(macro_stringify): Remove unused result.
+	* objc-lang.c (find_methods): Remove unused gdbarch.
+	* objfiles.c (filter_overlapping_sections): Remove unused abfd1, abfd2.
+	* regcache.c (regcache_cooked_read): Remove unused gdbarch.
+	* stack.c (print_frame_args): Remove unused summary.
+	* thread.c (thread_apply_command): Remove unused p.
+	* valarith.c (value_x_unop): Remove unused mangle_ptr.
+	* valops.c (search_struct_method): Remove unused skip.
+	* valprint.c (generic_val_print): Remove unused byte_order.
+	* varobj.c (varobj_update): Remove unused changed.
+	* cli/cli-cmds.c (complete_command): Remove unused next_item.
+	(alias_command): Remove unused c.
+	* mi/mi-cmd-catch.c (mi_catch_load_unload): Remove unused c.
+	* mi/mi-main.c (mi_cmd_data_write_register_values): Remove unused
+	format.
+	(mi_cmd_data_write_memory): Remove unused word_format.
+	(mi_cmd_data_write_memory_bytes): Remove unused r.
+	* python/py-gdb-readline.c (gdbpy_readline_wrapper): Remove unused
+	p_start, p_end.
+	* python/python.c (_initialize_python): Remove unused cmd_name, cmd.
+	* tui/tui-disasm.c (tui_set_disassem_content): Remove unused
+	line_width.
+
+Reference: http://sourceware.org/ml/gdb-patches/2013-01/msg00766.html
+@
+text
+@d84 6
+d422 52
+@
+
+
+1.15
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@a347 1
+  unsigned char header[4];
+@
+
+
+1.14
+log
+@	PR gdb/14290:
+	* solib-darwin.c (gdb_bfd_mach_o_fat_extract): New function.
+	(darwin_solib_get_all_image_info_addr_at_init, darwin_bfd_open):
+	Use it.
+	* gdb_bfd.h (gdb_bfd_mark_parent): Declare.
+	* gdb_bfd.c (gdb_bfd_mark_parent): New function.
+	(gdb_bfd_openr_next_archived_file): Use it.
+@
+text
+@d3 1
+a3 2
+   Copyright (C) 2011, 2012
+   Free Software Foundation, Inc.
+@
+
+
+1.13
+log
+@	PR gdb/14704:
+	* gdb_bfd.c (gdb_bfd_ref): Set BFD_DECOMPRESS.
+	(zlib_decompress_section): Remove.
+	(gdb_bfd_map_section): Only check for compressed section
+	in mmap case.  Use bfd_get_full_section_contents.
+	* osabi.c (check_note): Add 'sectsize' argument.  Read
+	section data.
+	(generic_elf_osabi_sniff_abi_tag_sections): Don't read
+	section data.  Update for check_note change.
+	* xcoffread.c (xcoff_initial_scan): Use
+	bfd_get_full_section_contents.
+	* py-auto-load.c (auto_load_section_scripts): Use
+	bfd_get_full_section_contents.
+	* contrib/cc-with-tweaks.sh: Add -Z option.
+testsuite
+	* gdb.base/comprdebug.exp: New file.
+@
+text
+@d502 21
+d529 1
+a529 12
+    {
+      struct gdb_bfd_data *gdata;
+
+      gdb_bfd_ref (result);
+      /* No need to stash the filename here, because we also keep a
+	 reference on the parent archive.  */
+
+      gdata = bfd_usrdata (result);
+      gdb_assert (gdata->archive_bfd == NULL || gdata->archive_bfd == archive);
+      gdata->archive_bfd = archive;
+      gdb_bfd_ref (archive);
+    }
+@
+
+
+1.12
+log
+@	* gdb_bfd.h: Include registry.h.  Use DECLARE_REGISTRY.
+	* gdb_bfd.c: Use DEFINE_REGISTRY.
+	(struct gdb_bfd_data): Add REGISTRY_FIELDS.
+	(gdb_bfd_ref): Call bfd_alloc_data.
+	(gdb_bfd_unref): Call bfd_free_data.
+@
+text
+@d261 3
+a342 92
+/* Decompress a section that was compressed using zlib.  Store the
+   decompressed buffer, and its size, in DESCRIPTOR.  */
+
+static void
+zlib_decompress_section (asection *sectp,
+			 struct gdb_bfd_section_data *descriptor)
+{
+  bfd *abfd = sectp->owner;
+#ifndef HAVE_ZLIB_H
+  error (_("Support for zlib-compressed data (from '%s', section '%s') "
+           "is disabled in this copy of GDB"),
+         bfd_get_filename (abfd),
+	 bfd_get_section_name (abfd, sectp));
+#else
+  bfd_size_type compressed_size = bfd_get_section_size (sectp);
+  gdb_byte *compressed_buffer = xmalloc (compressed_size);
+  struct cleanup *cleanup = make_cleanup (xfree, compressed_buffer);
+  struct cleanup *inner_cleanup;
+  bfd_size_type uncompressed_size;
+  gdb_byte *uncompressed_buffer;
+  z_stream strm;
+  int rc;
+  int header_size = 12;
+
+  if (bfd_seek (abfd, sectp->filepos, SEEK_SET) != 0
+      || bfd_bread (compressed_buffer,
+		    compressed_size, abfd) != compressed_size)
+    error (_("can't read data from '%s', section '%s'"),
+           bfd_get_filename (abfd),
+	   bfd_get_section_name (abfd, sectp));
+
+  /* Read the zlib header.  In this case, it should be "ZLIB" followed
+     by the uncompressed section size, 8 bytes in big-endian order.  */
+  if (compressed_size < header_size
+      || strncmp (compressed_buffer, "ZLIB", 4) != 0)
+    error (_("corrupt ZLIB header from '%s', section '%s'"),
+           bfd_get_filename (abfd),
+	   bfd_get_section_name (abfd, sectp));
+  uncompressed_size = compressed_buffer[4]; uncompressed_size <<= 8;
+  uncompressed_size += compressed_buffer[5]; uncompressed_size <<= 8;
+  uncompressed_size += compressed_buffer[6]; uncompressed_size <<= 8;
+  uncompressed_size += compressed_buffer[7]; uncompressed_size <<= 8;
+  uncompressed_size += compressed_buffer[8]; uncompressed_size <<= 8;
+  uncompressed_size += compressed_buffer[9]; uncompressed_size <<= 8;
+  uncompressed_size += compressed_buffer[10]; uncompressed_size <<= 8;
+  uncompressed_size += compressed_buffer[11];
+
+  /* It is possible the section consists of several compressed
+     buffers concatenated together, so we uncompress in a loop.  */
+  strm.zalloc = NULL;
+  strm.zfree = NULL;
+  strm.opaque = NULL;
+  strm.avail_in = compressed_size - header_size;
+  strm.next_in = (Bytef*) compressed_buffer + header_size;
+  strm.avail_out = uncompressed_size;
+  uncompressed_buffer = xmalloc (uncompressed_size);
+  inner_cleanup = make_cleanup (xfree, uncompressed_buffer);
+  rc = inflateInit (&strm);
+  while (strm.avail_in > 0)
+    {
+      if (rc != Z_OK)
+        error (_("setting up uncompression in '%s', section '%s': %d"),
+               bfd_get_filename (abfd),
+	       bfd_get_section_name (abfd, sectp),
+	       rc);
+      strm.next_out = ((Bytef*) uncompressed_buffer
+                       + (uncompressed_size - strm.avail_out));
+      rc = inflate (&strm, Z_FINISH);
+      if (rc != Z_STREAM_END)
+        error (_("zlib error uncompressing from '%s', section '%s': %d"),
+               bfd_get_filename (abfd),
+	       bfd_get_section_name (abfd, sectp),
+	       rc);
+      rc = inflateReset (&strm);
+    }
+  rc = inflateEnd (&strm);
+  if (rc != Z_OK
+      || strm.avail_out != 0)
+    error (_("concluding uncompression in '%s', section '%s': %d"),
+           bfd_get_filename (abfd),
+	   bfd_get_section_name (abfd, sectp),
+	   rc);
+
+  discard_cleanups (inner_cleanup);
+  do_cleanups (cleanup);
+
+  /* Attach the data to the BFD section.  */
+  descriptor->data = uncompressed_buffer;
+  descriptor->size = uncompressed_size;
+#endif
+}
+
+d351 1
+d364 2
+a365 4
+  /* Check if the file has a 4-byte header indicating compression.  */
+  if (bfd_get_section_size (sectp) > sizeof (header)
+      && bfd_seek (abfd, sectp->filepos, SEEK_SET) == 0
+      && bfd_bread (header, sizeof (header), abfd) == sizeof (header))
+d367 5
+a371 7
+      /* Upon decompression, update the buffer and its size.  */
+      if (strncmp (header, "ZLIB", sizeof (header)) == 0)
+        {
+          zlib_decompress_section (sectp, descriptor);
+	  goto done;
+        }
+    }
+d373 10
+a382 18
+#ifdef HAVE_MMAP
+  {
+    /* The page size, used when mmapping.  */
+    static int pagesize;
+
+    if (pagesize == 0)
+      pagesize = getpagesize ();
+
+    /* Only try to mmap sections which are large enough: we don't want
+       to waste space due to fragmentation.  */
+
+    if (bfd_get_section_size (sectp) > 4 * pagesize)
+      {
+	descriptor->size = bfd_get_section_size (sectp);
+	descriptor->data = bfd_mmap (abfd, 0, descriptor->size, PROT_READ,
+				     MAP_PRIVATE, sectp->filepos,
+				     &descriptor->map_addr,
+				     &descriptor->map_len);
+d384 2
+a385 2
+	if ((caddr_t)descriptor->data != MAP_FAILED)
+	  {
+d387 2
+a388 2
+	    posix_madvise (descriptor->map_addr, descriptor->map_len,
+			   POSIX_MADV_WILLNEED);
+d390 2
+a391 2
+	    goto done;
+	  }
+d393 4
+a396 4
+	/* On failure, clear out the section data and try again.  */
+	memset (descriptor, 0, sizeof (*descriptor));
+      }
+  }
+d399 2
+a400 1
+  /* If we get here, we are a normal, not-compressed section.  */
+d403 1
+a403 1
+  descriptor->data = xmalloc (descriptor->size);
+d405 6
+a410 9
+  if (bfd_seek (abfd, sectp->filepos, SEEK_SET) != 0
+      || bfd_bread (descriptor->data, bfd_get_section_size (sectp),
+		    abfd) != bfd_get_section_size (sectp))
+    {
+      xfree (descriptor->data);
+      descriptor->data = NULL;
+      error (_("Can't read data for section '%s'"),
+	     bfd_get_filename (abfd));
+    }
+@
+
+
+1.11
+log
+@	* gdb_bfd.c (struct gdb_bfd_data) <archive_bfd>: New field.
+	(gdb_bfd_ref): Initialize new field.
+	(gdb_bfd_unref): Unref the archive BFD.
+	(gdb_bfd_openr_next_archived_file): Acquire a reference to the
+	parent archive.
+@
+text
+@d88 3
+d93 5
+d267 2
+d310 1
+@
+
+
+1.10
+log
+@2012-08-10  Sergio Durigan Junior  <sergiodj@@redhat.com>
+
+	* gdb_bfd.c (gdb_bfd_unref): Remove unused variable `slot'.
+	(zlib_decompress_section): Likewise for `section_data'.
+	(gdb_bfd_map_section): Likewise for `buf' and `retbuf'.
+@
+text
+@d84 4
+d256 1
+d272 1
+d284 1
+d305 2
+d600 2
+d603 7
+a609 1
+      /* No need to stash the filename here.  */
+@
+
+
+1.9
+log
+@    	* NEWS: Mention maint info bfds.
+    	* gdb_bfd.c (all_bfds): New global.
+    	(gdb_bfd_ref, gdb_bfd_unref): Update all_bfds.
+    	(print_one_bfd, maintenance_info_bfds, _initialize_gdb_bfd):
+    	New functions.
+gdb/doc
+    	* gdb.texinfo (Maintenance Commands): Document maint info bfds.
+@
+text
+@a266 1
+  void **slot;
+a342 1
+  struct dwarf2_per_bfd_section *section_data;
+a417 1
+  gdb_byte *buf, *retbuf;
+@
+
+
+1.8
+log
+@gdb/
+	* gdb_bfd.c (zlib_decompress_section) <!HAVE_ZLIB_H>: Adjust
+	parameters to bfd_get_section_name.
+@
+text
+@d25 2
+d53 7
+d236 1
+d253 5
+d267 1
+d296 2
+d616 55
+@
+
+
+1.7
+log
+@	* gdb_bfd.c (gdb_bfd_ref, gdb_bfd_unref): Fix comment.
+@
+text
+@d315 1
+a315 1
+	 bfd_get_section_name (sectp));
+@
+
+
+1.6
+log
+@	* cli/cli-dump.c (bfd_openr_with_cleanup): Use gdb_bfd_openr.
+	(bfd_openw_with_cleanup): Use gdb_bfd_openw.
+	* corelow.c (core_open): Use gdb_bfd_fopen.
+	* dsrec.c (load_srec): Use gdb_bfd_openr.
+	* exec.c (exec_file_attach): Use gdb_bfd_fopen.
+	* gcore.c (gcore_memory_sections): Use gdb_bfd_openw.
+	* gdb_bfd.c (gdb_bfd_fopen, gdb_bfd_openr, gdb_bfd_openw)
+	(gdb_bfd_openr_iovec, gdb_bfd_openr_next_archived_file)
+	(gdb_bfd_fdopenr): New functions.
+	* gdb_bfd.h (gdb_bfd_fopen, gdb_bfd_openr, gdb_bfd_openw)
+	(gdb_bfd_openr_iovec, gdb_bfd_openr_next_archived_file)
+	(gdb_bfd_fdopenr): Declare.
+	* jit.c (bfd_open_from_target_memory): Use gdb_bfd_openr_iovec.
+	* m32-rom.c (m32r_load, m32r_upload_command): Use gdb_bfd_openr.
+	* machoread.c (macho_symfile_read_all_oso): Use gdb_bfd_openr,
+	gdb_bfd_openr_next_archived_file.
+	(macho_check_dsym): Use gdb_bfd_openr.
+	(macho_add_oso_symfile): Don't call gdb_bfd_stash_filename.
+	* procfs.c (insert_dbx_link_bpt_in_file): Use gdb_bfd_fdopenr.
+	* remote-m32r-sdi.c (m32r_load): Use gdb_bfd_openr.
+	* remote-mips.c (mips_load_srec, pmon_load_fast): Use
+	gdb_bfd_openr.
+	* remote.c (remote_bfd_open): Use gdb_bfd_openr_iovec.
+	* rs6000-nat.c (add_vmap): Use gdb_bfd_openr, gdb_bfd_fdopenr,
+	gdb_bfd_openr_next_archived_file.
+	* solib-darwin.c (darwin_solib_get_all_image_info_addr_at_init):
+	Use gdb_bfd_openr.
+	* solib-pa64.c (pa64_solib_create_inferior_hook): Use
+	gdb_bfd_openr.
+	* solib-spu.c (spu_bfd_fopen): Use gdb_bfd_openr_iovec.
+	* solib.c (solib_bfd_fopen): Use gdb_bfd_fopen.
+	* spu-linux-nat.c (spu_bfd_open): Use gdb_bfd_openr_iovec.
+	* symfile.c (bfd_open_maybe_remote): Use gdb_bfd_openr.
+	(symfile_bfd_open): Use gdb_bfd_fopen.
+	(generic_load): Use gdb_bfd_openr.
+	* windows-nat.c (windows_make_so): Use gdb_bfd_openr.
+@
+text
+@d221 1
+a221 1
+/* Add reference to ABFD.  Returns ABFD.  */
+d245 1
+a245 1
+/* Unreference and possibly close ABFD.  */
+@
+
+
+1.5
+log
+@	* bfd-target.c (target_bfd_reopen): Update.
+	* cli/cli-dump.c (bfd_openr_with_cleanup)
+	(bfd_openw_with_cleanup): Update.
+	* corelow.c (core_open): Update.
+	* dsrec.c (load_srec): Update.
+	* exec.c (exec_file_attach): Update.
+	* gcore.c (create_gcore_bfd): Update.
+	* gdb_bfd.c (gdb_bfd_ref): Return void.
+	(gdb_bfd_open): Update.
+	* gdb_bfd.h (gdb_bfd_ref): Return void.
+	Update comments.
+	* jit.c (jit_bfd_try_read_symtab): Update.
+	* m32r-rom.c (m32r_load, m32r_upload_command): Update.
+	* machoread.c (macho_symfile_read_all_oso): Update.
+	(macho_check_dsym): Update.
+	* procfs.c (insert_dbx_link_bpt_in_file): Update.
+	* remote-m32r-sdi.c (m32r_load): Update.
+	* remote-mips.c (mips_load_srec, pmon_load_fast): Update.
+	* rs6000-nat.c (add_vmap): Update.
+	* solib-darwin.c (darwin_solib_get_all_image_info_addr_at_init):
+	Update.
+	* solib-pa64.c (pa64_solib_create_inferior_hook): Update.
+	* solib-spu.c (spu_bfd_open): Update.
+	* solib.c (solib_bfd_fopen, solib_read_symbols): Update.
+	* spu-linux-nat.c (spu_bfd_open): Update.
+	* symfile.c (bfd_open_maybe_remote, symfile_bfd_open)
+	(generic_load): Update.
+	* windows-nat.c (windows_make_so): Update.
+@
+text
+@d484 114
+@
+
+
+1.4
+log
+@	* dwarf2read.c: Don't include zlib.h or sys/mman.h.
+	(pagesize): Remove.
+	(struct dwarf2_section_info) <map_addr, map_len>: Remove.
+	(zlib_decompress_section): Remove.
+	(dwarf2_read_section): Use gdb_bfd_map_section.
+	(munmap_section_buffer): Remove.
+	(free_dwo_file, dwarf2_per_objfile_free): Don't use
+	munmap_section_buffer.
+	* gdb_bfd.c: Include zlib.h, sys/mman.h.
+	(struct gdb_bfd_section_data): New.
+	(free_one_bfd_section): New function.
+	(gdb_bfd_close_or_warn): Use free_one_bfd_section.
+	(get_section_descriptor, zlib_decompress_section)
+	(gdb_bfd_map_section): New functions.
+	* gdb_bfd.h (gdb_bfd_map_section): Declare.
+@
+text
+@d161 2
+a162 1
+      return gdb_bfd_ref (abfd);
+d174 2
+a175 1
+  return gdb_bfd_ref (abfd);
+d223 1
+a223 1
+struct bfd *
+d229 1
+a229 1
+    return NULL;
+d236 1
+a236 1
+      return abfd;
+a242 2
+
+  return abfd;
+@
+
+
+1.3
+log
+@	* gdb_bfd.c (struct gdb_bfd_data): New.
+	(gdb_bfd_cache): New global.
+	(struct gdb_bfd_cache_search): New.
+	(hash_bfd, eq_bfd, gdb_bfd_open): New functions.
+	(gdb_bfd_ref, gdb_bfd_unref): Use gdb_bfd_data.
+	* gdb_bfd.h (gdb_bfd_open): Declare.
+@
+text
+@d26 24
+d176 24
+d208 2
+d282 202
+@
+
+
+1.2
+log
+@	* symfile.c (symfile_bfd_open): Don't copy name.  Call
+	gdb_bfd_stash_filename.
+	(load_command): Open the new BFD before freeing the old.
+	(bfd_open_maybe_remote): Call gdb_bfd_stash_filename.
+	* symfile-mem.c (symbol_file_add_from_memory): Don't copy name.
+	Call gdb_bfd_stash_filename.
+	* spu-linux-nat.c (spu_bfd_open): Don't copy name.
+	* solib-spu.c (spu_bfd_fopen): Don't copy name.  Call
+	gdb_bfd_stash_filename.
+	* solib-darwin.c (darwin_solib_get_all_image_info_addr_at_init):
+	Free found_pathname.
+	* rs6000-nat.c (add_vmap): Don't copy filename.  Call
+	gdb_bfd_stash_filename.
+	* remote.c (remote_bfd_open): Call gdb_bfd_stash_filename.
+	* machoread.c (macho_add_oso_symfile): Call
+	gdb_bfd_stash_filename.
+	(macho_symfile_read_all_oso): Arrange to free archive_name.  Call
+	gdb_bfd_stash_filename.
+	(macho_check_dsym): Don't copy filename.  Call
+	gdb_bfd_stash_filename.
+	* jit.c (bfd_open_from_target_memory): Don't copy the filename.
+	* gdb_bfd.c (gdb_bfd_stash_filename): New function.
+	* gdb_bfd.h (gdb_bfd_stash_filename): Declare.
+	* gcore.c (create_gcore_bfd): Call gdb_bfd_stash_filename.
+	* exec.c (exec_close): Don't free the BFD's filename.
+	(exec_file_attach): Don't copy the filename.  Call
+	gdb_bfd_stash_filename.
+	* corelow.c (core_close): Don't free the BFD's filename.
+	(core_open): Call gdb_bfd_stash_filename.
+	* corefile.c (reopen_exec_file): Remove #if 0 code.
+	* solib.c (solib_bfd_fopen): Call gdb_bfd_stash_filename.  Free
+	pathname.
+	* dwarf2read.c (try_open_dwo_file): Call gdb_bfd_stash_filename.
+@
+text
+@d3 1
+a3 1
+   Copyright (C) 2011
+d25 1
+d42 110
+d174 1
+a174 1
+  int *p_refcount;
+d179 1
+a179 1
+  p_refcount = bfd_usrdata (abfd);
+d181 1
+a181 1
+  if (p_refcount != NULL)
+d183 1
+a183 1
+      *p_refcount += 1;
+d187 4
+a190 3
+  p_refcount = xmalloc (sizeof (*p_refcount));
+  *p_refcount = 1;
+  bfd_usrdata (abfd) = p_refcount;
+d200 2
+a201 2
+  int *p_refcount;
+  char *name;
+d206 2
+a207 2
+  p_refcount = bfd_usrdata (abfd);
+  gdb_assert (*p_refcount >= 1);
+d209 2
+a210 2
+  *p_refcount -= 1;
+  if (*p_refcount > 0)
+d213 15
+a227 1
+  xfree (p_refcount);
+a229 1
+  name = bfd_get_filename (abfd);
+@
+
+
+1.1
+log
+@	* dwarf2read.c (try_open_dwo_file): Use gdb_bfd_ref and
+	gdb_bfd_unref.
+	(free_dwo_file): Use gdb_bfd_unref.
+	* cli/cli-dump.c: Include gdb_bfd.h.
+	(bfd_openw_with_cleanup): Use gdb_bfd_ref.
+	(bfd_openr_with_cleanup): Likewise.
+	* windows-nat.c (windows_make_so): Use gdb_bfd_ref,
+	gdb_bfd_unref.
+	* utils.c: Include gdb_bfd.h.
+	(do_bfd_close_cleanup): Use gdb_bfd_unref.
+	* symfile.c: Include gdb_bfd.h.
+	(separate_debug_file_exists): Use gdb_bfd_unref.
+	(bfd_open_maybe_remote): Use gdb_bfd_ref.
+	(symfile_bfd_open): Use gdb_bfd_ref, gdb_bfd_unref.
+	(generic_load): Use gdb_bfd_ref.
+	(reread_symbols): Use gdb_bfd_unref.
+	* symfile-mem.c: Include gdb_bfd.h.
+	(symbol_file_add_from_memory): Use make_cleanup_bfd_close.
+	* spu-linux-nat.c (spu_bfd_open): Use gdb_bfd_ref, gdb_bfd_unref.
+	* solib.c: Include gdb_bfd.h.
+	(solib_bfd_fopen): Use gdb_bfd_ref.
+	(solib_bfd_open): Use gdb_bfd_unref.
+	(free_so_symbols): Use gdb_bfd_unref.
+	(reload_shared_libraries_1): Use gdb_bfd_unref.
+	* solib-spu.c: Include gdb_bfd.h.
+	(spu_bfd_fopen): Use gdb_bfd_ref, gdb_bfd_unref.
+	* solib-pa64.c (pa64_solib_create_inferior_hook): Use gdb_bfd_ref,
+	gdb_bfd_unref.
+	* solib-frv.c: Include gdb_bfd.h.
+	(enable_break2): Use gdb_bfd_unref.
+	* solib-dsbt.c: Include gdb_bfd.h.
+	(enable_break2): Use gdb_bfd_unref.
+	* solib-darwin.c: Include gdb_bfd.h.
+	(darwin_solib_get_all_image_info_addr_at_init): Use gdb_bfd_ref,
+	gdb_bfd_unref.
+	(darwin_bfd_open): Use gdb_bfd_unref.
+	* rs6000-nat.c (add_vmap): Use gdb_bfd_ref, gdb_bfd_unref.
+	* remote-mips.c: Include gdb_bfd.h.
+	(mips_load_srec): Use gdb_bfd_ref.
+	(pmon_load_fast): Use gdb_bfd_ref.
+	* remote-m32r-sdi.c: Include gdb_bfd.h.
+	(m32r_load): Use gdb_bfd_ref.
+	* record.c: Include gdb_bfd.h.
+	(record_save_cleanups): Use gdb_bfd_unref.
+	(cmd_record_save): Use gdb_bfd_unref.
+	* procfs.c (insert_dbx_link_bpt_in_file): Use gdb_bfd_ref,
+	gdb_bfd_unref.
+	* objfiles.h (gdb_bfd_close_or_warn): Remove.
+	(gdb_bfd_ref, gdb_bfd_unref): Move to gdb_bfd.h.
+	* objfiles.c: Include gdb_bfd.h.
+	(free_objfile): Use gdb_bfd_unref.
+	(gdb_bfd_close_or_warn, gdb_bfd_ref, gdb_bfd_unref): Move to
+	gdb_bfd.c.
+	* machoread.c (macho_add_oso_symfile): Use gdb_bfd_unref.
+	(macho_symfile_read_all_oso): Use gdb_bfd_ref, gdb_bfd_unref.
+	(macho_check_dsym): Likewise.
+	* m32r-rom.c: Include gdb_bfd.h.
+	(m32r_load): Use gdb_bfd_ref.
+	(m32r_upload_command): Use gdb_bfd_ref.
+	* jit.c: Include gdb_bfd.h.
+	(jit_bfd_try_read_symtab): Use gdb_bfd_ref, gdb_bfd_unref.
+	* gdb_bfd.h: New file.
+	* gdb_bfd.c: New file.
+	* gcore.c: Include gdb_bfd.h.
+	(create_gcore_bfd): Use gdb_bfd_ref.
+	(do_bfd_delete_cleanup): Use gdb_bfd_unref.
+	(gcore_command): Use gdb_bfd_unref.
+	* exec.c: Include gdb_bfd.h.
+	(exec_close): Use gdb_bfd_unref.
+	(exec_close_1): Use gdb_bfd_unref.
+	(exec_file_attach): Use gdb_bfd_ref.
+	* elfread.c: Include gdb_bfd.h.
+	(build_id_verify): Use gdb_bfd_unref.
+	* dsrec.c: Include gdb_bfd.h.
+	(load_srec): Use gdb_bfd_ref.
+	* corelow.c: Include gdb_bfd.h.
+	(core_close): Use gdb_bfd_unref.
+	(core_open): Use gdb_bfd_ref.
+	* bfd-target.c: Include gdb_bfd.h.
+	(target_bfd_xclose): Use gdb_bfd_unref.
+	(target_bfd_reopen): Use gdb_bfd_ref.
+	* Makefile.in (SFILES): Add gdb_bfd.c.
+	(HFILES_NO_SRCDIR): Add gdb_bfd.h.
+	(COMMON_OBS): Add gdb_bfd.o.
+@
+text
+@d24 16
+@
+

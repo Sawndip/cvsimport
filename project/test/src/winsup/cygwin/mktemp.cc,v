@@ -1,0 +1,560 @@
+head	1.9;
+access;
+symbols
+	cygwin-1_7_35-release:1.9
+	cygwin-1_7_34-release:1.9
+	cygwin-1_7_33-release:1.9
+	cygwin-1_7_32-release:1.9
+	cygwin-1_7_31-release:1.9
+	cygwin-1_7_30-release:1.9
+	cygwin-1_7_29-release:1.9
+	cygwin-1_7_29-release-branchpoint:1.9.0.2
+	cygwin-pre-user-db:1.9
+	cygwin-1_7_28-release:1.9
+	cygwin-1_7_27-release:1.9
+	cygwin-1_7_26-release:1.9
+	cygwin-1_7_25-release:1.9
+	cygwin-1_7_24-release:1.9
+	cygwin-1_7_23-release:1.9
+	cygwin-1_7_22-release:1.9
+	cygwin-1_7_21-release:1.9
+	cygwin-1_7_20-release:1.9
+	cygwin-1_7_19-release:1.9
+	cygwin-64bit-postmerge:1.8
+	cygwin-64bit-premerge-branch:1.7.0.8
+	cygwin-64bit-premerge:1.7
+	cygwin-1_7_18-release:1.7
+	post-ptmalloc3:1.7.6.1
+	pre-ptmalloc3:1.7.6.1
+	cygwin-1_7_17-release:1.7
+	cygwin-64bit-branch:1.7.0.6
+	cygwin-1_7_16-release:1.7
+	cygwin-1_7_15-release:1.7
+	cygwin-1_7_14_2-release:1.7
+	cygwin-1_7_14-release:1.7
+	cygwin-1_7_12-release:1.7
+	cygwin-1_7_11-release:1.7
+	cygwin-1_7_10-release:1.7
+	signal-rewrite:1.7.0.4
+	pre-notty:1.7
+	cygwin-1_7_9-release:1.7
+	cv-post-1_7_9:1.7.0.2
+	cygwin-1_7_8-release:1.7
+	cygwin-1_7_7-release:1.7
+	cygwin-1_7_5-release:1.6
+	cygwin-1_7_4-release:1.6
+	cygwin-1_7_3-release:1.6
+	cygwin-1_7_2-release:1.6
+	fifo_doover3:1.6.0.2
+	cygwin-1_7_1-release:1.6
+	prefifo:1.6
+	cv-branch-2:1.5.0.2
+	pre-ripout-set_console_state_for_spawn:1.4
+	EOL_registry_mounts:1.3
+	preoverlapped:1.3
+	drop_9x_support_start:1.3
+	cr-0x5f1:1.3.0.4
+	cv-branch:1.3.0.2
+	pre-ptymaster-archetype:1.3
+	cr-0x3b58:1.2.0.4
+	cr-0x5ef:1.2.0.2
+	after-mmap-privanon-noreserve:1.2
+	after-mmap-revamp:1.2
+	before-mmap-revamp:1.2
+	cgf-more-exit-sync:1.2
+	post_wait_sig_exit:1.2
+	pre_wait_sig_exit:1.2;
+locks; strict;
+comment	@// @;
+
+
+1.9
+date	2013.05.21.19.04.49;	author corinna;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2013.04.23.09.44.33;	author corinna;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2010.07.19.18.22.40;	author ericb;	state Exp;
+branches
+	1.7.6.1;
+next	1.6;
+
+1.6
+date	2009.07.03.13.01.17;	author corinna;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2009.03.13.20.49.42;	author corinna;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2008.04.07.18.45.57;	author cgf;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2006.04.17.15.09.13;	author cgf;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2005.05.25.03.43.58;	author cgf;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2005.05.25.03.40.07;	author cgf;	state Exp;
+branches;
+next	;
+
+1.7.6.1
+date	2012.08.13.20.04.34;	author corinna;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.9
+log
+@	* Makefile.in (DLL_OFILES): Add arc4random.o.
+	* common.din: Export arc4random, arc4random_addrandom, arc4random_buf,
+	arc4random_stir and arc4random_uniform.
+	* mktemp.cc (arc4random): Remove static replacement function.
+	* posix.sgml (std-bsd): Add arc4random functions.
+	* include/cygwin/stdlib.h: Declare arc4random functions.
+	* include/cygwin/version.h (CYGWIN_VERSION_API_MINOR): Bump.
+	* libc/arc4random.cc: New file implementing arc4random functions taken
+	from FreeBSD.
+@
+text
+@/* mktemp.cc: mktemp functions
+
+This file is adapted for Cygwin from FreeBSD and newlib.
+
+See the copyright at the bottom of this file. */
+
+#include "winsup.h"
+#include "cygerrno.h"
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
+static int _gettemp(char *, int *, int, size_t, int);
+
+static const char padchar[] =
+"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+
+extern "C" int
+mkstemp(char *path)
+{
+  int fd;
+  return _gettemp(path, &fd, 0, 0, O_BINARY) ? fd : -1;
+}
+
+extern "C" char *
+mkdtemp(char *path)
+{
+  return _gettemp(path, NULL, 1, 0, 0) ? path : NULL;
+}
+
+extern "C" int
+mkstemps(char *path, int len)
+{
+  int fd;
+  return _gettemp(path, &fd, 0, len, O_BINARY) ? fd : -1;
+}
+
+extern "C" int
+mkostemp(char *path, int flags)
+{
+  int fd;
+  return _gettemp(path, &fd, 0, 0, flags & ~O_ACCMODE) ? fd : -1;
+}
+
+extern "C" int
+mkostemps(char *path, int len, int flags)
+{
+  int fd;
+  return _gettemp(path, &fd, 0, len, flags & ~O_ACCMODE) ? fd : -1;
+}
+
+extern "C" char *
+mktemp(char *path)
+{
+  return _gettemp(path, NULL, 0, 0, 0) ? path : (char *) NULL;
+}
+
+static int
+_gettemp(char *path, int *doopen, int domkdir, size_t suffixlen, int flags)
+{
+  char *start, *trv, *suffp;
+  char *pad;
+
+  if (doopen && domkdir)
+    {
+      set_errno (EINVAL);
+      return 0;
+    }
+
+  trv = strchr (path, '\0');
+  if ((size_t) (trv - path) < suffixlen)
+    {
+      set_errno (EINVAL);
+      return 0;
+    }
+  trv -= suffixlen;
+  suffp = trv--;
+
+  /* Fill space with random characters */
+  while (trv >= path && *trv == 'X')
+    {
+      uint32_t rand = arc4random () % (sizeof (padchar) - 1);
+      *trv-- = padchar[rand];
+    }
+  if (suffp - trv < 6)
+    {
+      set_errno (EINVAL);
+      return 0;
+    }
+  start = trv + 1;
+
+  /*
+   * check the target directory.
+   */
+  struct stat sbuf;
+  if (doopen != NULL || domkdir)
+    {
+      for (; trv > path; trv--)
+	{
+	  if (*trv == '/')
+	    {
+	      *trv = '\0';
+	      int rval = stat64 (path, &sbuf);
+	      *trv = '/';
+	      if (rval != 0)
+		return 0;
+	      if (!S_ISDIR (sbuf.st_mode))
+		{
+		  set_errno (ENOTDIR);
+		  return 0;
+		}
+	      break;
+	    }
+	}
+    }
+
+  for (;;)
+    {
+      if (doopen)
+	{
+	  if ((*doopen = open (path, O_CREAT | O_EXCL | O_RDWR | flags,
+			       S_IRUSR | S_IWUSR)) >= 0)
+	    return 1;
+	  if (errno != EEXIST)
+	    return 0;
+	}
+      else if (domkdir)
+	{
+	  if (mkdir (path, 0700) == 0)
+	    return 1;
+	  if (errno != EEXIST)
+	    return 0;
+	  }
+      else if (lstat64 (path, &sbuf))
+	return errno == ENOENT;
+
+      /* If we have a collision, cycle through the space of filenames */
+      for (trv = start;;)
+	{
+	  if (*trv == '\0' || trv == suffp)
+	    return 0;
+	  pad = strchr (padchar, *trv);
+	  if (pad == NULL || *++pad == '\0')
+	    *trv++ = padchar[0];
+	  else
+	    {
+	      *trv++ = *pad;
+	      break;
+	    }
+	}
+    }
+  /*NOTREACHED*/
+}
+
+/*
+* Copyright (c) 1987, 1993
+*	The Regents of the University of California.  All rights reserved.
+*
+* Redistribution and use in source and binary forms, with or without
+* modification, are permitted provided that the following conditions
+* are met:
+* 1. Redistributions of source code must retain the above copyright
+*    notice, this list of conditions and the following disclaimer.
+* 2. Redistributions in binary form must reproduce the above copyright
+*    notice, this list of conditions and the following disclaimer in the
+*    documentation and/or other materials provided with the distribution.
+* 4. Neither the name of the University nor the names of its contributors
+*    may be used to endorse or promote products derived from this software
+*    without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND
+* ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+* ARE DISCLAIMED.  IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE
+* FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+* OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+* HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+* LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+* OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+* SUCH DAMAGE.
+*/
+@
+
+
+1.8
+log
+@	* Merge in cygwin-64bit-branch.
+@
+text
+@a13 1
+static uint32_t arc4random ();
+a154 14
+static uint32_t
+arc4random ()
+{
+  union
+  {
+    uint32_t rand;
+    char buf[sizeof (int) / 8];
+  } r;
+  int fd = open ("/dev/urandom", O_RDONLY);
+  read (fd, r.buf, 4);
+  close (fd);
+  return r.rand;
+}
+
+@
+
+
+1.7
+log
+@Add mkostemp and mkostemps.
+
+* mktemp.cc (_gettemp): Add flags argument.  All callers updated.
+(mkostemp, mkostemps): New functions.
+* cygwin.din (mkostemp, mkostemps): Export.
+* posix.sgml: Document them.
+* include/cygwin/version.h: Bump version.
+@
+text
+@d96 1
+a96 1
+  struct __stat64 sbuf;
+@
+
+
+1.7.6.1
+log
+@	* include/cygwin/stat.h (struct __stat64): Drop entirely in favor of
+	struct stat.  Accommodate throughout Cygwin.
+	* include/cygwin/types.h: Throughout, drop current, internal types
+	used since Cygwin 1.5 with the base type they have been used for.
+	Throughout, define types based on bitsize-specific types where
+	appropriate.  Accommodate throughout Cygwin.
+	* include/sys/cygwin.h: Drop __uid32_t and __gid32_t in favor of
+	uid_t and gid_t.  Define uid/gid types based on bitsize-specific types.
+	(struct external_pinfo): Accommodate above change.
+	* cygtls.h (struct _local_storage): Drop unused members grp and
+	namearray,
+	* tlsoffsets.h: Regenerate.
+	* devices.h (_dev_t): Drop definition.  Use dev_t throughout instead.
+	* devices.cc: Regenerate.
+
+	Probably temporary patch to drop unneeded functionality on x86_64:
+	* fcntl.cc (_fcntl): Alias to fcntl64 on x86_64.
+	* glob.cc (CYGWIN_gl_stat): Simplify on x86_64.
+	* grp.cc (grp32togrp16): Don't define on x86_64.
+	(getgrgid): Alias to getgrgid32 on x86_64.
+	(getgrnam): Alias to getgrnam32 on x86_64.
+	(getgrent): Alias to getgrent32 on x86_64.
+	(getgroups): Alias to getgroups32 on x86_64.
+	(initgroups): Alias to initgroups32 on x86_64.
+	(setgroups): Alias to setgroups32 on x86_64.
+	* mmap.cc (mmap): Alias to mmap64 on x86_64.
+	* passwd.cc (getpwuid): Alias to getpwuid32 on x86_64.
+	(getpwuid_r): Alias to getpwuid_r32 on x86_64.
+	(getpwduid): Don't define on x86_64.
+	* syscalls.cc (lseek): Alias to lseek64 on x86_64.
+	(_lseek): Alias to lseek64 on x86_64.
+	(chown): Alias to chown32 on x86_64.
+	(lchown): Alias to lchown32 on x86_64.
+	(fchown): Alias to fchown32 on x86_64.
+	(stat64_to_stat32): Don't define on x86_64.
+	(fstat): Alias to fstat64 on x86_64.
+	(_fstat_r): Alias to _fstat64_r on x86_64.
+	(stat): Alias to stat64 on x86_64.
+	(_stat_r): Alias to _stat64_r on x86_64.
+	(lstat): Alias to lstat64 on x86_64.
+	(ftruncate): Alias to ftruncate64 on x86_64.
+	(truncate): Alias to truncate64 on x86_64.
+	(seteuid): Alias to seteuid32 on x86_64.
+	(setuid): Alias to setuid32 on x86_64.
+	(setreuid): Alias to setreuid32 on x86_64.
+	(setegid): Alias to setegid32 on x86_64.
+	(setgid): Alias to setgid32 on x86_64.
+	(setregid): Alias to setregid32 on x86_64.
+	* uinfo.cc (getuid): Alias to getuid32 on x86_64.
+	(getgid): Alias to getgid32 on x86_64.
+	(geteuid): Alias to geteuid32 on x86_64.
+	(getegid): Alias to getegid32 on x86_64.
+	* winsup.h (ILLEGAL_UID16): Don't define on x86_64.
+	(ILLEGAL_GID16): Ditto.
+	(uid16touid32): Don't declare on x86_64.
+	(gid16togid32): Don't declare on x86_64.
+@
+text
+@d96 1
+a96 1
+  struct stat sbuf;
+@
+
+
+1.6
+log
+@	* cygwin.din (fpurge, mkstemps): New exports.
+	* include/cygwin/version.h (CYGWIN_VERSION_API_MINOR): Bump.
+	* mktemp.cc (_gettemp): Add parameter.
+	(mkstemps): New function.
+	(mkstemp, mkdtemp, mktemp): Adjust clients.
+@
+text
+@d13 1
+a13 1
+static int _gettemp(char *, int *, int, size_t);
+d23 1
+a23 1
+  return _gettemp(path, &fd, 0, 0) ? fd : -1;
+d29 1
+a29 1
+  return _gettemp(path, NULL, 1, 0) ? path : NULL;
+d36 15
+a50 1
+  return _gettemp(path, &fd, 0, len) ? fd : -1;
+d56 1
+a56 1
+  return _gettemp(path, NULL, 0, 0) ? path : (char *) NULL;
+d60 1
+a60 1
+_gettemp(char *path, int *doopen, int domkdir, size_t suffixlen)
+d122 1
+a122 1
+	  if ((*doopen = open (path, O_CREAT | O_EXCL | O_RDWR | O_BINARY,
+@
+
+
+1.5
+log
+@	* mktemp.cc: Remove STABS specific link-time warning.  Align copyright
+	text to upstream.
+@
+text
+@d3 1
+a3 1
+This file is adapted for Cygwin from FreeBSD.
+d10 1
+d13 1
+a13 1
+static int _gettemp(char *, int *, int);
+d23 1
+a23 1
+  return _gettemp(path, &fd, 0) ? fd : -1;
+d29 8
+a36 1
+  return _gettemp(path, NULL, 1) ? path : NULL;
+d42 1
+a42 1
+  return _gettemp(path, NULL, 0) ? path : (char *) NULL;
+d46 1
+a46 1
+_gettemp(char *path, int *doopen, int domkdir)
+d57 2
+a58 2
+  suffp = trv = strchr (path, '\0');
+  if (--trv < path)
+d63 2
+d72 5
+@
+
+
+1.4
+log
+@Remove unneeded header files from source files throughout.
+@
+text
+@a11 5
+#define link_warning(symbol, msg) \
+  asm (".stabs \"" msg "\",30,0,0,0\n\t" \
+  ".stabs \"_" #symbol "\",1,0,0,0\n");
+
+
+a30 3
+link_warning (mktemp, "the use of `mktemp' is dangerous, better use `mkstemp'")
+link_warning (_imp__mktemp, "the use of `mktemp' is dangerous, better use `mkstemp'")
+
+a152 4
+* 3. All advertising materials mentioning features or use of this software
+*    must display the following acknowledgement:
+*	This product includes software developed by the University of
+*	California, Berkeley and its contributors.
+@
+
+
+1.3
+log
+@* mktemp.cc (_gettemp): Open temp files in binary mode.
+@
+text
+@a8 3
+#include <sys/cdefs.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+a9 4
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <ctype.h>
+@
+
+
+1.2
+log
+@Add top comment
+@
+text
+@d108 2
+a109 1
+	  if ((*doopen = open (path, O_CREAT | O_EXCL | O_RDWR, 0600)) >= 0)
+@
+
+
+1.1
+log
+@* cygwin.din: Export mkdtemp.
+* mktemp.cc: New file.
+* Makefile.in (DLL_OFILES): Add mktemp.o
+@
+text
+@d1 6
+@
+

@@ -1,0 +1,839 @@
+head	1.7;
+access;
+symbols
+	cygwin-1_7_35-release:1.7
+	cygwin-1_7_34-release:1.7
+	newlib-2_2_0:1.7.0.2
+	cygwin-1_7_33-release:1.7
+	cygwin-1_7_32-release:1.7
+	cygwin-1_7_31-release:1.7
+	cygwin-1_7_30-release:1.7
+	cygwin-1_7_29-release:1.7
+	cygwin-1_7_28-release:1.7
+	newlib-2_1_0:1.7
+	cygwin-1_7_27-release:1.7
+	cygwin-1_7_26-release:1.7
+	cygwin-1_7_25-release:1.6
+	cygwin-1_7_24-release:1.6
+	cygwin-1_7_23-release:1.6
+	cygwin-1_7_22-release:1.6
+	cygwin-1_7_21-release:1.6
+	cygwin-1_7_20-release:1.6
+	cygwin-1_7_19-release:1.6
+	cygwin-64bit-postmerge:1.6
+	cygwin-64bit-premerge-branch:1.6.0.2
+	cygwin-64bit-premerge:1.6
+	cygwin-1_7_18-release:1.6
+	newlib-2_0_0:1.6
+	cygwin-1_7_17-release:1.6
+	cygwin-64bit-branch:1.2.0.2
+	cygwin-1_7_16-release:1.1
+	cygwin-1_7_15-release:1.1
+	cygwin-1_7_14_2-release:1.1
+	cygwin-1_7_14-release:1.1
+	cygwin-1_7_12-release:1.1
+	cygwin-1_7_11-release:1.1
+	cygwin-1_7_10-release:1.1
+	newlib-1_20_0:1.1
+	cygwin-1_7_9-release:1.1
+	cygwin-1_7_8-release:1.1
+	newlib-1_19_0:1.1
+	cygwin-1_7_7-release:1.1
+	cygwin-1_7_5-release:1.1
+	cygwin-1_7_4-release:1.1
+	cygwin-1_7_3-release:1.1
+	cygwin-1_7_2-release:1.1
+	newlib-1_18_0:1.1
+	cygwin-1_7_1-release:1.1
+	newlib-1_17_0-arc:1.1.0.2
+	newlib-1_17_0:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.7
+date	2013.11.23.22.39.34;	author joel;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2012.10.09.12.05.51;	author corinna;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2012.10.09.09.26.15;	author corinna;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2012.10.09.09.20.46;	author corinna;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2012.10.09.09.09.20;	author corinna;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2012.08.08.11.04.17;	author corinna;	state Exp;
+branches
+	1.2.2.1;
+next	1.1;
+
+1.1
+date	2008.10.31.21.03.41;	author jjohnstn;	state Exp;
+branches;
+next	;
+
+1.2.2.1
+date	2012.10.16.15.58.10;	author corinna;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.7
+log
+@2013-11-23 Bryan Dunsmore <dunsmoreb@@gmail.com>
+
+	* libc/include/wordexp.h (wordexp): Add restrict keyword.
+	* libc/posix/wordexp.c (wordexp): Ditto.
+@
+text
+@/* Copyright (C) 2002 by  Red Hat, Incorporated. All rights reserved.
+ *
+ * Permission to use, copy, modify, and distribute this software
+ * is freely granted, provided that this notice is preserved.
+ */
+#ifndef _NO_WORDEXP
+
+#include <sys/param.h>
+#include <sys/stat.h>
+
+#include <ctype.h>
+#include <dirent.h>
+#include <errno.h>
+#include <glob.h>
+#include <pwd.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/wait.h>
+#include <sys/queue.h>
+
+#include <wordexp.h>
+#include "wordexp2.h"
+
+#define MAXLINELEN 500
+
+/* Note: This implementation of wordexp requires a version of bash
+   that supports the --wordexp and --protected arguments to be present
+   on the system.  It does not support the WRDE_UNDEF flag. */
+int
+wordexp(const char *__restrict words, wordexp_t *__restrict pwordexp, int flags)
+{
+  FILE *f = NULL;
+  FILE *f_err = NULL;
+  char tmp[MAXLINELEN];
+  int i = 0;
+  int offs = 0;
+  char *iter;
+  pid_t pid;
+  int num_words = 0;
+  int num_bytes = 0;
+  int fd[2];
+  int fd_err[2];
+  int err = WRDE_NOSPACE;
+  ext_wordv_t *wordv = NULL;
+  char *eword;
+  struct ewords_entry *entry;
+
+  if (pwordexp == NULL)
+    {
+      return WRDE_NOSPACE;
+    }
+
+  if (flags & WRDE_REUSE)
+    wordfree(pwordexp);
+
+  if ((flags & WRDE_APPEND) == 0)
+    {
+      pwordexp->we_wordc = 0;
+      pwordexp->we_wordv = NULL;
+    }
+
+  if (flags & WRDE_DOOFFS)
+    {
+      offs = pwordexp->we_offs;
+
+      if (pwordexp->we_wordv)
+        wordv = WE_WORDV_TO_EXT_WORDV(pwordexp->we_wordv);
+      wordv = (ext_wordv_t *)realloc(wordv, sizeof(ext_wordv_t) + (offs + pwordexp->we_wordc) * sizeof(char *));
+      if (!wordv)
+        return err;
+      if (!pwordexp->we_wordv)
+        SLIST_INIT(&wordv->list);
+      pwordexp->we_wordv = wordv->we_wordv;
+
+      for (i = 0; i < offs; i++)
+        pwordexp->we_wordv[i] = NULL;
+    }
+
+  if (pipe(fd))
+    return err;
+  if (pipe(fd_err))
+    {
+      close(fd[0]);
+      close(fd[1]);
+      return err;
+    }
+  pid = fork();
+
+  if (pid == -1)
+    {
+      /* In "parent" process, but fork failed */
+      close(fd_err[0]);
+      close(fd_err[1]);
+      close(fd[0]);
+      close(fd[1]);
+      return err;
+    }
+  else if (pid > 0)
+    {
+      /* In parent process. */
+
+      /* Close write end of parent's pipe. */
+      close(fd[1]);
+      close(fd_err[1]);
+
+      /* f_err is the standard error from the shell command. */
+      if (!(f_err = fdopen(fd_err[0], "r")))
+        goto cleanup;
+
+      /* Check for errors. */
+      if (fgets(tmp, MAXLINELEN, f_err))
+        {
+          if (strstr(tmp, "EOF"))
+            err = WRDE_SYNTAX;
+          else if (strstr(tmp, "`\n'") || strstr(tmp, "`|'")
+                   || strstr(tmp, "`&'") || strstr(tmp, "`;'")
+                   || strstr(tmp, "`<'") || strstr(tmp, "`>'")
+                   || strstr(tmp, "`('") || strstr(tmp, "`)'")
+                   || strstr(tmp, "`{'") || strstr(tmp, "`}'"))
+            err = WRDE_BADCHAR;
+          else if (strstr(tmp, "command substitution"))
+            err = WRDE_CMDSUB;
+          else
+            err = WRDE_SYNTAX;
+
+          if (flags & WRDE_SHOWERR)
+            {
+              fprintf(stderr, tmp);
+              while(fgets(tmp, MAXLINELEN, f_err))
+                fprintf(stderr, tmp);
+            }
+
+          goto cleanup;
+        }
+
+      /* f is the standard output from the shell command. */
+      if (!(f = fdopen(fd[0], "r")))
+        goto cleanup;
+
+      /* Get number of words expanded by shell. */
+      if (!fgets(tmp, MAXLINELEN, f))
+        goto cleanup;
+
+      if((iter = strchr(tmp, '\n')))
+          *iter = '\0';
+
+      num_words = atoi(tmp);
+
+      if (pwordexp->we_wordv)
+        wordv = WE_WORDV_TO_EXT_WORDV(pwordexp->we_wordv);
+      wordv = (ext_wordv_t *)realloc(wordv, sizeof(ext_wordv_t) + (offs + pwordexp->we_wordc + num_words) * sizeof(char *));
+      if (!wordv)
+        return err;
+      if (!pwordexp->we_wordv)
+        SLIST_INIT(&wordv->list);
+      pwordexp->we_wordv = wordv->we_wordv;
+
+      /* Get number of bytes required for storage of all num_words words. */
+      if (!fgets(tmp, MAXLINELEN, f))
+        goto cleanup;
+
+      if((iter = strchr(tmp, '\n')))
+          *iter = '\0';
+
+      num_bytes = atoi(tmp);
+
+      if (!(entry = (struct ewords_entry *)malloc(sizeof(struct ewords_entry) + num_bytes + num_words)))
+        goto cleanup;
+      SLIST_INSERT_HEAD(&wordv->list, entry, next);
+
+      /* Get expansion from the shell output. */
+      if (!fread(entry->ewords, 1, num_bytes + num_words, f))
+        goto cleanup;
+      entry->ewords[num_bytes + num_words] = 0;
+
+      /* Store each entry in pwordexp's we_wordv vector. */
+      eword = entry->ewords;
+      for(i = 0; i < num_words; i++, eword = iter)
+        {
+          if (!eword)
+            break;
+          pwordexp->we_wordv[offs + pwordexp->we_wordc + i] = eword;
+          if ((iter = strchr(eword, '\n')))
+            *iter++ = '\0';
+        }
+
+      pwordexp->we_wordv[offs + pwordexp->we_wordc + i] = NULL;
+      pwordexp->we_wordc += num_words;
+      if (i == num_words)
+        err = WRDE_SUCCESS;
+
+cleanup:
+      if (f)
+        fclose(f);
+      else
+        close(fd[0]);
+      if (f_err)
+        fclose(f_err);
+      else
+        close(fd_err[0]);
+
+      /* Wait for child to finish. */
+      waitpid (pid, NULL, 0);
+
+      return err;
+    }
+  else
+    {
+      /* In child process. */
+
+      /* Close read end of child's pipe. */
+      close(fd[0]);
+      close(fd_err[0]);
+
+      /* Pipe standard output to parent process via fd. */
+      if (fd[1] != STDOUT_FILENO)
+        {
+          if (dup2(fd[1], STDOUT_FILENO) == -1)
+            _exit(EXIT_FAILURE);
+          /* fd[1] no longer required. */
+          close(fd[1]);
+        }
+
+      /* Pipe standard error to parent process via fd_err. */
+      if (fd_err[1] != STDERR_FILENO)
+        {
+          if (dup2(fd_err[1], STDERR_FILENO) == -1)
+            _exit(EXIT_FAILURE);
+          /* fd_err[1] no longer required. */
+          close(fd_err[1]);
+        }
+
+      if (flags & WRDE_NOCMD)
+        execl("/bin/bash", "bash", "--protected", "--wordexp", words, (char *)0);
+      else
+        execl("/bin/bash", "bash", "--wordexp", words, (char *)0);
+      _exit(EXIT_FAILURE);
+    }
+  return WRDE_SUCCESS;
+}
+#endif /* !_NO_WORDEXP  */
+@
+
+
+1.6
+log
+@	* libc/posix/wordfree.c (wordfree): The wrong words are freed
+	when WRDE_DOOFFS is in use. Restructure the code so that the memory
+	needed to be freed is instead kept in an internal linked list...
+	* libc/posix/wordexp2.h: ...as defined here...
+	* libc/posix/wordexp.c (wordexp): ...and build this internal
+	linked list here, avoiding wasteful strdup calls in the process.
+@
+text
+@d32 1
+a32 1
+wordexp(const char *words, wordexp_t *pwordexp, int flags)
+@
+
+
+1.5
+log
+@	* libc/posix/wordexp.c (wordexp): Return WRDE_NOSPACE on resource
+	allocation failure. Cleanup leftover resources when failing.
+@
+text
+@d21 1
+d24 1
+d46 1
+a46 2
+  char **wordv;
+  char *ewords = NULL;
+d48 1
+d68 3
+a70 1
+      wordv = (char **)realloc(pwordexp->we_wordv, (pwordexp->we_wordc + offs + 1) * sizeof(char *));
+d73 3
+a75 1
+      pwordexp->we_wordv = wordv;
+d151 3
+a153 2
+      wordv = (char **)realloc(pwordexp->we_wordv,
+                               (pwordexp->we_wordc + num_words + offs + 1) * sizeof(char *));
+d155 4
+a158 2
+        goto cleanup;
+      pwordexp->we_wordv = wordv;
+d169 4
+d174 1
+a174 1
+      if (!(ewords = (char *)malloc(num_bytes + num_words + 1)))
+d176 1
+a176 3
+      if (!fread(ewords, 1, num_bytes + num_words, f))
+        goto cleanup;
+      ewords[num_bytes + num_words] = 0;
+d179 2
+a180 2
+      eword = ewords;
+      for(i = 0; i < num_words; i++)
+d182 5
+a186 11
+          if (eword && (iter = strchr(eword, '\n')))
+            *iter = '\0';
+
+          if (!eword ||
+              !(pwordexp->we_wordv[pwordexp->we_wordc + offs + i] = strdup(eword)))
+            {
+              pwordexp->we_wordv[pwordexp->we_wordc + offs + i] = NULL;
+              pwordexp->we_wordc += i;
+              goto cleanup;
+            }
+          eword = iter ? iter + 1 : iter;
+d189 1
+a189 1
+      pwordexp->we_wordv[pwordexp->we_wordc + offs + i] = NULL;
+d191 2
+a192 1
+      err = WRDE_SUCCESS;
+a194 1
+      free(ewords);
+@
+
+
+1.4
+log
+@	* libc/posix/wordexp.c (wordexp): Handle expanded words longer
+	than 500 bytes.
+@
+text
+@d32 2
+a33 2
+  FILE *f;
+  FILE *f_err;
+d43 3
+a45 2
+  int err = 0;
+  char *ewords;
+d66 4
+a69 2
+      if(!(pwordexp->we_wordv = (char **)realloc(pwordexp->we_wordv, (pwordexp->we_wordc + offs + 1) * sizeof(char *))))
+        return WRDE_NOSPACE;
+d75 8
+a82 2
+  pipe(fd);
+  pipe(fd_err);
+d85 10
+a94 1
+  if (pid > 0)
+d103 2
+a104 1
+      f_err = fdopen(fd_err[0], "r");
+d129 1
+a129 1
+          return err;
+d133 2
+a134 1
+      f = fdopen(fd[0], "r");
+d137 2
+a138 1
+      fgets(tmp, MAXLINELEN, f);
+d145 5
+a149 3
+      if(!(pwordexp->we_wordv = (char **)realloc(pwordexp->we_wordv,
+                                                 (pwordexp->we_wordc + num_words + offs + 1) * sizeof(char *))))
+        return WRDE_NOSPACE;
+d152 2
+a153 1
+      fgets(tmp, MAXLINELEN, f);
+d162 3
+a164 2
+        return WRDE_NOSPACE;
+      fread(ewords, 1, num_bytes + num_words, f);
+d174 7
+a180 3
+          if (eword)
+            eword = strdup(eword);
+          pwordexp->we_wordv[pwordexp->we_wordc + offs + i] = eword;
+d186 1
+d188 1
+d190 8
+a197 2
+      fclose(f);
+      fclose(f_err);
+d202 1
+a202 1
+      return WRDE_SUCCESS;
+d215 2
+a216 1
+          dup2(fd[1], STDOUT_FILENO);
+d224 2
+a225 1
+          dup2(fd_err[1], STDERR_FILENO);
+d234 1
+@
+
+
+1.3
+log
+@	* libc/posix/wordexp.c (wordexp): Don't leak file streams.
+@
+text
+@d40 1
+d44 2
+d128 1
+a128 1
+      /* Get number of bytes required for storage of num_words words. */
+d134 10
+a143 2
+      /* Get each expansion from the shell output, and store each in
+         pwordexp's we_wordv vector. */
+d146 1
+a146 3
+          fgets(tmp, MAXLINELEN, f);
+
+          if((iter = strchr(tmp, '\n')))
+d149 4
+a152 1
+          pwordexp->we_wordv[pwordexp->we_wordc + offs + i] = strdup(tmp);
+d158 1
+@
+
+
+1.2
+log
+@	Throughout, run newlib with -Wall -Werror option and fix bugs and
+	compiler warnings found this way.
+
+	* libc/stdio/freopen.c (_freopen_r): Fix bug setting _flags.
+
+	* libc/include/stdio.h (_rename): Define when building newlib.
+	* libc/include/sys/signal.h (_kill): Ditto.
+	* libc/include/sys/stat.h (_mkdir): Ditto.
+	* libc/include/sys/time.h (_gettimeofday): Ditto.
+	* libc/include/sys/times.h (_times): Ditto.
+	* libc/include/sys/wait.h (_wait): Ditto.
+	* libc/locale/lmessages.c (empty): Don't define for Cygwin.
+	* libc/locale/lmonetary.c (cnv): Ditto.
+	* libc/locale/nl_langinfo.c (nl_langinfo): Ditto for variable s.
+	* libc/posix/collate.c: Throughout cast to avoid compiler warning.
+	* libc/posix/engine.c (matcher): Initialize dp to avoid compiler
+	warning.
+	* libc/posix/glob.c: Disable on Cygwin.  Explain why.
+	* libc/posix/regcomp.c: Fix "uninitialized" compiler warnings.
+	(dissect): Deliberately silence gcc compiler warning.  Add comment to
+	explain why.
+	* libc/posix/wordexp.c (wordexp): Remove num_bytes variable since result
+	is never used.
+	* libc/posix/popen.c (popen): Ditto for variable last.
+	* libc/reent/mkdirr.c: Include sys/stat.h.
+	* libc/reent/renamer.c: Include stdio.h.
+	* libc/search/hash.c:  Throughout use underscored variants of the stat
+	function family.
+	(init_hash): Add missing definition for the __USE_INTERNAL_STAT64 case.
+	* libc/search/hash_bigkey.c (__big_insert): Add parenthesis to avoid
+	compiler warning.
+	* libc/search/hash_page.c (overflow_page): Initalize freep to NULL to
+	avoid compiler warning.
+	* libc/stdio/asiprintf.c (_asiprintf_r): Cast unsigned char * to char *
+	to avoid compiler warning.
+	(asiprintf): Ditto.
+	* libc/stdio/asprintf.c (_asprintf_r): Ditto.
+	(asprintf): Ditto.
+	* libc/stdio/vasiprintf.c (_vasiprintf_r): Ditto.
+	* libc/stdio/vasprintf.c (_vasprintf_r): Ditto.
+	* libc/stdio/mktemp.c (_gettemp): Cast to unsigned char in call to
+	isdigit to avoid compiler warning.
+	* libc/stdio/vfprintf.c (_VFPRINTF_R): Initialize variables used for
+	grouping to avoid compiler warning.  Only define and set nseps and
+	nrepeats if they are really used.
+	* libc/stdio/vfwprintf.c (_VFWPRINTF_R): Ditto.  Only define state if
+	it is really used.
+	* libc/stdio/vfscanf.c (u_char): Revert to be defined as unsigned char.
+	(__SVFSCANF_R): Cast fmt in call to __mbtowc.
+	* libc/stdlib/mbtowc_r.c (JIS_state_table): Disable when building
+	Cygwin.
+	(JIS_action_table): Ditto.
+	* libc/stdlib/wctomb_r.c (__utf8_wctomb): Add parenthesis to avoid
+	compiler warning.
+	* libc/string/strcasestr.c: Deliberately silence gcc compiler warning.
+	Add comment to explain why.
+	* libc/time/strptime.c (strptime): Cast to unsigned char in calls to
+	isspace to avoid compiler warning.
+	* libm/math/e_atan2.c (__ieee754_atan2): Add parenthesis to avoid
+	compiler warning.
+	* libm/math/e_exp.c (__ieee754_exp): Initialize k to 0 to avoid
+	compiler warning.  Drop setting it to 0 later.
+	* libm/math/ef_exp.c (__ieee754_expf): Ditto.
+	* libm/math/e_pow.c (__ieee754_pow): Add braces to avoid compiler
+	warning.
+	* libm/math/ef_pow.c (__ieee754_powf): Ditto.
+	* libm/math/er_lgamma.c (__ieee754_lgamma_r): Initialize nadj to 0 to
+	avoid compiler warning.
+	* libm/math/erf_lgamma.c (__ieee754_lgammaf_r): Ditto.
+	* libm/math/e_rem_pio2.c (__ieee754_rem_pio2): Ditto for variable z.
+	* libm/common/sf_round.c (roundf): Remove signbit variable since result
+	is never used.
+@
+text
+@d146 2
+a147 2
+      close(fd[0]);
+      close(fd_err[0]);
+@
+
+
+1.2.2.1
+log
+@	Pull in changes from HEAD
+	Align ChangeLog with head
+	New file ChangeLog.64bit
+@
+text
+@a20 1
+#include <sys/queue.h>
+a22 1
+#include "wordexp2.h"
+d32 2
+a33 2
+  FILE *f = NULL;
+  FILE *f_err = NULL;
+a39 1
+  int num_bytes = 0;
+d42 1
+a42 4
+  int err = WRDE_NOSPACE;
+  ext_wordv_t *wordv = NULL;
+  char *eword;
+  struct ewords_entry *entry;
+d62 2
+a63 8
+      if (pwordexp->we_wordv)
+        wordv = WE_WORDV_TO_EXT_WORDV(pwordexp->we_wordv);
+      wordv = (ext_wordv_t *)realloc(wordv, sizeof(ext_wordv_t) + (offs + pwordexp->we_wordc) * sizeof(char *));
+      if (!wordv)
+        return err;
+      if (!pwordexp->we_wordv)
+        SLIST_INIT(&wordv->list);
+      pwordexp->we_wordv = wordv->we_wordv;
+d69 2
+a70 8
+  if (pipe(fd))
+    return err;
+  if (pipe(fd_err))
+    {
+      close(fd[0]);
+      close(fd[1]);
+      return err;
+    }
+d73 1
+a73 10
+  if (pid == -1)
+    {
+      /* In "parent" process, but fork failed */
+      close(fd_err[0]);
+      close(fd_err[1]);
+      close(fd[0]);
+      close(fd[1]);
+      return err;
+    }
+  else if (pid > 0)
+d82 1
+a82 2
+      if (!(f_err = fdopen(fd_err[0], "r")))
+        goto cleanup;
+d107 1
+a107 1
+          goto cleanup;
+d111 1
+a111 2
+      if (!(f = fdopen(fd[0], "r")))
+        goto cleanup;
+d114 1
+a114 2
+      if (!fgets(tmp, MAXLINELEN, f))
+        goto cleanup;
+d121 6
+a126 12
+      if (pwordexp->we_wordv)
+        wordv = WE_WORDV_TO_EXT_WORDV(pwordexp->we_wordv);
+      wordv = (ext_wordv_t *)realloc(wordv, sizeof(ext_wordv_t) + (offs + pwordexp->we_wordc + num_words) * sizeof(char *));
+      if (!wordv)
+        return err;
+      if (!pwordexp->we_wordv)
+        SLIST_INIT(&wordv->list);
+      pwordexp->we_wordv = wordv->we_wordv;
+
+      /* Get number of bytes required for storage of all num_words words. */
+      if (!fgets(tmp, MAXLINELEN, f))
+        goto cleanup;
+d131 5
+a135 1
+      num_bytes = atoi(tmp);
+d137 4
+a140 18
+      if (!(entry = (struct ewords_entry *)malloc(sizeof(struct ewords_entry) + num_bytes + num_words)))
+        goto cleanup;
+      SLIST_INSERT_HEAD(&wordv->list, entry, next);
+
+      /* Get expansion from the shell output. */
+      if (!fread(entry->ewords, 1, num_bytes + num_words, f))
+        goto cleanup;
+      entry->ewords[num_bytes + num_words] = 0;
+
+      /* Store each entry in pwordexp's we_wordv vector. */
+      eword = entry->ewords;
+      for(i = 0; i < num_words; i++, eword = iter)
+        {
+          if (!eword)
+            break;
+          pwordexp->we_wordv[offs + pwordexp->we_wordc + i] = eword;
+          if ((iter = strchr(eword, '\n')))
+            *iter++ = '\0';
+d143 1
+a143 1
+      pwordexp->we_wordv[offs + pwordexp->we_wordc + i] = NULL;
+a144 2
+      if (i == num_words)
+        err = WRDE_SUCCESS;
+d146 2
+a147 9
+cleanup:
+      if (f)
+        fclose(f);
+      else
+        close(fd[0]);
+      if (f_err)
+        fclose(f_err);
+      else
+        close(fd_err[0]);
+d152 1
+a152 1
+      return err;
+d165 1
+a165 2
+          if (dup2(fd[1], STDOUT_FILENO) == -1)
+            _exit(EXIT_FAILURE);
+d173 1
+a173 2
+          if (dup2(fd_err[1], STDERR_FILENO) == -1)
+            _exit(EXIT_FAILURE);
+a181 1
+      _exit(EXIT_FAILURE);
+@
+
+
+1.1
+log
+@
+2008-10-31  Jeff Johnston  <jjohnstn@@redhat.com>
+
+        * libc/include/limits.h: Add ARG_MAX, PATH_MAX, and _POSIX2_RE_DUP_MAX.
+        * libc/include/envlock.h: New file.
+        * libc/include/fnmatch.h: Ditto.
+        * libc/include/glob.h: Ditto.
+        * libc/include/regex.h: Ditto.
+        * libc/include/wordexp.h: Ditto.
+        * libc/posix/Makefile.am: Add new files moved from
+        libc/sys/linux/stdlib.
+        * libc/posix/Makefile.in: Regenerated.
+        * libc/posix/COPYRIGHT: New file moved from libc/sys/linux/stdlib.
+        * libc/posix/cclass.h: Ditto.
+        * libc/posix/cname.h: Ditto.
+        * libc/posix/collate.c: Ditto.
+        * libc/posix/collate.h: Ditto.
+        * libc/posix/collcmp.c: Ditto.
+        * libc/posix/engine.c: Ditto.
+        * libc/posix/fnmatch.3: Ditto.
+        * libc/posix/glob.3: Ditto.
+        * libc/posix/fnmatch.c: Ditto.
+        * libc/posix/glob.c: Ditto.
+        * libc/posix/namespace.h: Ditto.
+        * libc/posix/reallocf.c: Ditto.
+        * libc/posix/regcomp.c: Ditto.
+        * libc/posix/regerror.c: Ditto.
+        * libc/posix/regex.3: Ditto.
+        * libc/posix/regex2.h: Ditto.
+        * libc/posix/regexec.c: Ditto.
+        * libc/posix/regfree.c: Ditto.
+        * libc/posix/rune.h: Ditto.
+        * libc/posix/runetype.h: Ditto.
+        * libc/posix/scandir.c: Remove advertising clause which is not in
+        effect.
+        * libc/posix/sysexits.h: Ditto.
+        * libc/posix/un-namespace.h: Ditto.
+        * libc/posix/utils.h: Ditto.
+        * libc/posix/wordexp.c: Ditto.
+        * libc/posix/wordfree.c: Ditto.
+        * libc/posix/execl.c: Add !_NO_EXECVE flag check.
+        * libc/posix/execle.c: Ditto.
+        * libc/posix/execlp.c: Ditto.
+        * libc/posix/execv.c: Ditto.
+        * libc/posix/execve.c: Ditto.
+        * libc/posix/execvp.c: Ditto.
+        * libc/posix/popen.c: Add !_NO_POPEN flag check.
+        * libc/sys/linux/configure: Regenerated.
+        * libc/sys/linux/configure.in: Remove stdlib.
+        * libc/sys/linux/include/limits.h: Add include of linux/limits.h.
+        * libc/sys/linux/stdlib/Makefile.am: Removed.
+        * libc/sys/linux/stdlib/Makefile.in: Ditto.
+        * libc/sys/linux/stdlib/COPYRIGHT: Moved to libc/posix.
+        * libc/sys/linux/stdlib/cclass.h: Ditto.
+        * libc/sys/linux/stdlib/cname.h: Ditto.
+        * libc/sys/linux/stdlib/collate.c: Ditto.
+        * libc/sys/linux/stdlib/collate.h: Ditto.
+        * libc/sys/linux/stdlib/collcmp.c: Ditto.
+        * libc/sys/linux/stdlib/engine.c: Ditto.
+        * libc/sys/linux/stdlib/fnmatch.3: Ditto.
+        * libc/sys/linux/stdlib/fnmatch.c: Ditto.
+        * libc/sys/linux/stdlib/glob.3: Ditto.
+        * libc/sys/linux/stdlib/glob.c: Ditto.
+        * libc/sys/linux/stdlib/reallocf.c: Ditto.
+        * libc/sys/linux/stdlib/regcomp.c: Ditto.
+        * libc/sys/linux/stdlib/regerror.c: Ditto.
+        * libc/sys/linux/stdlib/regex.3: Ditto.
+        * libc/sys/linux/stdlib/regex2.h: Ditto.
+        * libc/sys/linux/stdlib/regexec.c: Ditto.
+        * libc/sys/linux/stdlib/regfree.c: Ditto.
+        * libc/sys/linux/stdlib/utils.h: Ditto.
+        * libc/sys/linux/stdlib/wordexp.c: Ditto.
+        * libc/sys/linux/stdlib/wordfree.c: Ditto.
+@
+text
+@a39 1
+  int num_bytes = 0;
+a130 2
+      num_bytes = atoi(tmp) + pwordexp->we_wordc;
+
+@
+

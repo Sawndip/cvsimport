@@ -1,0 +1,287 @@
+head	1.5;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.5
+	gdb_7_6-2013-04-26-release:1.5
+	gdb_7_6-branch:1.5.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.5
+	gdb_7_5_1-2012-11-29-release:1.3
+	gdb_7_5-2012-08-17-release:1.3
+	gdb_7_5-branch:1.3.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.3
+	gdb_7_4_1-2012-04-26-release:1.1.2.1
+	gdb_7_4-2012-01-24-release:1.1.2.1
+	gdb_7_4-branch:1.1.0.2
+	gdb_7_4-2011-12-13-branchpoint:1.1;
+locks; strict;
+comment	@# @;
+
+
+1.5
+date	2013.01.01.06.41.22;	author brobecke;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2012.12.10.17.17.29;	author tromey;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2012.06.27.17.00.09;	author tromey;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2012.01.04.08.17.51;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2011.10.09.18.46.41;	author jkratoch;	state Exp;
+branches
+	1.1.2.1;
+next	;
+
+1.1.2.1
+date	2012.01.06.04.44.06;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.5
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@# Copyright 2011-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+load_lib dwarf.exp
+
+# This test can only be run on targets which support DWARF-2 and use gas.
+if {![dwarf2_support]} {
+    return 0  
+}
+
+standard_testfile .S
+set mainfile main.c
+
+proc test { dwarf_version offset_size addr_size ref_addr_size two_cu } {
+    global testfile srcfile mainfile
+
+    # 32-bit targets do not support any of the testcases; keep quiet there.
+    set opts {quiet}
+    foreach n { dwarf_version offset_size addr_size ref_addr_size two_cu } {
+	lappend opts "additional_flags=-D[string toupper $n]=[expr "\$$n"]"
+    }
+
+    set name "d${dwarf_version}o${offset_size}a${addr_size}r${ref_addr_size}t${two_cu}"
+    set executable ${testfile}-${name}
+    if [prepare_for_testing ${testfile}.exp $executable "${srcfile} ${mainfile}" $opts] {
+	return -1
+    }
+
+    if ![runto_main] {
+	return -1
+    }
+
+    gdb_test "p/x p->f" " = 0x1010101" $name
+}
+
+#    DWARF_VERSION OFFSET_SIZE ADDR_SIZE REF_ADDR_SIZE TWO_CU
+test 2 8 4 4 0
+test 2 4 8 8 0
+test 3 8 4 8 0
+test 3 4 8 4 0
+test 2 8 4 4 1
+test 2 4 8 8 1
+test 3 8 4 8 1
+test 3 4 8 4 1
+@
+
+
+1.4
+log
+@	* dwarf2read.c (dwarf2_fetch_die_loc_sect_off): New function.
+	(dwarf2_fetch_die_loc_cu_off): Rename from
+	dwarf2_fetch_die_location_block.  Rewrite to use
+	dwarf2_fetch_die_loc_sect_off.
+	* dwarf2loc.h (dwarf2_fetch_die_loc_sect_off): Declare.
+	(dwarf2_fetch_die_loc_cu_off): Rename.
+	* dwarf2loc.c (indirect_pieced_value): Use
+	dwarf2_fetch_die_loc_sect_off.
+	* dwarf2expr.h (struct dwarf_expr_context) <len, data>: Update
+	comment.
+	(struct dwarf_expr_piece) <v.ptr.die>: Now a sect_offset.
+	* dwarf2expr.c (add_piece): Update.
+	(execute_stack_op) <DW_OP_GNU_implicit_pointer>: Update comment.
+testsuite
+	* gdb.dwarf2/implptr-64bit.exp: Run tests with two CUs as well.
+	(test): Add "two_cu" argument.
+	* gdb.dwarf2/implptr-64bit.S: Move subprogram later; use ref_addr
+	for types; allow two CUs.
+@
+text
+@d1 1
+a1 1
+# Copyright 2011-2012 Free Software Foundation, Inc.
+@
+
+
+1.3
+log
+@	* gdb.dwarf2/pr10770.exp: Use standard_testfile.
+	* gdb.dwarf2/dw2-var-zero-addr.exp: Use standard_testfile.
+	* gdb.dwarf2/dw2-param-error.exp: Use standard_testfile.
+	* gdb.dwarf2/dw2-op-call.exp: Use standard_testfile.
+	* gdb.dwarf2/dw2-inline-param.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.dwarf2/dw2-inline-break.exp: Use standard_testfile.
+	* gdb.dwarf2/dw2-ifort-parameter.exp: Use standard_testfile.
+	* gdb.dwarf2/dw2-cp-infcall-ref-static.exp: Use
+	standard_testfile.
+	* gdb.dwarf2/dw2-case-insensitive.exp: Use standard_testfile.
+	* gdb.dwarf2/dw4-sig-types.exp: Use standard_testfile.
+	* gdb.dwarf2/dw2-objfile-overlap.exp: Use standard_testfile.
+	* gdb.dwarf2/callframecfa.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.dwarf2/dup-psym.exp: Use standard_testfile.
+	* gdb.dwarf2/dw2-ada-ffffffff.exp: Use standard_testfile.
+	* gdb.dwarf2/dw2-anonymous-func.exp: Use standard_testfile.
+	* gdb.dwarf2/dw2-bad-parameter-type.exp: Use standard_testfile.
+	* gdb.dwarf2/dw2-basic.exp: Use standard_testfile.
+	* gdb.dwarf2/dw2-compressed.exp: Use standard_testfile.
+	* gdb.dwarf2/dw2-const.exp: Use standard_testfile.
+	* gdb.dwarf2/dw2-cu-size.exp: Use standard_testfile.
+	* gdb.dwarf2/dw2-double-set-die-type.exp: Use standard_testfile.
+	* gdb.dwarf2/dw2-empty-namespace.exp: Use standard_testfile.
+	* gdb.dwarf2/dw2-empty-pc-range.exp: Use standard_testfile.
+	* gdb.dwarf2/dw2-filename.exp: Use standard_testfile.
+	* gdb.dwarf2/dw2-icc-opaque.exp: Use standard_testfile.
+	* gdb.dwarf2/dw2-inheritance.exp: Use standard_testfile.
+	* gdb.dwarf2/dw2-intercu.exp: Use standard_testfile.
+	* gdb.dwarf2/dw2-intermix.exp: Use standard_testfile.
+	* gdb.dwarf2/dw2-linkage-name-trust.exp: Use standard_testfile.
+	* gdb.dwarf2/dw2-modula2-self-type.exp: Use standard_testfile.
+	* gdb.dwarf2/dw2-namespaceless-anonymous.exp: Use standard_testfile.
+	* gdb.dwarf2/dw2-op-stack-value.exp: Use standard_testfile.
+	* gdb.dwarf2/dw2-producer.exp: Use standard_testfile.
+	* gdb.dwarf2/dw2-ranges.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.dwarf2/dw2-ref-missing-frame.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.dwarf2/dw2-restore.exp: Use standard_testfile.
+	* gdb.dwarf2/dw2-simple-locdesc.exp: Use standard_testfile.
+	* gdb.dwarf2/dw2-skip-prologue.exp: Use standard_testfile.
+	* gdb.dwarf2/dw2-stack-boundary.exp: Use standard_testfile.
+	* gdb.dwarf2/dw2-strp.exp: Use standard_testfile.
+	* gdb.dwarf2/dw4-sig-type-unused.exp: Use standard_testfile.
+	* gdb.dwarf2/implptr-64bit.exp: Use standard_testfile.
+	* gdb.dwarf2/implptr-optimized-out.exp: Use standard_testfile.
+	* gdb.dwarf2/implptr.exp: Use standard_testfile.
+	* gdb.dwarf2/mac-fileno.exp: Use standard_testfile.
+	* gdb.dwarf2/member-ptr-forwardref.exp: Use standard_testfile.
+	* gdb.dwarf2/pieces.exp: Use standard_testfile.
+	* gdb.dwarf2/pr11465.exp: Use standard_testfile.
+	* gdb.dwarf2/pr13961.exp: Use standard_testfile.
+	* gdb.dwarf2/valop.exp: Use standard_testfile,
+	prepare_for_testing.
+@
+text
+@d25 1
+a25 1
+proc test { dwarf_version offset_size addr_size ref_addr_size } {
+d30 1
+a30 1
+    foreach n { dwarf_version offset_size addr_size ref_addr_size } {
+d34 1
+a34 1
+    set name "d${dwarf_version}o${offset_size}a${addr_size}r${ref_addr_size}"
+d47 9
+a55 5
+#    DWARF_VERSION OFFSET_SIZE ADDR_SIZE REF_ADDR_SIZE
+test 2 8 4 4
+test 2 4 8 8
+test 3 8 4 8
+test 3 4 8 4
+@
+
+
+1.2
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d22 1
+a22 2
+set testfile "implptr-64bit"
+set srcfile ${testfile}.S
+@
+
+
+1.1
+log
+@gdb/
+	Fix DW_OP_GNU_implicit_pointer for DWARF32 v3+ on 64-bit arches.
+	* dwarf2-frame.c (execute_stack_op): Initialize ctx->ref_addr_size.
+	* dwarf2expr.c (execute_stack_op) <DW_OP_GNU_implicit_pointer>: Use
+	ctx->ref_addr_size.  Handle its invalid value.
+	* dwarf2expr.h (struct dwarf_expr_context): New field ref_addr_size.
+	* dwarf2loc.c (dwarf2_evaluate_loc_desc_full)
+	(dwarf2_loc_desc_needs_frame): Initialize ctx->ref_addr_size.
+	* dwarf2loc.h (dwarf2_per_cu_ref_addr_size): New declaration.
+	* dwarf2read.c (decode_locdesc): Initialize ctx->ref_addr_size.
+	(dwarf2_per_cu_ref_addr_size): New function.
+
+gdb/testsuite/
+	Fix DW_OP_GNU_implicit_pointer for DWARF32 v3+ on 64-bit arches.
+	* gdb.dwarf2/implptr-64bit.S: New file.
+	* gdb.dwarf2/implptr-64bit.exp: New file.
+@
+text
+@d1 1
+a1 1
+# Copyright 2011 Free Software Foundation, Inc.
+@
+
+
+1.1.2.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d1 1
+a1 1
+# Copyright 2011-2012 Free Software Foundation, Inc.
+@
+
+

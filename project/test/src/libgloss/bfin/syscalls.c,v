@@ -1,0 +1,595 @@
+head	1.8;
+access;
+symbols
+	newlib-2_2_0:1.8.0.2
+	newlib-2_1_0:1.8
+	newlib-2_0_0:1.8
+	newlib-1_20_0:1.8
+	newlib-1_19_0:1.4
+	newlib-1_18_0:1.4
+	newlib-1_17_0-arc:1.4.0.4
+	binutils-arc-20080908-branch:1.4.0.2
+	binutils-arc-20080908-branchpoint:1.4
+	newlib-1_17_0:1.4
+	newlib-1_16_0:1.2
+	newlib-1_15_0:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.8
+date	2011.07.01.21.47.36;	author vapier;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2011.07.01.20.55.42;	author vapier;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2011.06.22.04.18.45;	author vapier;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2011.06.22.03.00.44;	author vapier;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2008.08.14.22.00.45;	author jjohnstn;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2008.01.03.22.38.30;	author jjohnstn;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2007.07.06.17.00.12;	author jjohnstn;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2006.11.08.19.36.56;	author jjohnstn;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.8
+log
+@libgloss: bfin: implement getpid/fstat/stat/link/unlink syscalls
+
+The current syscalls.c implements getpid/fstat/stat/link/unlink as mere
+stubs.  So replace them with useful calls to do_syscall now that our sim
+can support them.
+
+Signed-off-by: Mike Frysinger <vapier@@gentoo.org>
+@
+text
+@/*
+ * C library support files for the Blackfin processor
+ *
+ * Copyright (C) 2006 Analog Devices, Inc.
+ *
+ * The authors hereby grant permission to use, copy, modify, distribute,
+ * and license this software and its documentation for any purpose, provided
+ * that existing copyright notices are retained in all copies and that this
+ * notice is included verbatim in any distributions. No written agreement,
+ * license, or royalty fee is required for any of the authorized uses.
+ * Modifications to this software may be copyrighted by their authors
+ * and need not follow the licensing terms described here, provided that
+ * the new terms are clearly indicated on the first page of each file where
+ * they apply.
+ */
+
+#include <_ansi.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <sys/fcntl.h>
+#include <stdio.h>
+#include <time.h>
+#include <sys/time.h>
+#include <sys/times.h>
+#include "syscall.h"
+#include <errno.h>
+#include <reent.h>
+#include <unistd.h>
+
+register char *stack_ptr asm ("SP");
+
+static inline int
+do_syscall (int reason, void *arg)
+{
+  int result, result2, errcode;
+  asm volatile ("excpt 0;"
+		: "=q0" (result),
+		  "=q1" (result2),
+		  "=q2" (errcode)
+		: "qA" (reason),
+		  "q0" (arg)
+		: "memory", "CC");
+  errno = errcode;
+  return result;
+}
+
+int
+_read (int file, char *ptr, int len)
+{
+  int block[3];
+
+  block[0] = file;
+  block[1] = (int) ptr;
+  block[2] = len;
+
+  return do_syscall (SYS_read, block);
+}
+
+int
+_lseek (int file, int ptr, int whence)
+{
+  int block[3];
+
+  block[0] = file;
+  block[1] = ptr;
+  block[2] = whence;
+
+  return do_syscall (SYS_lseek, block);
+}
+
+int
+_write (int file, char *ptr, int len)
+{
+  int block[3];
+
+  block[0] = file;
+  block[1] = (int) ptr;
+  block[2] = len;
+
+  return do_syscall (SYS_write, block);
+}
+
+int
+_open (const char *path, int flags)
+{
+  int block[2];
+
+  block[0] = (int) path;
+  block[1] = flags;
+
+  return do_syscall (SYS_open, block);
+}
+
+int
+_close (int file)
+{
+  return do_syscall (SYS_close, &file);
+}
+
+void
+_exit (int n)
+{
+  do_syscall (SYS_exit, &n);
+}
+
+int
+_kill (int n, int m)
+{
+  int block[2];
+
+  block[0] = n;
+  block[1] = m;
+
+  return do_syscall (SYS_kill, block);
+}
+
+int
+_getpid (int n)
+{
+  return do_syscall (SYS_getpid, &n);
+}
+
+caddr_t
+_sbrk (int incr)
+{
+  extern char end;		/* Defined by the linker.  */
+  static char *heap_end;
+  char *prev_heap_end;
+
+  if (heap_end == NULL)
+    heap_end = &end;
+
+  prev_heap_end = heap_end;
+
+  if (heap_end + incr > stack_ptr)
+    {
+      /* Some of the libstdc++-v3 tests rely upon detecting
+	 out of memory errors, so do not abort here.  */
+#if 0
+      extern void abort (void);
+
+      _write (1, "_sbrk: Heap and stack collision\n", 32);
+
+      abort ();
+#else
+      errno = ENOMEM;
+      return (caddr_t) -1;
+#endif
+    }
+
+  heap_end += incr;
+
+  return (caddr_t) prev_heap_end;
+}
+
+extern void memset (struct stat *, int, unsigned int);
+
+int
+_fstat (int file, struct stat *st)
+{
+  int block[2];
+
+  block[0] = file;
+  block[1] = (int) st;
+
+  return do_syscall (SYS_fstat, block);
+}
+
+int _stat (const char *fname, struct stat *st)
+{
+  int block[2];
+
+  block[0] = (int) fname;
+  block[1] = (int) st;
+
+  return do_syscall (SYS_stat, block);
+}
+
+int
+_link (const char *existing, const char *new)
+{
+  int block[2];
+
+  block[0] = (int) existing;
+  block[1] = (int) new;
+
+  return do_syscall (SYS_link, block);
+}
+
+int
+_unlink (const char *path)
+{
+  return do_syscall (SYS_unlink, path);
+}
+
+void
+_raise (void)
+{
+  return;
+}
+
+int
+_gettimeofday (struct timeval *tv, void *tz)
+{
+  tv->tv_usec = 0;
+  tv->tv_sec = do_syscall (SYS_time, 0);
+  return 0;
+}
+
+/* Return a clock that ticks at 100Hz.  */
+clock_t
+_times (struct tms * tp)
+{
+  return -1;
+}
+
+int
+_isatty (int fd)
+{
+  return 1;
+}
+
+int
+_system (const char *s)
+{
+  if (s == NULL)
+    return 0;
+  errno = ENOSYS;
+  return -1;
+}
+
+int
+_rename (const char * oldpath, const char * newpath)
+{
+  errno = ENOSYS;
+  return -1;
+}
+
+static inline int
+__setup_argv_for_main (int argc)
+{
+  int block[2];
+  char **argv;
+  int i = argc;
+
+  argv = __builtin_alloca ((1 + argc) * sizeof (*argv));
+
+  argv[i] = NULL;
+  while (i--) {
+    block[0] = i;
+    argv[i] = __builtin_alloca (1 + do_syscall (SYS_argnlen, (void *)block));
+    block[1] = (int) argv[i];
+    do_syscall (SYS_argn, (void *)block);
+  }
+
+  return main (argc, argv);
+}
+
+int
+__setup_argv_and_call_main ()
+{
+  int argc = do_syscall (SYS_argc, 0);
+
+  if (argc <= 0)
+    return main (argc, NULL);
+  else
+    return __setup_argv_for_main (argc);
+}
+@
+
+
+1.7
+log
+@libgloss: bfin: fix sim lseek() syscall
+
+The sim lseek() syscall in the Blackfin libgloss code did not pass down
+the "whence" argument making lseek() in general kind of useless.
+
+Signed-off-by: Mike Frysinger <vapier@@gentoo.org>
+@
+text
+@d120 1
+a120 1
+  return 1;
+d159 1
+a159 1
+_fstat (int file, struct stat * st)
+d161 6
+a166 4
+  memset (st, 0, sizeof (* st));
+  st->st_mode = S_IFCHR;
+  st->st_blksize = 1024;
+  return 0;
+d171 4
+a174 1
+  int file;
+d176 1
+a176 10
+  /* The best we can do is try to open the file readonly.  If it exists,
+     then we can guess a few things about it.  */
+  if ((file = _open (fname, O_RDONLY)) < 0)
+    return -1;
+
+  memset (st, 0, sizeof (* st));
+  st->st_mode = S_IFREG | S_IREAD;
+  st->st_blksize = 1024;
+  _close (file); /* Not interested in the error.  */
+  return 0;
+d180 1
+a180 1
+_link (void)
+d182 6
+a187 1
+  return -1;
+d191 1
+a191 1
+_unlink (void)
+d193 1
+a193 1
+  return -1;
+@
+
+
+1.6
+log
+@libgloss: bfin: handle result2/errcode in sim syscalls
+
+The sim passes back results via two values, and the error code via a 3rd.
+make sure libgloss extracts all three so that things like errno work as
+expected.  This fixes many gdb tests which look for this sort of thing.
+
+Signed-off-by: Mike Frysinger <vapier@@gentoo.org>
+@
+text
+@d60 1
+a60 1
+_lseek (int file, int ptr, int dir)
+d62 1
+a62 1
+  int block[2];
+d66 1
+@
+
+
+1.5
+log
+@libgloss: bfin: trim trailing whitespace
+@
+text
+@d35 9
+a43 4
+  register int r asm ("P0") = reason;
+  register void *a asm ("R0") = arg;
+  register int result asm ("R0");
+  asm volatile ("excpt 0;" : "=r" (result) : "a" (r), "r" (a) : "memory", "CC");
+@
+
+
+1.4
+log
+@
+2008-08-14  Jie Zhang  <jie.zhang@@analog.com>
+
+        * bfin/Makefile.in: (top_srcdir): Define.
+        (mkinstalldirs): Define.
+        (BOARD_SCRIPTS): Define.
+        (BOARD_LDFLAGS): Define.
+        (BOARD_BSP): Define.
+        (BOARD_CRT0S): Define.
+        (BOARD_OBJS): Define.
+        (BOARD_TEST): Define.
+        (BOARD_INSTALL): Define.
+        (INCLUDES): Add -I$(srcdir)/include.
+        (all): Add ${BOARD_CRT0S} and ${BOARD_BSP}.
+        (.c.S): Remove target.
+        (crt0.o): New target.
+        (basiccrt.o): Likewise.
+        (basiccrtb.o): Likewise.
+        (basiccrts.o): Likewise.
+        (basiccrt561.o, basiccrt561s.o, basiccrt561b.o): Likewise
+        (clean mostlyclean): Remove ${BOARD_BSP}.
+        (install): Depend on ${BOARD_INSTALL}.
+        (install-sim): Reformat.
+        (install-board): New target.
+        * bfin/basiccrt.S: Remove useless __ADSPBF561_COREB__ in
+        workaround code for 05000229.
+        * bfin/syscalls.c (do_syscall): Use `EXCPT 0' instead of
+        `RAISE 0' for syscall.
+        * bfin/basiccrt.S: New file.
+        * bfin/bf5*ld: New file.
+        * bfin/bfin-common-mc.ld: New file.
+        * bfin/bfin-common-sc.ld: New file.
+        * bfin/include/blackfin.h: New file.
+        * bfin/include/cdefBF5*.h: New file.
+        * bfin/include/cdef_LPBlackfin.h: New file.
+        * bfin/include/cdefblackfin.h: New file.
+        * bfin/include/cplb.h: New file.
+        * bfin/include/cplbtab.h: New file.
+        * bfin/include/defBF5*.h: New files.
+        * bfin/include/def_LPBlackfin.h: New files.
+        * bfin/include/defblackfin.h: New file.
+        * bfin/include/sys/_adi_platform.h: New file.
+        * bfin/include/sys/anomaly_macros_rtl.h: New file.
+        * bfin/include/sys/excause.h: New file.
+        * bfin/include/sys/exception.h: New file.
+        * bfin/include/sys/mc_typedef.h: New file.
+        * bfin/include/sys/platform.h: New file.
+        * bfin/include/sys/pll.h: New file.
+        * bfin/include/sysreg.h: New file.
+        * libnosys/configure.in (MISSING_SYSCALL_NAMES): Don't define
+        for bfin.
+        * libnosys/configure: Regenerate.
+@
+text
+@d50 1
+a50 1
+  
+d69 1
+a69 1
+  
+d73 1
+a73 1
+  
+d126 1
+a126 1
+  
+d128 1
+a128 1
+  
+d137 1
+a137 1
+      
+d144 1
+a144 1
+  
+d204 1
+a204 1
+clock_t 
+@
+
+
+1.3
+log
+@
+2008-01-03  Jeff Johnston  <jjohnstn@@redhat.com>
+
+        * arm/redboot-syscalls.c: Consistently supply _isatty if syscalls
+        dir is used in newlib.
+        * bfin/syscalls.c: Ditto.
+        * cris/gensyscalls: Ditto.
+        * fr30/syscalls.c: Ditto.
+        * frv/isatty.c: Ditto.
+        * iq2000/isatty.c: Ditto.
+        * libnosys/isatty.c: Ditto.
+        * m32r/isatty.c: Ditto.
+        * mn10200/isatty.c: Ditto.
+        * mn10300/isatty.c: Ditto.
+        * xstormy16/isatty.c: New file with _isatty function.
+@
+text
+@d35 4
+a38 7
+  int result;
+  asm volatile ("[--sp] = %1; [--sp] = %2; \
+		r1 = [sp++]; r0 = [sp++]; \
+		raise 0; %0 = r0;"
+		: "=r" (result)
+		: "r" (reason), "r" (arg)
+		: "R0", "R1", "memory", "cc");
+@
+
+
+1.2
+log
+@
+2007-07-06  Jeff Johnston  <jjohnstn@@redhat.com>
+
+        * arm/syscalls.c (gettimeofday): Change to POSIX signature
+        where second argument is passed as void *.
+        * bfin/syscalls.c (gettimeofday): Ditto.
+        * cris/gensyscalls (gettimeofday): Ditto.
+        * cris/linunistd.h (gettimeofday): Ditto.
+        * crx/time.c (gettimeofday): Ditto.
+        * frv/sim-time.c (gettimeofday): Ditto.
+        * i386/cygmon-salib.c (gettimeofday): Ditto.
+        * libnosys/gettod.c (gettimeofday): Ditto.
+        * m68k/io-gettimeofday.c (gettimeofday): Ditto.
+        * sparc/cygmon-salib.c (gettimeofday): Ditto.
+        * spu/gettimeofday.c (gettimeofday): Ditto.
+@
+text
+@d214 1
+a214 1
+isatty (int fd)
+@
+
+
+1.1
+log
+@
+2006-11-08  Jie Zhang  <jzhang918@@gmail.com>
+
+        * bfin/configure.in: New.
+        * bfin/crt0.S: New.
+        * bfin/Makefile.in: New.
+        * bfin/syscalls.c: New.
+        * bfin/aclocal.m4: Generate.
+        * bfin/configure: Ditto.
+        * configure.in: Add support for bfin-*-*.
+        * configure: Regenerate.
+        * syscall.h (SYS_argc): Define.
+        (SYS_argnlen): Define.
+        (SYS_argn): Define.
+@
+text
+@d199 1
+a199 1
+_gettimeofday (struct timeval *tv, struct timezone *tz)
+@
+

@@ -1,0 +1,862 @@
+head	1.8;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.8
+	gdb_7_6-2013-04-26-release:1.8
+	gdb_7_6-branch:1.8.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.8
+	gdb_7_5_1-2012-11-29-release:1.6
+	gdb_7_5-2012-08-17-release:1.6
+	gdb_7_5-branch:1.6.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.6
+	gdb_7_4_1-2012-04-26-release:1.5.2.1
+	gdb_7_4-2012-01-24-release:1.5.2.1
+	gdb_7_4-branch:1.5.0.2
+	gdb_7_4-2011-12-13-branchpoint:1.5;
+locks; strict;
+comment	@ * @;
+
+
+1.8
+date	2013.01.31.18.37.37;	author aristovski;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2013.01.01.06.32.40;	author brobecke;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2012.01.04.08.17.00;	author brobecke;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2011.05.30.18.04.32;	author palves;	state Exp;
+branches
+	1.5.2.1;
+next	1.4;
+
+1.4
+date	2011.05.27.18.26.19;	author palves;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2011.05.27.14.56.14;	author palves;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2011.05.27.14.32.08;	author palves;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2011.05.27.14.00.25;	author palves;	state Exp;
+branches;
+next	;
+
+1.5.2.1
+date	2012.01.06.04.43.06;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.8
+log
+@2013-01-31  Aleksandar Ristovski  <aristovski@@qnx.com>
+
+	* charset.c (intermediate_encoding): Remove unused i.
+	* completer.c (signal_completer): Remove unused i.
+	* continuations.c (discard_my_continuations_1): Remove unused
+	continuation_ptr.
+	* corelow.c (core_close): Remove unuseD name.
+	(get_core_siginfo): Remove unused pid.
+	* cp-namespace.c (cp_lookup_symbol_imports_or_template): Remove unused
+	i, cps.
+	* dwarf2loc.c (dwarf2_compile_expr_to_ax): Remove unused base_offset.
+	(loclist_describe_location): Remove unused first.
+	* event-top.c (command_line_handler): Remove unused got_eof.
+	* exec.c (exec_close_1): Remove unused need_symtab_cleanup.
+	(resize_section_table): Remove unused old_value.
+	* gdb_bfd.c (gdb_bfd_map_section): Remove unused header.
+	* gnu-v3-abi.c (compute_vtable_size): Remove unused addr.
+	* i386-tdep.c (i386_process_record): Remove unused rex.
+	* infcmd.c (get_return_value): Remove unused uiout.
+	* jv-lang.c (type_from_class): Remove unused is_array.
+	* jv-valprint.c (java_val_print): Remove unused i.
+	* linux-nat.c (linux_nat_stop_lwp): Remove unused ptid.
+	* linux-thread-db.c (thread_db_find_new_threads_2): Remove unuseD pid.
+	* m2-typeprint.c (m2_print_type): Remove unused code.
+	* macroexp.c (get_character_constant): Remove unused body_start.
+	(macro_stringify): Remove unused result.
+	* objc-lang.c (find_methods): Remove unused gdbarch.
+	* objfiles.c (filter_overlapping_sections): Remove unused abfd1, abfd2.
+	* regcache.c (regcache_cooked_read): Remove unused gdbarch.
+	* stack.c (print_frame_args): Remove unused summary.
+	* thread.c (thread_apply_command): Remove unused p.
+	* valarith.c (value_x_unop): Remove unused mangle_ptr.
+	* valops.c (search_struct_method): Remove unused skip.
+	* valprint.c (generic_val_print): Remove unused byte_order.
+	* varobj.c (varobj_update): Remove unused changed.
+	* cli/cli-cmds.c (complete_command): Remove unused next_item.
+	(alias_command): Remove unused c.
+	* mi/mi-cmd-catch.c (mi_catch_load_unload): Remove unused c.
+	* mi/mi-main.c (mi_cmd_data_write_register_values): Remove unused
+	format.
+	(mi_cmd_data_write_memory): Remove unused word_format.
+	(mi_cmd_data_write_memory_bytes): Remove unused r.
+	* python/py-gdb-readline.c (gdbpy_readline_wrapper): Remove unused
+	p_start, p_end.
+	* python/python.c (_initialize_python): Remove unused cmd_name, cmd.
+	* tui/tui-disasm.c (tui_set_disassem_content): Remove unused
+	line_width.
+
+Reference: http://sourceware.org/ml/gdb-patches/2013-01/msg00766.html
+@
+text
+@/* Continuations for GDB, the GNU debugger.
+
+   Copyright (C) 1986-2013 Free Software Foundation, Inc.
+
+   This file is part of GDB.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+#include "defs.h"
+#include "gdbthread.h"
+#include "inferior.h"
+#include "continuations.h"
+
+struct continuation
+{
+  struct continuation *next;
+  continuation_ftype *function;
+  continuation_free_arg_ftype *free_arg;
+  void *arg;
+};
+
+/* Add a new continuation to the continuation chain.  Args are
+   FUNCTION to run the continuation up with, and ARG to pass to
+   it.  */
+
+static void
+make_continuation (struct continuation **pmy_chain,
+		   continuation_ftype *function,
+		   void *arg,  void (*free_arg) (void *))
+{
+  struct continuation *new = XNEW (struct continuation);
+
+  new->next = *pmy_chain;
+  new->function = function;
+  new->free_arg = free_arg;
+  new->arg = arg;
+  *pmy_chain = new;
+}
+
+static void
+do_my_continuations_1 (struct continuation **pmy_chain, int err)
+{
+  struct continuation *ptr;
+
+  while ((ptr = *pmy_chain) != NULL)
+    {
+      *pmy_chain = ptr->next;	/* Do this first in case of recursion.  */
+      (*ptr->function) (ptr->arg, err);
+      if (ptr->free_arg)
+	(*ptr->free_arg) (ptr->arg);
+      xfree (ptr);
+    }
+}
+
+static void
+do_my_continuations (struct continuation **list, int err)
+{
+  struct continuation *continuations;
+
+  if (*list == NULL)
+    return;
+
+  /* Copy the list header into another pointer, and set the global
+     list header to null, so that the global list can change as a side
+     effect of invoking the continuations and the processing of the
+     preexisting continuations will not be affected.  */
+
+  continuations = *list;
+  *list = NULL;
+
+  /* Work now on the list we have set aside.  */
+  do_my_continuations_1 (&continuations, err);
+}
+
+static void
+discard_my_continuations_1 (struct continuation **pmy_chain)
+{
+  struct continuation *ptr;
+
+  while ((ptr = *pmy_chain) != NULL)
+    {
+      *pmy_chain = ptr->next;
+      if (ptr->free_arg)
+	(*ptr->free_arg) (ptr->arg);
+      xfree (ptr);
+    }
+}
+
+static void
+discard_my_continuations (struct continuation **list)
+{
+  discard_my_continuations_1 (list);
+  *list = NULL;
+}
+
+/* Add a continuation to the continuation list of INFERIOR.  The new
+   continuation will be added at the front.  */
+
+void
+add_inferior_continuation (continuation_ftype *hook, void *args,
+			   continuation_free_arg_ftype *free_arg)
+{
+  struct inferior *inf = current_inferior ();
+
+  make_continuation (&inf->continuations, hook, args, free_arg);
+}
+
+/* Do all continuations of the current inferior.  */
+
+void
+do_all_inferior_continuations (int err)
+{
+  struct inferior *inf = current_inferior ();
+  do_my_continuations (&inf->continuations, err);
+}
+
+/* Get rid of all the inferior-wide continuations of INF.  */
+
+void
+discard_all_inferior_continuations (struct inferior *inf)
+{
+  discard_my_continuations (&inf->continuations);
+}
+
+/* Add a continuation to the continuation list of THREAD.  The new
+   continuation will be added at the front.  */
+
+void
+add_continuation (struct thread_info *thread,
+		  continuation_ftype *hook, void *args,
+		  continuation_free_arg_ftype *free_arg)
+{
+  make_continuation (&thread->continuations, hook, args, free_arg);
+}
+
+static void
+restore_thread_cleanup (void *arg)
+{
+  ptid_t *ptid_p = arg;
+
+  switch_to_thread (*ptid_p);
+}
+
+/* Walk down the continuation list of PTID, and execute all the
+   continuations.  There is a problem though.  In some cases new
+   continuations may be added while we are in the middle of this loop.
+   If this happens they will be added in the front, and done before we
+   have a chance of exhausting those that were already there.  We need
+   to then save the beginning of the list in a pointer and do the
+   continuations from there on, instead of using the global beginning
+   of list as our iteration pointer.  */
+
+static void
+do_all_continuations_ptid (ptid_t ptid,
+			   struct continuation **continuations_p,
+			   int err)
+{
+  struct cleanup *old_chain;
+  ptid_t current_thread;
+
+  if (*continuations_p == NULL)
+    return;
+
+  current_thread = inferior_ptid;
+
+  /* Restore selected thread on exit.  Don't try to restore the frame
+     as well, because:
+
+     - When running continuations, the selected frame is always #0.
+
+     - The continuations may trigger symbol file loads, which may
+     change the frame layout (frame ids change), which would trigger
+     a warning if we used make_cleanup_restore_current_thread.  */
+
+  old_chain = make_cleanup (restore_thread_cleanup, &current_thread);
+
+  /* Let the continuation see this thread as selected.  */
+  switch_to_thread (ptid);
+
+  do_my_continuations (continuations_p, err);
+
+  do_cleanups (old_chain);
+}
+
+/* Callback for iterate over threads.  */
+
+static int
+do_all_continuations_thread_callback (struct thread_info *thread, void *data)
+{
+  int err = * (int *) data;
+  do_all_continuations_ptid (thread->ptid, &thread->continuations, err);
+  return 0;
+}
+
+/* Do all continuations of thread THREAD.  */
+
+void
+do_all_continuations_thread (struct thread_info *thread, int err)
+{
+  do_all_continuations_thread_callback (thread, &err);
+}
+
+/* Do all continuations of all threads.  */
+
+void
+do_all_continuations (int err)
+{
+  iterate_over_threads (do_all_continuations_thread_callback, &err);
+}
+
+/* Callback for iterate over threads.  */
+
+static int
+discard_all_continuations_thread_callback (struct thread_info *thread,
+					   void *data)
+{
+  discard_my_continuations (&thread->continuations);
+  return 0;
+}
+
+/* Get rid of all the continuations of THREAD.  */
+
+void
+discard_all_continuations_thread (struct thread_info *thread)
+{
+  discard_all_continuations_thread_callback (thread, NULL);
+}
+
+/* Get rid of all the continuations of all threads.  */
+
+void
+discard_all_continuations (void)
+{
+  iterate_over_threads (discard_all_continuations_thread_callback, NULL);
+}
+
+
+/* Add a continuation to the intermediate continuation list of THREAD.
+   The new continuation will be added at the front.  */
+
+void
+add_intermediate_continuation (struct thread_info *thread,
+			       continuation_ftype *hook,
+			       void *args,
+			       continuation_free_arg_ftype *free_arg)
+{
+  make_continuation (&thread->intermediate_continuations, hook,
+		     args, free_arg);
+}
+
+/* Walk down the cmd_continuation list, and execute all the
+   continuations.  There is a problem though.  In some cases new
+   continuations may be added while we are in the middle of this
+   loop.  If this happens they will be added in the front, and done
+   before we have a chance of exhausting those that were already
+   there.  We need to then save the beginning of the list in a pointer
+   and do the continuations from there on, instead of using the
+   global beginning of list as our iteration pointer.  */
+
+static int
+do_all_intermediate_continuations_thread_callback (struct thread_info *thread,
+						   void *data)
+{
+  int err = * (int *) data;
+
+  do_all_continuations_ptid (thread->ptid,
+			     &thread->intermediate_continuations, err);
+  return 0;
+}
+
+/* Do all intermediate continuations of thread THREAD.  */
+
+void
+do_all_intermediate_continuations_thread (struct thread_info *thread, int err)
+{
+  do_all_intermediate_continuations_thread_callback (thread, &err);
+}
+
+/* Do all intermediate continuations of all threads.  */
+
+void
+do_all_intermediate_continuations (int err)
+{
+  iterate_over_threads (do_all_intermediate_continuations_thread_callback,
+			&err);
+}
+
+/* Callback for iterate over threads.  */
+
+static int
+discard_all_intermediate_continuations_thread_callback (struct thread_info *thread,
+							void *data)
+{
+  discard_my_continuations (&thread->intermediate_continuations);
+  return 0;
+}
+
+/* Get rid of all the intermediate continuations of THREAD.  */
+
+void
+discard_all_intermediate_continuations_thread (struct thread_info *thread)
+{
+  discard_all_intermediate_continuations_thread_callback (thread, NULL);
+}
+
+/* Get rid of all the intermediate continuations of all threads.  */
+
+void
+discard_all_intermediate_continuations (void)
+{
+  iterate_over_threads (discard_all_intermediate_continuations_thread_callback,
+			NULL);
+}
+@
+
+
+1.7
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@a102 2
+  struct continuation *continuation_ptr = *list;
+
+@
+
+
+1.6
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d3 1
+a3 1
+   Copyright (C) 1986, 1988-2012 Free Software Foundation, Inc.
+@
+
+
+1.5
+log
+@2011-05-30  Pedro Alves  <pedro@@codesourcery.com>
+
+	gdb/
+	* continuations.h (continuation_ftype): Add `err' parameter.
+	Document parameters.
+	(do_all_continuations, do_all_continuations_thread)
+	(do_all_intermediate_continuations)
+	(do_all_intermediate_continuations_thread)
+	(do_all_inferior_continuations): Add `err' parameter.
+	* continuations.c (do_my_continuations_1, do_my_continuations)
+	(do_all_inferior_continuations, do_all_continuations_ptid)
+	(do_all_continuations_thread_callback)
+	(do_all_continuations_thread, do_all_continuations)
+	(do_all_intermediate_continuations_thread_callback)
+	(do_all_intermediate_continuations_thread)
+	(do_all_intermediate_continuations): Add `err' parameter, and pass
+	it down all the way to the continuations proper.
+	* inf-loop.c (inferior_event_handler): If fetching an inferior
+	event throws an error, don't pop the target, and still call the
+	continuations, but with `err' set.  Adjust all other continuation
+	calls.
+	* breakpoint.c (until_break_command_continuation): Add `err'
+	parameter.
+	* infcmd.c (step_1_continuation): Add `err' parameter.  Don't
+	issue another step if `err' is set.
+	(struct until_next_continuation_args): New.
+	(until_next_continuation): Add `err' parameter.  Adjust.
+	(until_next_command): Adjust.
+	(struct finish_command_continuation_args): Add `thread' field.
+	(finish_command_continuation): Add `err' parameter.  Handle it.
+	(finish_forward): Adjust.
+	(attach_command_continuation): Add `err' parameter.  Handle it.
+	* infrun.c (infrun_thread_stop_requested_callback): Adjust to
+	cancel the continuations.
+	* interps.c (interp_set): Adjust to cancel the continuations.
+	* thread.c (clear_thread_inferior_resources): Adjust to cancel the
+	continuations rather than discarding.
+	(free_thread): Don't clear thread inferior resources here.
+	(delete_thread_1): Do it here instead.  And do it before removing
+	the thread from the threads list.  Tag the thread as exited before
+	clearing thread inferior resources.
+@
+text
+@d3 1
+a3 3
+   Copyright (C) 1986, 1988, 1989, 1990, 1991, 1992, 1993, 1994, 1995, 1996,
+   1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008,
+   2009, 2010, 2011 Free Software Foundation, Inc.
+@
+
+
+1.5.2.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d3 3
+a5 1
+   Copyright (C) 1986, 1988-2012 Free Software Foundation, Inc.
+@
+
+
+1.4
+log
+@2011-05-27  Pedro Alves  <pedro@@codesourcery.com>
+
+	* defs.h (struct continuation, continuation_ftype)
+	(continuation_free_arg_ftype, add_continuation)
+	(do_all_continuations, do_all_continuations_thread)
+	(discard_all_continuations, discard_all_continuations_thread)
+	(add_intermediate_continuation, do_all_intermediate_continuations)
+	(do_all_intermediate_continuations_thread)
+	(discard_all_intermediate_continuations)
+	(discard_all_intermediate_continuations_thread)
+	(add_inferior_continuation, do_all_inferior_continuations)
+	(discard_all_inferior_continuations): Move to ...
+	* continuations.h: ... this new file.
+	* breakpoint.c, continuations.c, event-top.c, inf-loop.c,
+	infcmd.c, inferior.c, infrun.c, interps.c: Include
+	continuations.h.
+@
+text
+@d54 1
+a54 1
+do_my_continuations_1 (struct continuation **pmy_chain)
+d61 1
+a61 1
+      (*ptr->function) (ptr->arg);
+d69 1
+a69 1
+do_my_continuations (struct continuation **list)
+d85 1
+a85 1
+  do_my_continuations_1 (&continuations);
+d126 1
+a126 1
+do_all_inferior_continuations (void)
+d129 1
+a129 1
+  do_my_continuations (&inf->continuations);
+d170 2
+a171 1
+			   struct continuation **continuations_p)
+d195 1
+a195 1
+  do_my_continuations (continuations_p);
+d205 2
+a206 1
+  do_all_continuations_ptid (thread->ptid, &thread->continuations);
+d213 1
+a213 1
+do_all_continuations_thread (struct thread_info *thread)
+d215 1
+a215 1
+  do_all_continuations_thread_callback (thread, NULL);
+d221 1
+a221 1
+do_all_continuations (void)
+d223 1
+a223 1
+  iterate_over_threads (do_all_continuations_thread_callback, NULL);
+d279 2
+d282 1
+a282 1
+			     &thread->intermediate_continuations);
+d289 1
+a289 1
+do_all_intermediate_continuations_thread (struct thread_info *thread)
+d291 1
+a291 1
+  do_all_intermediate_continuations_thread_callback (thread, NULL);
+d297 1
+a297 1
+do_all_intermediate_continuations (void)
+d300 1
+a300 1
+			NULL);
+@
+
+
+1.3
+log
+@2011-05-27  Pedro Alves  <pedro@@codesourcery.com>
+
+	gdb/
+	* defs.h (continuation_ftype, continuation_free_arg_ftype): New
+	typedefs.
+	(add_continuation, add_intermediate_continuation)
+	(add_inferior_continuation): Use them.
+	* continuations.c (struct continuation): Use them.
+	(make_continuation_ftype): Delete.
+	(make_continuation, add_inferior_continuation, add_continuation)
+	(add_intermediate_continuation): Use continuation_ftype and
+	continuation_free_arg_ftype.  Rename parameters to shorter names.
+@
+text
+@d25 1
+@
+
+
+1.2
+log
+@2011-05-27  Pedro Alves  <pedro@@codesourcery.com>
+
+	gdb/
+	* continuations.c (make_continuation): Make it return void.
+	(do_my_continuations): Rename to ...
+	(do_my_continuations_1): ... this.  Remove old_chain parameter and
+	adjust.
+	(do_my_continuations): New.
+	(discard_my_continuations): Rename to ...
+	(discard_my_continuations_1): ... this.  Remove old_chain
+	parameter and adjust.
+	(discard_my_continuations): New.
+	(add_inferior_continuation): Simplify.
+	(do_all_inferior_continuations): Reimplement on top
+	do_my_continuations.
+	(discard_all_inferior_continuations): Simplify.
+	(add_continuation): Simplify.
+	(do_all_continuations_ptid): Simplify.
+	(discard_all_continuations_thread_callback): Simplify.
+	(add_intermediate_continuation): Simplify.
+	(discard_all_intermediate_continuations_thread_callback):
+	Simplify.
+@
+text
+@d29 2
+a30 2
+  void (*function) (void *);
+  void (*free_arg) (void *);
+a33 2
+typedef void (make_continuation_ftype) (void *);
+
+d40 1
+a40 1
+		   make_continuation_ftype *function,
+d114 2
+a115 2
+add_inferior_continuation (void (*continuation_hook) (void *), void *args,
+			   void (*continuation_free_args) (void *))
+d119 1
+a119 2
+  make_continuation (&inf->continuations, continuation_hook,
+		     args, continuation_free_args);
+d144 2
+a145 2
+		  void (*continuation_hook) (void *), void *args,
+		  void (*continuation_free_args) (void *))
+d147 1
+a147 2
+  make_continuation (&thread->continuations, continuation_hook,
+		     args, continuation_free_args);
+d255 3
+a257 3
+			       void (*continuation_hook)
+			       (void *), void *args,
+			       void (*continuation_free_args) (void *))
+d259 2
+a260 2
+  make_continuation (&thread->intermediate_continuations, continuation_hook,
+		     args, continuation_free_args);
+@
+
+
+1.1
+log
+@2011-05-27  Pedro Alves  <pedro@@codesourcery.com>
+
+	gdb/
+	* utils.c (struct continuation, add_continuation)
+	(add_inferior_continuation)
+	(do_all_inferior_continuations, discard_all_inferior_continuations)
+	(restore_thread_cleanup, do_all_continuations_ptid)
+	(do_all_continuations_thread_callback)
+	(do_all_continuations_thread, do_all_continuations)
+	(discard_all_continuations_thread_callback)
+	(discard_all_continuations_thread, discard_all_continuations)
+	(add_intermediate_continuation)
+	(do_all_intermediate_continuations_thread_callback)
+	(do_all_intermediate_continuations_thread)
+	(do_all_intermediate_continuations)
+	(discard_all_intermediate_continuations_thread_callback)
+	(discard_all_intermediate_continuations_thread)
+	(discard_all_intermediate_continuations): Move to ...
+	* continuations.c: ... this new file, and adjust to no longer
+	implement continuations on top of cleanups.
+	* Makefile.in (SFILES): Add continuations.c.
+	(COMMON_OBS): Add continuations.o.
+@
+text
+@d36 3
+a38 4
+/* Add a new continuation to the continuation chain, and return the
+   previous chain pointer to be passed later to do_continuations or
+   discard_continuations.  Args are FUNCTION to run the continuation
+   up with, and ARG to pass to it.  */
+d40 1
+a40 1
+static struct continuation *
+a45 1
+  struct continuation *old_chain = *pmy_chain;
+a51 2
+
+  return old_chain;
+d55 1
+a55 2
+do_my_continuations (struct continuation **pmy_chain,
+		     struct continuation *old_chain)
+d59 1
+a59 1
+  while ((ptr = *pmy_chain) != old_chain)
+d69 22
+a90 3
+void
+discard_my_continuations (struct continuation **pmy_chain,
+			  struct continuation *old_chain)
+d94 1
+a94 1
+  while ((ptr = *pmy_chain) != old_chain)
+d103 2
+a104 7
+/* Add a continuation to the continuation list of THREAD.  The new
+   continuation will be added at the front.  */
+
+void
+add_continuation (struct thread_info *thread,
+		  void (*continuation_hook) (void *), void *args,
+		  void (*continuation_free_args) (void *))
+d106 1
+a106 7
+  struct continuation *continuations = thread->continuations;
+  make_cleanup_ftype *continuation_hook_fn = continuation_hook;
+
+  make_continuation (&continuations,
+		     continuation_hook_fn,
+		     args,
+		     continuation_free_args);
+d108 2
+a109 1
+  thread->continuations = continuations;
+a119 2
+  struct continuation *continuations = inf->continuations;
+  make_cleanup_ftype *continuation_hook_fn = continuation_hook;
+d121 2
+a122 6
+  make_continuation (&continuations,
+		     continuation_hook_fn,
+		     args,
+		     continuation_free_args);
+
+  inf->continuations = continuations;
+a129 1
+  struct continuation *continuations;
+d131 1
+a131 14
+
+  if (inf->continuations == NULL)
+    return;
+
+  /* Copy the list header into another pointer, and set the global
+     list header to null, so that the global list can change as a side
+     effect of invoking the continuations and the processing of the
+     preexisting continuations will not be affected.  */
+
+  continuations = inf->continuations;
+  inf->continuations = NULL;
+
+  /* Work now on the list we have set aside.  */
+  do_my_continuations (&continuations, NULL);
+d139 2
+a140 1
+  struct continuation *continuation_ptr = inf->continuations;
+d142 10
+a151 2
+  discard_my_continuations (&continuation_ptr, NULL);
+  inf->continuations = NULL;
+a175 1
+  struct continuation *continuations;
+d197 1
+a197 10
+  /* Copy the list header into another pointer, and set the global
+     list header to null, so that the global list can change as a side
+     effect of invoking the continuations and the processing of the
+     preexisting continuations will not be affected.  */
+
+  continuations = *continuations_p;
+  *continuations_p = NULL;
+
+  /* Work now on the list we have set aside.  */
+  do_my_continuations (&continuations, NULL);
+d233 1
+a233 4
+  struct continuation *continuation_ptr = thread->continuations;
+
+  discard_my_continuations (&continuation_ptr, NULL);
+  thread->continuations = NULL;
+d263 2
+a264 9
+  struct continuation *continuations = thread->intermediate_continuations;
+  make_cleanup_ftype *continuation_hook_fn = continuation_hook;
+
+  make_continuation (&continuations,
+		     continuation_hook_fn,
+		     args,
+		     continuation_free_args);
+
+  thread->intermediate_continuations = continuations;
+d308 1
+a308 4
+  struct continuation *continuation_ptr = thread->intermediate_continuations;
+
+  discard_my_continuations (&continuation_ptr, NULL);
+  thread->intermediate_continuations = NULL;
+@
+

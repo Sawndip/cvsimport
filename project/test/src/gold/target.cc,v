@@ -1,0 +1,1222 @@
+head	1.15;
+access;
+symbols
+	binutils-2_24-branch:1.14.0.2
+	binutils-2_24-branchpoint:1.14
+	binutils-2_21_1:1.8
+	binutils-2_23_2:1.13
+	binutils-2_23_1:1.13
+	binutils-2_23:1.13
+	binutils-2_23-branch:1.13.0.2
+	binutils-2_23-branchpoint:1.13
+	binutils-2_22_branch:1.12.0.4
+	binutils-2_22:1.12
+	binutils-2_22-branch:1.12.0.2
+	binutils-2_22-branchpoint:1.12
+	binutils-2_21:1.8
+	binutils-2_21-branch:1.8.0.2
+	binutils-2_21-branchpoint:1.8
+	binutils-2_20_1:1.2.2.1
+	binutils-2_20:1.2.2.1
+	binutils-2_20-branch:1.2.0.2
+	binutils-2_20-branchpoint:1.2
+	dje-cgen-play1-branch:1.1.0.2
+	dje-cgen-play1-branchpoint:1.1
+	binutils_latest_snapshot:1.15;
+locks; strict;
+comment	@// @;
+
+
+1.15
+date	2013.10.11.22.02.21;	author roland;	state Exp;
+branches;
+next	1.14;
+
+1.14
+date	2013.02.27.23.11.56;	author amodra;	state Exp;
+branches
+	1.14.2.1;
+next	1.13;
+
+1.13
+date	2012.04.20.22.23.47;	author davem;	state Exp;
+branches;
+next	1.12;
+
+1.12
+date	2011.08.01.18.25.22;	author ccoutant;	state Exp;
+branches;
+next	1.11;
+
+1.11
+date	2011.06.28.22.25.14;	author ian;	state Exp;
+branches;
+next	1.10;
+
+1.10
+date	2011.05.24.21.41.10;	author ccoutant;	state Exp;
+branches;
+next	1.9;
+
+1.9
+date	2010.12.14.19.03.30;	author rwild;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2010.08.25.08.36.54;	author nickc;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2010.03.11.01.18.26;	author ian;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2010.03.11.01.10.53;	author ian;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2009.10.09.23.18.19;	author dougkwan;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2009.10.06.22.58.27;	author ian;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2009.09.30.22.21.13;	author ian;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2009.08.18.23.49.29;	author dougkwan;	state Exp;
+branches
+	1.2.2.1;
+next	1.1;
+
+1.1
+date	2009.06.05.21.32.56;	author dougkwan;	state Exp;
+branches;
+next	;
+
+1.14.2.1
+date	2013.10.11.22.02.58;	author roland;	state Exp;
+branches;
+next	;
+
+1.2.2.1
+date	2009.10.16.05.51.18;	author ian;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.15
+log
+@gold/
+	* target.h (Target::adjust_elf_header, Target::do_adjust_elf_header):
+	Remove const from declaration.
+	* target.cc (Sized_target::do_adjust_elf_header): Update definition.
+	* sparc.cc (Target_sparc::do_adjust_elf_header): Likewise.
+	* output.h (Output_file_header): Remove const from member target_
+	and corresponding constructor argument.
+	* output.cc (Output_file_header::Output_file_header): Update prototype.
+	(Output_file_header::do_sized_write): Use this->target_ in place
+	of parameters()->target().
+@
+text
+@// target.cc -- target support for gold.
+
+// Copyright 2009, 2010, 2011, 2013 Free Software Foundation, Inc.
+// Written by Doug Kwan <dougkwan@@google.com>.
+
+// This file is part of gold.
+
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 3 of the License, or
+// (at your option) any later version.
+
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+// MA 02110-1301, USA.
+
+#include "gold.h"
+#include "elfcpp.h"
+#include "dynobj.h"
+#include "symtab.h"
+#include "output.h"
+#include "target.h"
+
+namespace gold
+{
+
+// Return whether NAME is a local label name.  This is used to implement the
+// --discard-locals options and can be overridden by child classes to
+// implement system-specific behaviour.  The logic here is the same as that
+// in _bfd_elf_is_local_label_name().
+
+bool
+Target::do_is_local_label_name(const char* name) const
+{
+  // Normal local symbols start with ``.L''.
+  if (name[0] == '.' && name[1] == 'L')
+    return true;
+
+  // At least some SVR4 compilers (e.g., UnixWare 2.1 cc) generate
+  // DWARF debugging symbols starting with ``..''.
+  if (name[0] == '.' && name[1] == '.')
+    return true;
+
+  // gcc will sometimes generate symbols beginning with ``_.L_'' when
+  // emitting DWARF debugging output.  I suspect this is actually a
+  // small bug in gcc (it calls ASM_OUTPUT_LABEL when it should call
+  // ASM_GENERATE_INTERNAL_LABEL, and this causes the leading
+  // underscore to be emitted on some ELF targets).  For ease of use,
+  // we treat such symbols as local.
+  if (name[0] == '_' && name[1] == '.' && name[2] == 'L' && name[3] == '_')
+    return true;
+
+  return false;
+}
+
+// Implementations of methods Target::do_make_elf_object are almost identical
+// except for the address sizes and endianities.  So we extract this
+// into a template.
+
+template<int size, bool big_endian>
+inline Object*
+Target::do_make_elf_object_implementation(
+    const std::string& name,
+    Input_file* input_file,
+    off_t offset,
+    const elfcpp::Ehdr<size, big_endian>& ehdr)
+{
+  int et = ehdr.get_e_type();
+  // ET_EXEC files are valid input for --just-symbols/-R,
+  // and we treat them as relocatable objects.
+  if (et == elfcpp::ET_REL
+      || (et == elfcpp::ET_EXEC && input_file->just_symbols()))
+    {
+      Sized_relobj_file<size, big_endian>* obj =
+	new Sized_relobj_file<size, big_endian>(name, input_file, offset, ehdr);
+      obj->setup();
+      return obj;
+    }
+  else if (et == elfcpp::ET_DYN)
+    {
+      Sized_dynobj<size, big_endian>* obj =
+	new Sized_dynobj<size, big_endian>(name, input_file, offset, ehdr);
+      obj->setup();
+      return obj;
+    }
+  else
+    {
+      gold_error(_("%s: unsupported ELF file type %d"),
+		 name.c_str(), et);
+      return NULL;
+    }
+}
+
+// Make an ELF object called NAME by reading INPUT_FILE at OFFSET.  EHDR
+// is the ELF header of the object.  There are four versions of this
+// for different address sizes and endianities.
+
+#ifdef HAVE_TARGET_32_LITTLE
+Object*
+Target::do_make_elf_object(const std::string& name, Input_file* input_file,
+			   off_t offset, const elfcpp::Ehdr<32, false>& ehdr)
+{
+  return this->do_make_elf_object_implementation<32, false>(name, input_file,
+							    offset, ehdr);
+}
+#endif
+
+#ifdef HAVE_TARGET_32_BIG
+Object*
+Target::do_make_elf_object(const std::string& name, Input_file* input_file,
+			   off_t offset, const elfcpp::Ehdr<32, true>& ehdr)
+{
+  return this->do_make_elf_object_implementation<32, true>(name, input_file,
+							   offset, ehdr);
+}
+#endif
+
+#ifdef HAVE_TARGET_64_LITTLE
+Object*
+Target::do_make_elf_object(const std::string& name, Input_file* input_file,
+			   off_t offset, const elfcpp::Ehdr<64, false>& ehdr)
+{
+  return this->do_make_elf_object_implementation<64, false>(name, input_file,
+							    offset, ehdr);
+}
+#endif
+
+#ifdef HAVE_TARGET_64_BIG
+Object*
+Target::do_make_elf_object(const std::string& name, Input_file* input_file,
+			   off_t offset, const elfcpp::Ehdr<64, true>& ehdr)
+{
+  return this->do_make_elf_object_implementation<64, true>(name, input_file,
+							   offset, ehdr);
+}
+#endif
+
+Output_section*
+Target::do_make_output_section(const char* name, elfcpp::Elf_Word type,
+			       elfcpp::Elf_Xword flags)
+{
+  return new Output_section(name, type, flags);
+}
+
+// Default for whether a reloc is a call to a non-split function is
+// whether the symbol is a function.
+
+bool
+Target::do_is_call_to_non_split(const Symbol* sym, unsigned int) const
+{
+  return sym->type() == elfcpp::STT_FUNC;
+}
+
+// Default conversion for -fsplit-stack is to give an error.
+
+void
+Target::do_calls_non_split(Relobj* object, unsigned int, section_offset_type,
+			   section_size_type, unsigned char*, section_size_type,
+			   std::string*, std::string*) const
+{
+  static bool warned;
+  if (!warned)
+    {
+      gold_error(_("linker does not include stack split support "
+		   "required by %s"),
+		 object->name().c_str());
+      warned = true;
+    }
+}
+
+//  Return whether BYTES/LEN matches VIEW/VIEW_SIZE at OFFSET.
+
+bool
+Target::match_view(const unsigned char* view, section_size_type view_size,
+		   section_offset_type offset, const char* bytes,
+		   size_t len) const
+{
+  if (offset + len > view_size)
+    return false;
+  return memcmp(view + offset, bytes, len) == 0;
+}
+
+// Set the contents of a VIEW/VIEW_SIZE to nops starting at OFFSET
+// for LEN bytes.
+
+void
+Target::set_view_to_nop(unsigned char* view, section_size_type view_size,
+			section_offset_type offset, size_t len) const
+{
+  gold_assert(offset >= 0 && offset + len <= view_size);
+  if (!this->has_code_fill())
+    memset(view + offset, 0, len);
+  else
+    {
+      std::string fill = this->code_fill(len);
+      memcpy(view + offset, fill.data(), len);
+    }
+}
+
+// Return address and size to plug into eh_frame FDEs associated with a PLT.
+void
+Target::do_plt_fde_location(const Output_data* plt, unsigned char*,
+			    uint64_t* address, off_t* len) const
+{
+  *address = plt->address();
+  *len = plt->data_size();
+}
+
+// Class Sized_target.
+
+// Set the EI_OSABI field of the ELF header if requested.
+
+template<int size, bool big_endian>
+void
+Sized_target<size, big_endian>::do_adjust_elf_header(unsigned char* view,
+						     int len)
+{
+  elfcpp::ELFOSABI osabi = this->osabi();
+  if (osabi != elfcpp::ELFOSABI_NONE)
+    {
+      gold_assert(len == elfcpp::Elf_sizes<size>::ehdr_size);
+
+      elfcpp::Ehdr<size, big_endian> ehdr(view);
+      unsigned char e_ident[elfcpp::EI_NIDENT];
+      memcpy(e_ident, ehdr.get_e_ident(), elfcpp::EI_NIDENT);
+
+      e_ident[elfcpp::EI_OSABI] = osabi;
+
+      elfcpp::Ehdr_write<size, big_endian> oehdr(view);
+      oehdr.put_e_ident(e_ident);
+    }
+}
+
+#ifdef HAVE_TARGET_32_LITTLE
+template
+class Sized_target<32, false>;
+#endif
+
+#ifdef HAVE_TARGET_32_BIG
+template
+class Sized_target<32, true>;
+#endif
+
+#ifdef HAVE_TARGET_64_LITTLE
+template
+class Sized_target<64, false>;
+#endif
+
+#ifdef HAVE_TARGET_64_BIG
+template
+class Sized_target<64, true>;
+#endif
+
+} // End namespace gold.
+@
+
+
+1.14
+log
+@	* target.h (Target::plt_fde_location, do_plt_fde_location): Declare.
+	* target.cc (Target::do_plt_fde_location): New function.
+	* ehframe.h (class FDE): Add post_map field to u_.from_linker,
+	accessor function, and constructor param.
+	(struct Post_fde, Post_fdes): Declare.
+	(Cie::write): Add post_fdes param.
+	* ehframe.cc (Fde::write): Use plt_fde_location.
+	(struct Post_fde): Define.
+	(Cie::write): Stash FDEs added post merge mapping.
+	(Eh_frame::add_ehframe_for_plt): Assert no new CIEs after mapping.
+	Adjust Fde constructor call.  Bump final_data_size_ for post map FDEs.
+	(Eh_frame::do_sized_write): Arrange to write post map FDES after
+	other FDEs.
+	* powerpc.cc (Target_powerpc::do_plt_fde_location): New function.
+	(Target_powerpc::has_glink): New function.
+	(Target_powerpc::do_relax): Add eh_frame info for stubs.
+	(struct Eh_cie, eh_frame_cie, glink_eh_frame_fde_64,
+	glink_eh_frame_fde_32, default_fde): New data.
+	(Stub_table::eh_frame_added_): New var.
+	(Stub_table::find_long_branch_entry, stub_address, stub_offset):
+	Make const.
+	(Stub_table::add_eh_frame): New function.
+	(Output_data_glink::add_eh_frame): New function.
+	(Target_powerpc::make_glink_section): Call add_eh_frame.
+@
+text
+@d3 1
+a3 1
+// Copyright 2009, 2010, 2011 Free Software Foundation, Inc.
+d222 1
+a222 1
+						     int len) const
+@
+
+
+1.14.2.1
+log
+@gold/
+	* target.h (Target::adjust_elf_header, Target::do_adjust_elf_header):
+	Remove const from declaration.
+	* target.cc (Sized_target::do_adjust_elf_header): Update definition.
+	* sparc.cc (Target_sparc::do_adjust_elf_header): Likewise.
+	* output.h (Output_file_header): Remove const from member target_
+	and corresponding constructor argument.
+	* output.cc (Output_file_header::Output_file_header): Update prototype.
+	(Output_file_header::do_sized_write): Use this->target_ in place
+	of parameters()->target().
+@
+text
+@d3 1
+a3 1
+// Copyright 2009, 2010, 2011, 2013 Free Software Foundation, Inc.
+d222 1
+a222 1
+						     int len)
+@
+
+
+1.13
+log
+@gold: Fix parameterization of do_adjust_elf_header
+
+gold/
+
+	* target.cc (Sized_target::do_adjust_elf_header): Use big_endian
+	instead of false.
+@
+text
+@d206 9
+@
+
+
+1.12
+log
+@	* layout.cc (Layout::set_segment_offsets): Don't realign text
+	segment if -Ttext was specified.
+	* object.cc (Sized_relobj_file::Sized_relobj_file): Store the ELF
+	file type.
+	* object.h (Sized_relobj_file::e_type): New function.
+	(Sized_relobj_file::e_type_): New data member.
+	* symtab.cc (Symbol_table::add_from_relobj): Don't add section
+	base address for ET_EXEC files.
+	* target.cc (Target::do_make_elf_object_implementation): Allow
+	ET_EXEC files with --just-symbols option.
+@
+text
+@d220 1
+a220 1
+      elfcpp::Ehdr<size, false> ehdr(view);
+d226 1
+a226 1
+      elfcpp::Ehdr_write<size, false> oehdr(view);
+@
+
+
+1.11
+log
+@	* target.h (class Target): Add osabi_ field.
+	(Target::osabi): New function.
+	(Target::set_osabi): New function.
+	(Target::Target): Initialize osabi_.
+	(Target::do_adjust_elf_header): Make pure virtual.
+	(Sized_target::do_adjust_elf_header): Declare.
+	* target.cc (Sized_target::do_adjust_elf_header): New function.
+	(class Sized_target): Instantiate all versions.
+	* freebsd.h (class Target_freebsd): Remove.
+	(Target_selector_freebsd::do_recognize): Call set_osabi on
+	Target.
+	(Target_selector_freebsd::do_recognize_by_name): Likewise.
+	(Target_selector_freebsd::set_osabi): Remove.
+	* i386.cc (class Target_i386): Inherit from Sized_target rather
+	than Target_freebsd.
+	* x86_64.cc (class Target_x86_64): Likewise.
+@
+text
+@d75 4
+a78 1
+  if (et == elfcpp::ET_REL)
+@
+
+
+1.10
+log
+@	* incremental-dump.cc (dump_incremental_inputs): Print dynamic reloc
+	info; adjust display of GOT entries.
+	* incremental.cc (Sized_incremental_binary::setup_readers): Allocate
+	vector of input objects; remove file_status_.
+	(Sized_incremental_binary::do_reserve_layout): Remove file_status_.
+	(Sized_incremental_binary::do_process_got_plt): Adjust calls to
+	got_plt reader; call target hooks to reserve GOT entries.
+	(Output_section_incremental_inputs::set_final_data_size): Adjust size
+	of input file info header and GOT info entry.
+	(Output_section_incremental_inputs::write_info_blocks): Write dynamic
+	relocation info.
+	(Got_plt_view_info::got_descriptor): Remove.
+	(Got_plt_view_info::sym_index): New data member.
+	(Got_plt_view_info::input_index): New data member.
+	(Local_got_offset_visitor::visit): Write input file index.
+	(Global_got_offset_visitor::visit): Write 0 for input file index.
+	(Global_symbol_visitor_got_plt::operator()): Replace got_descriptor
+	with sym_index and input_index.
+	(Output_section_incremental_inputs::write_got_plt): Adjust size of
+	incremental info GOT entry; replace got_descriptor with input_index.
+	(Sized_relobj_incr::Sized_relobj_incr): Adjust initializers; record
+	map from input file index to object.
+	(Sized_relobj_incr::do_layout): Replace direct data member reference
+	with accessor function.
+	(Sized_relobj_incr::do_for_all_local_got_entries): Move to base class.
+	* incremental.h (Incremental_input_entry_reader::get_symbol_offset):
+	Adjust size of input file info header.
+	(Incremental_input_entry_reader::get_first_dyn_reloc): New function.
+	(Incremental_input_entry_reader::get_dyn_reloc_count): New function.
+	(Incremental_input_entry_reader::get_input_section): Adjust size of
+	input file info header.
+	(Incremental_got_plt_reader::Incremental_got_plt_reader): Adjust size
+	of incremental info GOT entry.
+	(Incremental_got_plt_reader::get_got_desc): Remove.
+	(Incremental_got_plt_reader::get_got_symndx): New function.
+	(Incremental_got_plt_reader::get_got_input_index): New function.
+	(Sized_incremental_binary::Sized_incremental_binary): Remove
+	file_status_; add input_objects_.
+	(Sized_incremental_binary::~Sized_incremental_binary): Remove.
+	(Sized_incremental_binary::set_file_is_unchanged): Remove.
+	(Sized_incremental_binary::file_is_unchanged): Remove.
+	(Sized_incremental_binary::set_input_object): New function.
+	(Sized_incremental_binary::input_object): New function.
+	(Sized_incremental_binary::file_status_): Remove.
+	(Sized_incremental_binary::input_objects_): New data member.
+	(Sized_relobj_incr): Rename Sized_incr_relobj to this; adjust all
+	references.
+	(Sized_relobj_incr::invalid_address): Move to base class.
+	(Sized_relobj_incr::is_output_section_offset_invalid): Move to base
+	class.
+	(Sized_relobj_incr::do_output_section_offset): Likewise.
+	(Sized_relobj_incr::do_for_all_local_got_entries): Likewise.
+	(Sized_relobj_incr::section_offsets_): Likewise.
+	* object.cc (Sized_relobj::do_for_all_local_got_entries): New
+	function.
+	(Sized_relobj_file::Sized_relobj_file): Remove local_got_offsets_.
+	(Sized_relobj_file::layout_section): Replace refs to section_offsets_
+	with accessor function.
+	(Sized_relobj_file::do_layout): Likewise.
+	(Sized_relobj_file::do_layout_deferred_sections): Likewise.
+	(Sized_relobj_file::do_for_all_local_got_entries): Move to base class.
+	(Sized_relobj_file::compute_final_local_value): Replace refs to
+	section_offsets_ with accessor function.
+	(Sized_relobj_file::do_finalize_local_symbols): Likewise.
+	* object.h (Relobj::Relobj): Initialize new data members.
+	(Relobj::add_dyn_reloc): New function.
+	(Relobj::first_dyn_reloc): New function.
+	(Relobj::dyn_reloc_count): New function.
+	(Relobj::first_dyn_reloc_): New data member.
+	(Relobj::dyn_reloc_count_): New data member.
+	(Sized_relobj): Rename Sized_relobj_base to this; adjust all
+	references.
+	(Sized_relobj::Address): New typedef.
+	(Sized_relobj::invalid_address): Move here from child class.
+	(Sized_relobj::Sized_relobj): Initialize new data members.
+	(Sized_relobj::sized_relobj): New function.
+	(Sized_relobj::is_output_section_offset_invalid): Move here from
+	child class.
+	(Sized_relobj::get_output_section_offset): Likewise.
+	(Sized_relobj::local_has_got_offset): Likewise.
+	(Sized_relobj::local_got_offset): Likewise.
+	(Sized_relobj::set_local_got_offset): Likewise.
+	(Sized_relobj::do_for_all_local_got_entries): Likewise.
+	(Sized_relobj::clear_got_offsets): New function.
+	(Sized_relobj::section_offsets): Move here from child class.
+	(Sized_relobj::do_output_section_offset): Likewise.
+	(Sized_relobj::do_set_section_offset): Likewise.
+	(Sized_relobj::Local_got_offsets): Likewise.
+	(Sized_relobj::local_got_offsets_): Likewise.
+	(Sized_relobj::section_offsets_): Likewise.
+	(Sized_relobj_file): Rename Sized_relobj to this; adjust all
+	references.
+	(Sized_relobj_file::is_output_section_offset_invalid): Move to base
+	class.
+	(Sized_relobj_file::sized_relobj): New function
+	(Sized_relobj_file::local_has_got_offset): Move to base class.
+	(Sized_relobj_file::local_got_offset): Likewise.
+	(Sized_relobj_file::set_local_got_offset): Likewise.
+	(Sized_relobj_file::get_output_section_offset): Likewise.
+	(Sized_relobj_file::do_for_all_local_got_entries): Likewise.
+	(Sized_relobj_file::do_output_section_offset): Likewise.
+	(Sized_relobj_file::do_set_section_offset): Likewise.
+	(Sized_relobj_file::Local_got_offsets): Likewise.
+	(Sized_relobj_file::local_got_offsets_): Likewise.
+	(Sized_relobj_file::section_offsets_): Likewise.
+	* output.cc (Output_reloc::Output_reloc): Adjust type of relobj
+	(all constructors).
+	(set_needs_dynsym_index): Convert relobj to derived class pointer.
+	(Output_reloc::get_symbol_index): Likewise.
+	(Output_reloc::local_section_offset): Likewise.
+	(Output_reloc::get_address): Likewise.
+	(Output_reloc::symbol_value): Likewise.
+	(Output_data_got::reserve_slot): Move to class definition.
+	(Output_data_got::reserve_local): New function.
+	(Output_data_got::reserve_slot_for_global): Remove.
+	(Output_data_got::reserve_global): New function.
+	* output.h (Output_reloc::Output_reloc): Adjust type of relobj
+	(all constructors, two instantiations).
+	(Output_reloc::get_relobj): New function (two instantiations).
+	(Output_reloc::u1_.relobj, Output_reloc::u2_.relobj): Adjust type.
+	(Output_data_reloc_base::add): Convert relobj to derived class pointer.
+	(Output_data_reloc::add_global): Adjust type of relobj.
+	(Output_data_reloc::add_global_relative): Likewise.
+	(Output_data_reloc::add_symbolless_global_addend): Likewise.
+	(Output_data_reloc::add_local): Likewise.
+	(Output_data_reloc::add_local_relative): Likewise.
+	(Output_data_reloc::add_symbolless_local_addend): Likewise.
+	(Output_data_reloc::add_local_section): Likewise.
+	(Output_data_reloc::add_output_section): Likewise.
+	(Output_data_reloc::add_absolute): Likewise.
+	(Output_data_reloc::add_target_specific): Likewise.
+	(Output_data_got::reserve_slot): Move definition here.
+	(Output_data_got::reserve_local): New function.
+	(Output_data_got::reserve_global): New function.
+	* reloc.cc (Sized_relobj_file::do_read_relocs): Replace refs to
+	section_offsets_ with accessor function.
+	(Sized_relobj_file::write_sections): Likewise.
+	(Sized_relobj_file::do_relocate_sections): Likewise.
+	* target.h (Sized_target::reserve_local_got_entry): New function.
+	(Sized_target::reserve_global_got_entry): New function.
+	* x86_64.cc (Target_x86_64::reserve_local_got_entry): New function.
+	(Target_x86_64::reserve_global_got_entry): New function.
+	(Target_x86_64::init_got_plt_for_update): Create rela_dyn section.
+@
+text
+@d1 1
+a1 1
+// target.cc
+d3 1
+a3 1
+// Copyright 2009, 2010 Free Software Foundation, Inc.
+d203 45
+@
+
+
+1.9
+log
+@Fix typos in gold.
+
+gold/:
+	* dwarf_reader.cc: Remove outdated comment.
+	* gold-threads.cc: Fix typo in error message.
+	* archive.cc: Fix typos in comments.
+	* archive.h: Likewise.
+	* arm-reloc-property.cc: Likewise.
+	* arm-reloc-property.h: Likewise.
+	* arm-reloc.def: Likewise.
+	* arm.cc: Likewise.
+	* attributes.h: Likewise.
+	* cref.cc: Likewise.
+	* ehframe.cc: Likewise.
+	* fileread.h: Likewise.
+	* gold.h: Likewise.
+	* i386.cc: Likewise.
+	* icf.cc: Likewise.
+	* incremental.h: Likewise.
+	* int_encoding.cc: Likewise.
+	* layout.h: Likewise.
+	* main.cc: Likewise.
+	* merge.h: Likewise.
+	* object.cc: Likewise.
+	* object.h: Likewise.
+	* options.cc: Likewise.
+	* readsyms.cc: Likewise.
+	* reduced_debug_output.cc: Likewise.
+	* reloc.cc: Likewise.
+	* script-sections.cc: Likewise.
+	* sparc.cc: Likewise.
+	* symtab.h: Likewise.
+	* target-reloc.h: Likewise.
+	* target.cc: Likewise.
+	* target.h: Likewise.
+	* timer.cc: Likewise.
+	* timer.h: Likewise.
+	* x86_64.cc: Likewise.
+@
+text
+@d77 2
+a78 2
+      Sized_relobj<size, big_endian>* obj =
+	new Sized_relobj<size, big_endian>(name, input_file, offset, ehdr);
+@
+
+
+1.8
+log
+@        * archive.cc: Formatting fixes: Remove whitespace between
+        typename and following asterisk.  Remove whitespace between
+        function name and opening parenthesis.
+        * archive.h: Likewise.
+        * arm.cc: Likewise.
+        * attributes.cc: Likewise.
+        * attributes.h: Likewise.
+        * common.cc: Likewise.
+        * copy-relocs.cc: Likewise.
+        * dirsearch.h: Likewise.
+        * dynobj.cc: Likewise.
+        * ehframe.cc: Likewise.
+        * ehframe.h: Likewise.
+        * expression.cc: Likewise.
+        * fileread.cc: Likewise.
+        * fileread.h: Likewise.
+        * gc.h: Likewise.
+        * gold-threads.cc: Likewise.
+        * gold.cc: Likewise.
+        * i386.cc: Likewise.
+        * icf.h: Likewise.
+        * incremental-dump.cc: Likewise.
+        * incremental.cc: Likewise.
+        * layout.cc: Likewise.
+        * layout.h: Likewise.
+        * main.cc: Likewise.
+        * merge.cc: Likewise.
+        * merge.h: Likewise.
+        * object.cc: Likewise.
+        * object.h: Likewise.
+        * options.cc: Likewise.
+        * options.h: Likewise.
+        * output.cc: Likewise.
+        * output.h: Likewise.
+        * plugin.cc: Likewise.
+        * plugin.h: Likewise.
+        * powerpc.cc: Likewise.
+        * reloc.cc: Likewise.
+        * script-c.h: Likewise.
+        * script-sections.cc: Likewise.
+        * script.cc: Likewise.
+        * stringpool.cc: Likewise.
+        * symtab.cc: Likewise.
+        * symtab.h: Likewise.
+        * target.cc: Likewise.
+        * timer.cc: Likewise.
+        * timer.h: Likewise.
+        * version.cc: Likewise.
+        * x86_64.cc: Likewise.
+@
+text
+@d3 1
+a3 1
+// Copyright 2009 Free Software Foundation, Inc.
+d34 1
+a34 1
+// --discard-locals options and can be overriden by children classes to
+@
+
+
+1.7
+log
+@Adjust last patch--same ChangeLog entry, same e-mail.
+@
+text
+@d39 1
+a39 1
+Target::do_is_local_label_name (const char* name) const
+@
+
+
+1.6
+log
+@	* reloc.cc (Sized_relobj::split_stack_adjust_reltype): Call the
+	target to ask whether a reference to a symbol requires a stack
+	split.
+	* target.h (Target::is_call_to_non_split): New function.
+	(Target::do_is_call_to_non_split): Declare virtual function.
+	* target.cc: Include "symtab.h".
+	(Target::do_is_call_to_non_split): New function.
+	* i386.cc (Target_i386::do_is_call_to_non_split): New function.
+@
+text
+@d148 2
+a149 2
+// Default for whether a reloc is a call to a non-split function is if
+// the symbol is a function not defined by the ABI.
+d154 1
+a154 2
+  return (sym->type() == elfcpp::STT_FUNC
+	  && !this->is_defined_by_abi(sym));
+@
+
+
+1.5
+log
+@2009-10-09  Doug Kwan  <dougkwan@@google.com>
+
+	* layout.cc (Layout::make_output_section): Call target hook to make
+	ordinary output section.
+	(Layout::finalize): Adjust parameter list of call the
+	Target::may_relax().
+	* layout.h (class Layout::section_list): New method.
+	* merge.h (Output_merge_base::entsize): Change visibility to public.
+	(Output_merge_base::is_string, Output_merge_base::do_is_string):
+	New methods.
+	(Output_merge_string::do_is_string): New method.
+	* object.cc (Sized_relobj::do_setup): renamed from
+	Sized_relobj::set_up.
+	* object.h (Sized_relobj::adjust_shndx,
+	Sized_relobj::initializ_input_to_output_maps,
+	Sized_relobj::free_input_to_output_maps): Change visibilities to
+	protected.
+	(Sized_relobj::setup): Virtualize.
+	(Sized_relobj::do_setup): New method declaration.
+	(Sized_relobj::invalidate_section_offset,
+	Sized_relobj::do_invalidate_section_offset): New method decfinitions.
+	(Sized_relobj::elf_file, Sized_relobj::local_values): New methods.
+	* options.cc (parse_int): New function.
+	* options.h (parse_int): New declaration.
+	(DEFINE_int): New macro.
+	(stub_group_size): New option.
+	* output.cc (Output_section::Output_section): Initialize memebers
+	merge_section_map_, merge_section_by_properties_map_,
+	relaxed_input_section_map_, is_relaxed_input_section_map_valid_.
+	(Output_section::add_input_section): Handled deferred code-fill
+	generation and remove an old comment.
+	(Output_section::add_relaxed_input_section): New method definition.
+	(Output_section::add_merge_input_section): Use merge section by
+	properties map to speed to search.  Update merge section maps
+	as appropriate.
+	(Output_section::build_relaxation_map): New method definition.
+	(Output_section::convert_input_sections_in_list_to_relaxed_sections):
+	Same.
+	(Output_section::relax_input_section): Renamed to
+	Output_section::convert_input_sections_to_relaxed_sections and change
+	interface to take a vector of pointers to relaxed sections.
+	(Output_section::find_merge_section,
+	Output_section::find_relaxed_input_section): New method definitions.
+	(Output_section::is_input_address_mapped,
+	Output_section::output_offset, Output_section::output_address):
+	Use output section data maps to speed up searching.
+	(Output_section::find_starting_output_address): Add comments.
+	(Output_section::do_write,
+	Output_section::write_to_postprocessing_buffer): Do code-fill
+	generation as appropriate.
+	(Output_section::get_input_sections): Invalidate relaxed input section
+	map.
+	(Output_section::restore_states): Adjust type of checkpoint .
+	Invalidate relaxed input section map.
+	* output.h (Output_merge_base): New class declaration.
+	(Input_section_specifier): New class defintion.
+	(class Output_relaxed_input_section) Change base class to
+	Output_section_data_build.
+	(Output_relaxed_input_section::Output_relaxed_input_section): Adjust
+	base class initializer.
+	(Output_section::add_relaxed_input_section): New method declaration.
+	(Output_section::Input_section): Change visibility to protected.
+     	(Output_section::Input_section::relobj,
+	Output_section::Input_section::shndx): Handle relaxed input sections.
+	Output_section::input_sections) Change visibility to protected.  Also
+	define overload to return a non-const pointer.
+	(Output_section::Merge_section_properties): New class defintion.
+	(Output_section::Merge_section_by_properties_map,
+	Output_section::Output_section_data_by_input_section_map,
+	Output_section::Relaxation_map): New types.
+	(Output_section::relax_input_section): Rename method to
+	Output_section::convert_input_sections_to_relaxed_sections and change
+	interface to take a vector of relaxed section pointers.
+	(Output_section::find_merge_section,
+	Output_section::find_relaxed_input_section,
+	Output_section::build_relaxation_map,
+	Output_section::convert_input_sections_in_list_to_relaxed_sections):
+	New method declarations.
+	(Output_section::merge_section_map_
+	Output_section::merge_section_by_properties_map_,
+	Output_section::relaxed_input_section_map_,
+	Output_section::is_relaxed_input_section_map_valid_,
+	Output_section::generate_code_fills_at_write_): New data members.
+	* script-sections.cc
+	(Output_section_element_input::set_section_addresses): Call
+	current_data_size and addralign methods of relaxed input sections.
+	(Orphan_output_section::set_section_addresses): Call current_data_size
+	and addralign methods of relaxed input sections.
+	* symtab.cc (Symbol_table::compute_final_value): Extract template
+	from the body of Symbol_table::sized_finalize_symbol.
+	(Symbol_table::sized_finalized_symbol): Call
+	Symbol_table::compute_final_value.
+	* symtab.h (Symbol_table::Compute_final_value_status): New enum type.
+	(Symbol_table::compute_final_value): New templated method declaration.
+	* target.cc (Target::do_make_output_section): New method defintion.
+	* target.h (Target::make_output_section): New method declaration.
+	(Target::relax): Add more parameters for input objects, symbol table
+	and layout.  Adjust call to do_relax.
+	(Target::do_make_output_section): New method declaration.
+	(Target::do_relax): Add parameters for input objects, symbol table
+	and layout.
+@
+text
+@d24 1
+a24 1
+#include "target.h"
+d26 1
+d28 1
+a28 1
+#include "elfcpp.h"
+d148 10
+@
+
+
+1.4
+log
+@	* options.h (class General_options): Define
+	split_stack_adjust_size parameter.
+	* object.h (class Object): Add uses_split_stack_ and
+	has_no_split_stack_ fields.  Add uses_split_stack and
+	has_no_split_stack accessor functions.  Declare
+	handle_split_stack_section.
+	(class Reloc_symbol_changes): Define.
+	(class Sized_relobj): Define Function_offsets.  Declare
+	split_stack_adjust, split_stack_adjust_reltype, and
+	find_functions.
+	* object.cc (Object::handle_split_stack_section): New function.
+	(Sized_relobj::do_layout): Call handle_split_stack_section.
+	* dynobj.cc (Sized_dynobj::do_layout): Call
+	handle_split_stack_section.
+	* reloc.cc (Sized_relobj::relocate_sections): Call
+	split_stack_adjust for executable sections in split_stack
+	objects.  Pass reloc_map to relocate_section.
+	(Sized_relobj::split_stack_adjust): New function.
+	(Sized_relobj::split_stack_adjust_reltype): New function.
+	(Sized_relobj::find_functions): New function.
+	* target-reloc.h: Include "object.h".
+	(relocate_section): Add reloc_symbol_changes parameter.  Change
+	all callers.
+	* target.h (class Target): Add calls_non_split method.  Declare
+	do_calls_non_split virtual method.  Declare match_view and
+	set_view_to_nop.
+	* target.cc: Include "elfcpp.h".
+	(Target::do_calls_non_split): New function.
+	(Target::match_view): New function.
+	(Target::set_view_to_nop): New function.
+	* gold.cc (queue_middle_tasks): Give an error if mixing
+	split-stack and non-split-stack objects with -r.
+	* i386.cc (Target_i386::relocate_section): Add
+	reloc_symbol_changes parameter.
+	(Target_i386::do_calls_non_split): New function.
+	* x86_64.cc (Target_x86_64::relocate_section): Add
+	reloc_symbol_changes parameter.
+	(Target_x86_64::do_calls_non_split): New function.
+	* arm.cc (Target_arm::relocate_section): Add reloc_symbol_changes
+	parameter.
+	* powerpc.cc (Target_powerpc::relocate_section): Add
+	reloc_symbol_changes parameter.
+	* sparc.cc (Target_sparc::relocate_section): Add
+	reloc_symbol_changes parameter.
+	* configure.ac: Call AM_CONDITIONAL for the default target.
+	* configure: Rebuild.
+	* testsuite/Makefile.am (TEST_AS): New variable.
+	(check_SCRIPTS): Add split_i386.sh and split_x86_64.sh.
+	(check_DATA): Add split_i386 and split_x86_64 files.
+	(SPLIT_DEFSYMS): Define.
+	(split_i386_[1234n].o): New targets.
+	(split_i386_[124]): New targets.
+	(split_i386_[1234r].stdout): New targets.
+	(split_x86_64_[1234n].o): New targets.
+	(split_x86_64_[124]): New targets.
+	(split_x86_64_[1234r].stdout): New targets.
+	(MOSTLYCLEANFILES): Add new executables.
+	* testsuite/split_i386.sh: New file.
+	* testsuite/split_x86_64.sh: New file.
+	* testsuite/split_i386_1.s: New file.
+	* testsuite/split_i386_2.s: New file.
+	* testsuite/split_i386_3.s: New file.
+	* testsuite/split_i386_4.s: New file.
+	* testsuite/split_i386_n.s: New file.
+	* testsuite/split_x86_64_1.s: New file.
+	* testsuite/split_x86_64_2.s: New file.
+	* testsuite/split_x86_64_3.s: New file.
+	* testsuite/split_x86_64_4.s: New file.
+	* testsuite/split_x86_64_n.s: New file.
+	* testsuite/testfile.cc (Target_test): Update relocation_section
+	function.
+	* testsuite/Makefile.in: Rebuild.
+@
+text
+@d26 1
+d140 7
+@
+
+
+1.3
+log
+@	* object.h (class Object): Remove target_ field, and target,
+	sized_target, and set_target methods.
+	(Object::sized_target): Remove.
+	(class Sized_relobj): Update declarations.  Remove sized_target.
+	* object.cc (Sized_relobj::setup): Remove target parameter.
+	Change all callers.
+	(Input_objects::add_object): Don't do anything with the target.
+	(make_elf_sized_object): Add punconfigured parameter.  Change all
+	callers.  Set or test parameter target.
+	* dynobj.cc (Sized_dynobj::target): Remove target parameter.
+	Change all callers.
+	* parameters.cc (Parameters::set_target): Change parameter type to
+	be non-const.
+	(Parameters::default_target): Remove.
+	(set_parameters_target): Change parameter type to be non-const.
+	(parameters_force_valid_target): New function.
+	(parameters_clear_target): New function.
+	* parameters.h (class Parameters): Update declarations.  Remove
+	default_target method.  Add sized_target and clear_target
+	methods.  Change target_ to be non-const.
+	(set_parameters_target): Update declaration.
+	(parameters_force_valid_target): Declare.
+	(parameters_clear_target): Declare.
+	* readsyms.cc (Read_symbols::do_read_symbols): Pass punconfigured
+	as NULL if we aren't searching.
+	(Add_symbols::run): Don't check for compatible target.
+	* fileread.cc (Input_file::open_binary): Call
+	parameters_force_valid_target.
+	* gold.cc (queue_middle_tasks): Likewise.
+	* plugin.cc (make_sized_plugin_object): Likewise.  Don't call
+	set_target on object.
+	* dynobj.h (class Sized_dynobj): Update declarations.
+	* archive.cc (Archive::get_elf_object_for_member): Return NULL if
+	make_elf_object returns NULL.
+	(Archive::include_member): Don't check whether object target is
+	compatible.
+	* output.cc (Output_section::add_input_section): Get target from
+	parameters.
+	(Output_section::relax_input_section): Likewise.
+	* reloc.cc (Sized_relobj::do_gc_process_relocs): Get target from
+	parameters.
+	(Sized_relobj::do_scan_relocs): Likewise.
+	(Sized_relobj::relocate_sections): Likewise.
+	* resolve.cc (Symbol_table::resolve): Likewise.
+	* symtab.cc (Symbol_table::wrap_symbol): Likewise.  Remove object
+	parameter.  Change all callers.
+	(Symbol_table::add_from_object): Get target from parameters.
+	(Symbol_table::add_from_relobj): Don't check object target.
+	(Symbol_table::add_from_dynobj): Likewise.
+	(Symbol_table::define_special_symbol): Get target from
+	parameters.
+	* symtab.h (class Symbol_table): Update declaration.
+	* testsuite/binary_unittest.cc (gold_testsuite): Remove target
+	parameter.  Change all callers.  Clear parameter target.
+	(Binary_test): Test target here.
+	* testsuite/object_unittest.cc (gold_testsuite): Remove
+	target_test_pointer parameter.  Change all callers.
+	(Object_test): Test target here.
+@
+text
+@d26 1
+d139 46
+@
+
+
+1.2
+log
+@2009-08-18  Doug Kwan  <dougkwan@@google.com>
+
+	* dynobj.cc (Sized_dynobj::setup): Take a Target object instead of
+	an elcpp::Ehdr as parameter.  Adjust call to set_target.
+	* dynobj.h (Sized_dynobj::setup): Take a Target object instead of
+	an elfcpp::Ehdr as parameter.
+	* object.cc (Object::set_target): Remove the version that looks up
+	a target and sets it.
+	(Sized_relobj::setup): Take a Target object instead of
+	an elfcpp::Ehdr as parameter.  Adjust call to set_target.
+	(make_elf_sized_object): Find target and ask target to
+	make an ELF object.
+	* object.h: (Object::set_target): Remove the version that looks up
+	a target and sets it.
+	(Sized_relobj::setup): Take a Target object instead of
+	an elfcpp:Ehdr as parameter.
+	* target.cc: Include dynobj.h.
+	(Target::do_make_elf_object_implementation): New.
+ 	(Target::do_make_elf_object): New.
+	* target.h (Target::make_elf_object): New template declaration.
+	(Target::do_make_elf_object): New method declarations.
+	(Target::do_make_elf_object_implementation): New template declaration.
+@
+text
+@d76 1
+a76 1
+      obj->setup(this);
+d83 1
+a83 1
+      obj->setup(this);
+@
+
+
+1.2.2.1
+log
+@Merge elfcpp and gold from trunk.
+@
+text
+@a25 2
+#include "output.h"
+#include "elfcpp.h"
+d76 1
+a76 1
+      obj->setup();
+d83 1
+a83 1
+      obj->setup();
+a137 53
+Output_section*
+Target::do_make_output_section(const char* name, elfcpp::Elf_Word type,
+			       elfcpp::Elf_Xword flags)
+{
+  return new Output_section(name, type, flags);
+}
+
+// Default conversion for -fsplit-stack is to give an error.
+
+void
+Target::do_calls_non_split(Relobj* object, unsigned int, section_offset_type,
+			   section_size_type, unsigned char*, section_size_type,
+			   std::string*, std::string*) const
+{
+  static bool warned;
+  if (!warned)
+    {
+      gold_error(_("linker does not include stack split support "
+		   "required by %s"),
+		 object->name().c_str());
+      warned = true;
+    }
+}
+
+//  Return whether BYTES/LEN matches VIEW/VIEW_SIZE at OFFSET.
+
+bool
+Target::match_view(const unsigned char* view, section_size_type view_size,
+		   section_offset_type offset, const char* bytes,
+		   size_t len) const
+{
+  if (offset + len > view_size)
+    return false;
+  return memcmp(view + offset, bytes, len) == 0;
+}
+
+// Set the contents of a VIEW/VIEW_SIZE to nops starting at OFFSET
+// for LEN bytes.
+
+void
+Target::set_view_to_nop(unsigned char* view, section_size_type view_size,
+			section_offset_type offset, size_t len) const
+{
+  gold_assert(offset >= 0 && offset + len <= view_size);
+  if (!this->has_code_fill())
+    memset(view + offset, 0, len);
+  else
+    {
+      std::string fill = this->code_fill(len);
+      memcpy(view + offset, fill.data(), len);
+    }
+}
+
+@
+
+
+1.1
+log
+@2009-06-05  Doug Kwan  <dougkwan@@google.com>
+
+	* Makefile.am (CCFILES): Add target.cc.
+	* Makefile.in: Regenerate.
+	* i386.cc (class Target_i386): Define new virtual method to
+	override do_is_local_label_name in parent.
+	* object.cc (Sized_relobj::do_count_local_symbols): Discard
+	local symbols if --discard-locals or -X is given.
+	* options.h (class General_options): Declare new options
+	'--discard-locals' and '-X' for discarding locals.
+	* target.h (class Target): Define new methods is_local_label_name.
+	Declare new virtual method do_is_local_label_name.
+	* target.cc: New file.
+	* testsuite/Makefile.am (check_PROGRAMS): Add discard_locals_test.
+	(check_SCRIPTS): Add discard_locals_test.sh.
+	(check_DATA): Add discard_local_tests.syms.
+	(discard_locals_test_SOURCES, discard_locals_test_LDFLAGS): Define.
+	(discard_local_tests.syms, discard_locals_test.o): New make rules.
+	* testsuite/Makefile.in: Regenerate.
+	* testsuite/discard_locals_test.c: New file.
+	* testsuite/discard_locals_test.sh: Same.
+@
+text
+@d25 1
+d59 79
+@
+

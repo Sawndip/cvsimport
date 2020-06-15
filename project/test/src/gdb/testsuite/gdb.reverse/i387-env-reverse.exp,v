@@ -1,0 +1,529 @@
+head	1.12;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.12
+	gdb_7_6-2013-04-26-release:1.12
+	gdb_7_6-branch:1.12.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.12
+	gdb_7_5_1-2012-11-29-release:1.11
+	gdb_7_5-2012-08-17-release:1.11
+	gdb_7_5-branch:1.11.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.11
+	gdb_7_4_1-2012-04-26-release:1.8.2.1
+	gdb_7_4-2012-01-24-release:1.8.2.1
+	gdb_7_4-branch:1.8.0.2
+	gdb_7_4-2011-12-13-branchpoint:1.8
+	gdb_7_3_1-2011-09-04-release:1.5
+	gdb_7_3-2011-07-26-release:1.5
+	gdb_7_3-branch:1.5.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.5
+	gdb_7_2-2010-09-02-release:1.4
+	gdb_7_2-branch:1.4.0.2
+	gdb_7_2-2010-07-07-branchpoint:1.4
+	gdb_7_1-2010-03-18-release:1.2
+	gdb_7_1-branch:1.2.0.2
+	gdb_7_1-2010-02-18-branchpoint:1.2;
+locks; strict;
+comment	@# @;
+
+
+1.12
+date	2013.01.01.06.41.26;	author brobecke;	state Exp;
+branches;
+next	1.11;
+
+1.11
+date	2012.06.26.17.54.59;	author tromey;	state Exp;
+branches;
+next	1.10;
+
+1.10
+date	2012.01.16.16.21.52;	author palves;	state Exp;
+branches;
+next	1.9;
+
+1.9
+date	2012.01.04.08.27.54;	author brobecke;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2011.11.10.19.22.07;	author devans;	state Exp;
+branches
+	1.8.2.1;
+next	1.7;
+
+1.7
+date	2011.05.24.12.01.22;	author muller;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2011.05.16.13.56.41;	author palves;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2011.01.01.15.33.49;	author brobecke;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2010.05.28.18.26.41;	author msnyder;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2010.05.05.18.07.02;	author brobecke;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2010.01.01.07.32.06;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2009.12.10.19.36.20;	author msnyder;	state Exp;
+branches;
+next	;
+
+1.8.2.1
+date	2012.01.06.04.54.28;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.12
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@# Copyright 2009-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# This file is part of the gdb testsuite.
+
+
+if ![istarget "i?86-*linux*"] then {
+    verbose "Skipping i387 reverse float tests."
+    return
+}
+
+standard_testfile
+
+# some targets have leading underscores on assembly symbols.
+set additional_flags [gdb_target_symbol_prefix_flags]
+
+if {[prepare_for_testing $testfile.exp $testfile $srcfile \
+	 [list debug $additional_flags]]} {
+    return -1
+}
+
+runto main
+
+# Record to end of main
+
+set location [gdb_get_line_number "END I387-FLOAT-REVERSE"]
+gdb_test_no_output "record"  "Turn on process record"
+# This can take awhile.
+set oldtimeout $timeout
+set timeout [expr $oldtimeout + 120]
+gdb_test "until $location" ".*/$srcfile:$location.*" \
+    "record to end of main"
+set timeout $oldtimeout
+
+# Now rewind to beginning so we can begin testing.
+
+set location [gdb_get_line_number "BEGIN I387-FLOAT-REVERSE"]
+gdb_test_no_output "set exec-dir reverse" "set reverse direction"
+gdb_test "until $location" ".*/$srcfile:$location.*" \
+    "rewind to beginning of main"
+gdb_test_no_output "set exec-dir forward" "set forward direction"
+
+# Test FPU env particularly ftag and fstatus reigters.
+
+set location [gdb_get_line_number "TEST ENV"]
+gdb_test "until $location" ".*/$srcfile:$location.*asm.*nop.*" \
+    "begin testing fpu env"       
+
+gdb_test "n" "asm.*fsave.*"               "save FPU env in memory"    
+gdb_test "n" "asm.*frstor.*"              "restore FPU env"
+gdb_test "n" "asm.*fstsw.*"               "store status word in EAX"
+gdb_test "n" "asm.*fld1.*"                "push st0"
+
+gdb_test "info register eax" "eax *0x8040000.*\t.*"  "verify eax == 0x8040000"
+gdb_test "info register fstat" "fstat *0.*\t.*"      "verify fstat == 0"
+gdb_test "info register ftag" "ftag *0xffff.*\t.*"   "verify ftag == 0xffff"
+
+gdb_test "stepi" "asm.*fldl2t.*"                      "push st0"
+gdb_test "info register fstat" "fstat *0x3800.*\t.*"  "verify fstat == 0x3800"
+gdb_test "info register ftag" "ftag *0x3fff.*\t.*"    "verify ftag  == 0x3fff"
+
+gdb_test "stepi" "asm.*fldl2e.*"                  "push st0"
+gdb_test "info register fstat" "fstat *0x3000.*\t.*"  "verify fstat == 0x3000"
+gdb_test "info register ftag" "ftag *0xfff.*\t.*"     "verify ftag  == 0xfff"
+
+gdb_test "stepi" "asm.*fldpi.*"                   "push st0"
+gdb_test "info register fstat" "fstat *0x2800.*\t.*"  "verify fstat == 0x2800"
+gdb_test "info register ftag" "ftag *0x3ff.*\t.*"     "verify ftag  == 0x3ff"
+
+gdb_test "stepi" "asm.*fldlg2.*"                  "push st0"
+gdb_test "info register fstat" "fstat *0x2000.*\t.*"  "verify fstat == 0x2000"
+gdb_test "info register ftag" "ftag *0xff.*\t.*"      "verify ftag  == 0xff"
+
+gdb_test "stepi" "asm.*fldln2.*"                  "push st0"
+gdb_test "info register fstat" "fstat *0x1800.*\t.*"  "verify fstat == 0x1800"
+gdb_test "info register ftag" "ftag *0x3f.*\t.*"      "verify ftag  == 0x3f"
+
+gdb_test "stepi" "asm.*fldz.*"                    "push st0"
+gdb_test "info register fstat" "fstat *0x1000.*\t.*"  "verify fstat == 0x1000"
+gdb_test "info register ftag" "ftag *0xf.*\t.*"       "verify ftag  == 0xf"
+
+gdb_test "stepi" "asm.*nop.*"                    "push st0"
+gdb_test "info register fstat" "fstat *0x800.*\t.*"  "verify fstat == 0x800"
+gdb_test "info register ftag" "ftag *0x7.*\t.*"      "verify ftag  == 0x7"
+
+
+# move backward and ehck we get the same registers back.
+
+gdb_test "reverse-stepi" "asm.*fldz.*"           "push st0"
+gdb_test "info register fstat" "fstat *0x1000.*\t.*" "verify fstat == 0x1000"
+gdb_test "info register ftag" "ftag *0xf.*\t.*"      "verify ftag  == 0xf"
+
+gdb_test "reverse-stepi" "asm.*fldln2.*"          "push st0"
+gdb_test "info register fstat" "fstat *0x1800.*\t.*"  "verify fstat == 0x1800"
+gdb_test "info register ftag" "ftag *0x3f.*\t.*"      "verify ftag  == 0x3f"
+
+gdb_test "reverse-stepi" "asm.*fldlg2.*"          "push st0"
+gdb_test "info register fstat" "fstat *0x2000.*\t.*"  "verify fstat == 0x2000"
+gdb_test "info register ftag" "ftag *0xff.*\t.*"      "verify ftag  == 0xff"
+
+gdb_test "reverse-stepi" "asm.*fldpi.*"          "push st0"
+gdb_test "info register fstat" "fstat *0x2800.*\t.*" "verify fstat == 0x2800"
+gdb_test "info register ftag" "ftag *0x3ff.*\t.*"    "verify ftag  == 0x3ff"
+
+gdb_test "reverse-stepi" "asm.*fldl2e.*"          "push st0"
+gdb_test "info register fstat" "fstat *0x3000.*\t.*"  "verify fstat == 0x3000"
+gdb_test "info register ftag" "ftag *0xfff.*\t.*"     "verify ftag  == 0xfff"
+
+gdb_test "reverse-stepi" "asm.*fldl2t.*"          "push st0"
+gdb_test "info register fstat" "fstat *0x3800.*\t.*"  "verify fstat == 0x3800"
+gdb_test "info register ftag" "ftag *0x3fff.*\t.*"    "verify ftag  == 0x3fff"
+
+gdb_test "reverse-stepi" "asm.*fld1.*"            "push st0"
+gdb_test "info register fstat" "fstat *0.*\t.*"       "verify fstat == 0"
+gdb_test "info register ftag" "ftag *0xffff.*\t.*"    "verify ftag == 0xffff"
+
+
+
+
+
+
+@
+
+
+1.11
+log
+@	* gdb.reverse/break-precsave.exp: Use standard_testfile.
+	* gdb.reverse/break-reverse.exp: Use standard_testfile.
+	* gdb.reverse/consecutive-precsave.exp: Use standard_testfile.
+	* gdb.reverse/consecutive-reverse.exp: Use standard_testfile.
+	* gdb.reverse/finish-precsave.exp: Use standard_testfile.
+	* gdb.reverse/finish-reverse-bkpt.exp: Use standard_testfile.
+	* gdb.reverse/finish-reverse.exp: Use standard_testfile.
+	* gdb.reverse/i386-precsave.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.reverse/i386-reverse.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.reverse/i386-sse-reverse.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.reverse/i387-env-reverse.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.reverse/i387-stack-reverse.exp: Use standard_testfile,
+	prepare_for_testing
+	* gdb.reverse/machinestate-precsave.exp: Use standard_testfile.
+	* gdb.reverse/machinestate.exp: Use standard_testfile.
+	* gdb.reverse/next-reverse-bkpt-over-sr.exp: Use standard_testfile.
+	* gdb.reverse/sigall-precsave.exp: Use standard_testfile,
+	build_executable.
+	* gdb.reverse/sigall-reverse.exp: Use standard_testfile,
+	build_executable.
+	* gdb.reverse/solib-precsave.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.reverse/solib-reverse.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.reverse/step-precsave.exp: Use standard_testfile.
+	* gdb.reverse/step-reverse.exp: Use standard_testfile.
+	* gdb.reverse/until-precsave.exp: Use standard_testfile.
+	* gdb.reverse/until-reverse.exp: Use standard_testfile.
+	* gdb.reverse/watch-precsave.exp: Use standard_testfile.
+	* gdb.reverse/watch-reverse.exp: Use standard_testfile.
+@
+text
+@d1 1
+a1 1
+# Copyright 2009-2012 Free Software Foundation, Inc.
+@
+
+
+1.10
+log
+@2012-01-16  Pedro Alves  <palves@@redhat.com>
+
+	Remove all calls to strace.
+@
+text
+@d24 1
+a24 3
+set testfile "i387-env-reverse"
+set srcfile ${testfile}.c
+set binfile ${objdir}/${subdir}/${testfile}
+d29 2
+a30 2
+if { [gdb_compile "${srcdir}/${subdir}/${srcfile}" "${binfile}" executable [list debug $additional_flags]] != "" } {
+    untested ${testfile}.exp
+a33 6
+# Get things started.
+
+gdb_exit
+gdb_start
+gdb_reinitialize_dir $srcdir/$subdir
+gdb_load ${binfile}
+@
+
+
+1.9
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@a17 4
+if $tracelevel {
+    strace $tracelevel
+}
+
+@
+
+
+1.8
+log
+@	* gdb.reverse/i387-env-reverse.exp: Extend timeout of
+	"record to end of main" test.
+@
+text
+@d1 1
+a1 1
+# Copyright 2009, 2010, 2011 Free Software Foundation, Inc.
+@
+
+
+1.8.2.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d1 1
+a1 1
+# Copyright 2009-2012 Free Software Foundation, Inc.
+@
+
+
+1.7
+log
+@../commit.txt~
+@
+text
+@d52 3
+d57 1
+@
+
+
+1.6
+log
+@2011-05-16  Pedro Alves  <pedro@@codesourcery.com>
+
+	gdb/testsuite/
+	* gdb.ada/start.exp: Call untested with the correct test filename.
+	* gdb.arch/i386-bp_permanent.exp: Call untested with the correct
+	test filename.  Make the test's binary unique.
+	* gdb.arch/i386-signal.exp: Call untested with the correct test
+	filename.
+	* gdb.arch/i386-size-overlap.exp: Ditto.
+	* gdb.arch/Makefile.in (EXECUTABLES): Update.
+	* gdb.base/gcore-buffer-overflow.exp: Ditto.
+	* gdb.cp/call-c.exp: Ditto.
+	* gdb.mi/mi-reverse.exp: Call untested with the correct test
+	filename.  Make the test's binary unique.
+	* gdb.mi/Makefile.in (EXECUTABLES): Update.
+	* gdb.python/py-mi.exp: Ditto.
+	* gdb.python/Makefile.in (EXECUTABLES): Update.
+	* gdb.reverse/i386-precsave.exp: Ditto.
+	* gdb.reverse/i387-env-reverse.exp: Call untested with the correct
+	test filename.
+	* gdb.reverse/i387-stack-reverse.exp: Ditto.
+	* gdb.reverse/sigall-precsave.exp: Ditto.  Make the test's binary
+	unique.
+	* gdb.reverse/sigall-reverse.exp: Call untested with the correct
+	test filename.
+	* gdb.reverse/Makefile.in (EXECUTABLES): Update.
+	* gdb.trace/tfile.exp: Ditto.
+@
+text
+@d33 1
+a33 5
+# TODO: detect this automatically
+set additional_flags ""
+if [istarget "i?86-*-cygwin*"] then {
+  set additional_flags "additional_flags=-DSYMBOL_PREFIX=\"_\""
+}
+@
+
+
+1.5
+log
+@run copyright.sh for 2011.
+@
+text
+@d40 1
+a40 1
+    untested i387-float-reverse
+@
+
+
+1.4
+log
+@2010-05-28  Michael Snyder  <msnyder@@msnyder-server.eng.vmware.com>
+
+	* gdb.reverse/break-precsave.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/break-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/consecutive-precsave.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/consecutive-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/finish-precsave.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/finish-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/i386-precsave.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/i386-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/i386-sse-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/i387-env-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/i387-stack-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/machinestate-precsave.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/machinestate.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/sigall-precsave.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/sigall-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/solib-precsave.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/solib-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/step-precsave.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/step-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/until-precsave.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/until-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/watch-precsave.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.reverse/watch-reverse.exp:
+	Replace uses of send_gdb / gdb_expect.
+@
+text
+@d1 1
+a1 1
+# Copyright 2009, 2010 Free Software Foundation, Inc.
+@
+
+
+1.3
+log
+@Do not set prms_id/bug_id anymore.
+
+2010-05-05  Joel Brobecker  <brobecker@@adacore.com>
+
+	Remove the use of prms_id and bug_id throughout the testsuite.
+@
+text
+@d55 1
+a55 1
+gdb_test "record" "" "Turn on process record"
+d62 1
+a62 1
+gdb_test "set exec-dir reverse" "" "set reverse direction"
+d65 1
+a65 1
+gdb_test "set exec-dir forward" "" "set forward direction"
+@
+
+
+1.2
+log
+@Update copyright year in most headers.
+
+Automatic update by copyright.sh.
+@
+text
+@a21 2
+set prms_id 0
+set bug_id 0
+@
+
+
+1.1
+log
+@2009-12-10  Oza Pawandeep (paawan1982@@yahoo.com
+
+	* gdb.reverse/i387-env-reverse.c: New file.
+	* gdb.reverse/i387-env-reverse.exp: New file.
+	* gdb.reverse/i387-stack-reverse.c: New file.
+	* gdb.reverse/i387-stack-reverse.exp: New file.
+@
+text
+@d1 1
+a1 1
+# Copyright 2009 Free Software Foundation, Inc.
+@
+

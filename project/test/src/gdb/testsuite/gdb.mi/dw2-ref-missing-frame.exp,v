@@ -1,0 +1,393 @@
+head	1.6;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.6
+	gdb_7_6-2013-04-26-release:1.6
+	gdb_7_6-branch:1.6.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.6
+	gdb_7_5_1-2012-11-29-release:1.5
+	gdb_7_5-2012-08-17-release:1.5
+	gdb_7_5-branch:1.5.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.5
+	gdb_7_4_1-2012-04-26-release:1.3.4.1
+	gdb_7_4-2012-01-24-release:1.3.4.1
+	gdb_7_4-branch:1.3.0.4
+	gdb_7_4-2011-12-13-branchpoint:1.3
+	gdb_7_3_1-2011-09-04-release:1.3
+	gdb_7_3-2011-07-26-release:1.3
+	gdb_7_3-branch:1.3.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.3
+	gdb_7_2-branch:1.1.0.2;
+locks; strict;
+comment	@# @;
+
+
+1.6
+date	2013.01.01.06.41.24;	author brobecke;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2012.07.10.15.32.51;	author tromey;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2012.01.04.08.17.54;	author brobecke;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2011.01.19.20.26.09;	author qiyao;	state Exp;
+branches
+	1.3.4.1;
+next	1.2;
+
+1.2
+date	2011.01.01.15.33.47;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2010.09.16.13.47.55;	author pmuldoon;	state Exp;
+branches
+	1.1.2.1;
+next	;
+
+1.3.4.1
+date	2012.01.06.04.44.08;	author brobecke;	state Exp;
+branches;
+next	;
+
+1.1.2.1
+date	2010.11.18.14.40.30;	author pmuldoon;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.6
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@# Copyright 2008-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+load_lib dwarf.exp
+# This test can only be run on targets which support DWARF-2 and use gas.
+load_lib mi-support.exp
+set MIFLAGS "-i=mi"
+
+if {![dwarf2_support]} {
+    return 0
+}
+
+standard_testfile .S dw2-ref-missing-frame-func.c dw2-ref-missing-frame-main.c
+set objsfile [standard_output_file ${testfile}.o]
+set objfuncfile [standard_output_file ${testfile}-func.o]
+set objmainfile [standard_output_file ${testfile}-main.o]
+
+if { [gdb_compile "${srcdir}/${subdir}/${srcfile}" $objsfile object {}] != ""
+     || [gdb_compile "${srcdir}/${subdir}/${srcfile2}" $objfuncfile object {}] != ""
+     || [gdb_compile "${srcdir}/${subdir}/${srcfile3}" $objmainfile object {debug}] != ""
+     || [gdb_compile "$objsfile $objfuncfile $objmainfile" $binfile executable {}] != "" } {
+    return -1
+}
+
+if [mi_gdb_start] {
+    continue
+}
+
+mi_delete_breakpoints
+mi_gdb_reinitialize_dir $srcdir/$subdir
+mi_gdb_load ${binfile}
+
+if [mi_runto func_nofb_marker] {
+    # First try referencing DW_AT_frame_base which is not defined.
+    mi_gdb_test "300-stack-list-locals --thread 1 --frame 1 --all-values" \
+	"300\\^done,locals=\\\[\{name=\"func_nofb_var\",value=\"\\\<error reading variable: Could not find the frame base for \\\\\"func_nofb\\\\\"\\\.\\\>\"\},\{name=\"func_nofb_var2\",value=\"\\\<error reading variable: Could not find the frame base for \\\\\"func_nofb\\\\\"\\\.\\\>\"\}\\\].*" \
+	"test func_nofb_marker"
+}
+
+# GDB could have crashed.
+mi_gdb_exit
+if [mi_gdb_start] {
+    continue
+}
+mi_delete_breakpoints
+mi_gdb_reinitialize_dir $srcdir/$subdir
+mi_gdb_load ${binfile}
+
+# And now try referencing DW_AT_frame_base defined using a self-reference
+# (DW_OP_fbreg).
+if [mi_runto func_loopfb_marker] {
+    mi_gdb_test "301-stack-list-locals --thread 1 --frame 1 --all-values" \
+	"301\\^done,locals=\\\[\{name=\"func_loopfb_var\",value=\"\\\<error reading variable: DWARF-2 expression error: Loop detected.*\"\},\{name=\"func_loopfb_var2\",value=\"\\\<error reading variable: DWARF-2 expression error: Loop detected.*\"\}\\\]" \
+	"test func_loopfb_var"
+}
+@
+
+
+1.5
+log
+@	* gdb.mi/dw2-ref-missing-frame.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.mi/gdb2549.exp: Use standard_testfile.
+	* gdb.mi/gdb669.exp: Use standard_testfile.
+	* gdb.mi/gdb701.exp: Use standard_testfile.
+	* gdb.mi/gdb792.exp: Use standard_testfile.
+	* gdb.mi/mi-async.exp: Use standard_testfile.
+	* gdb.mi/mi-basics.exp: Use standard_testfile.
+	* gdb.mi/mi-break.exp: Use standard_testfile.
+	* gdb.mi/mi-cli.exp: Use standard_testfile.
+	* gdb.mi/mi-console.exp: Use standard_testfile.
+	* gdb.mi/mi-disassemble.exp: Use standard_testfile.
+	* gdb.mi/mi-eval.exp: Use standard_testfile.
+	* gdb.mi/mi-file-transfer.exp: Use standard_testfile.
+	* gdb.mi/mi-file.exp: Use standard_testfile.
+	* gdb.mi/mi-inheritance-syntax-error.exp: Use standard_testfile.
+	* gdb.mi/mi-logging.exp: Use standard_testfile.
+	* gdb.mi/mi-nonstop-exit.exp: Use standard_testfile.
+	* gdb.mi/mi-nonstop.exp: Use standard_testfile.
+	* gdb.mi/mi-ns-stale-regcache.exp: Use standard_testfile.
+	* gdb.mi/mi-nsintrall.exp: Use standard_testfile.
+	* gdb.mi/mi-nsmoribund.exp: Use standard_testfile.
+	* gdb.mi/mi-nsthrexec.exp: Use standard_testfile.
+	* gdb.mi/mi-pending.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.mi/mi-pthreads.exp: Use standard_testfile.
+	* gdb.mi/mi-read-memory.exp: Use standard_testfile.
+	* gdb.mi/mi-regs.exp: Use standard_testfile.
+	* gdb.mi/mi-return.exp: Use standard_testfile.
+	* gdb.mi/mi-reverse.exp: Use standard_testfile.
+	* gdb.mi/mi-simplerun.exp: Use standard_testfile.
+	* gdb.mi/mi-solib.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.mi/mi-stack.exp: Use standard_testfile.
+	* gdb.mi/mi-stepi.exp: Use standard_testfile.
+	* gdb.mi/mi-stepn.exp: Use standard_testfile.
+	* gdb.mi/mi-syn-frame.exp: Use standard_testfile.
+	* gdb.mi/mi-until.exp: Use standard_testfile.
+	* gdb.mi/mi-var-block.exp: Use standard_testfile.
+	* gdb.mi/mi-var-child-f.exp: Use standard_testfile.
+	* gdb.mi/mi-var-child.exp: Use standard_testfile.
+	* gdb.mi/mi-var-cmd.exp: Use standard_testfile.
+	* gdb.mi/mi-var-cp.exp: Use standard_testfile.
+	* gdb.mi/mi-var-display.exp: Use standard_testfile.
+	* gdb.mi/mi-var-invalidate.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.mi/mi-var-rtti.exp: Use standard_testfile.
+	* gdb.mi/mi-watch-nonstop.exp: Use standard_testfile.
+	* gdb.mi/mi-watch.exp: Use standard_testfile.
+	* gdb.mi/mi2-amd64-entry-value.exp: Use standard_testfile.
+	* gdb.mi/mi2-basics.exp: Use standard_testfile.
+	* gdb.mi/mi2-break.exp: Use standard_testfile.
+	* gdb.mi/mi2-cli.exp: Use standard_testfile.
+	* gdb.mi/mi2-console.exp: Use standard_testfile.
+	* gdb.mi/mi2-disassemble.exp: Use standard_testfile.
+	* gdb.mi/mi2-eval.exp: Use standard_testfile.
+	* gdb.mi/mi2-file.exp: Use standard_testfile.
+	* gdb.mi/mi2-pthreads.exp: Use standard_testfile.
+	* gdb.mi/mi2-read-memory.exp: Use standard_testfile.
+	* gdb.mi/mi2-regs.exp: Use standard_testfile.
+	* gdb.mi/mi2-return.exp: Use standard_testfile.
+	* gdb.mi/mi2-simplerun.exp: Use standard_testfile.
+	* gdb.mi/mi2-stack.exp: Use standard_testfile.
+	* gdb.mi/mi2-stepi.exp: Use standard_testfile.
+	* gdb.mi/mi2-syn-frame.exp: Use standard_testfile.
+	* gdb.mi/mi2-until.exp: Use standard_testfile.
+	* gdb.mi/mi2-var-block.exp: Use standard_testfile.
+	* gdb.mi/mi2-var-child.exp: Use standard_testfile.
+	* gdb.mi/mi2-var-cmd.exp: Use standard_testfile.
+	* gdb.mi/mi2-var-display.exp: Use standard_testfile.
+	* gdb.mi/mi2-watch.exp: Use standard_testfile.
+@
+text
+@d1 1
+a1 1
+# Copyright 2008-2012 Free Software Foundation, Inc.
+@
+
+
+1.4
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d25 8
+a32 13
+set testfile "dw2-ref-missing-frame"
+set srcsfile ${testfile}.S
+set objsfile ${objdir}/${subdir}/${testfile}.o
+set srcfuncfile ${testfile}-func.c
+set objfuncfile ${objdir}/${subdir}/${testfile}-func.o
+set srcmainfile ${testfile}-main.c
+set objmainfile ${objdir}/${subdir}/${testfile}-main.o
+set executable ${testfile}
+set binfile ${objdir}/${subdir}/${executable}
+
+if { [gdb_compile "${srcdir}/${subdir}/${srcsfile}" $objsfile object {}] != ""
+     || [gdb_compile "${srcdir}/${subdir}/${srcfuncfile}" $objfuncfile object {}] != ""
+     || [gdb_compile "${srcdir}/${subdir}/${srcmainfile}" $objmainfile object {debug}] != ""
+@
+
+
+1.3
+log
+@2011-01-19  Yao Qi  <yao@@codesourcery.com>
+
+	* gdb.asm/asm-source.exp: Replace ARM target triplet with a
+	canonical form.
+	Remove "xscale-*-*"
+	* gdb.xml/tdesc-regs.exp: Likewise.
+	* gdb.python/py-section-script.exp: Replace ARM target triplet
+	with canonical form.
+	Match arm*-*-symbianelf*.
+	* gdb.base/dup-sect.exp: Likewise.
+	* lib/dwarf.exp: New.
+	* gdb.dwarf2/callframecfa.exp: Check dwarf2 support by routine
+	dwarf2_support.
+	* gdb.dwarf2/dup-psym.exp: Likewise.
+	* gdb.dwarf2/dw2-ada-ffffffff.exp: Likewise.
+	* gdb.dwarf2/dw2-anonymous-func.exp: Likewise.
+	* gdb.dwarf2/dw2-bad-parameter-type.exp: Likewise.
+	* gdb.dwarf2/dw2-basic.exp: Likewise.
+	* gdb.dwarf2/dw2-compressed.exp: Likewise.
+	* gdb.dwarf2/dw2-const.exp: Likewise.
+	* gdb.dwarf2/dw2-cp-infcall-ref-static.exp: Likewise.
+	* gdb.dwarf2/dw2-cu-size.exp: Likewise.
+	* gdb.dwarf2/dw2-double-set-die-type.exp: Likewise.
+	* gdb.dwarf2/dw2-empty-namespace.exp: Likewise.
+	* gdb.dwarf2/dw2-filename.exp: Likewise.
+	* gdb.dwarf2/dw2-inheritance.exp: Likewise.
+	* gdb.dwarf2/dw2-inline-param.exp: Likewise.
+	* gdb.dwarf2/dw2-intercu.exp: Likewise.
+	* gdb.dwarf2/dw2-intermix.exp: Likewise.
+	* gdb.dwarf2/dw2-modula2-self-type.exp: Likewise.
+	* gdb.dwarf2/dw2-noloc.exp: Likewise.
+	* gdb.dwarf2/dw2-op-call.exp: Likewise.
+	* gdb.dwarf2/dw2-producer.exp: Likewise.
+	* gdb.dwarf2/dw2-ranges.exp: Likewise.
+	* gdb.dwarf2/dw2-ref-missing-frame.exp: Likewise.
+	* gdb.dwarf2/dw2-stack-boundary.exp: Likewise.
+	* gdb.dwarf2/dw2-strp.exp: Likewise.
+	* gdb.dwarf2/dw2-unresolved.exp: Likewise.
+	* gdb.dwarf2/implptr.exp: Likewise.
+	* gdb.dwarf2/mac-fileno.exp: Likewise.
+	* gdb.dwarf2/member-ptr-forwardref.exp: Likewise.
+	* gdb.dwarf2/pieces.exp: Likewise.
+	* gdb.dwarf2/pr11465.exp: Likewise.
+	* gdb.dwarf2/valop.exp: Likewise.
+	* gdb.dwarf2/watch-notconst.exp: Likewise.
+	* gdb.mi/dw2-ref-missing-frame.exp: Likewise.
+@
+text
+@d1 1
+a1 1
+# Copyright 2008, 2009, 2010, 2011 Free Software Foundation, Inc.
+@
+
+
+1.3.4.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d1 1
+a1 1
+# Copyright 2008-2012 Free Software Foundation, Inc.
+@
+
+
+1.2
+log
+@run copyright.sh for 2011.
+@
+text
+@d16 1
+a17 1
+# For now pick a sampling of likely targets.
+d21 1
+a21 6
+if {![istarget *-*-linux*]
+    && ![istarget *-*-gnu*]
+    && ![istarget *-*-elf*]
+    && ![istarget *-*-openbsd*]
+    && ![istarget arm-*-eabi*]
+    && ![istarget powerpc-*-eabi*]} {
+@
+
+
+1.1
+log
+@2010-09-16  Phil Muldoon  <pmuldoon@@redhat.com>
+
+	PR mi/11407
+	* mi/mi-cmd-stack.c (list_args_or_locals): Catch exceptions from
+	read_var_value and common_val_print and print a warning.
+
+2010-09-16  Phil Muldoon  <pmuldoon@@redhat.com>
+            Jan Kratochvil  <jan.kratochvil@@redhat.com>
+
+	PR mi/11407
+	* gdb.mi/dw2-ref-missing-frame-func.c: New File.
+	* gdb.mi/dw2-ref-missing-frame-main.c New File.
+	* gdb.mi/dw2-ref-missing-frame.S New File.
+	* gdb.mi/dw2-ref-missing-frame.exp New File.
+@
+text
+@d1 1
+a1 1
+# Copyright 2008, 2009, 2010 Free Software Foundation, Inc.
+@
+
+
+1.1.2.1
+log
+@2010-11-18  Phil Muldoon  <pmuldoon@@redhat.com>
+
+    	PR mi/11407
+    	* mi/mi-cmd-stack.c (list_args_or_locals): Catch exceptions from
+    	read_var_value and common_val_print and print a warning.
+
+2010-11-18  Phil Muldoon  <pmuldoon@@redhat.com>
+            Jan Kratochvil  <jan.kratochvil@@redhat.com>
+
+    	PR mi/11407
+    	* gdb.mi/dw2-ref-missing-frame-func.c: New File.
+    	* gdb.mi/dw2-ref-missing-frame-main.c New File.
+    	* gdb.mi/dw2-ref-missing-frame.S New File.
+    	* gdb.mi/dw2-ref-missing-frame.exp New File.
+@
+text
+@@
+

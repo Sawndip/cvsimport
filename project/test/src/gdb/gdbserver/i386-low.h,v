@@ -1,0 +1,382 @@
+head	1.6;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.6
+	gdb_7_6-2013-04-26-release:1.6
+	gdb_7_6-branch:1.6.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.6
+	gdb_7_5_1-2012-11-29-release:1.5
+	gdb_7_5-2012-08-17-release:1.5
+	gdb_7_5-branch:1.5.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.5
+	gdb_7_4_1-2012-04-26-release:1.4.4.1
+	gdb_7_4-2012-01-24-release:1.4.4.1
+	gdb_7_4-branch:1.4.0.4
+	gdb_7_4-2011-12-13-branchpoint:1.4
+	gdb_7_3_1-2011-09-04-release:1.4
+	gdb_7_3-2011-07-26-release:1.4
+	gdb_7_3-branch:1.4.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.4
+	gdb_7_2-2010-09-02-release:1.2
+	gdb_7_2-branch:1.2.0.4
+	gdb_7_2-2010-07-07-branchpoint:1.2
+	gdb_7_1-2010-03-18-release:1.2
+	gdb_7_1-branch:1.2.0.2
+	gdb_7_1-2010-02-18-branchpoint:1.2
+	gdb_7_0_1-2009-12-22-release:1.1
+	gdb_7_0-2009-10-06-release:1.1
+	gdb_7_0-branch:1.1.0.4
+	gdb_7_0-2009-09-16-branchpoint:1.1
+	msnyder-checkpoint-072509-branch:1.1.0.2
+	msnyder-checkpoint-072509-branchpoint:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.6
+date	2013.01.01.06.33.00;	author brobecke;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2012.01.04.08.17.23;	author brobecke;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2011.01.01.15.33.24;	author brobecke;	state Exp;
+branches
+	1.4.4.1;
+next	1.3;
+
+1.3
+date	2010.08.25.14.40.21;	author palves;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2010.01.01.07.31.49;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2009.06.30.21.31.32;	author devans;	state Exp;
+branches;
+next	;
+
+1.4.4.1
+date	2012.01.06.04.43.37;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.6
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@/* Misc. low level support for i386.
+
+   Copyright (C) 2009-2013 Free Software Foundation, Inc.
+
+   This file is part of GDB.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+/* Support for hardware watchpoints and breakpoints using the i386
+   debug registers.
+
+   This provides several functions for inserting and removing
+   hardware-assisted breakpoints and watchpoints, testing if one or
+   more of the watchpoints triggered and at what address, checking
+   whether a given region can be watched, etc.
+
+   The functions below implement debug registers sharing by reference
+   counts, and allow to watch regions up to 16 bytes long
+   (32 bytes on 64 bit hosts).  */
+
+
+/* Debug registers' indices.  */
+#define DR_FIRSTADDR 0
+#define DR_LASTADDR  3
+#define DR_NADDR     4 /* The number of debug address registers.  */
+#define DR_STATUS    6
+#define DR_CONTROL   7
+
+/* Global state needed to track h/w watchpoints.  */
+
+struct i386_debug_reg_state
+{
+  /* Mirror the inferior's DRi registers.  We keep the status and
+     control registers separated because they don't hold addresses.
+     Note that since we can change these mirrors while threads are
+     running, we never trust them to explain a cause of a trap.
+     For that, we need to peek directly in the inferior registers.  */
+  CORE_ADDR dr_mirror[DR_NADDR];
+  unsigned dr_status_mirror, dr_control_mirror;
+
+  /* Reference counts for each debug register.  */
+  int dr_ref_count[DR_NADDR];
+};
+
+/* Initialize STATE.  */
+extern void i386_low_init_dregs (struct i386_debug_reg_state *state);
+
+/* Insert a watchpoint to watch a memory region which starts at
+   address ADDR and whose length is LEN bytes.  Watch memory accesses
+   of the type TYPE_FROM_PACKET.  Return 0 on success, -1 on failure.  */
+extern int i386_low_insert_watchpoint (struct i386_debug_reg_state *state,
+				       char type_from_packet, CORE_ADDR addr,
+				       int len);
+
+/* Remove a watchpoint that watched the memory region which starts at
+   address ADDR, whose length is LEN bytes, and for accesses of the
+   type TYPE_FROM_PACKET.  Return 0 on success, -1 on failure.  */
+extern int i386_low_remove_watchpoint (struct i386_debug_reg_state *state,
+				       char type_from_packet, CORE_ADDR addr,
+				       int len);
+
+/* Return non-zero if we can watch a memory region that starts at
+   address ADDR and whose length is LEN bytes.  */
+extern int i386_low_region_ok_for_watchpoint (struct i386_debug_reg_state *state,
+					      CORE_ADDR addr, int len);
+
+/* If the inferior has some break/watchpoint that triggered, set the
+   address associated with that break/watchpoint and return true.
+   Otherwise, return false.  */
+extern int i386_low_stopped_data_address (struct i386_debug_reg_state *state,
+					  CORE_ADDR *addr_p);
+
+/* Return true if the inferior has some watchpoint that triggered.
+   Otherwise return false.  */
+extern int i386_low_stopped_by_watchpoint (struct i386_debug_reg_state *state);
+
+/* Each target needs to provide several low-level functions
+   that will be called to insert watchpoints and hardware breakpoints
+   into the inferior, remove them, and check their status.  These
+   functions are:
+
+      i386_dr_low_set_control  -- set the debug control (DR7)
+				  register to a given value
+
+      i386_dr_low_set_addr     -- put an address into one debug register
+
+      i386_dr_low_get_status   -- return the value of the debug
+				  status (DR6) register.
+*/
+
+/* Update the inferior's debug register REGNUM from STATE.  */
+extern void i386_dr_low_set_addr (const struct i386_debug_reg_state *state,
+				  int regnum);
+
+/* Return the inferior's debug register REGNUM.  */
+extern CORE_ADDR i386_dr_low_get_addr (int regnum);
+
+/* Update the inferior's DR7 debug control register from STATE.  */
+extern void i386_dr_low_set_control (const struct i386_debug_reg_state *state);
+
+/* Return the value of the inferior's DR7 debug control register.  */
+extern unsigned i386_dr_low_get_control (void);
+
+/* Return the value of the inferior's DR6 debug status register.  */
+extern unsigned i386_dr_low_get_status (void);
+@
+
+
+1.5
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d3 1
+a3 1
+   Copyright (C) 2009-2012 Free Software Foundation, Inc.
+@
+
+
+1.4
+log
+@run copyright.sh for 2011.
+@
+text
+@d3 1
+a3 1
+   Copyright (C) 2009, 2010, 2011 Free Software Foundation, Inc.
+@
+
+
+1.4.4.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d3 1
+a3 1
+   Copyright (C) 2009-2012 Free Software Foundation, Inc.
+@
+
+
+1.3
+log
+@	PR threads/10729
+
+	* linux-x86-low.c (update_debug_registers_callback): New.
+	(i386_dr_low_set_addr): Use it.
+	(i386_dr_low_get_addr): New.
+	(i386_dr_low_set_control): Use update_debug_registers_callback.
+	(i386_dr_low_get_control): New.
+	(i386_dr_low_get_status): Adjust.
+	* linux-low.c (linux_stop_lwp): New.
+	* linux-low.h (linux_stop_lwp): Declare.
+
+	* i386-low.c (I386_DR_GET_RW_LEN): Take the dr7 contents as
+	argument instead of a i386_debug_reg_state.
+	(I386_DR_WATCH_HIT): Take the dr6 contents as argument instead of
+	a i386_debug_reg_state.
+	(i386_insert_aligned_watchpoint): Adjust.
+	(i386_remove_aligned_watchpoint): Adjust.
+	(i386_low_stopped_data_address): Read the debug registers from the
+	inferior instead of from the mirrors.
+	* i386-low.h (struct i386_debug_reg_state): Extend comment.
+	(i386_dr_low_get_addr): Declare.
+	(i386_dr_low_get_control): Declare.
+	(i386_dr_low_get_status): Change prototype.
+
+	* win32-i386-low.c (dr_status_mirror, dr_control_mirror): New globals.
+	(i386_dr_low_get_addr): New.
+	(i386_dr_low_get_control): New.
+	(i386_dr_low_get_status): Adjust prototype.  Return
+	dr_status_mirror.
+	(i386_initial_stuff): Clear dr_status_mirror and
+	dr_control_mirror.
+	(i386_get_thread_context): Adjust.
+	(i386_set_thread_context): Adjust.
+	(i386_thread_added): Adjust.
+@
+text
+@d3 1
+a3 1
+   Copyright (C) 2009, 2010 Free Software Foundation, Inc.
+@
+
+
+1.2
+log
+@Update copyright year in most headers.
+
+Automatic update by copyright.sh.
+@
+text
+@d45 4
+a48 1
+     control registers separated because they don't hold addresses.  */
+d106 3
+d112 5
+a116 3
+/* Get the value of the inferior's DR6 debug status register
+   and record it in STATE.  */
+extern void i386_dr_low_get_status (struct i386_debug_reg_state *state);
+@
+
+
+1.1
+log
+@	Add h/w watchpoint support to x86-linux, win32-i386.
+	* Makefile.in (SFILES): Add i386-low.c
+	(i386_low_h): Define.
+	(i386-low.o): Add dependencies.
+	(linux-x86-low.o): Add i386-low.h dependency.
+	(win32-i386-low.o): Ditto.
+	* i386-low.c: New file.
+	* i386-low.h: New file.
+	* configure.srv (i[34567]86-*-cygwin*): Add i386-low.o to srv_tgtobj.
+	(i[34567]86-*-linux*, i[34567]86-*-mingw*, x86_64-*-linux*): Ditto.
+	* linux-low.c (linux_add_process): Initialize arch_private.
+	(linux_remove_process): Free arch_private.
+	(add_lwp): Initialize arch_private.
+	(delete_lwp): Free arch_private.
+	(linux_resume_one_lwp): Call the_low_target.prepare_to_resume if
+	provided.
+	* linux-low.h (process_info_private): New member arch_private.
+	(lwp_info): New member arch_private.
+	(linux_target_ops): New members new_process, new_thread,
+	prepare_to_resume.
+	(ptid_of): New macro.
+	* linux-x86-low.c: Include stddef.h, i386-low.h.
+	(arch_process_info): New struct.
+	(arch_lwp_info): New struct.
+	(x86_linux_dr_get, x86_linux_dr_set): New functions.
+	(i386_dr_low_set_addr, i386_dr_low_set_control): New functions.
+	(i386_dr_low_get_status): New function.
+	(x86_insert_point, x86_remove_point): New functions.
+	(x86_stopped_by_watchpoint): New function.
+	(x86_stopped_data_address): New function.
+	(x86_linux_new_process, x86_linux_new_thread): New functions.
+	(x86_linux_prepare_to_resume): New function.
+	(the_low_target): Add entries for insert_point, remove_point,
+	stopped_by_watchpoint, stopped_data_address, new_process, new_thread,
+	prepare_to_resume.
+	* server.c (debug_hw_points): New global.
+	(monitor_show_help): Document set debug-hw-points.
+	(handle_query): Process "set debug-hw-points".
+	* server.h (debug_hw_points): Declare.
+	(paddress): Declare.
+	* utils.c (NUMCELLS, CELLSIZE): New macros.
+	(get_sell, xsnprintf, paddress): New functions.
+	* win32-arm-low.c (the_low_target): Add entries for insert_point,
+	remove_point, stopped_by_watchpoint, stopped_data_address.
+	* win32-i386-low.c: Include i386-low.h.
+	(debug_reg_state): Replaces dr.
+	(i386_dr_low_set_addr, i386_dr_low_set_control): New functions.
+	(i386_dr_low_get_status): New function.
+	(i386_insert_point, i386_remove_point): New functions.
+	(i386_stopped_by_watchpoint): New function.
+	(i386_stopped_data_address): New function.
+	(i386_initial_stuff): Update.
+	(get_thread_context,set_thread_context,i386_thread_added): Update.
+	(the_low_target): Add entries for insert_point,
+	remove_point, stopped_by_watchpoint, stopped_data_address.
+	* win32-low.c (win32_insert_watchpoint): New function.
+	(win32_remove_watchpoint): New function.
+	(win32_stopped_by_watchpoint): New function.
+	(win32_stopped_data_address): New function.
+	(win32_target_ops): Add entries for insert_watchpoint,
+	remove_watchpoint, stopped_by_watchpoint, stopped_data_address.
+	* win32-low.h (win32_target_ops): New members insert_point,
+	remove_point, stopped_by_watchpoint, stopped_data_address.
+@
+text
+@d3 1
+a3 2
+   Copyright (C) 2009
+   Free Software Foundation, Inc.
+@
+

@@ -1,0 +1,603 @@
+head	1.10;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.10
+	gdb_7_6-2013-04-26-release:1.10
+	gdb_7_6-branch:1.10.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.10
+	gdb_7_5_1-2012-11-29-release:1.9
+	gdb_7_5-2012-08-17-release:1.9
+	gdb_7_5-branch:1.9.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.9
+	gdb_7_4_1-2012-04-26-release:1.6.4.1
+	gdb_7_4-2012-01-24-release:1.6.4.1
+	gdb_7_4-branch:1.6.0.4
+	gdb_7_4-2011-12-13-branchpoint:1.6
+	gdb_7_3_1-2011-09-04-release:1.6
+	gdb_7_3-2011-07-26-release:1.6
+	gdb_7_3-branch:1.6.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.6
+	gdb_7_2-2010-09-02-release:1.5
+	gdb_7_2-branch:1.5.0.2
+	gdb_7_2-2010-07-07-branchpoint:1.5
+	gdb_7_1-2010-03-18-release:1.2
+	gdb_7_1-branch:1.2.0.2
+	gdb_7_1-2010-02-18-branchpoint:1.2
+	gdb_7_0_1-2009-12-22-release:1.1
+	gdb_7_0-2009-10-06-release:1.1
+	gdb_7_0-branch:1.1.0.4
+	gdb_7_0-2009-09-16-branchpoint:1.1
+	msnyder-checkpoint-072509-branch:1.1.0.2
+	msnyder-checkpoint-072509-branchpoint:1.1;
+locks; strict;
+comment	@# @;
+
+
+1.10
+date	2013.01.01.06.41.27;	author brobecke;	state Exp;
+branches;
+next	1.9;
+
+1.9
+date	2012.06.26.19.23.20;	author tromey;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2012.01.16.16.21.52;	author palves;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2012.01.04.08.27.55;	author brobecke;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2011.01.01.15.33.50;	author brobecke;	state Exp;
+branches
+	1.6.4.1;
+next	1.5;
+
+1.5
+date	2010.06.10.19.48.20;	author msnyder;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2010.06.02.21.53.28;	author msnyder;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2010.06.02.19.58.21;	author msnyder;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2010.01.01.07.32.06;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2009.05.30.00.19.13;	author devans;	state Exp;
+branches;
+next	;
+
+1.6.4.1
+date	2012.01.06.04.54.29;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.10
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@# Copyright (C) 2004-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# Test making hand function calls in multiple threads.
+
+set NR_THREADS 4
+
+standard_testfile
+
+if {[gdb_compile_pthreads "${srcdir}/${subdir}/${srcfile}" "${binfile}" executable [list debug "additional_flags=-DNR_THREADS=$NR_THREADS"]] != "" } {
+    return -1
+}
+
+# Some targets can't do function calls, so don't even bother with this
+# test.
+if [target_info exists gdb,cannot_call_functions] {
+    setup_xfail "*-*-*" 2416
+    fail "This target can not call functions"
+    continue
+}
+
+proc get_dummy_frame_number { } {
+    global gdb_prompt
+
+    gdb_test_multiple "bt" "" {
+	-re "#(\[0-9\]*) *<function called from gdb>.*$gdb_prompt $" {
+	    return $expect_out(1,string)
+	}
+	-re "$gdb_prompt $" {
+	    return ""
+	}
+	timeout {
+	    return ""
+	}
+    }
+    return ""
+}
+
+clean_restart ${binfile}
+
+if { ![runto_main] } {
+    fail "Can't run to main"
+    return 0
+}
+
+gdb_test "break all_threads_running" \
+         "Breakpoint 2 at .*: file .*${srcfile}, line .*" \
+         "breakpoint on all_threads_running"
+
+gdb_test "break hand_call" \
+         "Breakpoint 3 at .*: file .*${srcfile}, line .*" \
+         "breakpoint on hand_call"
+
+# Run the program and make sure GDB reports that we stopped after
+# hitting breakpoint 2 in all_threads_running().
+
+gdb_test "continue" \
+         ".*Breakpoint 2, all_threads_running ().*" \
+         "run to all_threads_running"
+
+# Before we start making hand function calls, turn on scheduler locking.
+
+gdb_test_no_output "set scheduler-locking on" "enable scheduler locking"
+gdb_test "show scheduler-locking" ".* locking scheduler .* is \"on\"." "show scheduler locking on"
+
+# Now hand-call a function in each thread, having the function
+# stop without returning.
+
+# Add one for the main thread.
+set total_nr_threads [expr $NR_THREADS + 1]
+
+# Thread numbering in gdb is origin-1, so begin numbering at 1.
+for { set i 1 } { $i <= $total_nr_threads } { incr i } {
+    set thread_nr $i
+    gdb_test "thread $thread_nr" ".*" \
+	"prepare to make hand call, thread $thread_nr"
+    gdb_test "call hand_call()" "Breakpoint 3, .*" \
+	"hand call, thread $thread_nr"
+}
+
+# Now have each hand-called function return.
+
+# Turn confirmation off for the "return" command.
+gdb_test_no_output "set confirm off"
+
+clear_xfail "*-*-*"
+
+for { set i 1 } { $i <= $total_nr_threads } { incr i } {
+    set thread_nr $i
+    gdb_test "thread $thread_nr" ".*" \
+	"prepare to discard hand call, thread $thread_nr"
+    set frame_number [get_dummy_frame_number]
+    if { "$frame_number" == "" } {
+	fail "dummy stack frame number, thread $thread_nr"
+	# Need something.
+	set frame_number 0
+    } else {
+	pass "dummy stack frame number, thread $thread_nr"
+    }
+    # Pop the dummy frame.
+    gdb_test "frame $frame_number" ".*" "setting frame, thread $thread_nr"
+    gdb_test "return" ".*" "discard hand call, thread $thread_nr"
+    # In case getting the dummy frame number failed, re-enable for next iter.
+    clear_xfail "*-*-*"
+}
+
+# Make sure all dummy frames got popped.
+
+gdb_test_multiple "maint print dummy-frames" "all dummies popped" {
+    -re ".*stack=.*$gdb_prompt $" {
+	fail "all dummies popped"
+    }
+    -re ".*$gdb_prompt $" {
+	pass "all dummies popped"
+    }
+}
+
+# Before we resume the full program, turn off scheduler locking.
+gdb_test_no_output "set scheduler-locking off" "disable scheduler locking"
+gdb_test "show scheduler-locking" ".* locking scheduler .* is \"off\"." "show scheduler locking off"
+
+# Continue one last time, the program should exit normally.
+#
+# ??? This currently doesn't work because gdb doesn't know how to singlestep
+# over reported breakpoints that weren't in the last thread to run.
+# Commented out until then.
+#
+# For reference sake ...
+# An alternative is to manually work around the issue by manually setting
+# the thread back to the first thread: the program is still at the
+# all_threads_running breakpoint, which wasn't the last thread to run,
+# and gdb doesn't know how to singlestep over reported breakpoints that
+# weren't in the last thread to run.
+#gdb_test "thread 1" ".*" "set thread to 1, prepare to resume"
+#
+#gdb_continue_to_end "hand-call-in-threads"
+
+return 0
+@
+
+
+1.9
+log
+@	* gdb.threads/watchpoint-fork.exp (test): Use
+	standard_output_file.  Don't declare objdir.
+	* gdb.threads/attach-into-signal.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.threads/attach-stopped.exp: Use standard_testfile.
+	* gdb.threads/bp_in_thread.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/corethreads.exp: Use standard_testfile.
+	* gdb.threads/execl.exp: Use standard_testfile,
+	standard_output_file, clean_restart.
+	* gdb.threads/fork-child-threads.exp: Use standard_testfile,
+	clean_restart.
+	* gdb.threads/fork-thread-pending.exp: Use standard_testfile,
+	clean_restart.
+	* gdb.threads/gcore-thread.exp: Use standard_testfile.  Remove
+	incdir.
+	* gdb.threads/hand-call-in-threads.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/ia64-sigill.exp: Use standard_testfile.
+	* gdb.threads/interrupted-hand-call.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/killed.exp: Use standard_testfile, clean_restart.
+	Remove incdir.
+	* gdb.threads/leader-exit.exp: Use standard_testfile.
+	* gdb.threads/linux-dp.exp: Use standard_testfile, clean_restart.
+	* gdb.threads/local-watch-wrong-thread.exp: Use standard_testfile,
+	clean_restart.
+	* gdb.threads/manythreads.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/multi-create.exp: Use standard_testfile,
+	clean_restart.
+	* gdb.threads/no-unwaited-for-left.exp: Use standard_testfile.
+	* gdb.threads/non-ldr-exc-1.exp: Use standard_testfile.
+	* gdb.threads/non-ldr-exc-2.exp: Use standard_testfile.
+	* gdb.threads/non-ldr-exc-3.exp: Use standard_testfile.
+	* gdb.threads/non-ldr-exc-4.exp: Use standard_testfile.
+	* gdb.threads/pending-step.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/print-threads.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/pthread_cond_wait.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/pthreads.exp: Use standard_testfile, clean_restart.
+	Remove incdir.
+	* gdb.threads/schedlock.exp: Use standard_testfile.  Remove
+	incdir.
+	* gdb.threads/sigthread.exp: Use standard_testfile,
+	clean_restart.
+	* gdb.threads/staticthreads.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/switch-threads.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/thread-execl.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/thread-find.exp: Use standard_testfile,
+	clean_restart.
+	* gdb.threads/thread-specific.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/thread-unwindonsignal.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/thread_check.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/thread_events.exp: Use standard_testfile.  Remove
+	incdir.
+	* gdb.threads/threadapply.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/threxit-hop-specific.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+	* gdb.threads/tls-nodebug.exp: Use standard_testfile,
+	clean_restart.
+	* gdb.threads/tls-shared.exp: Use standard_testfile,
+	clean_restart, standard_output_file.
+	* gdb.threads/tls-var.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.threads/tls.exp: Use standard_testfile, clean_restart.
+	Remove incdir.
+	* gdb.threads/watchthreads-reorder.exp: Use standard_testfile.
+	* gdb.threads/watchthreads.exp: Use standard_testfile.  Remove
+	incdir.
+	* gdb.threads/watchthreads2.exp: Use standard_testfile,
+	clean_restart.  Remove incdir.
+@
+text
+@d1 1
+a1 2
+# Copyright (C) 2004, 2007-2008, 2010-2012 Free Software Foundation,
+# Inc.
+@
+
+
+1.8
+log
+@2012-01-16  Pedro Alves  <palves@@redhat.com>
+
+	Remove all calls to strace.
+@
+text
+@d21 1
+a21 3
+set testfile "hand-call-in-threads"
+set srcfile ${testfile}.c
+set binfile ${objdir}/${subdir}/${testfile}
+d23 1
+a23 1
+if {[gdb_compile_pthreads "${srcdir}/${subdir}/${srcfile}" "${binfile}" executable [list debug "incdir=${objdir}" "additional_flags=-DNR_THREADS=$NR_THREADS"]] != "" } {
+d52 1
+a52 4
+gdb_exit
+gdb_start
+gdb_reinitialize_dir $srcdir/$subdir
+gdb_load ${binfile}
+@
+
+
+1.7
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@a20 4
+if $tracelevel then {
+	strace $tracelevel
+}
+
+@
+
+
+1.6
+log
+@run copyright.sh for 2011.
+@
+text
+@d1 2
+a2 1
+# Copyright (C) 2004, 2007, 2008, 2010, 2011 Free Software Foundation, Inc.
+@
+
+
+1.6.4.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d1 1
+a1 2
+# Copyright (C) 2004, 2007-2008, 2010-2012 Free Software Foundation,
+# Inc.
+@
+
+
+1.5
+log
+@2010-06-08  Michael Snyder  <msnyder@@vmware.com>
+
+	* gdb.ada/assign_1.exp: Use ".*" instead of "" as wildcard regexp.
+	* gdb.ada/boolean_expr.exp:
+	* gdb.ada/frame_args.exp: Ditto.
+	* gdb.ada/lang_switch.exp: Ditto.
+	* gdb.ada/ptype_arith_binop.exp: Ditto.
+	* gdb.ada/ref_param.exp: Ditto.
+	* gdb.ada/type_coercion.exp:Ditto.
+
+	* gdb.asm/asm-source.exp: Ditto.
+
+	* gdb.base/attach.exp: Ditto.
+	* gdb.base/bitfields2.exp: Ditto.
+	* gdb.base/call-signal-resume.exp: Ditto.
+	* gdb.base/callfuncs.exp: Ditto.
+	* gdb.base/commands.exp: Ditto.
+	* gdb.base/dbx.exp: Ditto.
+	* gdb.base/default.exp: Ditto.
+	* gdb.base/dump.exp: Ditto.
+	* gdb.base/exprs.exp: Ditto.
+	* gdb.base/freebpcmd.exp: Ditto.
+	* gdb.base/interrupt.exp: Ditto.
+	* gdb.base/list.exp: Ditto.
+	* gdb.base/long_long.exp: Ditto.
+	* gdb.base/maint.exp: Ditto.
+	* gdb.base/ptype.exp: Ditto.
+	* gdb.base/return.exp: Ditto.
+	* gdb.base/setshow.exp: Ditto.
+	* gdb.base/sigbpt.exp: Ditto.
+	* gdb.base/sigrepeat.exp: Ditto.
+
+	* gdb.cp/classes.exp: Ditto.
+
+	* gdb.dwarf2/dw2-restore.exp: Ditto.
+
+	* gdb.gdb/selftest.exp: Ditto.
+
+	* gdb.multi/base.exp: Ditto.
+	* gdb.multi/bkpt-multi-exec.exp: Ditto.
+
+	* gdb.python/py-block.exp: Ditto.
+	* gdb.python/py-prettyprint.exp: Ditto.
+	* gdb.python/py-template.exp: Ditto.
+
+	* gdb.server/ext-attach.exp: Ditto.
+	* gdb.server/ext-run.exp: Ditto.
+	* gdb.server/server-mon.exp: Ditto.
+
+	* gdb.threads/fork-thread-pending.exp: Ditto.
+	* gdb.threads/hand-call-in-threads.exp: Ditto.
+	* gdb.threads/interrupted-hand-call.exp: Ditto.
+	* gdb.threads/linux-dp.exp: Ditto.
+	* gdb.threads/manythreads.exp: Ditto.
+	* gdb.threads/print-threads.exp: Ditto.
+	* gdb.threads/pthreads.exp: Ditto.
+	* gdb.threads/schedlock.exp: Ditto.
+	* gdb.threads/thread-unwindonsignal.exp: Ditto.
+	* gdb.threads/threadapply.exp: Ditto.
+@
+text
+@d1 1
+a1 1
+# Copyright (C) 2004, 2007, 2008, 2010 Free Software Foundation, Inc.
+@
+
+
+1.4
+log
+@2010-06-02  Michael Snyder  <msnyder@@vmware.com>
+
+	* gdb.threads/fork-thread-pending.exp: Use gdb_test_no_output.
+	* gdb.threads/hand-call-in-thraeds.exp: Ditto.
+	* gdb.threads/local-watch-wrong-thread.exp: Ditto.
+	* gdb.threads/manythreads.exp: Ditto.
+	* gdb.threads/print-threads.exp: Ditto.
+	* gdb.threads/pthreads.exp: Ditto.
+	* gdb.threads/schedlock.exp: Ditto.
+	* gdb.threads/staticthreads.exp: Ditto.
+	* gdb.threads/thread-specific.exp: Ditto.
+	* gdb.threads/thread-unwindonsignal.exp: Ditto.
+	* gdb.threads/threadapply.exp: Ditto.
+	* gdb.threads/watchthreads.exp: Ditto.
+	* gdb.threads/watchthreads2.exp: Ditto.
+@
+text
+@d96 4
+a99 2
+    gdb_test "thread $thread_nr" "" "prepare to make hand call, thread $thread_nr"
+    gdb_test "call hand_call()" "Breakpoint 3, .*" "hand call, thread $thread_nr"
+d111 2
+a112 1
+    gdb_test "thread $thread_nr" "" "prepare to discard hand call, thread $thread_nr"
+d122 2
+a123 2
+    gdb_test "frame $frame_number" "" "setting frame, thread $thread_nr"
+    gdb_test "return" "" "discard hand call, thread $thread_nr"
+d155 1
+a155 1
+#gdb_test "thread 1" "" "set thread to 1, prepare to resume"
+@
+
+
+1.3
+log
+@2010-06-02  Michael Snyder  <msnyder@@msnyder-server.eng.vmware.com>
+
+	* gdb.threads/attach-stopped.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.threads/attachstop-mt.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.threads/gcore-thread.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.threads/hand-call-in-threads.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.threads/linux-dp.exp: Replace uses of send_gdb / gdb_expect.
+	* gdb.threads/print-threads.exp:
+	Replace uses of send_gdb / gdb_expect.
+	* gdb.threads/pthreads.exp: Replace uses of send_gdb / gdb_expect.
+	* gdb.threads/schedlock.exp: Replace uses of send_gdb / gdb_expect.
+	* gdb.threads/sigthread.exp: Replace uses of send_gdb / gdb_expect.
+@
+text
+@d84 1
+a84 1
+gdb_test "set scheduler-locking on" "" "enable scheduler locking"
+d103 1
+a103 1
+gdb_test "set confirm off" ""
+d136 2
+a137 2
+# Before we resume the full program, turn of scheduler locking.
+gdb_test "set scheduler-locking off" "" "disable scheduler locking"
+@
+
+
+1.2
+log
+@Update copyright year in most headers.
+
+Automatic update by copyright.sh.
+@
+text
+@d41 1
+a41 1
+  global gdb_prompt
+d43 12
+a54 16
+  send_gdb "bt\n"
+  gdb_expect {
+    -re "#(\[0-9\]*) *<function called from gdb>.*$gdb_prompt $"
+      {
+	return $expect_out(1,string)
+      }
+    -re "$gdb_prompt $"
+      {
+	return ""
+      }
+    timeout
+      {
+	return ""
+      }
+  }
+  return ""
+@
+
+
+1.1
+log
+@	* infrun.c (prepare_to_proceed): Document.  Assert !non_stop.
+	If scheduler-locking is enabled, we're not going to be singlestepping
+	any other previously stopped thread.
+
+	* gdb.threads/hand-call-in-threads.exp: New file.
+	* gdb.threads/hand-call-in-threads.c: New file.
+@
+text
+@d1 1
+a1 1
+# Copyright (C) 2004, 2007, 2008 Free Software Foundation, Inc.
+@
+

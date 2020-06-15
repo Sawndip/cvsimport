@@ -1,0 +1,730 @@
+head	1.11;
+access;
+symbols
+	cygwin-1_7_35-release:1.11
+	cygwin-1_7_34-release:1.7;
+locks; strict;
+comment	@ * @;
+
+
+1.11
+date	2015.02.24.20.52.57;	author corinna;	state Exp;
+branches;
+next	1.10;
+
+1.10
+date	2015.02.18.10.25.14;	author corinna;	state Exp;
+branches;
+next	1.9;
+
+1.9
+date	2015.02.17.21.08.01;	author corinna;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2015.02.12.16.55.38;	author corinna;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2014.11.26.19.46.59;	author corinna;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2014.06.25.09.10.50;	author corinna;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2014.05.22.20.07.25;	author corinna;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2014.05.22.14.50.24;	author corinna;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2014.04.22.10.36.35;	author corinna;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2014.02.17.15.36.33;	author corinna;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2014.02.09.19.44.55;	author corinna;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.11
+log
+@	* ldap.h: Remove index macros.
+	(class cyg_ldap): Remove members srch_msg and srch_entry.
+	(cyg_ldap::get_string_attribute): Remove private method taking index
+	argument.
+	(cyg_ldap::get_num_attribute): Ditto.  Add method taking attribute name.
+	(cyg_ldap::get_primary_gid): Adjust to aforementioned change.
+	(cyg_ldap::get_unix_uid): Ditto.
+	(cyg_ldap::get_unix_gid): Ditto.
+	* ldap.cc: Throughout, use msg and entry in place of srch_msg and
+	srch_entry.
+	(std_user_attr): Add sAMAccountName and objectSid.
+	(group_attr): Ditto.
+	(cyg_ldap::close): Drop handling of srch_msg and srch_entry.
+	(cyg_ldap::get_string_attribute): Move earlier in file.
+	(cyg_ldap::get_num_attribute): Ditto.
+	(cyg_ldap::enumerate_ad_accounts): Add comments for clarity.
+	Use group_attr or user_attr rather than sid_attr to fetch all desired
+	attributes for an account right away.
+	(cyg_ldap::next_account): Store found SID in last_fetched_sid to
+	skip calls to fetch_ad_account from fetch_account_from_windows.
+	(cyg_ldap::get_string_attribute): Remove method taking index argument.
+	(cyg_ldap::get_num_attribute): Ditto.
+	* pwdgrp.h (class pg_ent): Fix formatting.  Add member dom.
+	* passwd.cc (pg_ent::enumerate_ad): Store current flat domain name
+	in dom.  Construct fetch_acc_t argument from LDAP attributes and
+	call fetch_account_from_windows with that.
+	* userinfo.h (enum fetch_user_arg_type_t): Rename FULL_grp_arg to
+	FULL_acc_arg.  Change throughout.
+	(struct fetch_acc_t): Rename from fetch_full_grp_t.  Change throughout.
+	(struct fetch_user_arg_t): Rename full_grp to full_acc.  Change
+	throughout.
+@
+text
+@/* ldap.h.
+
+   Copyright 2014, 2015 Red Hat, Inc.
+
+This file is part of Cygwin.
+
+This software is a copyrighted work licensed under the terms of the
+Cygwin license.  Please consult the file "CYGWIN_LICENSE" for
+details. */
+
+#pragma once
+
+#pragma push_macro ("DECLSPEC_IMPORT")
+#undef DECLSPEC_IMPORT
+#define DECLSPEC_IMPORT
+#include <winldap.h>
+#include <ntldap.h>
+#pragma pop_macro ("DECLSPEC_IMPORT")
+
+class cyg_ldap {
+  PLDAP lh;
+  PWCHAR def_context;
+  PLDAPMessage msg, entry;
+  PWCHAR *val;
+  PWCHAR *attr;
+  bool isAD;
+  PLDAPSearch srch_id;
+  cygsid last_fetched_sid;
+
+  inline int map_ldaperr_to_errno (ULONG lerr);
+  inline int wait (cygthread *thr);
+  inline int connect (PCWSTR domain);
+  inline int search (PWCHAR base, ULONG scope, PWCHAR filter, PWCHAR *attrs);
+  inline int next_page ();
+  bool fetch_unix_sid_from_ad (uint32_t id, cygsid &sid, bool group);
+  PWCHAR fetch_unix_name_from_rfc2307 (uint32_t id, bool group);
+
+public:
+  cyg_ldap () : lh (NULL), def_context (NULL), msg (NULL), entry (NULL),
+		val (NULL), isAD (false), srch_id (NULL), 
+		last_fetched_sid (NO_SID)
+  {}
+  ~cyg_ldap () { close (); }
+
+  ULONG connect_ssl (PCWSTR domain);
+  ULONG connect_non_ssl (PCWSTR domain);
+  ULONG search_s (PWCHAR base, ULONG scope, PWCHAR filter, PWCHAR *attrs);
+  ULONG next_page_s ();
+
+  bool is_open () const { return !!lh; }
+  operator PLDAP () const { return lh; }
+  int open (PCWSTR in_domain);
+  void close ();
+  PWCHAR get_string_attribute (PCWSTR name);
+  uint32_t get_num_attribute (PCWSTR name);
+  bool fetch_ad_account (PSID sid, bool group, PCWSTR domain = NULL);
+  int enumerate_ad_accounts (PCWSTR domain, bool group);
+  int next_account (cygsid &sid);
+  uint32_t fetch_posix_offset_for_domain (PCWSTR domain);
+  uid_t remap_uid (uid_t uid);
+  gid_t remap_gid (gid_t gid);
+  /* User only */
+  gid_t get_primary_gid () { return get_num_attribute (L"primaryGroupID"); }
+  gid_t get_unix_uid () { return get_num_attribute (L"uidNumber"); }
+  /* group only */
+  PWCHAR get_group_name ()
+	    { return get_string_attribute (L"sAMAccountName"); }
+  gid_t get_unix_gid () { return get_num_attribute (L"gidNumber"); }
+};
+@
+
+
+1.10
+log
+@	* ldap.cc (struct cyg_ldap_search): Add scope member.
+	(cyg_ldap::search_s): Add parameter scope.  Use as LDAP search scope
+	instead of fixed LDAP_SCOPE_SUBTREE scope.
+	(ldap_search_thr): Call cyg_ldap::search_s with scope from argument.
+	(cyg_ldap::search): Add parameter scope and fill in to cyg_ldap_search.
+	(cyg_ldap::fetch_ad_account): Call search with LDAP_SCOPE_SUBTREE scope.
+	(cyg_ldap::fetch_posix_offset_for_domain): Call search with
+	LDAP_SCOPE_ONELEVEL scope.
+	(cyg_ldap::fetch_unix_sid_from_ad): Call search with LDAP_SCOPE_SUBTREE
+	scope.
+	(cyg_ldap::fetch_unix_name_from_rfc2307): Ditto.
+	* ldap.h (cyg_ldap::search): Align prototype to above change.
+	(cyg_ldap::search_s): Ditto.
+@
+text
+@a19 6
+#define LDAP_USER_PGRP_ATTR		 0
+#define LDAP_USER_UID_ATTR		 1
+
+#define LDAP_GROUP_NAME_ATTR		 0
+#define LDAP_GROUP_GID_ATTR		 1
+
+a27 1
+  PLDAPMessage srch_msg, srch_entry;
+a36 2
+  PWCHAR get_string_attribute (int idx);
+  uint32_t get_num_attribute (int idx);
+d40 2
+a41 2
+		val (NULL), isAD (false), srch_id (NULL), srch_msg (NULL),
+		srch_entry (NULL), last_fetched_sid (NO_SID)
+d54 2
+d63 2
+a64 2
+  gid_t get_primary_gid () { return get_num_attribute (LDAP_USER_PGRP_ATTR); }
+  gid_t get_unix_uid () { return get_num_attribute (LDAP_USER_UID_ATTR); }
+d67 2
+a68 3
+	    { return get_string_attribute (LDAP_GROUP_NAME_ATTR); }
+  gid_t get_unix_gid () { return get_num_attribute (LDAP_GROUP_GID_ATTR); }
+  PWCHAR get_string_attribute (PCWSTR name);
+@
+
+
+1.9
+log
+@	* ldap.h (class cyg_ldap): Rename rootdse to def_context.  Change
+	throughout.
+	* ldap.cc (cyg_ldap::open): Fix debug output.
+	(cyg_ldap::fetch_ad_account): Rename rdse to base.  Restrict LDAP
+	query to users and groups only.
+	(cyg_ldap::enumerate_ad_accounts): Rearrange filter expression for
+	user accounts.
+	(SYSTEM_CONTAINER): New macro.
+	(cyg_ldap::fetch_posix_offset_for_domain): Set base in LDAP search
+	to the "System" container in the default naming context to restrict
+	the search scope.
+	(cyg_ldap::fetch_unix_sid_from_ad): Add objectCategory=Person to
+	search filter for users.
+@
+text
+@d40 1
+a40 1
+  inline int search (PWCHAR base, PWCHAR filter, PWCHAR *attrs);
+d56 1
+a56 1
+  ULONG search_s (PWCHAR base, PWCHAR filter, PWCHAR *attrs);
+@
+
+
+1.8
+log
+@	* cygheap.h (cygheap_pwdgrp::get_home): Add dnsdomain parameter to
+	declaration in ldap-related method.
+	(cygheap_pwdgrp::get_shell): Ditto.
+	(cygheap_pwdgrp::get_gecos): Ditto.
+	* ldap.cc (cyg_ldap::open): Use NO_ERROR instead of 0.
+	(cyg_ldap::close): Reset last_fetched_sid.
+	(cyg_ldap::fetch_ad_account): Return immediately if sid is the same as
+	last_fetched_sid.  Open LDAP connection from here.  Move initialization
+	of rdse after open call.  Set last_fetched_sid if LDAP call was
+	successful.
+	* ldap.h (class cyg_ldap): Add member last_fetched_sid.
+	(cyg_ldap::cyg_ldap): Initialize last_fetched_sid.
+	(cyg_ldap::is_open): New inline method.
+	* uinfo.cc (cygheap_pwdgrp::init): Drop initialization of db_home,
+	db_shell and db_gecos with "cygwin desc", thus only using the fallback
+	by default.
+	(fetch_windows_home): Add parameter dnsdomain.  Call
+	cyg_ldap::fetch_ad_account if required.
+	(fetch_from_path): Add parameter dnsdomain.  Call fetch_windows_home
+	accordingly.
+	(cygheap_pwdgrp::get_home): Accomodate call to fetch_windows_home.
+	Add dnsdomain parameter in ldap-related method.  Call
+	cyg_ldap::fetch_ad_account if required.
+	(cygheap_pwdgrp::get_shell): Ditto.
+	(cygheap_pwdgrp::get_gecos): Ditto.
+	(pwdgrp::fetch_account_from_windows): Drop cyg_ldap::open call prior to
+	cyg_ldap::fetch_ad_account call.  Set is_current_user to true if we're
+	handling the current user account.  Make sure to perform the LDAP calls
+	only for users, and only if required.
+@
+text
+@d28 1
+a28 1
+  PWCHAR rootdse;
+d48 2
+a49 2
+  cyg_ldap () : lh (NULL), rootdse (NULL), msg (NULL), entry (NULL), val (NULL),
+		isAD (false), srch_id (NULL), srch_msg (NULL),
+@
+
+
+1.7
+log
+@	* Makefile.in (install): Add install-ldif target.
+	(install-ldif): New target to install cygwin.ldif.
+	* cygheap.h (class cygheap_pwdgrp): Rename pfx_t to nss_pfx_t.  Add
+	PFX to enum value.  Add nss_scheme_method enum and nss_scheme_t
+	structure.  Add home_scheme, shell_scheme and gecos_scheme members.
+	(NSS_SCHEME_MAX): Define.
+	(cygheap_pwdgrp::get_home): Declare.
+	(cygheap_pwdgrp::get_shell): Declare.
+	(cygheap_pwdgrp::get_gecos): Declare.
+	* cygwin.ldif: New file.
+	* ldap.cc (std_user_attr): New array, just defining the standard
+	attributes.
+	(group_attr): Add cygwinUnixGid.
+	(user_attr): Convert to macro pointing to cygheap->pg.ldap_user_attr.
+	(cygheap_pwdgrp::init_ldap_user_attr): New method.
+	(cyg_ldap::fetch_ad_account): Call cygheap_pwdgrp::init_ldap_user_attr
+	if user_attr initialization is required.  Fix comment.
+	(cyg_ldap::get_string_attribute): Implement taking attribute name
+	as argument.
+	* ldap.h: Drop unused macros.
+	(cyg_ldap::get_gecos): Remove.
+	(cyg_ldap::get_home): Remove.
+	(cyg_ldap::get_shell): Remove.
+	(cyg_ldap::get_string_attribute): Declare name argument variant public.
+	* uinfo.cc (cygheap_user::ontherange): Fix indentation.
+	(cygheap_pwdgrp::init): Initialize new home_scheme, shell_scheme and
+	gecos_scheme members.  Align comment.
+	(NSS_NCMP): Define comparison macro.
+	(NSS_CMP): Ditto.
+	(cygheap_pwdgrp::nss_init_line): Use aforementioned macros throughout.
+	Fix comment handling.  Add db_home, db_shell and db_gecos handling.
+	(fetch_from_description): New function to fetch XML-style attributes
+	from (description) string.
+	(fetch_from_path): New function to evaluate path string with wildcards.
+	(cygheap_pwdgrp::get_home): New methods to fetch pw_dir value.
+	(cygheap_pwdgrp::get_shell): Ditto for pw_shell.
+	(cygheap_pwdgrp::get_gecos): Ditto for pw_gecos.
+	(colon_to_semicolon): Move up.
+	(pwdgrp::fetch_account_from_windows): Convert home, shell, gecos
+	variables to char*.  Drop statement breaking extended group info.
+	Fetch home, shell and gecos values using new methods.  Use
+	fetch_from_description calls to fetch UNIX id and primary groups from
+	SAM comment field.  Accommodate uxid being a char* now.  Accommodate
+	the fact that extended info is malloc'ed, rather then alloca'ed.
+	Create linebuf content as multibyte string.  Create line buffer by
+	just calling cstrdup.
+@
+text
+@d3 1
+a3 1
+   Copyright 2014 Red Hat, Inc.
+d35 1
+d49 2
+a50 1
+		isAD (false), srch_id (NULL), srch_msg (NULL), srch_entry (NULL)
+d59 1
+@
+
+
+1.6
+log
+@	* autoload.cc (ldap_search_sW): Replace ldap_search_stW.
+	(LdapMapErrorToWin32): Import.
+	* fhandler_disk_file.cc (fhandler_base::fstat_by_nfs_ea): Accommodate
+	change to cyg_ldap::open.
+	* ldap.cc (CYG_LDAP_TIMEOUT): Remove.
+	(CYG_LDAP_ENUM_TIMEOUT): Remove.
+	(def_tv): Remove.
+	(enum_tv): Remove.
+	(cyg_ldap::map_ldaperr_to_errno): New method to map LDAP error codes to
+	POSIX errno codes.  Explicitly map LDAP_NO_RESULTS_RETURNED to ENMFILE.
+	(cyg_ldap::wait): Ditto.
+	(struct cyg_ldap_init): New struct.
+	(cyg_ldap::connect_ssl): Return ULONG.  Drop setting LDAP_OPT_TIMELIMIT.
+	Add call to ldap_search_sW to fetch root DSE.
+	(cyg_ldap::connect_non_ssl): Ditto.
+	(ldap_init_thr): New static thread function.
+	(cyg_ldap::connect): New method to call connect_ssl/connect_non_ssl in
+	an interruptible cygthread.
+	(struct cyg_ldap_search): New struct.
+	(cyg_ldap::search_s): New method to perform generic synchronous search.
+	(ldap_search_thr): New static thread function.
+	(cyg_ldap::search): New method to call search_s in an interruptible
+	cygthread.
+	(struct cyg_ldap_next_page): New struct.
+	(cyg_ldap::next_page_s): New method to perform generic synchronous
+	paged search.
+	(ldap_next_page_thr): New static thread function.
+	(cyg_ldap::next_page): New method to call next_page_s in an
+	interruptible cygthread.
+	(cyg_ldap::open): Return POSIX errno.  Call connect method.
+	(cyg_ldap::fetch_ad_account): Call search method rather than
+	ldap_search_stW.
+	(cyg_ldap::enumerate_ad_accounts): Return POSIX errno.  Use infinite
+	timeout in call to ldap_search_init_pageW.
+	(cyg_ldap::next_account): Return POSIX errno.  Call next_page method
+	rather than ldap_get_next_page_s.
+	(cyg_ldap::fetch_posix_offset_for_domain): Call search method rather
+	than ldap_search_stW.
+	(cyg_ldap::fetch_unix_sid_from_ad): Ditto.
+	(cyg_ldap::fetch_unix_name_from_rfc2307): Ditto.
+	* ldap.h (class cyg_ldap): Accommodate aforementioned changes.
+	* passwd.cc (pg_ent::enumerate_ad): Ditto.  Break search if one of
+	cyg_ldap::enumerate_ad_accounts or cldap.next_account returns with
+	an error code other than ENMFILE.
+	* sec_helper.cc (cygpsid::get_id): Accommodate change to cyg_ldap::open.
+	* uinfo.cc (fetch_posix_offset): Ditto.
+@
+text
+@d20 2
+a21 5
+#define LDAP_USER_PGRP_ATTR		0
+#define LDAP_USER_GECOS_ATTR		1
+#define LDAP_USER_HOME_ATTR		2
+#define LDAP_USER_SHELL_ATTR		3
+#define LDAP_USER_UID_ATTR		4
+d23 2
+a24 2
+#define LDAP_GROUP_NAME_ATTR		0
+#define LDAP_GROUP_GID_ATTR		1
+a67 4
+  PWCHAR get_gecos () { return get_string_attribute (LDAP_USER_GECOS_ATTR); }
+  PWCHAR get_home ()
+	    { return get_string_attribute (LDAP_USER_HOME_ATTR); }
+  PWCHAR get_shell () { return get_string_attribute (LDAP_USER_SHELL_ATTR); }
+d73 1
+@
+
+
+1.5
+log
+@	* autoload.cc (ldap_abandon): Remove.
+	(ldap_count_entries): Import.
+	(ldap_get_next_page_s): Import.
+	(ldap_result): Remove.
+	(ldap_searchW): Remove.
+	(ldap_search_abandon_page): Import.
+	(ldap_search_init_pageW): Import.
+	* ldap.cc (cyg_ldap::close): Use ldap_search_abandon_page to abandon
+	search.  Reset srch_id, srch_msg and srch_entry.
+	(cyg_ldap::enumerate_ad_accounts): Use paged search to overcome server
+	side search result set restriction.
+	(cyg_ldap::next_account): Ditto.
+	* ldap.h (class cyg_ldap): Add members srch_id, srch_msg and srch_entry.
+	Remove member msg_id.
+	(cyg_ldap::cyg_ldap): Change initialization accordingly.
+@
+text
+@d39 5
+a43 2
+  bool connect_ssl (PCWSTR domain);
+  bool connect_non_ssl (PCWSTR domain);
+d55 5
+d61 1
+a61 1
+  bool open (PCWSTR in_domain);
+d64 2
+a65 2
+  bool enumerate_ad_accounts (PCWSTR domain, bool group);
+  bool next_account (cygsid &sid);
+@
+
+
+1.4
+log
+@	* ldap.cc (cyg_ldap::fetch_ad_account): Take additional domain string
+	parameter.  Convert into likely rootDSE string if not NULL, and use in
+	subsequent call to ldap_search_stW.  Add comment to explain that this
+	is not the exactly correct solution.
+	* ldap.h (cyg_ldap::fetch_ad_account): Change prototype accordingly.
+	* uinfo.cc (pwdgrp::fetch_account_from_windows): Always use loc_ldap
+	in call to fetch_posix_offset to make sure we're fetchoinmg the posix
+	offsets from *our* domain controller.  Only set domain variable to
+	non-NULL if the account is from a trusted domain.  Use domain in call
+	to cyg_ldap::fetch_ad_account.
+@
+text
+@d36 2
+a37 1
+  ULONG msg_id;
+d47 2
+a48 2
+  cyg_ldap () : lh (NULL), rootdse (NULL), msg (NULL), entry (NULL),
+		val (NULL), isAD (false), msg_id ((ULONG) -1)
+@
+
+
+1.3
+log
+@	* ldap.cc (user_attr): Remove "uid" attribute.
+	* ldap.h (LDAP_USER_NAME_ATTR): Remove.  Change other attribute index
+	values as required.
+	(cyg_ldap::get_user_name): Remove inline function.
+	* uinfo.cc (pwdgrp::fetch_account_from_windows): Remove code to handle
+	Cygwin username different from Windows username.
+	(pwdgrp::add_account_from_cygserver): Remove unnecessary cast.
+@
+text
+@d54 1
+a54 1
+  bool fetch_ad_account (PSID sid, bool group);
+@
+
+
+1.2
+log
+@	* autoload.cc (ldap_abandon): Import.
+	(ldap_result): Import.
+	(ldap_searchW): Import.
+	(NetGroupEnum): Import.
+	(NetLocalGroupEnum): Import.
+	(NetUserEnum): Import.
+	* cygheap.h (class cygheap_pwdgrp): Add members enums and enum_tdoms.
+	(cygheap_pwdgrp::nss_db_enums): New inline method.
+	(cygheap_pwdgrp::nss_db_enum_tdoms): Ditto.
+	* cygtls.h (struct _local_storage): Drop unused members pw_pos and
+	grp_pos.
+	* grp.cc (grent): New static variable of class gr_ent.
+	(gr_ent::enumerate_caches): New method.
+	(gr_ent::enumerate_local): New method.
+	(gr_ent::getgrent): New method.
+	(setgrent): Call gr_ent method.
+	(getgrent32): Ditto.
+	(endgrent): Ditto.
+	* ldap.cc (sid_attr): Rename from nfs_attr.
+	(cyg_ldap::close): Abandon still running asynchronous search.
+	(cyg_ldap::fetch_ad_account): Reduce filter buffer size.
+	(cyg_ldap::enumerate_ad_accounts): New method.
+	(cyg_ldap::next_account): New method.
+	(cyg_ldap::fetch_posix_offset_for_domain): Reduce filter buffer size.
+	(cyg_ldap::fetch_unix_sid_from_ad): Ditto.  Fix return value in case
+	no value has been read.
+	(cyg_ldap::fetch_unix_name_from_rfc2307): Reduce filter buffer size.
+	* ldap.h (class cyg_ldap): Add msg_id member.
+	(cyg_ldap::enumerate_ad_accounts): Declare.
+	(cyg_ldap::next_account): Declare:
+	* passwd.cc (pwent): New static variable of class pw_ent.
+	(pg_ent::clear_cache): New method.
+	(pg_ent::setent): New method.
+	(pg_ent::getent): New method.
+	(pg_ent::endent): New method.
+	(pg_ent::enumerate_file): New method.
+	(pg_ent::enumerate_builtin): New method.
+	(pg_ent::enumerate_sam): New method.
+	(pg_ent::enumerate_ad): New method.
+	(pw_ent::enumerate_caches): New method.
+	(pw_ent::enumerate_local): New method.
+	(pw_ent::getpwent): New method.
+	(setpwent): Call pw_ent method.
+	(getpwent): Ditto.
+	(endpwent): Ditto.
+	* pwdgrp.h (class pwdgrp): Define pg_ent, pw_ent and gr_ent as friend
+	classes.
+	(pwdgrp::add_account_post_fetch): Declare with extra bool parameter.
+	(pwdgrp::file_attr): New inline method.
+	(enum nss_enum_t): Define.
+	(class pg_ent): Define.
+	(class pw_ent): Define.
+	(class gr_ent): Define.
+	* tlsoffsets.h: Regenerate.
+	* tlsoffsets64.h: Ditto.
+	* uinfo.cc (cygheap_pwdgrp::init): Initialize enums and enum_tdoms.
+	(cygheap_pwdgrp::nss_init_line): Fix typo in preceeding comment.
+	Handle new "db_enum" keyword.
+	(pwdgrp::add_account_post_fetch): Take additional `bool lock' parameter
+	and acquire pglock before adding element to array if lock is true.
+	(pwdgrp::add_account_from_file): Call add_account_post_fetch with lock
+	set to true.
+	(pwdgrp::add_account_from_windows): Ditto in case of caching.
+	(pwdgrp::fetch_account_from_windows): Handle builtin aliases only
+	known to the domain controller.  Only call NetLocalGroupGetInfo for
+	aliases.
+@
+text
+@d20 5
+a24 6
+#define LDAP_USER_NAME_ATTR		0
+#define LDAP_USER_PGRP_ATTR		1
+#define LDAP_USER_GECOS_ATTR		2
+#define LDAP_USER_HOME_ATTR		3
+#define LDAP_USER_SHELL_ATTR		4
+#define LDAP_USER_UID_ATTR		5
+a59 1
+  PWCHAR get_user_name () { return get_string_attribute (LDAP_USER_NAME_ATTR); }
+@
+
+
+1.1
+log
+@	Introduce reading passwd/group entries from SAM/AD.  Introduce
+	/etc/nsswitch.conf file to configure it.
+	* Makefile.in (DLL_OFILES): Add ldap.o.
+	* autoload.cc: Import ldap functions from wldap32.dll.
+	(DsEnumerateDomainTrustsW): Import.
+	(NetGroupGetInfo): Import.
+	* cygheap.h (class cygheap_domain_info): New class to keep global
+	domain info.
+	(class cygheap_pwdgrp): New class to keep passwd/group caches and
+	configuration info from /etc/nssswitch.conf.
+	(struct init_cygheap): Add cygheap_domain_info member "dom" and
+	cygheap_pwdgrp member "pg".
+	* cygtls.h (struct _local_storage): Remove unused member "res".
+	Rearrange slightly, Add members pwbuf and grbuf to implement non-caching
+	passwd/group fetching from SAM/AD.  Make pw_pos and pw_pos unsigned.
+	* fhandler_disk_file.cc (fhandler_base::fstat_by_nfs_ea): Add RFC 2307
+	uid/gid mapping.
+	* fhandler_process.cc: Drop including pwdgrp.h.
+	* fhandler_procsysvipc.cc: Ditto.
+	* fhandler_registry.cc (fhandler_registry::fstat): Set key uid/gid
+	to ILLEGAL_UID/ILLEGAL_GID rather than UNKNOWN_UID/UNKNOWN_GID.
+	* grp.cc (group_buf): Drop.
+	(gr): Drop.
+	(pwdgrp::parse_group): Fill pg_grp.
+	(pwdgrp::read_group): Remove.
+	(pwdgrp::init_grp): New method.
+	(pwdgrp::prep_tls_grbuf): New method.
+	(pwdgrp::find_group): New methods.
+	(internal_getgrsid): Convert to call new pwdgrp methods.
+	(internal_getgrnam): Ditto.
+	(internal_getgrgid): Ditto.
+	(getgrgid_r): Drop 2nd parameter from internal_getgrgid call.
+	(getgrgid32): Ditto.
+	(getgrnam_r): Ditto for internal_getgrnam.
+	(getgrnam32): Ditto.
+	(getgrent32): Convert to call new pwdgrp methods.
+	(internal_getgrent): Remove.
+	(internal_getgroups): Simplify, especially drop calls to
+	internal_getgrent.
+	* ldap.cc: New file implementing cyg_ldap class for LDAP access to AD
+	and RFC 2307 server.
+	* ldap.h: New header, declaring cyg_ldap class.
+	* passwd.cc (passwd_buf): Drop.
+	(pr): Drop.
+	(pwdgrp::parse_passwd): Fill pg_pwd.
+	(pwdgrp::read_passwd): Remove.
+	(pwdgrp::init_pwd): New method.
+	(pwdgrp::prep_tls_pwbuf): New method.
+	(find_user): New methods.
+	(internal_getpwsid): Convert to call new pwdgrp methods.
+	(internal_getpwnam): Ditto.
+	(internal_getpwuid): Ditto.
+	(getpwuid32): Drop 2nd parameter from internal_getpwuid call.
+	(getpwuid_r): Ditto.
+	(getpwnam): Ditto for internal_getpwnam.
+	(getpwnam_r): Ditto.
+	(getpwent): Convert to call new pwdgrp methods.
+	* path.cc (class etc): Remove all methods.
+	* path.h (class etc): Drop.
+	* pinfo.cc (pinfo_basic::pinfo_basic): Set gid to ILLEGAL_GID rather
+	than UNKNOWN_GID.
+	(pinfo_init): Ditto.
+	* pwdgrp.h (internal_getpwnam): Drop 2nd parameter from declaration.
+	(internal_getpwuid): Ditto.
+	(internal_getgrgid): Ditto.
+	(internal_getgrnam): Ditto.
+	(internal_getgrent): Drop declaration.
+	(enum fetch_user_arg_type_t): New type.
+	(struct fetch_user_arg_t): New type.
+	(struct pg_pwd): New type.
+	(struct pg_grp): New type.
+	(class pwdgrp): Rework to provide functions for file and db requests
+	and caching.
+	(class ugid_cache_t): New class to provide RFC 2307 uid map caching.
+	(ugid_cache): Declare.
+	* sec_acl.cc: Drop including pwdgrp.h.
+	* sec_auth.cc: Drop including dsgetdc.h and pwdgrp.h.
+	(get_logon_server): Convert third parameter to ULONG flags argument
+	to allow arbitrary flags values in DsGetDcNameW call and change calls
+	to this function throughout.  Use cached account domain name rather
+	than calling GetComputerNameW.
+	(get_unix_group_sidlist): Remove.
+	(get_server_groups): Drop call to get_unix_group_sidlist.
+	(verify_token): Rework token group check without calling
+	internal_getgrent.
+	* sec_helper.cc (cygpsid::pstring): New methods, like string() but
+	return pointer to end of string.
+	(cygsid::getfromstr): Add wide character implementation.
+	(get_sids_info): Add RFC 2307 uid/gid mapping for Samba shares.
+	* security.cc: Drop including pwdgrp.h.
+	* security.h (DEFAULT_UID): Remove.
+	(UNKNOWN_UID): Remove.
+	(UNKNOWN_GID): Remove.
+	(uinfo_init): Move here from winsup.h.
+	(ILLEGAL_UID): Ditto.
+	(ILLEGAL_GID): Ditto.
+	(UNIX_POSIX_OFFSET): Define.  Add lengthy comment.
+	(UNIX_POSIX_MASK): Ditto.
+	(MAP_UNIX_TO_CYGWIN_ID): Ditto.
+	(ILLEGAL_UID16): Move here from winsup.h.
+	(ILLEGAL_GID16): Ditto.
+	(uid16touid32): Ditto.
+	(gid16togid32): Ditto.
+	(sid_id_auth): New convenience macro for SID component access.
+	(sid_sub_auth_count): Ditto.
+	(sid_sub_auth): Ditto.
+	(sid_sub_auth_rid): Ditto.
+	(cygpsid::pstring): Declare.
+	(cygsid::getfromstr): Declare wide character variant.
+	(cygsid::operator=): Ditto.
+	(cygsid::operator*=): Ditto.
+	(get_logon_server): Change declaration according to source code.
+	* setlsapwd.cc (setlsapwd): Drop 2nd parameter from internal_getpwnam
+	call.
+	* shared.cc (memory_init): Call cygheap->pg.init in first process.
+	* syscalls.cc: Drop including pwdgrp.h.
+	* tlsoffsets.h: Regenerate.
+	* tlsoffsets64.h: Ditto.
+	* uinfo.cc (internal_getlogin): Drop gratuitious internal_getpwuid
+	call.  Fix debug output.  Overwrite user gid in border case of a
+	missing passwd file while a group file exists.
+	(pwdgrp::add_line): Allocate memory on cygheap.
+	(pwdgrp::load): Remove.
+	(ugid_cache): Define.
+	(cygheap_pwdgrp::init): New method.
+	(cygheap_pwdgrp::nss_init_line): New method.
+	(cygheap_pwdgrp::_nss_init): New method.
+	(cygheap_domain_info::init): New method.
+	(logon_sid): Define.
+	(get_logon_sid): New function.
+	(pwdgrp::add_account_post_fetch): New method.
+	(pwdgrp::add_account_from_file): New methods.
+	(pwdgrp::add_account_from_windows): New methods.
+	(pwdgrp::check_file): New method.
+	(pwdgrp::fetch_account_from_line): New method.
+	(pwdgrp::fetch_account_from_file): New method.
+	(pwdgrp::fetch_account_from_windows): New method.
+	* winsup.h: Move aforementioned macros and declarations to security.h.
+@
+text
+@d11 2
+d37 1
+d48 1
+a48 1
+		val (NULL), isAD (false)
+d56 2
+@
+

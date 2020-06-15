@@ -1,0 +1,264 @@
+head	1.2;
+access;
+symbols
+	binutils-2_24-branch:1.2.0.14
+	binutils-2_24-branchpoint:1.2
+	binutils-2_21_1:1.2
+	binutils-2_23_2:1.2
+	binutils-2_23_1:1.2
+	binutils-2_23:1.2
+	binutils-2_23-branch:1.2.0.12
+	binutils-2_23-branchpoint:1.2
+	binutils-2_22_branch:1.2.0.10
+	binutils-2_22:1.2
+	binutils-2_22-branch:1.2.0.8
+	binutils-2_22-branchpoint:1.2
+	binutils-2_21:1.2
+	binutils-2_21-branch:1.2.0.6
+	binutils-2_21-branchpoint:1.2
+	binutils-2_20_1:1.2
+	binutils-2_20:1.2
+	binutils-arc-20081103-branch:1.1.0.4
+	binutils-arc-20081103-branchpoint:1.1
+	binutils-2_20-branch:1.2.0.4
+	binutils-2_20-branchpoint:1.2
+	dje-cgen-play1-branch:1.2.0.2
+	dje-cgen-play1-branchpoint:1.2
+	arc-20081103-branch:1.1.0.2
+	arc-20081103-branchpoint:1.1
+	binutils_latest_snapshot:1.2;
+locks; strict;
+comment	@# @;
+
+
+1.2
+date	2009.01.15.01.29.25;	author ccoutant;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2008.09.19.22.54.57;	author ccoutant;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@	* archive.cc (Archive::get_elf_object_for_member): Remove call
+	to File_read::claim_for_plugin.
+	* descriptors.cc (Descriptors::open): Remove reference to
+	is_claimed.
+	(Descriptors::claim_for_plugin): Remove.
+	* descriptors.h (Descriptors::claim_for_plugin): Remove.
+	(Descriptors::is_claimed): Remove.
+	(claim_descriptor_for_plugin): Remove.
+	* fileread.cc (File_read::claim_for_plugin): Remove.
+	* fileread.h (File_read::claim_for_plugin): Remove.
+	(File_read::descriptor): Reopen descriptor if necessary.
+	* plugin.cc  (Plugin::load): Add two new APIs to transfer vector.
+	(Plugin_manager::all_symbols_read): Add task parameter. Change
+	all callers.
+	(Plugin_manager::get_input_file): New function.
+	(Plugin_manager::release_input_file): New function.
+	(Pluginobj::Pluginobj): Add filesize parameter and initialize
+	corresponding data member.
+	(Sized_pluginobj::Sized_pluginobj): Add filesize parameter
+	and pass to base constructor. Change all callers.
+	(get_input_file, release_input_file): New functions.
+	(make_sized_plugin_object): Add filesize parameter. Change all callers.
+	* plugin.h (Plugin_manager::Plugin_manager): Initialize task_ member.
+	(Plugin_manager::all_symbols_read): Add task parameter.
+	(Plugin_manager::get_input_file): New function.
+	(Plugin_manager::release_input_file): New function.
+	(Plugin_manager::task_): New data member.
+	(Pluginobj::Pluginobj): Add filesize parameter.
+	(Pluginobj::filename): New function.
+	(Pluginobj::descriptor): New function.
+	(Pluginobj::filesize): New function.
+	(Pluginobj::filesize_): New data member.
+	(Sized_pluginobj::Sized_pluginobj): Add filesize parameter.
+	* readsyms.cc (Read_symbols::do_read_symbols): Remove call to
+	File_read::claim_for_plugin; use Object::unlock to unlock the file.
+
+	* testsuite/Makefile.am (plugin_test_4): New test case for plugins
+	with archive libraries.
+	* testsuite/Makefile.in: Regenerate.
+	* testsuite/plugin_test.c (struct sym_info): New type.
+	(get_input_file, release_input_file): New static variables.
+	(onload): Capture new transfer vector entries.
+	(claim_file_hook): Stop reading at end of file according to filesize.
+	Factor out parsing of readelf output into separate function.
+	(all_symbols_read_hook): Exercise get_input_file and release_input_file
+	APIs and get the source file name from the symbol table.  Convert
+	source file name to corresponding object file name.  Print info
+	message when adding new input files.
+	(parse_readelf_line): New function.
+	* testsuite/plugin_test_1.sh: Add checks for new info messages.
+	* testsuite/plugin_test_2.sh: Likewise.
+	* testsuite/plugin_test_3.sh: Likewise.
+	* testsuite/plugin_test_4.sh: New test case.
+@
+text
+@#!/bin/sh
+
+# plugin_test_1.sh -- a test case for the plugin API.
+
+# Copyright 2008, 2009 Free Software Foundation, Inc.
+# Written by Cary Coutant <ccoutant@@google.com>.
+
+# This file is part of gold.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+# MA 02110-1301, USA.
+
+# This file goes with plugin_test_1.c, a simple plug-in library that
+# exercises the basic interfaces and prints out version numbers and
+# options passed to the plugin.
+
+check()
+{
+    if ! grep -q "$2" "$1"
+    then
+	echo "Did not find expected output in $1:"
+	echo "   $2"
+	echo ""
+	echo "Actual output below:"
+	cat "$1"
+	exit 1
+    fi
+}
+
+check plugin_test_1.err "API version:"
+check plugin_test_1.err "gold version:"
+check plugin_test_1.err "option: _Z4f13iv"
+check plugin_test_1.err "two_file_test_main.o: claim file hook called"
+check plugin_test_1.err "two_file_test_1.syms: claim file hook called"
+check plugin_test_1.err "two_file_test_1b.syms: claim file hook called"
+check plugin_test_1.err "two_file_test_2.syms: claim file hook called"
+check plugin_test_1.err "two_file_test_1.syms: _Z4f13iv: PREVAILING_DEF_IRONLY"
+check plugin_test_1.err "two_file_test_1.syms: _Z2t2v: PREVAILING_DEF_REG"
+check plugin_test_1.err "two_file_test_1.syms: v2: RESOLVED_IR"
+check plugin_test_1.err "two_file_test_1.syms: t17data: RESOLVED_IR"
+check plugin_test_1.err "two_file_test_2.syms: _Z4f13iv: PREEMPTED_IR"
+check plugin_test_1.err "two_file_test_1.o: adding new input file"
+check plugin_test_1.err "two_file_test_1b.o: adding new input file"
+check plugin_test_1.err "two_file_test_2.o: adding new input file"
+check plugin_test_1.err "cleanup hook called"
+
+exit 0
+@
+
+
+1.1
+log
+@Add plugin functionality for link-time optimization (LTO).
+
+include/:
+	* plugin-api.h: New file.
+
+gold/:
+	* configure.ac (plugins): Add --enable-plugins option.
+	* configure: Regenerate.
+	* config.in: Regenerate.
+	* Makefile.am (LIBDL): New variable.
+	(CCFILES): Add plugin.cc.
+	(HFILES): Add plugin.h.
+	(ldadd_var): Add LIBDL.
+	* Makefile.in: Regenerate.
+
+	* archive.cc: Include "plugin.h".
+	(Archive::setup): Don't preread archive symbols when using a plugin.
+	(Archive::get_file_and_offset): Add memsize parameter.  Change callers.
+	(Archive::get_elf_object_for_member): Call plugin hooks for claiming
+	files.
+	(Archive::include_member): Add symbols from plugin objects.
+	* archive.h (Archive::get_file_and_offset): Add memsize parameter.
+	* descriptors.cc (Descriptors::open): Check for file descriptors
+	abandoned by plugins.
+	(Descriptors::claim_for_plugin): New function.
+	* descriptors.h (Descriptors::claim_for_plugin): New function.
+	(Open_descriptor::is_claimed): New field.
+	(claim_descriptor_for_plugin): New function.
+	* fileread.cc (File_read::claim_for_plugin): New function.
+	* fileread.h (File_read::claim_for_plugin): New function.
+	(File_read::descriptor): New function.
+	* gold.cc: Include "plugin.h".
+	(queue_initial_tasks): Add task to call plugin hooks for generating
+	new object files.
+	* main.cc: Include "plugin.h".
+	(main): Load plugin libraries.
+	* object.h (Pluginobj): Declare.
+	(Object::pluginobj): New function.
+	(Object::do_pluginobj): New function.
+	(Object::set_target): New function.
+	* options.cc: Include "plugin.h".
+	(General_options::parse_plugin): New function.
+	(General_options::General_options): Initialize plugins_ field.
+	(General_options::add_plugin): New function.
+	* options.h (Plugin_manager): Declare.
+	(General_options): Add --plugin option.
+	(General_options::has_plugins): New function.
+	(General_options::plugins): New function.
+	(General_options::add_plugin): New function.
+	(General_options::plugins_): New field.
+	* plugin.cc: New file.
+	* plugin.h: New file.
+	* readsyms.cc: Include "plugin.h".
+	(Read_symbols::do_read_symbols): Check for archive before checking
+	for ELF file.  Call plugin hooks to claim files.
+	* resolve.cc (Symbol_table::resolve): Record when symbol is referenced
+	from a real object file; force override when processing replacement
+	files.
+	* symtab.cc (Symbol::init_fields): Initialize in_real_elf_ field.
+	(Symbol::init_base_object): Likewise.
+	(Symbol::init_base_output_data): Likewise.
+	(Symbol::init_base_output_segment): Likewise.
+	(Symbol::init_base_constant): Likewise.
+	(Symbol::init_base_undefined): Likewise.
+	(Symbol::output_section): Assert that object is not a plugin.
+	(Symbol_table::add_from_pluginobj): New function.
+	(Symbol_table::sized_finalize_symbol): Treat symbols from plugins as
+	undefined.
+	(Symbol_table::sized_write_globals): Likewise.
+	(Symbol_table::add_from_pluginobj): Instantiate template.
+	* symtab.h (Sized_pluginobj): Declare.
+	(Symbol::in_real_elf): New function.
+	(Symbol::set_in_real_elf): New function.
+	(Symbol::in_real_elf_): New field.
+	(Symbol_table::add_from_pluginobj): New function.
+
+	* testsuite/Makefile.am (AM_CFLAGS): New variable.
+	(LIBDL): New variable.
+	(LDADD): Add LIBDL.
+	(check_PROGRAMS): Add plugin_test_1 and plugin_test_2.
+	(check_SCRIPTS): Add plugin_test_1.sh and plugin_test_2.sh.
+	(check_DATA): Add plugin_test_1.err and plugin_test_2.err.
+	(MOSTLYCLEANFILES): Likewise.
+	* testsuite/Makefile.in: Regenerate.
+	* testsuite/plugin_test.c: New file.
+	* testsuite/plugin_test_1.sh: New file.
+	* testsuite/plugin_test_2.sh: New file.
+@
+text
+@d5 1
+a5 1
+# Copyright 2008 Free Software Foundation, Inc.
+d54 3
+@
+

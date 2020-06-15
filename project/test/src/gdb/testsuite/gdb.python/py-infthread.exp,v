@@ -1,0 +1,527 @@
+head	1.11;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.11
+	gdb_7_6-2013-04-26-release:1.11
+	gdb_7_6-branch:1.11.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.11
+	gdb_7_5_1-2012-11-29-release:1.9
+	gdb_7_5-2012-08-17-release:1.9
+	gdb_7_5-branch:1.9.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.9
+	gdb_7_4_1-2012-04-26-release:1.5.4.1
+	gdb_7_4-2012-01-24-release:1.5.4.1
+	gdb_7_4-branch:1.5.0.4
+	gdb_7_4-2011-12-13-branchpoint:1.5
+	gdb_7_3_1-2011-09-04-release:1.5
+	gdb_7_3-2011-07-26-release:1.5
+	gdb_7_3-branch:1.5.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.5
+	gdb_7_2-2010-09-02-release:1.1
+	gdb_7_2-branch:1.1.0.2
+	gdb_7_2-2010-07-07-branchpoint:1.1;
+locks; strict;
+comment	@# @;
+
+
+1.11
+date	2013.01.01.06.41.26;	author brobecke;	state Exp;
+branches;
+next	1.10;
+
+1.10
+date	2012.12.10.21.22.21;	author pkoning;	state Exp;
+branches;
+next	1.9;
+
+1.9
+date	2012.06.22.17.59.33;	author tromey;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2012.03.08.22.19.48;	author kseitz;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2012.01.16.16.21.52;	author palves;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2012.01.04.08.27.49;	author brobecke;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2011.03.17.09.36.17;	author pmuldoon;	state Exp;
+branches
+	1.5.4.1;
+next	1.4;
+
+1.4
+date	2011.01.19.17.21.39;	author tromey;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2011.01.11.21.22.35;	author tromey;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2011.01.01.15.33.49;	author brobecke;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2010.06.28.21.16.04;	author pmuldoon;	state Exp;
+branches;
+next	;
+
+1.5.4.1
+date	2012.01.06.04.54.27;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.11
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@# Copyright (C) 2009-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# This file is part of the GDB testsuite.  It tests the mechanism
+# exposing inferior threads to Python.
+
+load_lib gdb-python.exp
+
+standard_testfile
+
+if { [prepare_for_testing ${testfile}.exp ${testfile} ${srcfile}] } {
+    return -1
+}
+
+# Start with a fresh gdb.
+clean_restart ${testfile}
+
+# Skip all tests if Python scripting is not enabled.
+if { [skip_python_tests] } { continue }
+
+# The following tests require execution.
+
+if ![runto_main] then {
+    fail "Can't run to main"
+    return 0
+}
+
+# Test basic gdb.Inferior attributes and methods.
+
+gdb_py_test_silent_cmd "python t0 = gdb.selected_thread ()" "test gdb.selected_thread" 1
+gdb_test "python print (t0)" "\\<gdb.InferiorThread object at 0x\[\[:xdigit:\]\]+>" "verify InferiorThread object"
+gdb_test "python print ('result = %s' % t0.num)" " = \[0-9\]+" "test Inferior.num"
+gdb_test "python print ('result = %s' % str (t0.ptid))" " = \\(\[0-9\]+, \[0-9\]+, \[0-9\]+\\)" "test InferiorThread.ptid"
+
+gdb_py_test_silent_cmd "python name = gdb.selected_thread().name" \
+    "get supplied name of current thread" 1
+gdb_py_test_silent_cmd "python gdb.selected_thread().name = 'hibob'" \
+    "set name of current thread" 1
+gdb_test "python print (gdb.selected_thread().name)" "hibob" \
+    "check name of current thread"
+gdb_py_test_silent_cmd "python gdb.selected_thread().name = None" \
+    "reset name of current thread" 1
+gdb_test "python print (gdb.selected_thread().name == name)" "True" \
+    "check name of current thread again"
+
+gdb_test "python print ('result = %s' % t0.is_stopped ())" " = True" "test InferiorThread.is_stopped"
+gdb_test "python print ('result = %s' % t0.is_running ())" " = False" "test InferiorThread.is_running"
+gdb_test "python print ('result = %s' % t0.is_exited ())" " = False" "test InferiorThread.is_exited"
+
+# Test InferiorThread is_valid.  This must always be the last test in
+# this testcase as it kills the inferior.
+
+gdb_test "python print ('result = %s' % t0.is_valid ())" " = True" "test InferiorThread.is_valid"
+gdb_test_no_output "kill inferior 1" "kill inferior 1"
+gdb_test "python print ('result = %s' % t0.is_valid ())" " = False" "test InferiorThread.is_valid"
+@
+
+
+1.10
+log
+@2012-12-10  Paul Koning  <paul_koning@@dell.com>
+
+	* gdb.base/charset.exp: Change print syntax for Python 3
+	compatibility.
+	* gdb.python/py-block.exp: Ditto.
+	* gdb.python/py-breakpoint.exp: Ditto.
+	* gdb.python/py-cmd.exp: Ditto.
+	* gdb.python/py-events.py: Ditto.
+	* gdb.python/py-finish-breakpoint.py: Ditto.
+	* gdb.python/py-finish-breakpoint2.exp: Ditto.
+	* gdb.python/py-finish-breakpoint2.py: Ditto.
+	* gdb.python/py-frame-inline.exp: Ditto.
+	* gdb.python/py-frame.exp: Ditto.
+	* gdb.python/py-infthread.exp: Ditto.
+	* gdb.python/py-objfile.exp: Ditto.
+	* gdb.python/py-parameter.exp: Ditto.
+	* gdb.python/py-progspace.exp: Ditto.
+	* gdb.python/py-prompt.exp: Ditto.
+	* gdb.python/py-symbol.exp: Ditto.
+	* gdb.python/py-symtab.exp: Ditto.
+	* gdb.python/py-template.exp: Ditto.
+	* gdb.python/py-value-cc.exp: Ditto.
+	* gdb.python/python.exp: Ditto.
+	* gdb.python/source2.py: Ditto.
+	* gdb.python/lib-types.exp: Change print syntax for Python 3
+	compatibility.
+	Use sorted() function rather than sort() method.
+	Accept either int or long values for enum values.
+	* gdb.python/py-events.exp: Use exec(open(...).read()) instead of
+	execfile for Python 3 compatibility.
+	* gdb.python/py-evsignal.exp: Ditto.
+	* gdb.python/py-evthreads.exp: Ditto.
+	* gdb.python/py-mi.exp: Ditto.
+	* gdb.python/py-pp-maint.exp: Ditto.
+	* gdb.python/py-prettyprint.exp: Ditto.
+	* gdb.python/py-finish-breakpoint.exp: Change print syntax for
+	Python 3 compatibility.
+	Skip tests for Python 2.4.
+	* gdb.python/py-inferior.exp: Change print syntax for
+	Python 3 compatibility.
+	Use byte string rather than character string in memory write test
+	if Python 3.
+	* gdb.python/py-pp-maint.py: Change class declarations to "new
+	class" syntax.
+	* gdb.python/py-prettyprint.py: Change iterator class to generator
+	function for Python 3 compatibility.
+	Make all classes "new style".
+	Fix indentation issue and stray semicolon.
+	* gdb.python/py-shared.expChange print syntax for Python 3
+	compatibility.
+	Define "long" if Python 3.
+	* gdb.python/py-type.exp: Change print syntax for Python 3
+	compatibility.
+	Accept either int or long values for enum values.
+	* gdb.python/py-value.exp: Change print syntax for Python 3
+	compatibility.
+	Skip "long" and "unicode" tests if Python 3.
+	Accept either "type" or "class" in type checks.
+	* lib/gdb.exp (gdb_py_is_py3k): New flag set if Python 3.
+	(gdb_py_is_py24): New flag set if Python 2.4 or 2.5.
+@
+text
+@d1 1
+a1 1
+# Copyright (C) 2009-2012 Free Software Foundation, Inc.
+@
+
+
+1.9
+log
+@	* gdb.python/lib-types.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.python/py-block.exp: Use standard_testfile.
+	* gdb.python/py-breakpoint.exp: Use standard_testfile.
+	* gdb.python/py-events.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.python/py-evsignal.exp: Use standard_testfile.
+	* gdb.python/py-evethreads.exp: Use standard_testfile.
+	* gdb.python/py-explore-cc.exp: Use standard_testfile.
+	* gdb.python/py-explore.exp: Use standard_testfile.
+	* gdb.python/py-finish-breakpoint.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.python/py-finish-breakpoint2.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.python/py-frame-inline.exp: Use standard_testfile.
+	* gdb.python/py-frame.exp: Use standard_testfile.
+	* gdb.python/py-inferior.exp: Use standard_testfile.
+	* gdb.python/py-infthread.exp: Use standard_testfile.
+	* gdb.python/py-mi.exp: Use standard_testfile.
+	* gdb.python/py-objfile-script.exp: Use standard_testfile,
+	build_executable.
+	* gdb.python/py-objfile.exp: Use standard_testfile.
+	* gdb.python/py-pp-maint.exp: Use standard_testfile,
+	prepare_for_testing.
+	* gdb.python/py-prettyprint.exp: Use standard_testfile.
+	* gdb.python/py-progspace.exp: Use standard_testfile,
+	build_executable.
+	* gdb.python/py-prompt.exp: Use standard_testfile,
+	build_executable.
+	* gdb.python/py-section-script.exp: Use standard_testfile,
+	build_executable.
+	* gdb.python/py-shared.exp: Use standard_testfile,
+	standard_output_file, clean_restart.
+	* gdb.python/py-symbol.exp: Use standard_output_file,
+	prepare_for_testing.
+	* gdb.python/py-symtab.exp: Use standard_output_file,
+	prepare_for_testing
+	* gdb.python/py-template.exp: Use standard_testfile.
+	* gdb.python/py-type.exp: Use standard_testfile.
+	* gdb.python/py-value-cc.exp: Use standard_testfile.
+	* gdb.python/py-value.exp: Use standard_testfile.
+	* gdb.python/python.exp: Use standard_testfile, build_executable.
+@
+text
+@d43 3
+a45 3
+gdb_test "python print t0" "\\<gdb.InferiorThread object at 0x\[\[:xdigit:\]\]+>" "verify InferiorThread object"
+gdb_test "python print 'result =', t0.num" " = \[0-9\]+" "test Inferior.num"
+gdb_test "python print 'result =', t0.ptid" " = \\(\[0-9\]+, \[0-9\]+, \[0-9\]+\\)" "test InferiorThread.ptid"
+d51 1
+a51 1
+gdb_test "python print gdb.selected_thread().name" "hibob" \
+d55 1
+a55 1
+gdb_test "python print gdb.selected_thread().name == name" "True" \
+d58 3
+a60 3
+gdb_test "python print 'result =', t0.is_stopped ()" " = True" "test InferiorThread.is_stopped"
+gdb_test "python print 'result =', t0.is_running ()" " = False" "test InferiorThread.is_running"
+gdb_test "python print 'result =', t0.is_exited ()" " = False" "test InferiorThread.is_exited"
+d65 1
+a65 1
+gdb_test "python print 'result =', t0.is_valid ()" " = True" "test InferiorThread.is_valid"
+d67 1
+a67 1
+gdb_test "python print 'result =', t0.is_valid ()" " = False" "test InferiorThread.is_valid"
+@
+
+
+1.8
+log
+@	* gdb.ada/array_bounds.exp: Get breakpoint for line
+	with "START", not "STOP".
+	* gdb.python/py-infthread.exp: Do not continue to
+	line marked "Break here.", which is undefined.
+@
+text
+@d21 2
+a22 2
+set testfile "py-infthread"
+set srcfile ${testfile}.c
+@
+
+
+1.7
+log
+@2012-01-16  Pedro Alves  <palves@@redhat.com>
+
+	Remove all calls to strace.
+@
+text
+@a39 2
+runto [gdb_get_line_number "Break here."]
+
+@
+
+
+1.6
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@a18 4
+if $tracelevel then {
+    strace $tracelevel
+}
+
+@
+
+
+1.5
+log
+@2011-03-17  Phil Muldoon  <pmuldoon@@redhat.com>
+
+	    * python/py-symtab.c: Populate symtab_object_methods,
+	    sal_object_methods.
+	    (stpy_is_valid): New function.
+	    (salpy_is_valid): Ditto.
+	    * python/py-symbol.c: Declare symbol_object_methods.
+	    Populate.
+	    (sympy_is_valid): New function.
+	    * python/py-objfile.c: Declare objfile_object_methods.
+	    Populate.
+	    (objfpy_is_valid): New function.
+	    * python/py-inferior.c: Populate inferior_object_methods.
+	    (infpy_is_valid): New function.
+	    * python/py-infthread.c: Populate thread_object_methods.
+	    (thpy_is_valid): New function.
+	    * python/py-block.c: Declare block_object_methods.
+	    Populate.  Declare
+	    block_iterator_object_methods.  Populate.
+	    (blpy_is_valid): New function.
+	    (blpy_iter_is_valid): Ditto.
+
+2010-03-17  Phil Muldoon  <pmuldoon@@redhat.com>
+
+	    * gdb.python/Makefile.in: Add py-objfile.
+	    * gdb.python/py-objfile.exp: New file.
+	    * gdb.python/py-objfile.c: New file.
+	    * gdb.python/py-block.exp: Add is_valid tests.
+	    * gdb.python/py-inferior.exp: Ditto.
+	    * gdb.python/py-infthread.exp: Ditto.
+	    * gdb.python/py-symbol.exp: Ditto.
+	    * gdb.python/py-symtab.exp: Ditto.
+
+2011-03-17  Phil Muldoon  <pmuldoon@@redhat.com>
+
+	    * gdb.texinfo (Blocks In Python): Add is_valid method
+              description.
+	      (Inferiors In Python): Likewise.
+	      (Threads In Python): Likewise.
+	      (Symbols In Python): Likewise.
+	      (Objfiles In Python): Likewise.
+	      (Symbol Tables In Python): Likewise.
+@
+text
+@d1 1
+a1 1
+# Copyright (C) 2009, 2010, 2011 Free Software Foundation, Inc.
+@
+
+
+1.5.4.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d1 1
+a1 1
+# Copyright (C) 2009-2012 Free Software Foundation, Inc.
+@
+
+
+1.4
+log
+@gdb
+	PR mi/8618:
+	* thread.c (free_thread): Free 'name'.
+	(print_thread_info): Emit thread name.  Change CLI output.
+	(thread_name_command): New function.
+	(do_captured_thread_select): Emit newline.
+	(_initialize_thread): Register 'thread name' command.
+	* target.h (struct target_ops) <to_thread_name>: New field.
+	(target_thread_name): New macro.
+	* target.c (update_current_target): Handle to_thread_name.
+	* python/py-infthread.c (thpy_get_name): New function.
+	(thpy_set_name): Likewise.
+	(thread_object_getset): Add "name".
+	* linux-nat.c (linux_nat_thread_name): New function.
+	(linux_nat_add_target): Set to_thread_name.
+	* gdbthread.h (struct thread_info) <name>: New field.
+gdb/doc
+	* gdb.texinfo (Threads): Document thread name output and `thread
+	name' command.
+	(Threads In Python): Document Thread.name attribute.
+	(GDB/MI Thread Commands): Document thread attributes.
+gdb/testsuite
+	* gdb.python/py-infthread.exp: Add thread tests.
+@
+text
+@d67 7
+@
+
+
+1.3
+log
+@	* gdb.python/py-infthread.exp: Load gdb-python.exp.
+@
+text
+@d53 11
+@
+
+
+1.2
+log
+@run copyright.sh for 2011.
+@
+text
+@d23 2
+@
+
+
+1.1
+log
+@2010-06-28  Phil Muldoon  <pmuldoon@@redhat.com>
+            Tom Tromey  <tromey@@redhat.com>
+            Thiago Jung Bauermann  <bauerman@@br.ibm.com>
+
+	* value.c (pack_unsigned_long): New function.
+	(value_from_ulongest): New function.
+	* value.h (value_from_ulongest): Declare.
+	* python/python.c (_initialize_python): Call
+	gdbpy_initialize_thread and gdbpy_initialize_inferior.
+	* python/python-internal.h: Define thread_object.
+	(gdbpy_inferiors, gdbpy_selected_thread)
+	(frame_info_to_frame_object, create_thread_object)
+	(find_thread_object, find_inferior_object)
+	(gdbpy_initialize_thread, gdbpy_initialize_inferiors)
+	(gdbpy_is_value_object, get_addr_from_python): Declare.
+	* python/py-value.c (builtin_type_upylong): Define.
+	(convert_value_from_python): Add logic for ulongest.
+	(gdbpy_is_value_object): New function.
+	* python/py-utils.c (get_addr_from_python): New function.
+	* python/py-frame.c (frame_info_to_frame_object): Return a PyObject.
+	(gdbpy_selected_frame): Use PyObject over frame_info.
+	* Makefile.in (SUBDIR_PYTHON_OBS): Add py-inferior and
+	py-infthread.
+	(SUBDIR_PYTHON_SRCS): Likewise.
+	(py-inferior.o): New Rule.
+	(py-infthread.o): New Rule.
+	* python/py-inferior.c: New File.
+	* python/py-infthread.c: New File.
+
+2010-06-28  Phil Muldoon  <pmuldoon@@redhat.com>
+	    Tom Tromey  <tromey@@redhat.com>
+	    Thiago Jung Bauermann  <bauerman@@br.ibm.com>
+
+	* gdb.texinfo (Inferiors In Python): New node.
+	* gdb.texinfo (Threads In Python): New node.
+
+2010-06-28  Phil Muldoon  <pmuldoon@@redhat.com>
+            Tom Tromey  <tromey@@redhat.com>
+            Thiago Jung Bauermann  <bauerman@@br.ibm.com>
+
+	* gdb.python/py-inferior.c: New File.
+	* gdb.python/py-infthread.c: New File.
+	* gdb.python/py-inferior.exp: New File.
+	* gdb.python/py-infthread.exp: New File.
+@
+text
+@d1 1
+a1 1
+# Copyright (C) 2009, 2010 Free Software Foundation, Inc.
+@
+

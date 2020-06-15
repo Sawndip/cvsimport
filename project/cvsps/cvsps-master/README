@@ -1,0 +1,228 @@
+= cvsps README =
+
+== WARNING ==
+
+This program has been declared end-of-life. Do not use it unless you
+have no alternative, and consider its results highly suspect on any CVS
+repository with branches - that is, anything other than a straight
+linear succession of commits.  For a better alternative, see
+cvs-fast-export(1).
+
+== Overview ==
+
+CVSps is a program for collecting patchsets from a CVS repository. The
+original use case was that its reports were useful for human
+inspection by developers working on projects using CVS, but nowadays
+the --fast-export option (which emits the history as a git-style
+fast-import stream) is more interesting.
+
+This tool was written and maintained until 2.2b1 by David Manfield,
+who reported his "thanks to my employer Cobite and Robert Lippman,
+who've given me time to develop this tool".  The 3.x versions
+with fast-export dumping are maintained by Eric S. Raymond.
+
+== Change notices and deprecations ==
+
+If you have not used an older version of CVSps, you can skip this section.
+
+The 3.x versions have changed significantly.  In 2012, CVS use is
+declining swiftly (GNU CVS hasn't been updated since 2004) and the
+original use case for this tool - browsing change sets in a live CVS
+repository - is obsolete.  The 3.x versions are more focused on the
+--fast-export mode.
+
+Accordingly, a large amount of old code and options have been
+discarded in order to reduce CVSps's complexity and improve its
+performance.  It now always runs in what used to be cvs-direct mode,
+doing client transactions with the CVS server and not relying on local
+CVS commands at all.  Consequently, all the hairiness around caching
+and different log/rlog versions is gone and the tool is much faster.
+Also, it is no longer required that CVSps be run in a CVS checkout
+directory; it can run from a repository directory, or actually 
+from anywhere at all providing CVSROOT is set or --root is used.
+
+The old -A option enabling ancestry-branch tracking didn't work 
+and has been dropped (equivalent topological analysis is done in
+fast-export mode). The new -A option accepts an author-mapping file
+in the same format traditionally accepted by git-cvsimport, cvs2git,
+git-svn, reposurgeon, and other similar tools.
+
+The --summary-first, -g and --diff-opts options have been dropped.
+
+The old-style non-fast-export reporting mode is still supported, but
+deprecated.  In the future, it is possible that it may be dropped
+entirely.
+
+== Compiling ==
+
+Do 'make' and 'make install'.  This is very plain-vanilla ANSI C
+and should run on any Unixoid OS.
+
+== Testing ==
+
+'make check' runs a regression-test suite.
+
+== Known Bugs ==
+
+Executable permissions on CVS files are not retrieved or reported.
+This could in theory be fixed - cvs update (mostly) does the right
+thing - but it would require figuring out how the very poorly dcumented 
+CVS protocol transmits the information.
+
+== Running ==
+
+Note: not all options are necessarily discussed here.  Please check the
+output of 'cvsps -h' and/or the manual page for the most up-to-date info.
+
+a) General theory of operation
+
+CVSps operates by parsing 'cvs rlog' output fetched from the CVS
+server.  To run it, you must be in the working directory of a cvs
+project.  CVSps handles subdirectories fine, so run it in the top
+directory of your project.
+
+The --fast-export switch produces a git-style fast-import stream on
+standard output.  The rest of this section describes the older default
+format intended for human inspection.
+
+b) Old-style changeset reporting
+
+CVSps's output is information about patchsets.  A patchset looks like:
+
+---------------------
+PatchSet 63 
+Date: 2001/03/09 18:21:15
+Author: sneakums
+Branch: sneakums-nasty-hack
+Tag: (none) 
+Branches: 
+Log:
+First steps towards separating rfk from it nki source.  The primary
+aim is to rough out the interface, specified in nki.h.  Expect the
+implementation to suck.
+
+Members: 
+	src/Makefile.am:1.6->1.6.2.1 
+	src/messages.h:1.9->1.9.2.1 
+	src/nki.c:1.1->1.1.2.1 
+	src/nki.h:1.1->1.1.2.1 
+	src/robotfindskitten.c:1.15->1.15.2.1 
+
+---------------------
+
+This patchset report shows the date, the author, log message and each
+file that was modified.  For each file the pre-commit and post-commit
+revisions are given.  You can also see if the files are on a branch,
+as well as the tag (see TAGS below).
+
+Patchsets are ordered by commit timestamp, so as long as the clock on
+your CVS server is monotonic, the numbering of patchsets should be
+invariant. (see COMPATIBILITY below).
+
+c) Limiting the patchset output.
+
+The default output of CVSps is to show all patchsets.  This can be
+filtered in one of many ways.  These flags can be combined to really
+limit the output to what you're interested in.
+
+By patch-set number.  With the -s <ps range> you can specify
+individual PatchSets by number or by range.  Ranges can be of the form
+'<number>', '<number>-', '-<number>' and of course
+'<number>-<number>'.  Multiple ranges can be specified seperated by
+commas.  E.g.
+
+cvsps -s 999-1020,1025,4956-
+
+By author.  With the -a <author> flag you limit the output to patchsets
+committed by a given author.  The author is usually the UNIX login id.
+
+By file.  With the -f <file regex> flag you limit the output to patchsets 
+that have modified the given file.  Because a regular expression can have
+many pieces 'or'ed together, you can specify many different files here,
+for example (note also the use of the ^ character):
+
+cvsps -f '^net/ipv4|^net/core'
+
+By date.  With one date specification, CVSps shows only patchsets newer
+than the date given, and with two dates, it shows patchsets between the
+two dates.
+
+*NOTE ON DATE FORMAT*.  The preferred date format is in RFC3339 style:
+'yyyy-mm-dd-Thh:mm:ss'; 'yyyy/mm/dd hh:mm:ss' is also accepted.  In
+both cases time is given as localtime and hh is in 24 hour format.
+CVS tends to display times as GMT, but parse dates as localtime, so
+when using the '-D' with cvs you need to convert from GMT to localtime
+in your head.  CVSps is not as fancy.  It treats all dates as if in
+localtime, and therefore you give CVSps dates the same way it gives
+them to you.  But note that --fast-export exports git-style UTC times.
+
+By branch.  With the -b <branch> flag you limit the output to patchsets
+that have modified the history of the given branch.  Note, this 
+doesn't necessarily mean the commit itself was made on the branch, since
+the files in question may have existed prior to the branch point, in which
+case changes made to a given file before the branch point affect the file
+as it exists in the head of the branch.  If you want to restrict to the
+main branch, use a branch of 'HEAD'.
+
+By log comment.  With the -l <regex> flag you can limit the ouptut to
+patchsets with the commit message matching the regex.
+
+By tag.  With the -r <tag1> -r <tag2> you can limit the patchsets to
+commits after a given tag1 and, optionally, before tag2.
+
+d) what is timestamp fuzz factor (-z option)?
+
+There's another annoying feature of CVS.  When you commit a large change,
+the timestamp on the change is created per file committed.  For example:
+if you commit changes to 60 files on a slow server, taking, say, 60
+seconds, the 'commit time' as given in the log message for the first file
+will differ from that of the last file by 60 seconds.
+
+The fuzz factor attempts to workaround this by saying: commits by the same
+author, using the same log message, within <fuzz> seconds are considered
+part of the same patchset.  The default fuzz is 300 seconds (5 minutes).
+
+== TAGS ==
+
+Please read the manual page.
+
+== COMPATIBILITY ==
+
+One of the main goals of cvsps was to make the patchset numbering
+stable across all time, as long as no funny-business is done to the
+repository files themselves.
+
+Unfortunately, as bugs have been fixed, the numbering has changed.  This is most
+regrettable, but unavoidable.
+
+Additionally, in version 2.0, two changes have been made which will
+'renumber' the patch sets.
+
+1) The false 'globbing' of two commits from nearly the exact same time, by the
+same person, with the same log description but to different branches.  Now,
+these will be reported as 2 patchsets instead of one.
+
+2) The creation of a large volume of patchsets for 'file xyz was
+originally added on branch' log messages.  This occurs whenever a file
+is originally born on a branch, and is exacerbated by the fact that
+even when all of these files are created with a single commit, the
+'file xyz...' messages, which contains the actual file name, are
+different, causing a proliferation of these unwanted patchsets.  These
+patchsets are now silently eliminated from the output.
+
+== Known Problems (this will become the FAQ if anyone ever A any Q). ==
+
+1) What is the '*** file xyz doesn't match strip_path abc' error?
+
+This error occurs when one of the subdirectories of the directory you
+ran CVSps in is checked out from a different repository.  CVSps tries
+to remove the repository path information from the filenames that it
+gets to give you working-directory local pathnames.  It does this 
+at startup by parsing the CVS/Root and CVS/Repository files.  If 
+the contents of these two files is different for some subdirectory,
+all of the files in that subdirectory will be ignored. 
+
+You can always run CVSps in that subdirectory, and since it IS a 
+separate repository, that does make a little bit of sense.
+
+//end

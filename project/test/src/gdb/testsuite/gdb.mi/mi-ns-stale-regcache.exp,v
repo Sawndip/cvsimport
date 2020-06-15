@@ -1,0 +1,435 @@
+head	1.10;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.10
+	gdb_7_6-2013-04-26-release:1.10
+	gdb_7_6-branch:1.10.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.10
+	gdb_7_5_1-2012-11-29-release:1.9
+	gdb_7_5-2012-08-17-release:1.9
+	gdb_7_5-branch:1.9.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.9
+	gdb_7_4_1-2012-04-26-release:1.7.2.1
+	gdb_7_4-2012-01-24-release:1.7.2.1
+	gdb_7_4-branch:1.7.0.2
+	gdb_7_4-2011-12-13-branchpoint:1.7
+	gdb_7_3_1-2011-09-04-release:1.4
+	gdb_7_3-2011-07-26-release:1.4
+	gdb_7_3-branch:1.4.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.4
+	gdb_7_2-2010-09-02-release:1.3
+	gdb_7_2-branch:1.3.0.2
+	gdb_7_2-2010-07-07-branchpoint:1.3;
+locks; strict;
+comment	@# @;
+
+
+1.10
+date	2013.01.01.06.41.24;	author brobecke;	state Exp;
+branches;
+next	1.9;
+
+1.9
+date	2012.07.10.15.32.51;	author tromey;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	2012.01.04.08.17.54;	author brobecke;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2011.08.09.17.45.19;	author palves;	state Exp;
+branches
+	1.7.2.1;
+next	1.6;
+
+1.6
+date	2011.07.18.04.14.21;	author qiyao;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2011.05.27.12.47.10;	author mpolacek;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2011.01.01.15.33.47;	author brobecke;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2010.06.14.15.45.33;	author uweigand;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2010.05.26.18.12.13;	author msnyder;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2010.04.29.16.33.16;	author palves;	state Exp;
+branches;
+next	;
+
+1.7.2.1
+date	2012.01.06.04.44.09;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.10
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@# Copyright 2002-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# Regression test for PR11557.  Make sure we don't end up with a stale
+# register cache just after resuming a thread.
+
+if { ![support_displaced_stepping] } { 
+    unsupported "displaced stepping"
+    return -1
+}
+
+load_lib mi-support.exp
+set MIFLAGS "-i=mi"
+
+gdb_exit
+if {[mi_gdb_start]} {
+    continue
+}
+
+proc mi_nonstop_resume { command test } {
+    if { [mi_send_resuming_command $command $test] != 0 } {
+	# If a resume fails, assume non-stop is broken or unsupported
+	# for this target.  We have logged a FAIL or UNSUPPORTED; skip
+	# the remaining tests to limit timeouts.
+	return -code continue
+    }
+}
+
+#
+# Start here
+#
+standard_testfile ns-stale-regcache.c
+
+set options [list debug]
+if {[gdb_compile "$srcdir/$subdir/$srcfile" \
+	 $binfile executable $options] != "" } {
+    return -1
+}
+
+mi_gdb_reinitialize_dir $srcdir/$subdir
+mi_gdb_load $binfile
+
+mi_gdb_test "-gdb-set non-stop 1" ".*"
+mi_gdb_test "-gdb-set target-async 1" ".*"
+mi_detect_async
+
+if { [mi_run_to_main] < 0 } {
+    continue
+}
+
+# Check that register and stack info don't end up stale after resuming
+# a thread.
+mi_nonstop_resume "exec-continue" "resume thread"
+
+mi_gdb_test "-data-evaluate-expression \$pc" \
+    "\\^error,msg=\".*\"" "no stale register cache of resumed thread"
+
+mi_gdb_test "-stack-info-frame" \
+    "\\^error,msg=\".*\"" "no stale frame info of resumed thread"
+
+# Check that the thread is still running.  If the above tests passed,
+# we want it to be for the right reasons.
+mi_check_thread_states {"running"} "main thread still running"
+
+mi_gdb_exit
+@
+
+
+1.9
+log
+@	* gdb.mi/dw2-ref-missing-frame.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.mi/gdb2549.exp: Use standard_testfile.
+	* gdb.mi/gdb669.exp: Use standard_testfile.
+	* gdb.mi/gdb701.exp: Use standard_testfile.
+	* gdb.mi/gdb792.exp: Use standard_testfile.
+	* gdb.mi/mi-async.exp: Use standard_testfile.
+	* gdb.mi/mi-basics.exp: Use standard_testfile.
+	* gdb.mi/mi-break.exp: Use standard_testfile.
+	* gdb.mi/mi-cli.exp: Use standard_testfile.
+	* gdb.mi/mi-console.exp: Use standard_testfile.
+	* gdb.mi/mi-disassemble.exp: Use standard_testfile.
+	* gdb.mi/mi-eval.exp: Use standard_testfile.
+	* gdb.mi/mi-file-transfer.exp: Use standard_testfile.
+	* gdb.mi/mi-file.exp: Use standard_testfile.
+	* gdb.mi/mi-inheritance-syntax-error.exp: Use standard_testfile.
+	* gdb.mi/mi-logging.exp: Use standard_testfile.
+	* gdb.mi/mi-nonstop-exit.exp: Use standard_testfile.
+	* gdb.mi/mi-nonstop.exp: Use standard_testfile.
+	* gdb.mi/mi-ns-stale-regcache.exp: Use standard_testfile.
+	* gdb.mi/mi-nsintrall.exp: Use standard_testfile.
+	* gdb.mi/mi-nsmoribund.exp: Use standard_testfile.
+	* gdb.mi/mi-nsthrexec.exp: Use standard_testfile.
+	* gdb.mi/mi-pending.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.mi/mi-pthreads.exp: Use standard_testfile.
+	* gdb.mi/mi-read-memory.exp: Use standard_testfile.
+	* gdb.mi/mi-regs.exp: Use standard_testfile.
+	* gdb.mi/mi-return.exp: Use standard_testfile.
+	* gdb.mi/mi-reverse.exp: Use standard_testfile.
+	* gdb.mi/mi-simplerun.exp: Use standard_testfile.
+	* gdb.mi/mi-solib.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.mi/mi-stack.exp: Use standard_testfile.
+	* gdb.mi/mi-stepi.exp: Use standard_testfile.
+	* gdb.mi/mi-stepn.exp: Use standard_testfile.
+	* gdb.mi/mi-syn-frame.exp: Use standard_testfile.
+	* gdb.mi/mi-until.exp: Use standard_testfile.
+	* gdb.mi/mi-var-block.exp: Use standard_testfile.
+	* gdb.mi/mi-var-child-f.exp: Use standard_testfile.
+	* gdb.mi/mi-var-child.exp: Use standard_testfile.
+	* gdb.mi/mi-var-cmd.exp: Use standard_testfile.
+	* gdb.mi/mi-var-cp.exp: Use standard_testfile.
+	* gdb.mi/mi-var-display.exp: Use standard_testfile.
+	* gdb.mi/mi-var-invalidate.exp: Use standard_testfile,
+	standard_output_file.
+	* gdb.mi/mi-var-rtti.exp: Use standard_testfile.
+	* gdb.mi/mi-watch-nonstop.exp: Use standard_testfile.
+	* gdb.mi/mi-watch.exp: Use standard_testfile.
+	* gdb.mi/mi2-amd64-entry-value.exp: Use standard_testfile.
+	* gdb.mi/mi2-basics.exp: Use standard_testfile.
+	* gdb.mi/mi2-break.exp: Use standard_testfile.
+	* gdb.mi/mi2-cli.exp: Use standard_testfile.
+	* gdb.mi/mi2-console.exp: Use standard_testfile.
+	* gdb.mi/mi2-disassemble.exp: Use standard_testfile.
+	* gdb.mi/mi2-eval.exp: Use standard_testfile.
+	* gdb.mi/mi2-file.exp: Use standard_testfile.
+	* gdb.mi/mi2-pthreads.exp: Use standard_testfile.
+	* gdb.mi/mi2-read-memory.exp: Use standard_testfile.
+	* gdb.mi/mi2-regs.exp: Use standard_testfile.
+	* gdb.mi/mi2-return.exp: Use standard_testfile.
+	* gdb.mi/mi2-simplerun.exp: Use standard_testfile.
+	* gdb.mi/mi2-stack.exp: Use standard_testfile.
+	* gdb.mi/mi2-stepi.exp: Use standard_testfile.
+	* gdb.mi/mi2-syn-frame.exp: Use standard_testfile.
+	* gdb.mi/mi2-until.exp: Use standard_testfile.
+	* gdb.mi/mi2-var-block.exp: Use standard_testfile.
+	* gdb.mi/mi2-var-child.exp: Use standard_testfile.
+	* gdb.mi/mi2-var-cmd.exp: Use standard_testfile.
+	* gdb.mi/mi2-var-display.exp: Use standard_testfile.
+	* gdb.mi/mi2-watch.exp: Use standard_testfile.
+@
+text
+@d1 1
+a1 1
+# Copyright 2002-2005, 2007-2012 Free Software Foundation, Inc.
+@
+
+
+1.8
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d44 1
+a44 3
+set testfile "ns-stale-regcache"
+set srcfile "$testfile.c"
+set binfile "$objdir/$subdir/mi-$testfile"
+d46 1
+a46 1
+set options [list debug incdir=$objdir]
+@
+
+
+1.7
+log
+@2011-08-09  Pedro Alves  <pedro@@codesourcery.com>
+
+	gdb/testsuite/
+	* lib/mi-support.exp (detect_async): Rename to...
+	(mi_detect_async): ... this.
+	* gdb.mi/mi-nonstop-exit.exp: Adjust.
+	* gdb.mi/mi-nonstop.exp: Adjust.
+	* gdb.mi/mi-ns-stale-regcache.exp: Adjust.
+	* gdb.mi/mi-nsintrall.exp: Adjust.
+	* gdb.mi/mi-nsmoribund.exp: Adjust.
+	* gdb.mi/mi-nsthrexec.exp: Adjust.
+@
+text
+@d1 1
+a1 2
+# Copyright 2002, 2003, 2004, 2005, 2007, 2008, 2009, 2010, 2011
+# Free Software Foundation, Inc.
+@
+
+
+1.7.2.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d1 2
+a2 1
+# Copyright 2002-2005, 2007-2012 Free Software Foundation, Inc.
+@
+
+
+1.6
+log
+@	gdb/testsuite/
+
+	* gdb.base/async-shell.exp: Skip test if displaced stepping is not
+	supported.
+	* gdb.mi/mi-nonstop-exit.exp: Likewise.
+	* gdb.mi/mi-nonstop.exp: Likewise.
+	* gdb.mi/mi-ns-stale-regcache.exp: Likewise.
+	* gdb.mi/mi-nsintrall.exp: Likewise.
+	* gdb.mi/mi-nsmoribund.exp: Likewise.
+	* gdb.mi/mi-nsthrexec.exp: Likewise.
+	* gdb.python/py-evthreads.exp: Likewise.
+@
+text
+@d60 1
+a60 1
+detect_async
+@
+
+
+1.5
+log
+@gdb.mi: Get rid of the non-stop testcases.
+@
+text
+@d20 5
+@
+
+
+1.4
+log
+@run copyright.sh for 2011.
+@
+text
+@a52 11
+set supported 0
+gdb_test_multiple "-gdb-show non-stop" "" {
+    -re ".*\\^done,value=\"off\",supported=\"(\[^\"\]+)\"\r\n$mi_gdb_prompt$" {
+	if { $expect_out(1,string) == "1" } {
+	    set supported 1
+	}
+    }
+    -re ".*$mi_gdb_prompt$" {
+    }
+}
+
+@
+
+
+1.3
+log
+@	* gdb.mi/mi-nonstop.exp: Do not call perror if non-stop mode is
+	not supported on the target.
+	* gdb.mi/mi-nonstop-exit.exp: Likewise.
+	* gdb.mi/mi-ns-stale-regcache.exp: Likewise.
+	* gdb.mi/mi-nsintrall.exp: Likewise.
+	* gdb.mi/mi-nsmoribund.exp: Likewise.
+	* gdb.mi/mi-nsthrexec.exp: Likewise.
+@
+text
+@d1 1
+a1 1
+# Copyright 2002, 2003, 2004, 2005, 2007, 2008, 2009, 2010
+@
+
+
+1.2
+log
+@2010-05-26  Michael Snyder  <msnyder@@msnyder-server.eng.vmware.com>
+
+	* gdb.reverse/consecutive-reverse.exp: Replace send_gdb with gdb_test.
+	* gdb.reverse/consecutive-precsave.exp: Replace send_gdb with gdb_test.
+
+	* gdb.mi/mi-basics.exp:
+	* gdb.mi/mi-nonstop-exit.exp: Replace send_gdb with gdb_test.
+	* gdb.mi/mi-nonstop.exp: Replace send_gdb with gdb_test.
+	* gdb.mi/mi-ns-stale-regcache.exp: Replace send_gdb with gdb_test.
+	* gdb.mi/mi-nsintrall.exp: Replace send_gdb with gdb_test.
+	* gdb.mi/mi-nsmoribund.exp: Replace send_gdb with gdb_test.
+	* gdb.mi/mi-nsthrexec.exp: Replace send_gdb with gdb_test.
+	* gdb.mi/mi-return.exp: Replace send_gdb with gdb_test.
+	* gdb.mi/mi-var-display.exp: Replace send_gdb with gdb_test.
+	* gdb.mi/mi2-basics.exp: Replace send_gdb with gdb_test.
+	* gdb.mi/mi2-console.exp: Replace send_gdb with gdb_test.
+	* gdb.mi/mi2-return.exp: Replace send_gdb with gdb_test.
+	* gdb.mi/mi2-var-display.exp: Replace send_gdb with gdb_test.
+@
+text
+@a68 1
+    perror "mi-ns-stale-regcache.exp tests suppressed"
+@
+
+
+1.1
+log
+@	PR gdb/11557
+
+	gdb/
+	* regcache.c (registers_changed): Rename to ...
+	(registers_changed_ptid): ... this, and only delete register cache
+	entries matching the ptid filter argument.
+	(registers_changed): Reimplement on top of registers_changed_ptid.
+	* regcache.h (registers_changed_ptid): Declare.
+	* target.c (target_resume): Flush register caches.
+
+	gdb/testsuite/
+	* gdb.mi/mi-ns-stale-regcache.exp, gdb.mi/ns-stale-regcache.c: New
+	files.
+@
+text
+@d54 1
+a54 2
+send_gdb "-gdb-show non-stop\n"
+gdb_expect {
+d60 1
+a60 1
+    -re ".$mi_gdb_prompt$" {
+@
+

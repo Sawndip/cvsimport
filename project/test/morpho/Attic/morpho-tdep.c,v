@@ -1,0 +1,331 @@
+head	1.2;
+access;
+symbols
+	start:1.1.1.1 morpho:1.1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.2
+date	2005.04.04.20.36.24;	author msnyder;	state dead;
+branches;
+next	1.1;
+
+1.1
+date	2004.02.27.00.23.00;	author msnyder;	state Exp;
+branches
+	1.1.1.1;
+next	;
+
+1.1.1.1
+date	2004.02.27.00.23.00;	author msnyder;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@Oops, these were never meant to be here...
+@
+text
+@/* Target-dependent code for Morpho ms-64, for GDB.
+
+   Copyright 2001, Free Software Foundation, Inc.
+   Copyright 2002, 2003, 2004 Red Hat, Inc.
+
+   This file is part of GDB.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 2 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 59 Temple Place - Suite 330,
+   Boston, MA 02111-1307, USA.  */
+
+/*  Contributed by Michael Snyder, msnyder@@redhat.com */
+
+#include "defs.h"
+#include "dis-asm.h"
+#include "arch-utils.h"
+#include "gdbtypes.h"
+
+enum arch_constants {
+  E_MAX_STRUCT_SIZE = 16
+};
+
+enum gdb_regnum {
+  E_R0_REGNUM,			/* 32 bit regs */
+  E_R1_REGNUM,
+  E_1ST_ARGREG = E_R1_REGNUM, 
+  E_R2_REGNUM,
+  E_R3_REGNUM,
+  E_R4_REGNUM,
+  E_LAST_ARGREG = E_R4_REGNUM,
+  E_R5_REGNUM,
+  E_R6_REGNUM,
+  E_R7_REGNUM,
+  E_R8_REGNUM,
+  E_R9_REGNUM,
+  E_R10_REGNUM,
+  E_R11_REGNUM,
+  E_R12_REGNUM,
+  E_FP_REGNUM = E_R12_REGNUM, 
+  E_R13_REGNUM,
+  E_SP_REGNUM = E_R13_REGNUM,
+  E_R14_REGNUM,
+  E_RA_REGNUM = E_R14_REGNUM,
+  E_R15_REGNUM,
+  E_IRA_REGNUM = E_R15_REGNUM,
+  E_PC_REGNUM,
+
+  /*
+   * Interrupt Enable pseudo-register, exported by SID.
+   */
+
+  E_INT_ENABLE_REGNUM, 
+  
+  /*
+   * End of CPU regs.
+   */
+
+  E_NUM_CPU_REGS, 
+
+  /*
+   * Co-processor registers
+   */
+
+  E_COPRO_REGNUM = E_NUM_CPU_REGS, 	/* 16 bit regs */
+  E_CPR0_REGNUM,
+  E_CPR1_REGNUM, 
+  E_CPR2_REGNUM, 
+  E_CPR3_REGNUM, 
+  E_CPR4_REGNUM, 
+  E_CPR5_REGNUM, 
+  E_CPR6_REGNUM, 
+  E_CPR7_REGNUM, 
+  E_CPR8_REGNUM, 
+  E_CPR9_REGNUM, 
+  E_CPR10_REGNUM, 
+  E_CPR11_REGNUM, 
+  E_CPR12_REGNUM, 
+  E_CPR13_REGNUM, 
+  E_CPR14_REGNUM, 
+  E_CPR15_REGNUM, 
+  E_BYPA_REGNUM,	/* 32 bit regs */
+  E_BYPB_REGNUM,
+  E_BYPC_REGNUM,
+  E_FLAG_REGNUM,
+  E_CONTEXT_REGNUM,	/* 38 bits (treat as array of six bytes) */
+  E_MAC_REGNUM,		/* 32 bits */
+  E_Z1_REGNUM, 		/* 16 bits */
+  E_Z2_REGNUM, 		/* 16 bits */
+  E_CHANNEL_REGNUM,	/* 32 bits */
+  E_ISCRAMB_REGNUM, 	/* 32 bits */
+  E_QSCRAMB_REGNUM, 	/* 32 bits */
+  E_OUT_REGNUM, 	/* 16 bits */
+
+  E_LAST_REG = E_OUT_REGNUM,
+
+  E_NUM_REGS, 		/* number of real registers */
+
+  E_COPRO_PSEUDOREG_REGNUM = E_NUM_REGS, 
+
+  E_NUM_PSEUDO_REGS = 1	/* one pseudo-reg ('coprocessor') */
+};
+
+
+/* Function: register_name
+   Returns the name of the standard morpho register N. */
+
+static const char *
+morpho_register_name (int regnum)
+{
+  static char *register_names[] = {
+    /* CPU regs */
+    "r0",  "r1",  "r2",  "r3",  "r4",  "r5",  "r6",  "r7",
+    "r8",  "r9",  "r10", "r11", "r12", "r13", "r14", "r15",
+    "pc", "IE", 
+    /* Co-processor regs */
+    "forbidden", /* space reserved for private use */
+    "cr0", "cr1", "cr2",  "cr3",  "cr4",  "cr5",  "cr6",  "cr7", 
+    "cr8", "cr9", "cr10", "cr11", "cr12", "cr13", "cr14", "cr15", 
+    "bypa", "bypb", "bypc",  "flag", "context", "MAC", "z1", "z2", 
+    "channel", "Iscramb", "Qscramb", "out",
+    "coprocessor"	/* coprocessor pseudo-register */
+  };
+
+  if (regnum >= 0 &&
+      regnum < sizeof (register_names) / sizeof (register_names[0]))
+    {
+      return register_names[regnum];
+    }
+  else
+    internal_error (__FILE__, __LINE__,
+		    "morpho_register_name: illegal register number %d",
+		    regnum);
+}
+
+/* Function: register_type 
+   Returns the default type for register N. */
+
+static struct type *
+morpho_register_type (struct gdbarch *not_used, int regnum)
+{
+  static struct type *void_func_ptr = NULL;
+  static struct type *void_ptr = NULL;
+  static struct type *copro_type;
+
+  if (regnum >= 0 && regnum < E_NUM_REGS + E_NUM_PSEUDO_REGS)
+    {
+      if (void_func_ptr == NULL)
+	{
+	  struct type *temp;
+
+	  void_ptr = lookup_pointer_type (builtin_type_void);
+	  void_func_ptr = 
+	    lookup_pointer_type (lookup_function_type (builtin_type_void));
+	  temp = create_range_type (NULL, builtin_type_unsigned_int, 0, 1);
+	  copro_type = create_array_type (NULL, builtin_type_int16, temp);
+	}
+      switch (regnum) {
+      case E_PC_REGNUM:
+      case E_RA_REGNUM:
+      case E_IRA_REGNUM:
+	return void_func_ptr;
+      case E_SP_REGNUM:
+      case E_FP_REGNUM:
+	return void_ptr;
+      case E_INT_ENABLE_REGNUM:
+      case E_MAC_REGNUM:
+      case E_CHANNEL_REGNUM:
+      case E_ISCRAMB_REGNUM:
+      case E_QSCRAMB_REGNUM:
+	return builtin_type_int32;
+      case E_BYPA_REGNUM:
+      case E_BYPB_REGNUM:
+      case E_BYPC_REGNUM:
+      case E_Z1_REGNUM:
+      case E_Z2_REGNUM:
+      case E_OUT_REGNUM:
+	return builtin_type_int16;
+      case E_CONTEXT_REGNUM:
+	return builtin_type_long_long;
+      case E_COPRO_REGNUM:
+      case E_COPRO_PSEUDOREG_REGNUM:
+	return copro_type;
+      case E_FLAG_REGNUM:
+	return builtin_type_unsigned_char;
+      default:
+	if (regnum >= E_R0_REGNUM && regnum <= E_R15_REGNUM)
+	  return builtin_type_int32;
+	else if (regnum >= E_CPR0_REGNUM && regnum <= E_CPR15_REGNUM)
+	  return builtin_type_int16;
+      }
+    }
+  internal_error (__FILE__, __LINE__, 
+		  "morpho_register_type: illegal register number %d",
+		  regnum);
+}
+
+/* Function: skip_prologue
+   If the input address is in a function prologue, 
+   return the address of the end of the prologue;
+   else return the input address.
+
+   Note: the input address is likely to be the function start, 
+   since this function is mainly used for advancing a breakpoint
+   to the first line, or stepping to the first line when we have
+   stepped into a function call.  */
+
+static CORE_ADDR
+morpho_skip_prologue (CORE_ADDR pc)
+{
+  /* FIXME not implemented */
+  /* No function symbol -- just return the PC. */
+  return (CORE_ADDR) pc;
+}
+
+/* Function: breakpoint_from_pc
+
+   The breakpoint instruction must be the same size as the smallest
+   instruction in the instruction set.
+
+   The BP for morpho is defined as 0x68000000.  */
+
+static const unsigned char *
+morpho_breakpoint_from_pc (CORE_ADDR *bp_addr, int *bp_size)
+{
+  static char breakpoint[] = {0x68, 0, 0, 0};
+
+  *bp_size = 4;
+  return breakpoint;
+}
+
+static struct gdbarch *
+morpho_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
+{
+  struct gdbarch *gdbarch;
+
+  /* Find a candidate among the list of pre-declared architectures.  */
+  arches = gdbarch_list_lookup_by_info (arches, &info);
+  if (arches != NULL)
+    return arches->gdbarch;
+
+  /* None found, create a new architecture from the information
+     provided.  */
+  gdbarch = gdbarch_alloc (&info, NULL);
+
+  switch (info.bfd_arch_info->mach) {
+  default:
+  case bfd_mach_mrisc1:
+    break;
+  }
+  
+  set_gdbarch_register_name (gdbarch, morpho_register_name);
+  set_gdbarch_num_regs      (gdbarch, E_NUM_REGS);
+  set_gdbarch_skip_prologue (gdbarch, morpho_skip_prologue);
+  set_gdbarch_inner_than    (gdbarch, core_addr_lessthan);
+  set_gdbarch_breakpoint_from_pc    (gdbarch, morpho_breakpoint_from_pc);
+  set_gdbarch_decr_pc_after_break   (gdbarch, 0);
+  set_gdbarch_function_start_offset (gdbarch, 0);
+  set_gdbarch_frame_args_skip (gdbarch, 0);
+  set_gdbarch_print_insn      (gdbarch, print_insn_mrisc1);
+  set_gdbarch_register_type   (gdbarch, morpho_register_type);
+  
+  return gdbarch;
+}
+
+void
+_initialize_morpho_tdep (void)
+{
+  register_gdbarch_init (bfd_arch_mrisc1, morpho_gdbarch_init);
+}
+@
+
+
+1.1
+log
+@Initial revision
+@
+text
+@@
+
+
+1.1.1.1
+log
+@New morpho repository
+@
+text
+@@

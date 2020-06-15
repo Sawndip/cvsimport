@@ -1,0 +1,530 @@
+head	1.8;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.8
+	gdb_7_6-2013-04-26-release:1.8
+	gdb_7_6-branch:1.8.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.8
+	gdb_7_5_1-2012-11-29-release:1.6
+	gdb_7_5-2012-08-17-release:1.6
+	gdb_7_5-branch:1.6.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.6
+	gdb_7_4_1-2012-04-26-release:1.4.4.1
+	gdb_7_4-2012-01-24-release:1.4.4.1
+	gdb_7_4-branch:1.4.0.4
+	gdb_7_4-2011-12-13-branchpoint:1.4
+	gdb_7_3_1-2011-09-04-release:1.4
+	gdb_7_3-2011-07-26-release:1.4
+	gdb_7_3-branch:1.4.0.2
+	gdb_7_3-2011-04-01-branchpoint:1.4;
+locks; strict;
+comment	@# @;
+
+
+1.8
+date	2013.01.01.06.41.26;	author brobecke;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2012.12.10.21.22.21;	author pkoning;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2012.01.16.16.21.52;	author palves;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2012.01.04.08.27.49;	author brobecke;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2011.03.10.12.29.08;	author pmuldoon;	state Exp;
+branches
+	1.4.4.1;
+next	1.3;
+
+1.3
+date	2011.01.01.15.33.49;	author brobecke;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2010.11.05.17.07.36;	author devans;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2010.11.05.16.55.40;	author devans;	state Exp;
+branches;
+next	;
+
+1.4.4.1
+date	2012.01.06.04.54.27;	author brobecke;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.8
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@# Copyright (C) 2010-2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# This file is part of the GDB testsuite.
+# It tests gdb.parameter and gdb.Parameter.
+
+load_lib gdb-python.exp
+
+# Start with a fresh gdb.
+gdb_exit
+gdb_start
+gdb_reinitialize_dir $srcdir/$subdir
+
+# Skip all tests if Python scripting is not enabled.
+if { [skip_python_tests] } { continue }
+
+# We use "." here instead of ":" so that this works on win32 too.
+gdb_test "python print (gdb.parameter ('directories'))" "$srcdir/$subdir.\\\$cdir.\\\$cwd"
+
+# Test a simple boolean parameter.
+gdb_py_test_multiple "Simple gdb booleanparameter" \
+   "python" "" \
+   "class TestParam (gdb.Parameter):" "" \
+   "   \"\"\"When enabled, test param does something useful. When disabled, does nothing.\"\"\"" "" \
+   "   show_doc = \"Show the state of the boolean test-param\"" ""\
+   "   set_doc = \"Set the state of the boolean test-param\"" "" \
+   "   def get_show_string (self, pvalue):" ""\
+   "      return \"The state of the Test Parameter is \" + pvalue" ""\
+   "   def get_set_string (self):" ""\
+   "      val = \"on\"" ""\
+   "      if (self.value == False):" ""\
+   "         val = \"off\"" ""\
+   "      return \"Test Parameter has been set to \" + val" ""\
+   "   def __init__ (self, name):" "" \
+   "      super (TestParam, self).__init__ (name, gdb.COMMAND_DATA, gdb.PARAM_BOOLEAN)" "" \
+   "      self.value = True" "" \
+   "test_param = TestParam ('print test-param')" ""\
+   "end"
+
+gdb_test "python print (test_param.value)" "True" "Test parameter value"
+gdb_test "show print test-param" "The state of the Test Parameter is on.*" "Show parameter on"
+gdb_test "set print test-param off" "Test Parameter has been set to off" "Turn off parameter"
+gdb_test "show print test-param" "The state of the Test Parameter is off.*" "Show parameter off"
+gdb_test "python print (test_param.value)" "False" "Test parameter value"
+gdb_test "help show print test-param" "Show the state of the boolean test-param.*" "Test show help"
+gdb_test "help set print test-param" "Set the state of the boolean test-param.*" "Test set help"
+gdb_test "help set print" "set print test-param -- Set the state of the boolean test-param.*" "Test general help"
+
+
+# Test an enum parameter.
+gdb_py_test_multiple "enum gdb parameter" \
+   "python" "" \
+   "class TestEnumParam (gdb.Parameter):" "" \
+   "   \"\"\"When set, test param does something useful. When disabled, does nothing.\"\"\"" "" \
+   "   show_doc = \"Show the state of the enum\"" ""\
+   "   set_doc = \"Set the state of the enum\"" "" \
+   "   def get_show_string (self, pvalue):" ""\
+   "      return \"The state of the enum is \" + pvalue" ""\
+   "   def get_set_string (self):" ""\
+   "      return \"The state of the enum has been set to \" + self.value" ""\
+   "   def __init__ (self, name):" "" \
+   "      super (TestEnumParam, self).__init__ (name, gdb.COMMAND_DATA, gdb.PARAM_ENUM, \[\"one\", \"two\"\])" "" \
+   "      self.value = \"one\"" "" \
+   "test_enum_param = TestEnumParam ('print test-enum-param')" ""\
+   "end"
+
+gdb_test "python print (test_enum_param.value)" "one" "Test enum parameter value"
+gdb_test "show print test-enum-param" "The state of the enum is one.*" "Show parameter is initial value"
+gdb_test "set print test-enum-param two" "The state of the enum has been set to two" "Set enum to two"
+gdb_test "show print test-enum-param" "The state of the enum is two.*" "Show parameter is new value"
+gdb_test "python print (test_enum_param.value)" "two" "Test enum parameter value"
+gdb_test "set print test-enum-param three" "Undefined item: \"three\".*" "Set invalid enum parameter" 
+
+# Test a file parameter.
+gdb_py_test_multiple "file gdb parameter" \
+   "python" "" \
+   "class TestFileParam (gdb.Parameter):" "" \
+   "   \"\"\"When set, test param does something useful. When disabled, does nothing.\"\"\"" "" \
+   "   show_doc = \"Show the name of the file\"" ""\
+   "   set_doc = \"Set the name of the file\"" "" \
+   "   def get_show_string (self, pvalue):" ""\
+   "      return \"The name of the file is \" + pvalue" ""\
+   "   def get_set_string (self):" ""\
+   "      return \"The name of the file has been changed to \" + self.value" ""\
+   "   def __init__ (self, name):" "" \
+   "      super (TestFileParam, self).__init__ (name, gdb.COMMAND_FILES, gdb.PARAM_FILENAME)" "" \
+   "      self.value = \"foo.txt\"" "" \
+   "test_file_param = TestFileParam ('test-file-param')" ""\
+   "end"
+
+gdb_test "python print (test_file_param.value)" "foo.txt" "Test file parameter value"
+gdb_test "show test-file-param" "The name of the file is foo.txt.*" "Show initial file value"
+gdb_test "set test-file-param bar.txt" "The name of the file has been changed to bar.txt" "Set new file parameter" 1
+gdb_test "show test-file-param" "The name of the file is bar.txt.*" "Show new file value"
+gdb_test "python print (test_file_param.value)" "bar.txt" "Test new file parameter value"
+gdb_test "set test-file-param" "Argument required.*" 
+
+# Test a parameter that is not documented.
+gdb_py_test_multiple "Simple gdb booleanparameter" \
+   "python" "" \
+   "class TestUndocParam (gdb.Parameter):" "" \
+   "   def get_show_string (self, pvalue):" ""\
+   "      return \"The state of the Test Parameter is \" + pvalue" ""\
+   "   def get_set_string (self):" ""\
+   "      val = \"on\"" ""\
+   "      if (self.value == False):" ""\
+   "         val = \"off\"" ""\
+   "      return \"Test Parameter has been set to \" + val" ""\
+   "   def __init__ (self, name):" "" \
+   "      super (TestUndocParam, self).__init__ (name, gdb.COMMAND_DATA, gdb.PARAM_BOOLEAN)" "" \
+   "      self.value = True" "" \
+   "test_undoc_param = TestUndocParam ('print test-undoc-param')" ""\
+   "end"
+
+gdb_test "show print test-undoc-param" "The state of the Test Parameter is on.*" "Show parameter on"
+gdb_test "set print test-undoc-param off" "Test Parameter has been set to off" "Turn off parameter"
+gdb_test "show print test-undoc-param" "The state of the Test Parameter is off.*" "Show parameter off"
+gdb_test "python print (test_undoc_param.value)" "False" "Test parameter value"
+gdb_test "help show print test-undoc-param" "This command is not documented.*" "Test show help"
+gdb_test "help set print test-undoc-param" "This command is not documented.*" "Test set help"
+gdb_test "help set print" "set print test-undoc-param -- This command is not documented.*" "Test general help"
+
+# Test a parameter that is not documented in any way..
+gdb_py_test_multiple "Simple gdb booleanparameter" \
+   "python" "" \
+   "class TestNodocParam (gdb.Parameter):" "" \
+   "   def __init__ (self, name):" "" \
+   "      super (TestNodocParam, self).__init__ (name, gdb.COMMAND_DATA, gdb.PARAM_BOOLEAN)" "" \
+   "      self.value = True" "" \
+   "test_nodoc_param = TestNodocParam ('print test-nodoc-param')" ""\
+   "end"
+
+gdb_test "show print test-nodoc-param" "This command is not documented.*" "Show parameter on"
+gdb_test "set print test-nodoc-param off" "This command is not documented.*" "Turn off parameter"
+gdb_test "show print test-nodoc-param" "This command is not documented.*.*" "Show parameter off"
+gdb_test "python print (test_nodoc_param.value)" "False" "Test parameter value"
+gdb_test "help show print test-nodoc-param" "This command is not documented.*" "Test show help"
+gdb_test "help set print test-nodoc-param" "This command is not documented.*" "Test set help"
+gdb_test "help set print" "set print test-nodoc-param -- This command is not documented.*" "Test general help"
+
+# Test deprecated API. Do not use in your own implementations.
+gdb_py_test_multiple "Simple gdb booleanparameter" \
+   "python" "" \
+   "class TestParam (gdb.Parameter):" "" \
+   "   \"\"\"When enabled, test param does something useful. When disabled, does nothing.\"\"\"" "" \
+   "   show_doc = \"State of the Test Parameter\"" ""\
+   "   set_doc = \"Set the state of the Test Parameter\"" "" \
+   "   def __init__ (self, name):" "" \
+   "      super (TestParam, self).__init__ (name, gdb.COMMAND_DATA, gdb.PARAM_BOOLEAN)" "" \
+   "      self.value = True" "" \
+   "test_param = TestParam ('print test-param')" ""\
+   "end"
+
+gdb_test "python print (test_param.value)" "True" "Test parameter value"
+gdb_test "show print test-param" "State of the Test Parameter on.*" "Show parameter on"
+gdb_test "set print test-param off" "Set the state of the Test Parameter.*" "Turn off parameter"
+gdb_test "show print test-param" "State of the Test Parameter off.*" "Show parameter off"
+gdb_test "python print (test_param.value)" "False" "Test parameter value"
+gdb_test "help show print test-param" "State of the Test Parameter.*" "Test show help"
+gdb_test "help set print test-param" "Set the state of the Test Parameter.*" "Test set help"
+gdb_test "help set print" "set print test-param -- Set the state of the Test Parameter.*" "Test general help"
+@
+
+
+1.7
+log
+@2012-12-10  Paul Koning  <paul_koning@@dell.com>
+
+	* gdb.base/charset.exp: Change print syntax for Python 3
+	compatibility.
+	* gdb.python/py-block.exp: Ditto.
+	* gdb.python/py-breakpoint.exp: Ditto.
+	* gdb.python/py-cmd.exp: Ditto.
+	* gdb.python/py-events.py: Ditto.
+	* gdb.python/py-finish-breakpoint.py: Ditto.
+	* gdb.python/py-finish-breakpoint2.exp: Ditto.
+	* gdb.python/py-finish-breakpoint2.py: Ditto.
+	* gdb.python/py-frame-inline.exp: Ditto.
+	* gdb.python/py-frame.exp: Ditto.
+	* gdb.python/py-infthread.exp: Ditto.
+	* gdb.python/py-objfile.exp: Ditto.
+	* gdb.python/py-parameter.exp: Ditto.
+	* gdb.python/py-progspace.exp: Ditto.
+	* gdb.python/py-prompt.exp: Ditto.
+	* gdb.python/py-symbol.exp: Ditto.
+	* gdb.python/py-symtab.exp: Ditto.
+	* gdb.python/py-template.exp: Ditto.
+	* gdb.python/py-value-cc.exp: Ditto.
+	* gdb.python/python.exp: Ditto.
+	* gdb.python/source2.py: Ditto.
+	* gdb.python/lib-types.exp: Change print syntax for Python 3
+	compatibility.
+	Use sorted() function rather than sort() method.
+	Accept either int or long values for enum values.
+	* gdb.python/py-events.exp: Use exec(open(...).read()) instead of
+	execfile for Python 3 compatibility.
+	* gdb.python/py-evsignal.exp: Ditto.
+	* gdb.python/py-evthreads.exp: Ditto.
+	* gdb.python/py-mi.exp: Ditto.
+	* gdb.python/py-pp-maint.exp: Ditto.
+	* gdb.python/py-prettyprint.exp: Ditto.
+	* gdb.python/py-finish-breakpoint.exp: Change print syntax for
+	Python 3 compatibility.
+	Skip tests for Python 2.4.
+	* gdb.python/py-inferior.exp: Change print syntax for
+	Python 3 compatibility.
+	Use byte string rather than character string in memory write test
+	if Python 3.
+	* gdb.python/py-pp-maint.py: Change class declarations to "new
+	class" syntax.
+	* gdb.python/py-prettyprint.py: Change iterator class to generator
+	function for Python 3 compatibility.
+	Make all classes "new style".
+	Fix indentation issue and stray semicolon.
+	* gdb.python/py-shared.expChange print syntax for Python 3
+	compatibility.
+	Define "long" if Python 3.
+	* gdb.python/py-type.exp: Change print syntax for Python 3
+	compatibility.
+	Accept either int or long values for enum values.
+	* gdb.python/py-value.exp: Change print syntax for Python 3
+	compatibility.
+	Skip "long" and "unicode" tests if Python 3.
+	Accept either "type" or "class" in type checks.
+	* lib/gdb.exp (gdb_py_is_py3k): New flag set if Python 3.
+	(gdb_py_is_py24): New flag set if Python 2.4 or 2.5.
+@
+text
+@d1 1
+a1 1
+# Copyright (C) 2010-2012 Free Software Foundation, Inc.
+@
+
+
+1.6
+log
+@2012-01-16  Pedro Alves  <palves@@redhat.com>
+
+	Remove all calls to strace.
+@
+text
+@d30 1
+a30 1
+gdb_test "python print gdb.parameter ('directories')" "$srcdir/$subdir.\\\$cdir.\\\$cwd"
+d52 1
+a52 1
+gdb_test "python print test_param.value" "True" "Test parameter value"
+d56 1
+a56 1
+gdb_test "python print test_param.value" "False" "Test parameter value"
+d79 1
+a79 1
+gdb_test "python print test_enum_param.value" "one" "Test enum parameter value"
+d83 1
+a83 1
+gdb_test "python print test_enum_param.value" "two" "Test enum parameter value"
+d103 1
+a103 1
+gdb_test "python print test_file_param.value" "foo.txt" "Test file parameter value"
+d107 1
+a107 1
+gdb_test "python print test_file_param.value" "bar.txt" "Test new file parameter value"
+d130 1
+a130 1
+gdb_test "python print test_undoc_param.value" "False" "Test parameter value"
+d148 1
+a148 1
+gdb_test "python print test_nodoc_param.value" "False" "Test parameter value"
+d166 1
+a166 1
+gdb_test "python print test_param.value" "True" "Test parameter value"
+d170 1
+a170 1
+gdb_test "python print test_param.value" "False" "Test parameter value"
+@
+
+
+1.5
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@a18 4
+if $tracelevel then {
+    strace $tracelevel
+}
+
+@
+
+
+1.4
+log
+@2011-03-10  Phil Muldoon  <pmuldoon@@redhat.com>
+
+	* python/py-param.c (add_setshow_generic): Add set/show callback
+	parameters.  Register Python object context.
+	(get_show_value): New function.
+	(get_set_value): New function.
+	(call_doc_function): New function.
+	(get_doc_string): Move behind get_show_value/get_set_value.
+
+2011-03-10  Phil Muldoon  <pmuldoon@@redhat.com>
+
+	* gdb.texinfo (Parameters In Python): Document get_set_string and
+	get_show_string methods.
+
+2011-03-10  Phil Muldoon  <pmuldoon@@redhat.com>
+
+	* gdb.python/py-parameter.exp: Update tests to the new Python
+	parameter API. Add "no documentation" test.  Add deprecated API
+	backward compatibility test.
+@
+text
+@d1 1
+a1 1
+# Copyright (C) 2010, 2011 Free Software Foundation, Inc.
+@
+
+
+1.4.4.1
+log
+@Copyright year update in most files of the GDB Project.
+
+gdb/ChangeLog:
+
+        Copyright year update in most files of the GDB Project.
+@
+text
+@d1 1
+a1 1
+# Copyright (C) 2010-2012 Free Software Foundation, Inc.
+@
+
+
+1.3
+log
+@run copyright.sh for 2011.
+@
+text
+@d41 9
+a49 2
+   "   show_doc = \"Show whether the state of the Test Parameter does something useful\"" ""\
+   "   set_doc = \"Set whether the state of the Test Parameter does something useful\"" "" \
+d57 3
+a59 3
+gdb_test "show print test-param" "Whether the state of the Test Parameter does something useful is on.*" "Show parameter on"
+gdb_py_test_silent_cmd "set print test-param off" "Turn off parameter" 1
+gdb_test "show print test-param" "Whether the state of the Test Parameter does something useful is off.*" "Show parameter off"
+d61 4
+a64 3
+gdb_test "help show print test-param" "Show whether the state of the Test Parameter does something useful.*" "Test show help"
+gdb_test "help set print test-param" "Set whether the state of the Test Parameter does something useful.*" "Test set help"
+gdb_test "help set print" "set print test-param -- Set whether the state of the Test Parameter.*" "Test general help"
+d73 4
+d84 3
+a86 3
+gdb_test "show print test-enum-param" "The state of the enum is \"one\".*" "Show parameter is initial value"
+gdb_py_test_silent_cmd "set print test-enum-param two" "Set parameter to enum value" 1
+gdb_test "show print test-enum-param" "The state of the enum is \"two\".*" "Show parameter is new value"
+d97 4
+d108 3
+a110 3
+gdb_test "show test-file-param" "The name of the file is \"foo.txt\".*" "Show initial file value"
+gdb_py_test_silent_cmd "set test-file-param bar.txt" "Set new file parameter" 1
+gdb_test "show test-file-param" "The name of the file is \"bar.txt\".*" "Show new file value"
+d114 45
+a158 2
+# Test a file parameter.
+gdb_py_test_multiple "file gdb parameter" \
+d160 4
+a163 4
+   "class TestFileParam (gdb.Parameter):" "" \
+   "   \"\"\"When set, test param does something useful. When disabled, does nothing.\"\"\"" "" \
+   "   show_doc = \"Show the name of the file\"" ""\
+   "   set_doc = \"Set the name of the file\"" "" \
+d165 3
+a167 3
+   "      super (TestFileParam, self).__init__ (name, gdb.COMMAND_FILES, gdb.PARAM_FILENAME)" "" \
+   "      self.value = \"foo.txt\"" "" \
+   "test_file_param = TestFileParam ('test-file-param')" ""\
+d170 8
+a177 6
+gdb_test "python print test_file_param.value" "foo.txt" "Test parameter value"
+gdb_test "show test-file-param" "The name of the file is \"foo.txt\".*" "Show parameter on"
+gdb_py_test_silent_cmd "set test-file-param bar.txt" "Turn off parameter" 1
+gdb_test "show test-file-param" "The name of the file is \"bar.txt\".*" "Show parameter on"
+gdb_test "python print test_file_param.value" "bar.txt" "Test parameter value"
+gdb_test "set test-file-param" "Argument required.*" 
+@
+
+
+1.2
+log
+@	* gdb.python/py-param.exp: Delete, contents moved to ...
+	* gdb.python/py-parameter.exp: ... here.  New file.
+	Add test for gdb.parameter ("directories").
+@
+text
+@d1 1
+a1 1
+# Copyright (C) 2010 Free Software Foundation, Inc.
+@
+
+
+1.1
+log
+@	Make gdb.parameter("directories") work.
+	New command "set directories".
+	* NEWS: Document them.
+	* source.c (set_directories_command): New function.
+	(show_directories_1): Renamed from show_directories.
+	All callers updated.
+	(show_directories_command): New function.
+	(_initialize_source): Install "directories" as a set/show
+	variable instead of just a show command.
+
+	doc/
+	* gdb.texinfo (Source Path): Document "set directories".
+
+	testsuite/
+	* gdb.base/help.exp: Update expected output.
+	* gdb.python/py-parameter.exp: New file.
+@
+text
+@d16 2
+a17 1
+# This file is part of the GDB testsuite.  It tests gdb.parameter.
+d35 82
+@
+

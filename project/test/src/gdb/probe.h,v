@@ -1,0 +1,574 @@
+head	1.6;
+access;
+symbols
+	gdb_7_6_1-2013-08-30-release:1.4
+	gdb_7_6-2013-04-26-release:1.4
+	gdb_7_6-branch:1.4.0.2
+	gdb_7_6-2013-03-12-branchpoint:1.4
+	gdb_7_5_1-2012-11-29-release:1.1
+	gdb_7_5-2012-08-17-release:1.1
+	gdb_7_5-branch:1.1.0.2
+	gdb_7_5-2012-07-18-branchpoint:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.6
+date	2013.07.24.19.50.32;	author sergiodj;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2013.06.04.12.50.21;	author gary;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2013.01.01.06.32.49;	author brobecke;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2012.07.18.23.37.58;	author devans;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2012.07.18.16.12.17;	author sergiodj;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2012.04.27.20.47.55;	author sergiodj;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.6
+log
+@2013-07-24  Sergio Durigan Junior  <sergiodj@@redhat.com>
+
+	* breakpoint.c (create_longjmp_master_breakpoint): Check if probe
+	interface can evaluate arguments.  Fallback to the old mode if it
+	cannot.
+	(create_exception_master_breakpoint): Likewise.
+	* elfread.c (elf_can_evaluate_probe_arguments): New function.
+	(struct sym_probe_fns elf_probe_fns): Export function above to the
+	probe interface.
+	* probe.c (can_evaluate_probe_arguments): New function.
+	* probe.h (struct probe_ops) <can_evaluate_probe_arguments>: New
+	function pointer.
+	(can_evaluate_probe_arguments): New function prototype.
+	* solib-svr4.c (svr4_create_solib_event_breakpoints): Check if
+	probe interface can evaluate arguments.  Fallback to the old mode
+	if it cannot.
+	* stap-probe.c (stap_get_probe_argument_count): Check if probe
+	interface can evaluate arguments.  Warning the user if it cannot.
+	(stap_can_evaluate_probe_arguments): New function.
+	(struct probe_ops stap_probe_ops): Export function above to the
+	probe interface.
+	* symfile.h (struct sym_probe_fns) <can_evaluate_probe_arguments>:
+	New function pointer.
+@
+text
+@/* Generic SDT probe support for GDB.
+
+   Copyright (C) 2012-2013 Free Software Foundation, Inc.
+
+   This file is part of GDB.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+#if !defined (PROBE_H)
+#define PROBE_H 1
+
+#include "gdb_vecs.h"
+
+/* Definition of a vector of probes.  */
+
+typedef struct probe *probe_p;
+DEF_VEC_P (probe_p);
+
+struct linespec_result;
+
+/* Structure useful for passing the header names in the method
+   `gen_ui_out_table_header'.  */
+
+struct info_probe_column
+  {
+    /* The internal name of the field.  This string cannot be capitalized nor
+       localized, e.g., "extra_field".  */
+
+    const char *field_name;
+
+    /* The field name to be printed in the `info probes' command.  This
+       string can be capitalized and localized, e.g., _("Extra Field").  */
+    const char *print_name;
+  };
+
+typedef struct info_probe_column info_probe_column_s;
+DEF_VEC_O (info_probe_column_s);
+
+/* Operations associated with a probe.  */
+
+struct probe_ops
+  {
+    /* Method responsible for verifying if LINESPECP is a valid linespec for
+       a probe breakpoint.  It should return 1 if it is, or zero if it is not.
+       It also should update LINESPECP in order to discard the breakpoint
+       option associated with this linespec.  For example, if the option is
+       `-probe', and the LINESPECP is `-probe abc', the function should
+       return 1 and set LINESPECP to `abc'.  */
+
+    int (*is_linespec) (const char **linespecp);
+
+    /* Function that should fill PROBES with known probes from OBJFILE.  */
+
+    void (*get_probes) (VEC (probe_p) **probes, struct objfile *objfile);
+
+    /* Function used to relocate addresses from PROBE according to some DELTA
+       provided.  */
+
+    void (*relocate) (struct probe *probe, CORE_ADDR delta);
+
+    /* Return the number of arguments of PROBE.  */
+
+    unsigned (*get_probe_argument_count) (struct probe *probe);
+
+    /* Return 1 if the probe interface can evaluate the arguments of probe
+       PROBE, zero otherwise.  See the comments on
+       sym_probe_fns:can_evaluate_probe_arguments for more details.  */
+
+    int (*can_evaluate_probe_arguments) (struct probe *probe);
+
+    /* Evaluate the Nth argument from the PROBE, returning a value
+       corresponding to it.  The argument number is represented N.  */
+
+    struct value *(*evaluate_probe_argument) (struct probe *probe,
+					      unsigned n);
+
+    /* Compile the Nth argument of the PROBE to an agent expression.
+       The argument number is represented by N.  */
+
+    void (*compile_to_ax) (struct probe *probe, struct agent_expr *aexpr,
+			   struct axs_value *axs_value, unsigned n);
+
+    /* Set the semaphore associated with the PROBE.  This function only makes
+       sense if the probe has a concept of semaphore associated to a
+       probe.  */
+
+    void (*set_semaphore) (struct probe *probe, struct gdbarch *gdbarch);
+
+    /* Clear the semaphore associated with the PROBE.  This function only
+       makes sense if the probe has a concept of semaphore associated to
+       a probe.  */
+
+    void (*clear_semaphore) (struct probe *probe, struct gdbarch *gdbarch);
+
+    /* Function called to destroy PROBE's specific data.  This function
+       shall not free PROBE itself.  */
+
+    void (*destroy) (struct probe *probe);
+
+    /* Function responsible for providing the extra fields that will be
+       printed in the `info probes' command.  It should fill HEADS
+       with whatever extra fields it needs.  If the backend doesn't need
+       to print extra fields, it can set this method to NULL.  */
+
+    void (*gen_info_probes_table_header) (VEC (info_probe_column_s) **heads);
+
+    /* Function that will fill VALUES with the values of the extra fields
+       to be printed for PROBE.  If the backend implements the
+       `gen_ui_out_table_header' method, then it should implement
+       this method as well.  The backend should also guarantee that the
+       order and the number of values in the vector is exactly the same
+       as the order of the extra fields provided in the method
+       `gen_ui_out_table_header'.  If a certain field is to be skipped
+       when printing the information, you can push a NULL value in that
+       position in the vector.  */
+
+    void (*gen_info_probes_table_values) (struct probe *probe,
+					  VEC (const_char_ptr) **values);
+  };
+
+/* Definition of a vector of probe_ops.  */
+
+typedef const struct probe_ops *probe_ops_cp;
+DEF_VEC_P (probe_ops_cp);
+extern VEC (probe_ops_cp) *all_probe_ops;
+
+/* The probe_ops associated with the generic probe.  */
+
+extern const struct probe_ops probe_ops_any;
+
+/* Helper function that, given KEYWORDS, iterate over it trying to match
+   each keyword with LINESPECP.  If it succeeds, it updates the LINESPECP
+   pointer and returns 1.  Otherwise, nothing is done to LINESPECP and zero
+   is returned.  */
+
+extern int probe_is_linespec_by_keyword (const char **linespecp,
+					 const char *const *keywords);
+
+/* Return specific PROBE_OPS * matching *LINESPECP and possibly updating
+   *LINESPECP to skip its "-probe-type " prefix.  Return &probe_ops_any if
+   *LINESPECP matches "-probe ", that is any unspecific probe.  Return NULL if
+   *LINESPECP is not identified as any known probe type, *LINESPECP is not
+   modified in such case.  */
+
+extern const struct probe_ops *probe_linespec_to_ops (const char **linespecp);
+
+/* The probe itself.  The struct contains generic information about the
+   probe, and then some specific information which should be stored in
+   the `probe_info' field.  */
+
+struct probe
+  {
+    /* The operations associated with this probe.  */
+    const struct probe_ops *pops;
+
+    /* The objfile which contains this probe.  Even if the probe is also
+       present in a separate debug objfile, this variable always points to
+       the non-separate debug objfile.  */
+    struct objfile *objfile;
+
+    /* The name of the probe.  */
+    const char *name;
+
+    /* The provider of the probe.  It generally defaults to the name of
+       the objfile which contains the probe.  */
+    const char *provider;
+
+    /* The address where the probe is inserted.  */
+    CORE_ADDR address;
+  };
+
+/* A helper for linespec that decodes a probe specification.  It returns a
+   symtabs_and_lines object and updates *ARGPTR or throws an error.  The
+   argument PTYPE specifies the type of the probe(s) to be parsed.  */
+
+extern struct symtabs_and_lines parse_probes (char **argptr,
+					      struct linespec_result *canon);
+
+/* Helper function to register the proper probe_ops to a newly created probe.
+   This function is mainly called from `sym_get_probes'.  */
+
+extern void register_probe_ops (struct probe *probe);
+
+/* Given a PC, find an associated probe with type PTYPE.  If a probe is
+   found, return it.  If no probe is found, return NULL.  */
+
+extern struct probe *find_probe_by_pc (CORE_ADDR pc);
+
+/* Search OBJFILE for a probe with the given PROVIDER, NAME and PTYPE.
+   Return a VEC of all probes that were found.  If no matching probe
+   is found, return NULL.  The caller must free the VEC.  */
+
+extern VEC (probe_p) *find_probes_in_objfile (struct objfile *objfile,
+					      const char *provider,
+					      const char *name);
+
+/* Generate a `info probes' command output for probe_ops represented by
+   POPS.  If POPS is NULL it considers any probes types.  It is a helper
+   function that can be used by the probe backends to print their
+   `info probe TYPE'.  */
+
+extern void info_probes_for_ops (char *arg, int from_tty,
+				 const struct probe_ops *pops);
+
+/* Return the `cmd_list_element' associated with the `info probes' command,
+   or create a new one if it doesn't exist.  Helper function that serves the
+   purpose of avoiding the case of a backend using the `cmd_list_element'
+   associated with `info probes', without having it registered yet.  */
+
+extern struct cmd_list_element **info_probes_cmdlist_get (void);
+
+/* Return the argument count of the specified probe.  */
+
+extern unsigned get_probe_argument_count (struct probe *probe);
+
+/* Return 1 if the probe interface associated with PROBE can evaluate
+   arguments, zero otherwise.  See the comments on the definition of
+   sym_probe_fns:can_evaluate_probe_arguments for more details.  */
+
+extern int can_evaluate_probe_arguments (struct probe *probe);
+
+/* Evaluate argument N of the specified probe.  N must be between 0
+   inclusive and get_probe_argument_count exclusive.  */
+
+extern struct value *evaluate_probe_argument (struct probe *probe,
+					      unsigned n);
+
+/* A convenience function that finds a probe at the PC in FRAME and
+   evaluates argument N, with 0 <= N < number_of_args.  If there is no
+   probe at that location, or if the probe does not have enough arguments,
+   this returns NULL.  */
+
+extern struct value *probe_safe_evaluate_at_pc (struct frame_info *frame,
+						unsigned n);
+
+#endif /* !defined (PROBE_H) */
+@
+
+
+1.5
+log
+@2013-06-04  Gary Benson  <gbenson@@redhat.com>
+
+	* probe.h (get_probe_argument_count): New declaration.
+	(evaluate_probe_argument): Likewise.
+	* probe.c (get_probe_argument_count): New function.
+	(evaluate_probe_argument): Likewise.
+	(probe_safe_evaluate_at_pc): Use the above new functions.
+@
+text
+@d76 6
+d227 6
+@
+
+
+1.4
+log
+@Update years in copyright notice for the GDB files.
+
+Two modifications:
+  1. The addition of 2013 to the copyright year range for every file;
+  2. The use of a single year range, instead of potentially multiple
+     year ranges, as approved by the FSF.
+@
+text
+@d217 10
+@
+
+
+1.3
+log
+@	* common/gdb_vecs.h: Moved here from ./gdb_vecs.h.
+	* common/gdb_vecs.c: New file, contents from utils.c.
+	* common/host-defs.h: New file, contents from defs.h.
+	* utils.h: New file, contents from defs.h.
+	* defs.h: Move all declarations of objects defined in utils.c
+	to utils.h (except QUIT() and related).
+	#include "utils.h", "host-defs.h".
+	* probe.h (probe_p): Move here from gdb_vecs.h.
+	* symfile.c: #include "probe.h" instead of "gdb_vecs.h".
+	* utils.c (free_char_ptr_vec): Moved to common/gdb_vecs.c.
+	(dirnames_to_char_ptr_vec_append, dirnames_to_char_ptr_vec): Ditto.
+	* Makefile.in (SFILES): Add common/gdb_vecs.c.
+	(HFILES_NO_SRCDIR): Add common/gdb_vecs.h, common/host-defs.h, utils.h.
+	(COMMON_OBS): Add gdb_vecs.o.
+	(gdb_vecs.o): New rule.
+@
+text
+@d3 1
+a3 1
+   Copyright (C) 2012 Free Software Foundation, Inc.
+@
+
+
+1.2
+log
+@2012-07-18  Sergio Durigan Junior  <sergiodj@@redhat.com>
+
+	* elfread.c (elf_get_probe_argument_count): Remove `objfile' argument.
+	(elf_compile_to_ax): Likewise.
+	* infrun.c (insert_exception_resume_from_probe): Likewise.
+	(check_exception_resume): Remove `objfile' variable.
+	* probe.c (find_probe_by_pc): Remove `objfile' argument.
+	(struct probe_and_objfile, probe_and_objfile_s): Delete.
+	(collect_probes): Adjust return value to `VEC (probe_p) *'.
+	(compare_entries): Rename to...
+	(compare_probes): ...this.  Adjust function to work with
+	`struct probe *'.  Rename variables `ea' and `eb' to `pa' and `pb'
+	respectively.
+	(gen_ui_out_table_header_info): Adjust `probes' argument to be
+	`VEC (probe_p) *'.
+	(print_ui_out_info): Adjust argument to be `struct probe *'.
+	(info_probes_for_ops): Adjust internal computations to use
+	`VEC (probe_p) *'.
+	(probe_safe_evaluate_at_pc): Refactor to not pass `objfile' anymore.
+	* probe.h (struct probe_ops) <get_probe_argument_count, compile_to_ax,
+	gen_info_probes_table_values>: Remove `objfile' argument.
+	(struct probe) <objfile>: New field.
+	(find_probe_by_pc): Remove `objfile' argument.
+	* stap-probe.c (stap_parse_probe_arguments): Likewise.
+	(stap_get_probe_argument_count): Likewise.
+	(stap_get_arg): Likewise.
+	(stap_evaluate_probe_argument): Likewise.
+	(stap_compile_to_ax): Likewise.
+	(compile_probe_arg): Refactor not to pass `objfile' anymore.
+	(handle_stap_probe): Fill `objfile' field from `struct probe'.
+	(stap_gen_info_probes_table_header): Remove `objfile' argument.
+	* symfile.h (struct sym_probe_fns) <sym_evaluate_probe_argument,
+	sym_compile_to_ax>: Likewise.
+@
+text
+@d25 5
+@
+
+
+1.1
+log
+@2012-04-27  Sergio Durigan Junior  <sergiodj@@redhat.com>
+	    Tom Tromey  <tromey@@redhat.com>
+	    Jan Kratochvil  <jan.kratochvil@@redhat.com>
+
+	* Makefile.in (SFILES): Add `probe' and `stap-probe'.
+	(COMMON_OBS): Likewise.
+	(HFILES_NO_SRCDIR): Add `probe'.
+	* NEWS: Mention support for static and SystemTap probes.
+	* amd64-tdep.c (amd64_init_abi): Initializing proper fields used by
+	SystemTap probes' arguments parser.
+	* arm-linux-tdep.c: Including headers needed to perform the parsing
+	of SystemTap probes' arguments.
+	(arm_stap_is_single_operand): New function.
+	(arm_stap_parse_special_token): Likewise.
+	(arm_linux_init_abi): Initializing proper fields used by SystemTap
+	probes' arguments parser.
+	* ax-gdb.c (require_rvalue): Removing static declaration.
+	(gen_expr): Likewise.
+	* ax-gdb.h (gen_expr): Declaring function.
+	(require_rvalue): Likewise.
+	* breakpoint.c: Include `gdb_regex.h' and `probe.h'.
+	(bkpt_probe_breakpoint_ops): New variable.
+	(momentary_breakpoint_from_master): Set the `probe' value.
+	(add_location_to_breakpoint): Likewise.
+	(break_command_1): Using proper breakpoint_ops according to the
+	argument passed by the user in the command line.
+	(bkpt_probe_insert_location): New function.
+	(bkpt_probe_remove_location): Likewise.
+	(bkpt_probe_create_sals_from_address): Likewise.
+	(bkpt_probe_decode_linespec): Likewise.
+	(tracepoint_probe_create_sals_from_address): Likewise.
+	(tracepoint_probe_decode_linespec): Likewise.
+	(tracepoint_probe_breakpoint_ops): New variable.
+	(trace_command): Using proper breakpoint_ops according to the
+	argument passed by the user in the command line.
+	(initialize_breakpoint_ops): Initializing breakpoint_ops for
+	static probes on breakpoints and tracepoints.
+	* breakpoint.h (struct bp_location) <probe>: New field.
+	* cli-utils.c (skip_spaces_const): New function.
+	(extract_arg): Likewise.
+	* cli-utils.h (skip_spaces_const): Likewise.
+	(extract_arg): Likewise.
+	* coffread.c (coff_sym_fns): Add `sym_probe_fns' value.
+	* configure.ac: Append `stap-probe.o' to be generated when ELF
+	support is present.
+	* configure: Regenerate.
+	* dbxread.c (aout_sym_fns): Add `sym_probe_fns' value.
+	* elfread.c: Include `probe.h' and `arch-utils.h'.
+	(probe_key): New variable.
+	(elf_get_probes): New function.
+	(elf_get_probe_argument_count): Likewise.
+	(elf_evaluate_probe_argument): Likewise.
+	(elf_compile_to_ax): Likewise.
+	(elf_symfile_relocate_probe): Likewise.
+	(stap_probe_key_free): Likewise.
+	(elf_probe_fns): New variable.
+	(elf_sym_fns): Add `sym_probe_fns' value.
+	(elf_sym_fns_lazy_psyms): Likewise.
+	(elf_sym_fns_gdb_index): Likewise.
+	(_initialize_elfread): Initialize objfile cache for static
+	probes.
+	* gdb_vecs.h (struct probe): New forward declaration.
+	(probe_p): New VEC declaration.
+	* gdbarch.c: Regenerate.
+	* gdbarch.h: Regenerate.
+	* gdbarch.sh (stap_integer_prefix): New variable.
+	(stap_integer_suffix): Likewise.
+	(stap_register_prefix): Likewise.
+	(stap_register_suffix): Likewise.
+	(stap_register_indirection_prefix): Likewise.
+	(stap_register_indirection_suffix): Likewise.
+	(stap_gdb_register_prefix): Likewise.
+	(stap_gdb_register_suffix): Likewise.
+	(stap_is_single_operand): New function.
+	(stap_parse_special_token): Likewise.
+	(struct stap_parse_info): Forward declaration.
+	* i386-tdep.c: Including headers needed to perform the parsing
+	of SystemTap probes' arguments.
+	(i386_stap_is_single_operand): New function.
+	(i386_stap_parse_special_token): Likewise.
+	(i386_elf_init_abi): Initializing proper fields used by SystemTap
+	probes' arguments parser.
+	* i386-tdep.h (i386_stap_is_single_operand): New function.
+	(i386_stap_parse_special_token): Likewise.
+	* machoread.c (macho_sym_fns): Add `sym_probe_fns' value.
+	* mipsread.c (ecoff_sym_fns): Likewise.
+	* objfiles.c (objfile_relocate1): Support relocation for static
+	probes.
+	* parse.c (prefixify_expression): Remove static declaration.
+	(initialize_expout): Likewise.
+	(reallocate_expout): Likewise.
+	* parser-defs.h (initialize_expout): Declare function.
+	(reallocate_expout): Likewise.
+	(prefixify_expression): Likewise.
+	* ppc-linux-tdep.c: Including headers needed to perform the parsing
+	of SystemTap probes' arguments.
+	(ppc_stap_is_single_operand): New function.
+	(ppc_stap_parse_special_token): Likewise.
+	(ppc_linux_init_abi): Initializing proper fields used by SystemTap
+	probes' arguments parser.
+	* probe.c: New file, for generic statically defined probe support.
+	* probe.h: Likewise.
+	* s390-tdep.c: Including headers needed to perform the parsing of
+	SystemTap probes' arguments.
+	(s390_stap_is_single_operand): New function.
+	(s390_gdbarch_init): Initializing proper fields used by SystemTap
+	probes' arguments parser.
+	* somread.c (som_sym_fns): Add `sym_probe_fns' value.
+	* stap-probe.c: New file, for SystemTap probe support.
+	* stap-probe.h: Likewise.
+	* symfile.h: Include `gdb_vecs.h'.
+	(struct sym_probe_fns): New struct.
+	(struct sym_fns) <sym_probe_fns>: New field.
+	* symtab.c (init_sal): Initialize `probe' field.
+	* symtab.h (struct probe): Forward declaration.
+	(struct symtab_and_line) <probe>: New field.
+	* tracepoint.c (start_tracing): Adjust semaphore on breakpoints
+	locations.
+	(stop_tracing): Likewise.
+	* xcoffread.c (xcoff_sym_fns): Add `sym_probe_fns' value.
+@
+text
+@d69 1
+a69 2
+    unsigned (*get_probe_argument_count) (struct probe *probe,
+					  struct objfile *objfile);
+a74 1
+					      struct objfile *objfile,
+d80 1
+a80 2
+    void (*compile_to_ax) (struct probe *probe, struct objfile *objfile,
+			   struct agent_expr *aexpr,
+d108 2
+a109 2
+       to be printed for PROBE  and OBJFILE.  If the backend implements
+       the `gen_ui_out_table_header' method, then it should implement
+a117 1
+					  struct objfile *objfile,
+d156 5
+d185 1
+a185 2
+   found, set *OBJFILE_OUT to the probe's objfile, and return the
+   probe.  If no probe is found, return NULL.  */
+d187 1
+a187 2
+extern struct probe *find_probe_by_pc (CORE_ADDR pc,
+				       struct objfile **objfile_out);
+@
+

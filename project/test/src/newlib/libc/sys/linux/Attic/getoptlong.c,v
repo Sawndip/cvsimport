@@ -1,0 +1,161 @@
+head	1.2;
+access;
+symbols
+	cygnus_cvs_20020108_pre:1.1
+	newlib-1_10_0:1.1
+	cygwin-1-3-6-4:1.1.0.2
+	newlib-1_9_0:1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.2
+date	2002.08.29.23.53.06;	author fitzsim;	state dead;
+branches;
+next	1.1;
+
+1.1
+date	2000.12.09.01.20.32;	author jjohnstn;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@	* libc/sys/linux/argp: New directory.
+	* libc/sys/linux/getopt.c: New file.
+	* libc/sys/linux/getopt1.c: New file.
+	* libc/sys/linux/getoptlong.c: Remove file.
+	* libc/sys/linux/include/argp.h: New file.
+	* libc/sys/linux/Makefile.am: Define argp_dir and ARGP_LIB,
+	based on ELIX level.
+	(SUBDIRS): Add argp_dir.
+	(SUBLIBS): Add ARGP_LIB.
+	(ELIX_2_OBJS): Add getopt.$(oext), getopt1.$(oext), remove
+	getopt_long.$(oext).
+	* libc/sys/linux/configure.in (AC_OUTPUT): Add argp/Makefile.
+@
+text
+@#include <unistd.h>
+#include <string.h>
+#include <getopt.h>
+
+/* Written 2000 by Werner Almesberger */
+
+static const char *__resume;
+
+
+int getopt_long(int argc,char *const argv[],const char *optstring,
+  const struct option *longopts,int *longindex)
+{
+    char *here;
+
+    optarg = NULL;
+    if (!__resume) {
+	if (argc == optind || *argv[optind] != '-') return -1;
+	if (argv[optind][1] == '-') {
+	    const struct option *opt;
+
+	    optarg = strchr(argv[optind],'=');
+	    if (optarg) optarg++;
+	    for (opt = longopts; opt->name &&
+	      (optarg || strcmp(opt->name,argv[optind]+2)) &&
+	      (!optarg || strlen(opt->name) != optarg-argv[optind]-3 ||
+	      strncmp(opt->name,argv[optind]+2,optarg-argv[optind]-3));
+	      opt++);
+	    optind++;
+	    if (!opt->name) return '?';
+	    if ((opt->has_arg == no_argument && optarg) ||
+	      (opt->has_arg == required_argument && !optarg)) return ':';
+	    if (longindex) *longindex = opt-longopts;
+	    if (!opt->flag) return opt->val;
+	    *opt->flag = opt->val;
+	    return 0;
+	}
+	else {
+	    __resume = argv[optind]+1;
+	}
+    }
+    here = strchr(optstring,*__resume);
+    if (!here) {
+	optind++;
+	__resume = NULL;
+	return '?';
+    }
+    if (here[1] != ':') {
+	if (!*++__resume) __resume = NULL;
+    }
+    else {
+	if (__resume[1]) optarg = (char *) __resume+1;
+	else {
+	    optarg = (char *) argv[++optind];
+	    if (optind == argc || *argv[optind] == '-') {
+		optind++;
+		__resume = NULL;
+		return ':';
+	    }
+	}
+	__resume = NULL;
+    }
+    if (!__resume) optind++;
+    return *here;
+}
+@
+
+
+1.1
+log
+@
+2000-12-08  Werner Almesberger  <Werner.Almesberger@@epfl.ch>
+
+        * configure.host: Added x86 linux target.
+        * libc/unix/getpass.c (_PATH_PASSWD, _PASSWORD_LEN): Default
+        definitions provided if not already defined.
+        * libc/sys/linux/crt0.c: New file.
+        * libc/sys/linux/Makefile.am: Ditto.
+        * libc/sys/linux/Makefile.in: Ditto.
+        * libc/sys/linux/aclocal.m4: Ditto.
+        * libc/sys/linux/brk.c: Ditto.
+        * libc/sys/linux/configure: Ditto.
+        * libc/sys/linux/configure.in: Ditto.
+        * libc/sys/linux/getoptlong.c: Ditto.
+        * libc/sys/linux/ids.c: Ditto.
+        * libc/sys/linux/inode.c: Ditto.
+        * libc/sys/linux/io.c: Ditto.
+        * libc/sys/linux/linux.c: Ditto.
+        * libc/sys/linux/process.c: Ditto.
+        * libc/sys/linux/realpath.c: Ditto.
+        * libc/sys/linux/select.c: Ditto.
+        * libc/sys/linux/signal.c: Ditto.
+        * libc/sys/linux/systat.c: Ditto.
+        * libc/sys/linux/termios.c: Ditto.
+        * libc/sys/linux/time.c: Ditto.
+        * libc/sys/linux/wait.c: Ditto.
+        * libc/sys/linux/include/alloca.h: Ditto.
+        * libc/sys/linux/include/getopt.h: Ditto.
+        * libc/sys/linux/include/stdint.h: Ditto.
+        * libc/sys/linux/include/unistd.h: Ditto.
+        * libc/sys/linux/sys/cdefs.h: Ditto.
+        * libc/sys/linux/sys/dirent.h: Ditto.
+        * libc/sys/linux/sys/errno.h: Ditto.
+        * libc/sys/linux/sys/fcntl.h: Ditto.
+        * libc/sys/linux/sys/file.h: Ditto.
+        * libc/sys/linux/sys/ioctl.h: Ditto.
+        * libc/sys/linux/sys/resource.h: Ditto.
+        * libc/sys/linux/sys/signal.h: Ditto.
+        * libc/sys/linux/sys/stat.h: Ditto.
+        * libc/sys/linux/sys/syscall.h: Ditto.
+        * libc/sys/linux/sys/termios.h: Ditto.
+        * libc/sys/linux/sys/time.h: Ditto.
+        * libc/sys/linux/sys/types.h: Ditto.
+        * libc/sys/linux/sys/utmp.h: Ditto.
+        * libc/sys/linux/sys/utsname.h: Ditto.
+        * libc/sys/linux/sys/wait.h: Ditto.
+@
+text
+@@
+

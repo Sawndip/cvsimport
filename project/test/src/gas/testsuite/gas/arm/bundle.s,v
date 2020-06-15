@@ -1,0 +1,153 @@
+head	1.1;
+access;
+symbols
+	binutils-2_24-branch:1.1.0.4
+	binutils-2_24-branchpoint:1.1
+	binutils-2_23_2:1.1
+	binutils-2_23_1:1.1
+	binutils-2_23:1.1
+	binutils-2_23-branch:1.1.0.2
+	binutils-2_23-branchpoint:1.1
+	binutils_latest_snapshot:1.1;
+locks; strict;
+comment	@# @;
+
+
+1.1
+date	2012.03.13.16.59.57;	author roland;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.1
+log
+@gas/
+2012-03-12  Roland McGrath  <mcgrathr@@google.com>
+
+	* config/tc-arm.c (arm_frag_max_var): New function.
+	* config/tc-arm.h: Declare it.
+	(md_frag_max_var): New macro.
+
+	* config/tc-i386.c (i386_frag_max_var): New function.
+	* config/tc-i386.h: Declare it.
+	(md_frag_max_var): New macro.
+
+	* doc/as.texinfo (Bundle directives): New node.
+	(Pseudo Ops): Add it to the menu.
+	* NEWS: Mention new feature.
+	* read.c [md_frag_max_var] (HANDLE_BUNDLE): New macro.
+	[HANDLE_BUNDLE] (bundle_align_p2): New variable.
+	[HANDLE_BUNDLE] (bundle_lock_frchain, bundle_lock_frag): New variables.
+	[HANDLE_BUNDLE] (start_bundle, pending_bundle_size, finish_bundle):
+	New functions.
+	(assemble_one): New function if [HANDLE_BUNDLE], #define directly
+	to md_assembly if not.
+	(read_a_source_file): Call assemble_one in place of md_assemble.
+	(read_a_source_file) [HANDLE_BUNDLE]: Check for unterminated
+	.bundle_lock at end of processing.
+	[HANDLE_BUNDLE] (s_bundle_align_mode, s_bundle_lock, s_bundle_unlock):
+	New functions.
+	[HANDLE_BUNDLE] (potable): Add their entries.
+	* read.h: Declare new functions.
+
+gas/testsuite/
+2012-03-12  Roland McGrath  <mcgrathr@@google.com>
+
+	* gas/i386/bundle-bad.s: New file.
+	* gas/i386/bundle-bad.d: New file.
+	* gas/i386/bundle-bad.l: New file.
+	* gas/i386/i386.exp: Run it.
+
+	* gas/arm/bundle.s: New file.
+	* gas/arm/bundle.d: New file.
+	* gas/arm/bundle-lock.s: New file.
+	* gas/arm/bundle-lock.d: New file.
+
+	* gas/i386/bundle.s: New file.
+	* gas/i386/bundle.d: New file.
+	* gas/i386/x86-64-bundle.s: New file.
+	* gas/i386/x86-64-bundle.d: New file.
+	* gas/i386/bundle-lock.s: New file.
+	* gas/i386/bundle-lock.d: New file.
+	* gas/i386/i386.exp: Run them.
+@
+text
+@	.syntax unified
+	.bundle_align_mode 4
+
+# We use these macros to test each pattern at every offset from
+# bundle alignment, i.e. [0,16) by 2 or 4.
+
+.macro offset_insn insn_name, offset, size
+	.p2align 4
+\insn_name\()_offset_\offset\():
+	.rept \offset / \size
+	bkpt
+	.endr
+	\insn_name
+.endm
+
+.macro test_offsets_arm insn_name
+	.arm
+	offset_insn \insn_name, 0, 4
+	offset_insn \insn_name, 4, 4
+	offset_insn \insn_name, 8, 4
+	offset_insn \insn_name, 12, 4
+.endm
+
+.macro test_offsets_thumb insn_name
+	.thumb
+	offset_insn \insn_name, 0, 2
+	offset_insn \insn_name, 2, 2
+	offset_insn \insn_name, 4, 2
+	offset_insn \insn_name, 6, 2
+	offset_insn \insn_name, 8, 2
+	offset_insn \insn_name, 10, 2
+	offset_insn \insn_name, 12, 2
+	offset_insn \insn_name, 14, 2
+.endm
+
+.macro test_arm
+	add r0, r1
+.endm
+
+.macro test_thumb_2
+	adds r0, r1
+.endm
+.macro test_thumb_4
+	adds r8, r9
+.endm
+
+test_offsets_arm test_arm
+test_offsets_thumb test_thumb_2
+test_offsets_thumb test_thumb_4
+
+# There are many relaxation cases for Thumb instructions.
+# But we use as representative the simple branch cases.
+
+.macro test_thumb_b_2
+	b 0f
+	bkpt 1
+0:	bkpt 2
+.endm
+.macro test_thumb_b_4
+	b far_target
+.endm
+
+test_offsets_thumb test_thumb_b_2
+test_offsets_thumb test_thumb_b_4
+
+# This is to set up a branch target surely too far for a short branch.
+pad_for_far_target:
+	.rept 1025
+	bkpt 1
+	.endr
+far_target:
+	bkpt 2
+.p2align 4
+	bkpt
+@

@@ -1,0 +1,224 @@
+head	1.4;
+access;
+symbols
+	cygwin-1_7_17-release:1.3
+	cygwin-64bit-branch:1.3.0.2
+	cygwin-1_7_16-release:1.3
+	cygwin-1_7_15-release:1.3
+	cygwin-1_7_14_2-release:1.3
+	cygwin-1_7_14-release:1.3
+	cygwin-1_7_12-release:1.3
+	cygwin-1_7_11-release:1.3
+	cygwin-1_7_10-release:1.3
+	cygwin-1_7_9-release:1.3
+	cygwin-1_7_8-release:1.3
+	cygwin-1_7_7-release:1.3
+	cygwin-1_7_5-release:1.3
+	cygwin-1_7_4-release:1.3
+	cygwin-1_7_3-release:1.3
+	cygwin-1_7_2-release:1.3
+	cygwin-1_7_1-release:1.3
+	cv-branch-2:1.2.0.2
+	cr-0x5f1:1.1.0.4
+	cv-branch:1.1.0.2;
+locks; strict;
+comment	@ * @;
+
+
+1.4
+date	2012.11.07.16.52.13;	author cgf;	state dead;
+branches;
+next	1.3;
+
+1.3
+date	2009.07.18.15.05.20;	author ironhead;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2008.12.09.02.42.21;	author dannysmith;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2006.07.03.10.32.58;	author dannysmith;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.4
+log
+@* mingw: Delete obsolete directory.
+* w32api: Ditto.
+@
+text
+@#include <stdbool.h>
+#include "cpu_features.h"
+
+/* level 1 edx bits */
+#define EDX_CX8 (1 << 8) /* CMPXCHG8B */
+#define EDX_CMOV (1 << 15)
+#define EDX_MMX (1 << 23)
+#define EDX_FXSR (1 << 24) /* FXSAVE and FXRSTOR */
+#define EDX_SSE (1 << 25)
+#define EDX_SSE2 (1 << 26) 
+
+/*  level 1 ecx bits */
+#define ECX_SSE3 (1 << 0)
+#define ECX_CX16 (1 << 13) /* CMPXCHG16B */
+
+/* extended level 0x80000001 edx bits */
+#define EDX_3DNOW (1 << 31)
+#define EDX_3DNOWP (1 << 30)
+#define EDX_LM (1 << 29) /*LONG MODE */
+
+#define __cpuid(level,a,b,c,d)			 		\
+  asm volatile ("cpuid;"				\
+			: "=a" (a), "=b" (b), "=c" (c), "=d" (d)\
+			: "0" (level))
+
+/* Combine the different cpuid flags into a single bitmap.  */ 
+
+unsigned int __cpu_features = 0;
+
+void  __cpu_features_init (void)
+{
+  unsigned int eax, ebx, ecx, edx;
+  /* Try to change the value of CPUID bit (bit 21) in EFLAGS.
+     If the bit can be toggled, CPUID is supported.  */
+  asm volatile ("pushfl; pushfl; popl %0;"
+		"movl %0,%1; xorl %2,%0;"
+		"pushl %0; popfl; pushfl; popl %0; popfl"
+		: "=&r" (eax), "=&r" (ebx)
+		: "i" (0x00200000));
+
+  if (((eax ^ ebx) & 0x00200000) == 0)
+    return;
+
+  __cpuid (0, eax, ebx, ecx, edx);
+  if (eax == 0)
+    return;
+
+  __cpuid (1, eax, ebx, ecx, edx);
+
+  if (edx & EDX_CX8)
+     __cpu_features |= _CRT_CMPXCHG8B;
+  if (edx & EDX_CMOV)
+     __cpu_features |= _CRT_CMOV;
+
+  if (edx & EDX_MMX)
+     __cpu_features |= _CRT_MMX;
+  if (edx & EDX_FXSR)
+     __cpu_features |= _CRT_FXSR; 
+  if (edx & EDX_SSE)
+     __cpu_features |= _CRT_SSE;
+  if (edx & EDX_SSE2)
+     __cpu_features |= _CRT_SSE2;
+
+
+  if (ecx & ECX_SSE3)
+     __cpu_features |= _CRT_SSE3;
+  if (ecx & ECX_CX16)
+     __cpu_features |= _CRT_CMPXCHG16B;
+
+  __cpuid (0x80000000, eax, ebx, ecx, edx);
+  if (eax < 0x80000001)
+    return;
+  __cpuid (0x80000001, eax, ebx, ecx, edx);
+  if (edx & EDX_3DNOW)
+    __cpu_features |= _CRT_3DNOW; 
+  if (edx & EDX_3DNOWP)
+    __cpu_features |= _CRT_3DNOWP; 
+
+  return;
+}
+
+#ifdef TEST
+
+#include <stdio.h>
+#define report(feature) \
+  if ((feature) & __cpu_features) printf( #feature " found\n")
+
+int main()
+{
+  __cpu_features_init();
+
+  report(_CRT_CMPXCHG8B);
+  report(_CRT_CMOV);
+  report(_CRT_MMX);
+  report(_CRT_FXSR);
+  report(_CRT_SSE);
+  report(_CRT_SSE2);
+  report(_CRT_SSE3);
+  report(_CRT_CMPXCHG16B);
+  report(_CRT_3DNOW);
+  report(_CRT_3DNOWP);
+ return 0;
+}
+
+#endif
+@
+
+
+1.3
+log
+@2009-07-18  Gregory McGarry  <gregorymcgarry@@users.sourceforge.net>
+
+        * cpu_features.c: replace gcc-specific construct with portable alternative
+        and match the code a few lines above.
+        * crt1.c: remove gcc-specific noreturn attribute with mingw alternative
+@
+text
+@@
+
+
+1.2
+log
+@Committed as obvious.
+
+2008-12-08  Dmitry G. Gorbachev  <d.g.gorbachev@@gmail.com>
+
+	* cpu_features.c (__cpu_features_init): Remove erroneous ';'.
+@
+text
+@d22 1
+a22 1
+  __asm__ __volatile__ ("cpuid;"				\
+@
+
+
+1.1
+log
+@ 	Support SSE float environment in fenv.h functions.
+
+	* cpu_features.c: New file.
+	* cpu_features.h: New file.
+	* crt1.c: Include "cpu_features.h".
+	(__mingw_CRTStartup): Call cpu_features_init().
+	* Makefile.in (MING_OBJS): Add cpu_features.c.
+	(SRCDIST_FILES): Add cpu_features.c, cpu_features.h.
+	* include/fenv,h ( fenv_t;): Append  __mxcsr field.
+	(__MXCSR_EXCEPT_FLAG_SHIFT): New define.
+	(__MXCSR_EXCEPT_MASK_SHIFT): New define.
+	(__MXCSR_ROUND_FLAG_SHIFT): New define.
+	* mingwex/feclearexcept.c: Include "cpu_features.h".
+	Handle SSE environment.
+	* mingwex/fegetenv.c: Likewise.
+	* mingwex/feholdexcept.c: Likewise.
+	* mingwex/fesetenv.c: Likewise.
+	* mingwex/fesetexceptflag.c: Likewise.
+	* mingwex/fesetround.c: Likewise.
+	* mingwex/fetestexcept.c: Likewise.
+	* mingwex/feupdateenv.c: Likewise.
+	* mingwex/fegetround.c: Add comment.
+@
+text
+@d74 1
+a74 1
+  if (edx & EDX_3DNOW);
+@
+

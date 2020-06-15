@@ -1,0 +1,956 @@
+head	1.11;
+access;
+symbols
+	binutils-2_24-branch:1.11.0.2
+	binutils-2_24-branchpoint:1.11
+	binutils-2_21_1:1.8
+	binutils-2_23_2:1.9.6.1
+	binutils-2_23_1:1.9
+	binutils-2_23:1.9
+	binutils-2_23-branch:1.9.0.6
+	binutils-2_23-branchpoint:1.9
+	binutils-2_22_branch:1.9.0.4
+	binutils-2_22:1.9
+	binutils-2_22-branch:1.9.0.2
+	binutils-2_22-branchpoint:1.9
+	binutils-2_21:1.8
+	binutils-2_21-branch:1.8.0.2
+	binutils-2_21-branchpoint:1.8
+	binutils-2_20_1:1.6.4.1
+	binutils-2_20:1.6.4.1
+	binutils-arc-20081103-branch:1.5.0.6
+	binutils-arc-20081103-branchpoint:1.5
+	binutils-2_20-branch:1.6.0.4
+	binutils-2_20-branchpoint:1.6
+	dje-cgen-play1-branch:1.6.0.2
+	dje-cgen-play1-branchpoint:1.6
+	arc-20081103-branch:1.5.0.4
+	arc-20081103-branchpoint:1.5
+	binutils-2_19_1:1.5
+	binutils-2_19:1.5
+	binutils-2_19-branch:1.5.0.2
+	binutils-2_19-branchpoint:1.5
+	binutils_latest_snapshot:1.11
+	added-to-binutils:1.4;
+locks; strict;
+comment	@// @;
+
+
+1.11
+date	2012.12.10.17.38.42;	author roland;	state Exp;
+branches;
+next	1.10;
+
+1.10
+date	2012.12.07.21.48.32;	author roland;	state Exp;
+branches;
+next	1.9;
+
+1.9
+date	2011.05.24.21.41.10;	author ccoutant;	state Exp;
+branches
+	1.9.6.1;
+next	1.8;
+
+1.8
+date	2010.04.07.22.58.23;	author ccoutant;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	2009.09.30.22.21.13;	author ian;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2009.03.14.05.56.46;	author ian;	state Exp;
+branches
+	1.6.4.1;
+next	1.5;
+
+1.5
+date	2008.04.19.18.30.58;	author ian;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2008.02.28.00.18.24;	author iant;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2008.02.26.22.48.08;	author iant;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2008.02.12.00.13.39;	author iant;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2008.02.08.07.06.58;	author iant;	state Exp;
+branches;
+next	;
+
+1.9.6.1
+date	2012.12.07.21.49.47;	author roland;	state Exp;
+branches;
+next	;
+
+1.6.4.1
+date	2009.10.16.05.51.18;	author ian;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.11
+log
+@gold/
+	* testsuite/binary_unittest.cc (read_all): New function.
+	(Sized_binary_test): Use it instead of ::read.
+	* fileread.cc (do_read): Don't assume pread always reads the whole
+	amount in a single call.
+@
+text
+@// binary_unittest.cc -- test Binary_to_elf
+
+// Copyright 2008, 2012 Free Software Foundation, Inc.
+// Written by Ian Lance Taylor <iant@@google.com>.
+
+// This file is part of gold.
+
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 3 of the License, or
+// (at your option) any later version.
+
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
+// MA 02110-1301, USA.
+
+#include "gold.h"
+
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+
+#include "elfcpp.h"
+#include "parameters.h"
+#include "errors.h"
+#include "options.h"
+#include "binary.h"
+#include "object.h"
+#include "descriptors.h"
+
+#include "test.h"
+#include "testfile.h"
+
+namespace
+{
+
+ssize_t
+read_all (int fd, unsigned char* buf, ssize_t size)
+{
+  ssize_t total_read = 0;
+  while (size > 0)
+    {
+      ssize_t nread = ::read(fd, buf, size);
+      if (nread < 0)
+	return nread;
+      if (nread == 0)
+	break;
+      buf += nread;
+      size -= nread;
+      total_read += nread;
+    }
+  return total_read;
+}
+
+} // End anonymous namespace.
+
+namespace gold_testsuite
+{
+
+using namespace gold;
+
+template<int size, bool big_endian>
+bool
+Sized_binary_test()
+{
+  parameters_clear_target();
+  // We need a pretend Task.
+  const Task* task = reinterpret_cast<const Task*>(-1);
+
+  // Use the executable itself as the binary data.
+  struct stat st;
+  CHECK(::stat(gold::program_name, &st) == 0);
+  int o = open_descriptor(-1, gold::program_name, O_RDONLY);
+  CHECK(o >= 0);
+  unsigned char* filedata = new unsigned char[st.st_size];
+  CHECK(read_all(o, filedata, st.st_size) == static_cast<ssize_t>(st.st_size));
+  CHECK(::close(o) == 0);
+
+  Binary_to_elf binary(static_cast<elfcpp::EM>(0xffff), size, big_endian,
+		       gold::program_name);
+
+  CHECK(binary.convert(task));
+
+  Input_file input_file(task, "test.o", binary.converted_data(),
+			binary.converted_size());
+  Object* object = make_elf_object("test.o", &input_file, 0,
+				   binary.converted_data(),
+				   binary.converted_size(), NULL);
+  CHECK(object != NULL);
+  if (object == NULL)
+    return false;
+
+  CHECK(!object->is_dynamic());
+  CHECK(object->shnum() == 5);
+  CHECK(object->section_name(1) == ".data");
+  CHECK(object->section_flags(1) == (elfcpp::SHF_ALLOC | elfcpp::SHF_WRITE));
+  section_size_type len;
+  const unsigned char* contents = object->section_contents(1, &len, false);
+  CHECK(len == convert_to_section_size_type(st.st_size));
+  CHECK(memcmp(filedata, contents, len) == 0);
+
+  // Force the symbols to be read internally, so that
+  // symbol_section_and_value will work.
+  Read_symbols_data sd;
+  object->read_symbols(&sd);
+  delete sd.section_headers;
+  sd.section_headers = NULL;
+  delete sd.section_names;
+  sd.section_names = NULL;
+  delete sd.symbols;
+  sd.symbols = NULL;
+  delete sd.symbol_names;
+  sd.symbol_names = NULL;
+
+  Sized_relobj_file<size, big_endian>* relobj =
+    static_cast<Sized_relobj_file<size, big_endian>*>(object);
+  typename Sized_relobj_file<size, big_endian>::Address value;
+  bool is_ordinary;
+  CHECK(relobj->symbol_section_and_value(0, &value, &is_ordinary) == 0);
+  CHECK(is_ordinary);
+  CHECK(value == 0);
+  CHECK(relobj->symbol_section_and_value(1, &value, &is_ordinary) == 1);
+  CHECK(is_ordinary);
+  CHECK(value == 0);
+  CHECK(relobj->symbol_section_and_value(2, &value, &is_ordinary) == 1);
+  CHECK(is_ordinary);
+  CHECK(static_cast<off_t>(value) == st.st_size);
+  CHECK(relobj->symbol_section_and_value(3, &value, &is_ordinary)
+	== elfcpp::SHN_ABS);
+  CHECK(!is_ordinary);
+  CHECK(static_cast<off_t>(value) == st.st_size);
+
+  object->unlock(task);
+  return true;
+}
+
+bool
+Binary_test(Test_report*)
+{
+  Errors errors(gold::program_name);
+  set_parameters_errors(&errors);
+
+  General_options options;
+  set_parameters_options(&options);
+
+  int fail = 0;
+
+#ifdef HAVE_TARGET_32_LITTLE
+  if (!Sized_binary_test<32, false>())
+    ++fail;
+  CHECK(&parameters->target() == target_test_pointer_32_little);
+#endif
+
+#ifdef HAVE_TARGET_32_BIG
+  if (!Sized_binary_test<32, true>())
+    ++fail;
+  CHECK(&parameters->target() == target_test_pointer_32_big);
+#endif
+
+#ifdef HAVE_TARGET_64_LITTLE
+  if (!Sized_binary_test<64, false>())
+    ++fail;
+  CHECK(&parameters->target() == target_test_pointer_64_little);
+#endif
+
+#ifdef HAVE_TARGET_64_BIG
+  if (!Sized_binary_test<64, true>())
+    ++fail;
+  CHECK(&parameters->target() == target_test_pointer_64_big);
+#endif
+
+  return fail == 0;
+}
+
+Register_test binary_register("Binary", Binary_test);
+
+} // End namespace gold_testsuite.
+@
+
+
+1.10
+log
+@gold/
+	* testsuite/binary_unittest.cc (Sized_binary_test):
+	Use open_descriptor rather than ::open.
+@
+text
+@d41 23
+d83 1
+a83 1
+  CHECK(::read(o, filedata, st.st_size) == st.st_size);
+@
+
+
+1.9
+log
+@	* incremental-dump.cc (dump_incremental_inputs): Print dynamic reloc
+	info; adjust display of GOT entries.
+	* incremental.cc (Sized_incremental_binary::setup_readers): Allocate
+	vector of input objects; remove file_status_.
+	(Sized_incremental_binary::do_reserve_layout): Remove file_status_.
+	(Sized_incremental_binary::do_process_got_plt): Adjust calls to
+	got_plt reader; call target hooks to reserve GOT entries.
+	(Output_section_incremental_inputs::set_final_data_size): Adjust size
+	of input file info header and GOT info entry.
+	(Output_section_incremental_inputs::write_info_blocks): Write dynamic
+	relocation info.
+	(Got_plt_view_info::got_descriptor): Remove.
+	(Got_plt_view_info::sym_index): New data member.
+	(Got_plt_view_info::input_index): New data member.
+	(Local_got_offset_visitor::visit): Write input file index.
+	(Global_got_offset_visitor::visit): Write 0 for input file index.
+	(Global_symbol_visitor_got_plt::operator()): Replace got_descriptor
+	with sym_index and input_index.
+	(Output_section_incremental_inputs::write_got_plt): Adjust size of
+	incremental info GOT entry; replace got_descriptor with input_index.
+	(Sized_relobj_incr::Sized_relobj_incr): Adjust initializers; record
+	map from input file index to object.
+	(Sized_relobj_incr::do_layout): Replace direct data member reference
+	with accessor function.
+	(Sized_relobj_incr::do_for_all_local_got_entries): Move to base class.
+	* incremental.h (Incremental_input_entry_reader::get_symbol_offset):
+	Adjust size of input file info header.
+	(Incremental_input_entry_reader::get_first_dyn_reloc): New function.
+	(Incremental_input_entry_reader::get_dyn_reloc_count): New function.
+	(Incremental_input_entry_reader::get_input_section): Adjust size of
+	input file info header.
+	(Incremental_got_plt_reader::Incremental_got_plt_reader): Adjust size
+	of incremental info GOT entry.
+	(Incremental_got_plt_reader::get_got_desc): Remove.
+	(Incremental_got_plt_reader::get_got_symndx): New function.
+	(Incremental_got_plt_reader::get_got_input_index): New function.
+	(Sized_incremental_binary::Sized_incremental_binary): Remove
+	file_status_; add input_objects_.
+	(Sized_incremental_binary::~Sized_incremental_binary): Remove.
+	(Sized_incremental_binary::set_file_is_unchanged): Remove.
+	(Sized_incremental_binary::file_is_unchanged): Remove.
+	(Sized_incremental_binary::set_input_object): New function.
+	(Sized_incremental_binary::input_object): New function.
+	(Sized_incremental_binary::file_status_): Remove.
+	(Sized_incremental_binary::input_objects_): New data member.
+	(Sized_relobj_incr): Rename Sized_incr_relobj to this; adjust all
+	references.
+	(Sized_relobj_incr::invalid_address): Move to base class.
+	(Sized_relobj_incr::is_output_section_offset_invalid): Move to base
+	class.
+	(Sized_relobj_incr::do_output_section_offset): Likewise.
+	(Sized_relobj_incr::do_for_all_local_got_entries): Likewise.
+	(Sized_relobj_incr::section_offsets_): Likewise.
+	* object.cc (Sized_relobj::do_for_all_local_got_entries): New
+	function.
+	(Sized_relobj_file::Sized_relobj_file): Remove local_got_offsets_.
+	(Sized_relobj_file::layout_section): Replace refs to section_offsets_
+	with accessor function.
+	(Sized_relobj_file::do_layout): Likewise.
+	(Sized_relobj_file::do_layout_deferred_sections): Likewise.
+	(Sized_relobj_file::do_for_all_local_got_entries): Move to base class.
+	(Sized_relobj_file::compute_final_local_value): Replace refs to
+	section_offsets_ with accessor function.
+	(Sized_relobj_file::do_finalize_local_symbols): Likewise.
+	* object.h (Relobj::Relobj): Initialize new data members.
+	(Relobj::add_dyn_reloc): New function.
+	(Relobj::first_dyn_reloc): New function.
+	(Relobj::dyn_reloc_count): New function.
+	(Relobj::first_dyn_reloc_): New data member.
+	(Relobj::dyn_reloc_count_): New data member.
+	(Sized_relobj): Rename Sized_relobj_base to this; adjust all
+	references.
+	(Sized_relobj::Address): New typedef.
+	(Sized_relobj::invalid_address): Move here from child class.
+	(Sized_relobj::Sized_relobj): Initialize new data members.
+	(Sized_relobj::sized_relobj): New function.
+	(Sized_relobj::is_output_section_offset_invalid): Move here from
+	child class.
+	(Sized_relobj::get_output_section_offset): Likewise.
+	(Sized_relobj::local_has_got_offset): Likewise.
+	(Sized_relobj::local_got_offset): Likewise.
+	(Sized_relobj::set_local_got_offset): Likewise.
+	(Sized_relobj::do_for_all_local_got_entries): Likewise.
+	(Sized_relobj::clear_got_offsets): New function.
+	(Sized_relobj::section_offsets): Move here from child class.
+	(Sized_relobj::do_output_section_offset): Likewise.
+	(Sized_relobj::do_set_section_offset): Likewise.
+	(Sized_relobj::Local_got_offsets): Likewise.
+	(Sized_relobj::local_got_offsets_): Likewise.
+	(Sized_relobj::section_offsets_): Likewise.
+	(Sized_relobj_file): Rename Sized_relobj to this; adjust all
+	references.
+	(Sized_relobj_file::is_output_section_offset_invalid): Move to base
+	class.
+	(Sized_relobj_file::sized_relobj): New function
+	(Sized_relobj_file::local_has_got_offset): Move to base class.
+	(Sized_relobj_file::local_got_offset): Likewise.
+	(Sized_relobj_file::set_local_got_offset): Likewise.
+	(Sized_relobj_file::get_output_section_offset): Likewise.
+	(Sized_relobj_file::do_for_all_local_got_entries): Likewise.
+	(Sized_relobj_file::do_output_section_offset): Likewise.
+	(Sized_relobj_file::do_set_section_offset): Likewise.
+	(Sized_relobj_file::Local_got_offsets): Likewise.
+	(Sized_relobj_file::local_got_offsets_): Likewise.
+	(Sized_relobj_file::section_offsets_): Likewise.
+	* output.cc (Output_reloc::Output_reloc): Adjust type of relobj
+	(all constructors).
+	(set_needs_dynsym_index): Convert relobj to derived class pointer.
+	(Output_reloc::get_symbol_index): Likewise.
+	(Output_reloc::local_section_offset): Likewise.
+	(Output_reloc::get_address): Likewise.
+	(Output_reloc::symbol_value): Likewise.
+	(Output_data_got::reserve_slot): Move to class definition.
+	(Output_data_got::reserve_local): New function.
+	(Output_data_got::reserve_slot_for_global): Remove.
+	(Output_data_got::reserve_global): New function.
+	* output.h (Output_reloc::Output_reloc): Adjust type of relobj
+	(all constructors, two instantiations).
+	(Output_reloc::get_relobj): New function (two instantiations).
+	(Output_reloc::u1_.relobj, Output_reloc::u2_.relobj): Adjust type.
+	(Output_data_reloc_base::add): Convert relobj to derived class pointer.
+	(Output_data_reloc::add_global): Adjust type of relobj.
+	(Output_data_reloc::add_global_relative): Likewise.
+	(Output_data_reloc::add_symbolless_global_addend): Likewise.
+	(Output_data_reloc::add_local): Likewise.
+	(Output_data_reloc::add_local_relative): Likewise.
+	(Output_data_reloc::add_symbolless_local_addend): Likewise.
+	(Output_data_reloc::add_local_section): Likewise.
+	(Output_data_reloc::add_output_section): Likewise.
+	(Output_data_reloc::add_absolute): Likewise.
+	(Output_data_reloc::add_target_specific): Likewise.
+	(Output_data_got::reserve_slot): Move definition here.
+	(Output_data_got::reserve_local): New function.
+	(Output_data_got::reserve_global): New function.
+	* reloc.cc (Sized_relobj_file::do_read_relocs): Replace refs to
+	section_offsets_ with accessor function.
+	(Sized_relobj_file::write_sections): Likewise.
+	(Sized_relobj_file::do_relocate_sections): Likewise.
+	* target.h (Sized_target::reserve_local_got_entry): New function.
+	(Sized_target::reserve_global_got_entry): New function.
+	* x86_64.cc (Target_x86_64::reserve_local_got_entry): New function.
+	(Target_x86_64::reserve_global_got_entry): New function.
+	(Target_x86_64::init_got_plt_for_update): Create rela_dyn section.
+@
+text
+@d3 1
+a3 1
+// Copyright 2008 Free Software Foundation, Inc.
+d36 1
+d57 1
+a57 1
+  int o = ::open(gold::program_name, O_RDONLY);
+@
+
+
+1.9.6.1
+log
+@gold/
+	* testsuite/binary_unittest.cc (Sized_binary_test):
+	Use open_descriptor rather than ::open.
+@
+text
+@d3 1
+a3 1
+// Copyright 2008, 2012 Free Software Foundation, Inc.
+a35 1
+#include "descriptors.h"
+d56 1
+a56 1
+  int o = open_descriptor(-1, gold::program_name, O_RDONLY);
+@
+
+
+1.8
+log
+@	* archive.cc (include_member): Destroy Read_symbols_data object before
+	releasing file.
+	* object.cc (Read_symbols_data::~Read_symbols_data) New destructor.
+	* object.h (Read_symbols_data::Read_symbols_data) New constructor.
+	(Read_symbols_data::~Read_symbols_data) New destructor.
+	(Section_relocs::Section_relocs) New constructor.
+	(Section_relocs::~Section_relocs) New destructor.
+	(Read_relocs_data::Read_relocs_data) New constructor.
+	(Read_relocs_data::~Read_relocs_data) New destructor.
+	* testsuite/binary_unittest.cc (Sized_binary_test): Set sd member
+	pointers to NULL after deleting.
+@
+text
+@d98 3
+a100 3
+  Sized_relobj<size, big_endian>* relobj =
+    static_cast<Sized_relobj<size, big_endian>*>(object);
+  typename Sized_relobj<size, big_endian>::Address value;
+@
+
+
+1.7
+log
+@	* object.h (class Object): Remove target_ field, and target,
+	sized_target, and set_target methods.
+	(Object::sized_target): Remove.
+	(class Sized_relobj): Update declarations.  Remove sized_target.
+	* object.cc (Sized_relobj::setup): Remove target parameter.
+	Change all callers.
+	(Input_objects::add_object): Don't do anything with the target.
+	(make_elf_sized_object): Add punconfigured parameter.  Change all
+	callers.  Set or test parameter target.
+	* dynobj.cc (Sized_dynobj::target): Remove target parameter.
+	Change all callers.
+	* parameters.cc (Parameters::set_target): Change parameter type to
+	be non-const.
+	(Parameters::default_target): Remove.
+	(set_parameters_target): Change parameter type to be non-const.
+	(parameters_force_valid_target): New function.
+	(parameters_clear_target): New function.
+	* parameters.h (class Parameters): Update declarations.  Remove
+	default_target method.  Add sized_target and clear_target
+	methods.  Change target_ to be non-const.
+	(set_parameters_target): Update declaration.
+	(parameters_force_valid_target): Declare.
+	(parameters_clear_target): Declare.
+	* readsyms.cc (Read_symbols::do_read_symbols): Pass punconfigured
+	as NULL if we aren't searching.
+	(Add_symbols::run): Don't check for compatible target.
+	* fileread.cc (Input_file::open_binary): Call
+	parameters_force_valid_target.
+	* gold.cc (queue_middle_tasks): Likewise.
+	* plugin.cc (make_sized_plugin_object): Likewise.  Don't call
+	set_target on object.
+	* dynobj.h (class Sized_dynobj): Update declarations.
+	* archive.cc (Archive::get_elf_object_for_member): Return NULL if
+	make_elf_object returns NULL.
+	(Archive::include_member): Don't check whether object target is
+	compatible.
+	* output.cc (Output_section::add_input_section): Get target from
+	parameters.
+	(Output_section::relax_input_section): Likewise.
+	* reloc.cc (Sized_relobj::do_gc_process_relocs): Get target from
+	parameters.
+	(Sized_relobj::do_scan_relocs): Likewise.
+	(Sized_relobj::relocate_sections): Likewise.
+	* resolve.cc (Symbol_table::resolve): Likewise.
+	* symtab.cc (Symbol_table::wrap_symbol): Likewise.  Remove object
+	parameter.  Change all callers.
+	(Symbol_table::add_from_object): Get target from parameters.
+	(Symbol_table::add_from_relobj): Don't check object target.
+	(Symbol_table::add_from_dynobj): Likewise.
+	(Symbol_table::define_special_symbol): Get target from
+	parameters.
+	* symtab.h (class Symbol_table): Update declaration.
+	* testsuite/binary_unittest.cc (gold_testsuite): Remove target
+	parameter.  Change all callers.  Clear parameter target.
+	(Binary_test): Test target here.
+	* testsuite/object_unittest.cc (gold_testsuite): Remove
+	target_test_pointer parameter.  Change all callers.
+	(Object_test): Test target here.
+@
+text
+@d90 1
+d92 1
+d94 1
+d96 1
+@
+
+
+1.6
+log
+@	* readsyms.cc (Read_symbols::incompatible_warning): New function.
+	(Read_symbols::requeue): New function.
+	(Read_symbols::do_read_symbols): If make_elf_object fails because
+	the target type is not configured, and the file was searched for,
+	issue a warning and retry with the next directory.
+	(Add_symbols::run): If the file has an incompatible format, and
+	it was searched for, requeue the Read_symbols task.  On error,
+	release the object.
+	* readsyms.h (class Read_symbols): Add dirindex_ field.  Add
+	dirindex parameter to constructor.  Change all callers.  Declare
+	incompatible_warning and requeue.
+	(class Add_symbols): Add dirpath_, dirindex_, mapfile_,
+	input_argument_ and input_group_ fields.  Add them to
+	constructor.  Change all callers.
+	(class Read_script): Add dirindex_ field.  Add it to constructor.
+	Change all callers.
+	* archive.cc (Archive::setup): Remove input_objects parameter.
+	Change all callers.
+	(Archive::get_file_and_offset): Likewise.
+	(Archive::read_all_symbols): Likewise.
+	(Archive::read_symbols): Likewise.
+	(Archive::get_elf_object_for_member): Remove input_objects
+	parameter.  Add punconfigured parameter.  Change all callers.
+	(Archive::add_symbols): Change return type to bool.  Check return
+	value of include_member.
+	(Archive::include_all_members): Likewise.
+	(Archive::include_member): Change return type to bool.  Return
+	false if first included object has incompatible target.  Set
+	included_member_ field.
+	(Add_archive_symbols::run): If add_symbols returns false, requeue
+	Read_symbols task.
+	* archive.h (class Archive): Add included_member_ field.
+	Initialize it in constructor.  Add input_file and searched_for
+	methods.  Update declarations.
+	(class Add_archive_symbols): Add dirpath_, dirindex_, and
+	input_argument_ fields.  Add them to constructor.  Change all
+	callers.
+	* script.cc: Include "target-select.h".
+	(class Parser_closure): Add skip_on_incompatible_target_ and
+	found_incompatible_target_ fields.  Add
+	skip_on_incompatible_target parameter to constructor.  Change all
+	callers.  Add methods skip_on_incompatible_target,
+	clear_skip_on_incompatible_target, found_incompatible_target, and
+	set_found_incompatible_target.
+	(read_input_script): Add dirindex parameter.  Change all callers.
+	If parser finds an incompatible target, requeue Read_symbols
+	task.
+	(script_set_symbol): Clear skip_on_incompatible_target in
+	closure.
+	(script_add_assertion, script_parse_option): Likewise.
+	(script_start_sections, script_add_phdr): Likewise.
+	(script_check_output_format): New function.
+	* script.h (read_input_script): Update declaration.
+	* script-c.h (script_check_output_format): Declare.
+	* yyscript.y (file_cmd): Handle OUTPUT_FORMAT.
+	(ignore_cmd): Remove OUTPUT_FORMAT.
+	* fileread.cc (Input_file::Input_file): Add explicit this.
+	(Input_file::will_search_for): New function.
+	(Input_file::open): Add pindex parameter.  Change all callers.
+	* fileread.h (class Input_file): Add input_file_argument method.
+	Declare will_search_for.  Update declarations.
+	* object.cc (make_elf_object): Add punconfigured parameter.
+	Change all callers.
+	* object.h (class Object): Make input_file public.  Add
+	searched_for method.
+	(make_elf_object): Update declaration.
+	* dirsearch.cc (Dirsearch::find): Add pindex parameter.  Use it to
+	restart search.
+	* dirsearch.h (class Dirsearch): Update declaration.
+	* options.h (class General_options): Add --warn-search-mismatch.
+	* parameters.cc (Parameters::is_compatible_target): New function.
+	* parameters.h (class Parameters): Declare is_compatible_target.
+	* workqueue.cc (Workqueue::add_blocker): New function.
+	* workqueue.h (class Workqueue): Declare add_blocker.
+@
+text
+@d47 1
+a47 1
+Sized_binary_test(Target* target)
+d49 1
+a76 1
+  CHECK(object->target() == target);
+d128 1
+a128 1
+  if (!Sized_binary_test<32, false>(target_test_pointer_32_little))
+d130 1
+d134 1
+a134 1
+  if (!Sized_binary_test<32, true>(target_test_pointer_32_big))
+d136 1
+d140 1
+a140 1
+  if (!Sized_binary_test<64, false>(target_test_pointer_64_little))
+d142 1
+d146 1
+a146 1
+  if (!Sized_binary_test<64, true>(target_test_pointer_64_big))
+d148 1
+@
+
+
+1.6.4.1
+log
+@Merge elfcpp and gold from trunk.
+@
+text
+@d47 1
+a47 1
+Sized_binary_test()
+a48 1
+  parameters_clear_target();
+d76 1
+d128 1
+a128 1
+  if (!Sized_binary_test<32, false>())
+a129 1
+  CHECK(&parameters->target() == target_test_pointer_32_little);
+d133 1
+a133 1
+  if (!Sized_binary_test<32, true>())
+a134 1
+  CHECK(&parameters->target() == target_test_pointer_32_big);
+d138 1
+a138 1
+  if (!Sized_binary_test<64, false>())
+a139 1
+  CHECK(&parameters->target() == target_test_pointer_64_little);
+d143 1
+a143 1
+  if (!Sized_binary_test<64, true>())
+a144 1
+  CHECK(&parameters->target() == target_test_pointer_64_big);
+@
+
+
+1.5
+log
+@	* object.cc (Xindex::initialize_symtab_xindex): New function.
+	(Xindex::read_symtab_xindex): New function.
+	(Xindex::sym_xindex_to_shndx): New function.
+	(Sized_relobj::find_symtab): Pick up SHT_SYMTAB_SHNDX section if
+	available.
+	(Sized_relobj::do_initialize_xindex): New function.
+	(Sized_relobj::do_read_symbols): Adjust section links.
+	(Sized_relobj::symbol_section_and_value): Add is_ordinary
+	parameter.  Change all callers.
+	(Sized_relobj::include_section_group): Adjust section links and
+	symbol section indexes.
+	(Sized_relobj::do_layout): Adjust section links.
+	(Sized_relobj::do_count_local_symbols): Adjust section links and
+	symbol section indexes.
+	(Sized_relobj::do_finalize_local_symbols): Distinguish between
+	ordinary and special symbols.
+	(Sized_relobj::write_local_symbols): Add symtab_xindex and
+	dynsym_xindex parameters.  Change all callers.  Adjust section
+	links.  Use SHN_XINDEX when needed.
+	(Sized_relobj::get_symbol_location_info): Adjust section links.
+	Don't get fooled by special symbols.
+	* object.h (class Xindex): Define.
+	(class Object): Add xindex_ parameter.  Declare virtual functoin
+	do_initialize_xindex.
+	(Object::adjust_sym_shndx): New function.
+	(Object::set_xindex): New protected function.
+	(class Symbol_value): Add is_ordinary_shndx_ field.
+	(Symbol_value::Symbol_value): Initialize is_ordinary_shndx_.
+	(Symbol_value::value): Assert ordinary section.
+	(Symbol_value::initialize_input_to_output_map): Likewise.
+	(Symbol_value::set_input_shndx): Add is_ordinary parameter.
+	Change all callers.
+	(Symbol_value::input_shndx): Add is_ordinary parameter.  Change
+	all callers.
+	(class Sized_relobj): Update declarations.
+	(Sized_relobj::local_symbol_input_shndx): Add is_ordinary
+	parameter.  Change all callers.
+	(Sized_relobj::adjust_shndx): New function.
+	* dynobj.cc (Sized_dynobj::Sized_dynobj): Initialize dynsym_shndx_
+	field.
+	(Sized_dynobj::find_dynsym_sections): Remove pdynsym_shndx
+	parameter.  Change all callers.  Pick up SHT_DYNSYM_SHNDX section
+	for SHT_DYNSYM section if available.  Set dynsym_shndx_ field.
+	(Sized_dynobj::read_dynsym_section): Adjust section links.
+	(Sized_dynobj::read_dynamic): Likewise.
+	(Sized_dynobj::do_read_symbols): Use dynsym_shndx_ field.  Adjust
+	section links.
+	(Sized_dynobj::do_initialize_xindex): New function.
+	* dynobj.h (class Sized_dynobj): Add dynsym_shndx_ field.  Declare
+	do_initialize_xindex.
+	(Sized_dynobj::adjust_shndx): New function.
+	* layout.cc (Layout::Layout): Initialize symtab_xindex_ and
+	dynsym_xindex_ fields.
+	(Layout::finalize): Add a call to set_section_indexes before
+	creating the symtab sections.
+	(Layout::set_section_indexes): Don't do anything if the section
+	already has a section index.
+	(Layout::create_symtab_sections): Add shnum parameter.  Change
+	caller.  Create .symtab_shndx section if needed.
+	(Layout::create_shdrs): Add shstrtab_section parameter.  Change
+	caller.
+	(Layout::allocated_output_section_count): New function.
+	(Layout::create_dynamic_symtab): Create .dynsym_shndx section if
+	needed.
+	* layout.h (class Layout): Add symtab_xindex_ and dynsym_xindex_
+	fields.  Update declarations.
+	(Layout::symtab_xindex): New function.
+	(Layout::dynsym_xindex): New function.
+	(class Write_symbols_task): Add layout_ field.
+	(Write_symbols_task::Write_symbols_task): Add layout parameter.
+	Change caller.
+	* output.cc (Output_section_headers::Output_section_headers): Add
+	shstrtab_section parameter.  Change all callers.
+	(Output_section_headers::do_sized_write): Store overflow values
+	for section count and section string table section index in
+	section header zero.
+	(Output_file_header::do_sized_write): Check for overflow of
+	section count and section string table section index.
+	(Output_symtab_xindex::do_write): New function.
+	(Output_symtab_xindex::endian_do_write): New function.
+	* output.h (class Output_section_headers): Add shstrtab_section_.
+	Update declarations.
+	(class Output_symtab_xindex): Define.
+	(Output_section::has_out_shndx): New function.
+	* symtab.cc (Symbol::init_fields): Initialize is_ordinary_shndx_
+	field.
+	(Symbol::init_base): Add st_shndx and is_ordinary parameters.
+	Change all callers.
+	(Sized_symbol::init): Likewise.
+	(Symbol::output_section): Check for ordinary symbol.
+	(Symbol_table::add_from_object): Remove orig_sym parameter.  Add
+	st_shndx, is_ordinary, and orig_st_shndx parameters.  Change all
+	callers.
+	(Symbol_table::add_from_relobj): Add symndx_offset parameter.
+	Change all callers.  Simplify handling of symbols from sections
+	not included in the link.
+	(Symbol_table::add_from_dynobj): Handle ordinary symbol
+	distinction.
+	(Weak_alias_sorter::operator()): Assert that symbols are
+	ordinary.
+	(Symbol_table::sized_finalize_symbol): Handle ordinary symbol
+	distinction.
+	(Symbol_table::write_globals): Add symtab_xindex and dynsym_xindex
+	parameters.  Change all callers.
+	(Symbol_table::sized_write_globals): Likewise.  Handle ordinary
+	symbol distinction.  Use SHN_XINDEX when needed.
+	(Symbol_table::write_section_symbol): Add symtab_xindex
+	parameter.  Change all callers.
+	(Symbol_table::sized_write_section_symbol): Likewise.  Use
+	SHN_XINDEX when needed.
+	* symtab.h (class Symbol): Add is_ordinary_shndx_ field.  Update
+	declarations.
+	(Symbol::shndx): Add is_ordinary parameter.  Change all callers.
+	(Symbol::is_defined): Check is_ordinary.
+	(Symbol::is_undefined, Symbol::is_weak_undefined): Likewise.
+	(Symbol::is_absolute, Symbol::is_common): Likewise.
+	(class Sized_symbol): Update declarations.
+	(class Symbol_table): Update declarations.
+	* resolve.cc (Symbol::override_base): Add st_shndx and is_ordinary
+	parameters.  Change all callers.
+	(Sized_symbol::override): Likewise.
+	(Symbol_table::override): Likewise.
+	(symbol_to_bits): Add is_ordinary parameter.  Change all callers.
+	(Symbol_table::resolve): Remove orig_sym parameter.  Add st_shndx,
+	is_ordinary, and orig_st_shndx parameters.  Change all callers.
+	* copy-relocs.cc (Copy_relocs::emit_copy_reloc): Require symbol
+	to be in an ordinary section.
+	* dwarf_reader.cc (Sized_dwarf_line_info::symbol_section): Add
+	object and is_ordinary parameters.  Change all callers.
+	(Sized_dwarf_line_info::read_relocs): Add object parameter.
+	Change all callers.  Don't add undefined or non-ordinary symbols
+	to reloc_map_.
+	(Sized_dwarf_line_info::read_line_mappings): Add object parameter.
+	Change all callers.
+	* dwarf_reader.h (class Sized_dwarf_line_info): Update
+	declarations.
+	* ehframe.cc (Eh_frame::read_fde): Check for ordinary symbol.
+	* reloc.cc (Sized_relobj::do_read_relocs): Adjust section links.
+	(Sized_relobj::relocate_sections): Likewise.
+	* target-reloc.h (scan_relocs): Adjust section symbol index.
+	(scan_relocatable_relocs): Likewise.
+	* i386.cc (Scan::local): Check for ordinary symbols.
+	* sparc.cc (Scan::local): Likewise.
+	* x86_64.cc (Scan::local): Likewise.
+	* testsuite/binary_unittest.cc (Sized_binary_test): Update calls
+	to symbol_section_and_value.
+	* testsuite/many_sections_test.cc: New file.
+	* testsuite/Makefile.am (BUILT_SOURCES): Define.
+	(check_PROGRAMS): Add many_sections_test.
+	(many_sections_test_SOURCES): Define.
+	(many_sections_test_DEPENDENCIES): Define.
+	(many_sections_test_LDFLAGS): Define.
+	(BUILT_SOURCES): Add many_sections_define.h.
+	(many_sections_define.h): New target.
+	(BUILT_SOURCES): Add many_sections_check.h.
+	(many_sections_check.h): New target.
+	(check_PROGRAMS): Add many_sections_r_test.
+	(many_sections_r_test_SOURCES): Define.
+	(many_sections_r_test_DEPENDENCIES): Define.
+	(many_sections_r_test_LDFLAGS): Define.
+	(many_sections_r_test_LDADD): Define.
+	(many_sections_r_test.o): New target.
+	* testsuite/Makefile.in: Rebuild.
+@
+text
+@d70 1
+a70 1
+				   binary.converted_size());
+@
+
+
+1.4
+log
+@From Craig Silverstein: Have Parameters point to General_options.
+@
+text
+@d97 3
+a99 1
+  CHECK(relobj->symbol_section_and_value(0, &value) == 0);
+d101 2
+a102 1
+  CHECK(relobj->symbol_section_and_value(1, &value) == 1);
+d104 2
+a105 1
+  CHECK(relobj->symbol_section_and_value(2, &value) == 1);
+d107 3
+a109 1
+  CHECK(relobj->symbol_section_and_value(3, &value) == elfcpp::SHN_ABS);
+@
+
+
+1.3
+log
+@From Craig Silverstein: rework handling of Script_options.
+@
+text
+@d114 1
+a114 1
+  initialize_parameters(&errors);
+d117 1
+a117 1
+  set_parameters_from_options(&options);
+@
+
+
+1.2
+log
+@Fix precedence error, avoid signed/unsignd warning.
+@
+text
+@d116 1
+a116 2
+  Script_options script_options;
+  General_options options(&script_options);
+@
+
+
+1.1
+log
+@Add support for --format binary for input files.
+@
+text
+@d79 1
+a79 1
+  CHECK(object->section_flags(1) == elfcpp::SHF_ALLOC | elfcpp::SHF_WRITE);
+d82 1
+a82 1
+  CHECK(len == st.st_size);
+@
+

@@ -1,0 +1,153 @@
+head	1.2;
+access;
+symbols;
+locks; strict;
+comment	@# @;
+
+
+1.2
+date	2013.08.22.13.51.07;	author tromey;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2013.07.17.20.35.11;	author devans;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@fix gdb.python to be parallel-safe
+
+This fixes gdb.python to be parallel-safe, mostly by changing it to
+use gdb_remote_download.
+
+Tested on x86-64 Fedora 18.
+
+	* gdb.python/py-error.exp: Use gdb_remote_download.
+	* gdb.python/py-mi.exp: Use gdb_remote_download.
+	* gdb.python/py-objfile-script.exp: Use standard_output_file.
+	* gdb.python/py-prettyprint.exp: Use gdb_remote_download.
+	(run_lang_tests): Likewise.
+	* gdb.python/py-section-script.c: Use SCRIPT_FILE rather than
+	filename.
+	* gdb.python/py-section-script.exp: Set SCRIPT_FILE when
+	compiling.  Use gdb_remote_download.  Update some tests.
+	* gdb.python/py-strfns.exp (test_strfns_core_file): Use
+	standard_output_file.
+	* gdb.python/py-typeprint.exp: Use gdb_remote_download.
+	* gdb.python/py-frame-args.exp: Use gdb_remote_download.
+	* gdb.python/py-framefilter-mi.exp: Use gdb_remote_download.
+	* gdb.python/py-framefilter.exp: Use gdb_remote_download,
+	standard_output_file.
+@
+text
+@# Copyright (C) 2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+standard_testfile
+
+if { [prepare_for_testing ${testfile}.exp ${testfile} ${srcfile}] } {
+    return -1
+}
+
+# Skip all tests if Python scripting is not enabled.
+if { [skip_python_tests] } { continue }
+
+if ![runto_main] {
+    return -1
+}
+
+set remote_python_file [gdb_remote_download host \
+			    ${srcdir}/${subdir}/${testfile}.py]
+
+gdb_test_no_output "python exec (open ('${remote_python_file}').read ())" \
+    "python exec (open ('[file tail ${remote_python_file}]').read ())"
+
+gdb_breakpoint [gdb_get_line_number "break-here"]
+gdb_continue_to_breakpoint "break-here" ".* break-here .*"
+
+# Test all combinations with raw off.
+
+gdb_test_no_output "set print raw frame-arguments off"
+
+gdb_test_no_output "set print frame-arguments none"
+gdb_test "frame" ".*foo \\(x=\[.\]{3}, ss=\[.\]{3}\\).*" \
+    "frame pretty,none"
+
+gdb_test_no_output "set print frame-arguments scalars"
+gdb_test "frame" ".*foo \\(x=42, ss=super struct = {\[.\]{3}}\\).*" \
+    "frame pretty,scalars"
+
+gdb_test_no_output "set print frame-arguments all"
+gdb_test "frame" \
+    ".*foo \\(x=42, ss=super struct = {a = m=<1>, b = m=<2>}\\).*" \
+    "frame pretty,all"
+
+# Test all combinations with raw on.
+
+gdb_test_no_output "set print raw frame-arguments on"
+
+gdb_test_no_output "set print frame-arguments none"
+gdb_test "frame" ".*foo \\(x=\[.\]{3}, ss=\[.\]{3}\\).*" \
+    "frame raw,none"
+
+gdb_test_no_output "set print frame-arguments scalars"
+gdb_test "frame" ".*foo \\(x=42, ss=\[.\]{3}\\).*" \
+    "frame raw,scalars"
+
+gdb_test_no_output "set print frame-arguments all"
+gdb_test "frame" \
+    ".*foo \\(x=42, ss={a = {m = 1}, b = {m = 2}}\\).*" \
+    "frame raw,all"
+
+remote_file host delete ${remote_python_file}
+@
+
+
+1.1
+log
+@	* NEWS: Mention "set print raw frame-arguments".
+	* gdbcmd.h (setprintrawlist, showprintrawlist): Declare.
+	* stack.c (print_raw_frame_arguments): New static global.
+	(print_frame_arg): Set opts.raw from print_raw_frame_arguments.
+	(_initialize_stack): New command "set/show print raw frame-arguments".
+	* valprint.c (setprintrawlist, showprintrawlist): New globals.
+	(set_print_raw, show_print_raw): New functions.
+	(_initialize_valprint): New prefix command "set/show print raw".
+	* valprint.h (value_print_options): Improve comments.
+
+	doc/
+	* gdb.texinfo (Print Settings): Document "print raw frame-arguments".
+
+	testsuite/
+	* gdb.python/py-frame-args.c: New file.
+	* gdb.python/py-frame-args.py: New file.
+	* gdb.python/py-frame-args.exp New file.
+@
+text
+@d29 2
+a30 1
+set remote_python_file [remote_download host ${srcdir}/${subdir}/${testfile}.py]
+d32 2
+a33 1
+gdb_test_no_output "python exec (open ('${remote_python_file}').read ())"
+@
+

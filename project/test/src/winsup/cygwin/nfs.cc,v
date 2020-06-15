@@ -1,0 +1,211 @@
+head	1.3;
+access;
+symbols
+	cygwin-1_7_35-release:1.3
+	cygwin-1_7_34-release:1.3
+	cygwin-1_7_33-release:1.3
+	cygwin-1_7_32-release:1.3
+	cygwin-1_7_31-release:1.3
+	cygwin-1_7_30-release:1.3
+	cygwin-1_7_29-release:1.3
+	cygwin-1_7_29-release-branchpoint:1.3.0.10
+	cygwin-pre-user-db:1.3
+	cygwin-1_7_28-release:1.3
+	cygwin-1_7_27-release:1.3
+	cygwin-1_7_26-release:1.3
+	cygwin-1_7_25-release:1.3
+	cygwin-1_7_24-release:1.3
+	cygwin-1_7_23-release:1.3
+	cygwin-1_7_22-release:1.3
+	cygwin-1_7_21-release:1.3
+	cygwin-1_7_20-release:1.3
+	cygwin-1_7_19-release:1.3
+	cygwin-64bit-postmerge:1.3
+	cygwin-64bit-premerge-branch:1.3.0.8
+	cygwin-64bit-premerge:1.3
+	cygwin-1_7_18-release:1.3
+	post-ptmalloc3:1.3
+	pre-ptmalloc3:1.3
+	cygwin-1_7_17-release:1.3
+	cygwin-64bit-branch:1.3.0.6
+	cygwin-1_7_16-release:1.3
+	cygwin-1_7_15-release:1.3
+	cygwin-1_7_14_2-release:1.3
+	cygwin-1_7_14-release:1.3
+	cygwin-1_7_12-release:1.3
+	cygwin-1_7_11-release:1.3
+	cygwin-1_7_10-release:1.3
+	signal-rewrite:1.3.0.4
+	pre-notty:1.3
+	cygwin-1_7_9-release:1.3
+	cv-post-1_7_9:1.3.0.2
+	cygwin-1_7_8-release:1.3
+	cygwin-1_7_7-release:1.2
+	cygwin-1_7_5-release:1.2
+	cygwin-1_7_4-release:1.2
+	cygwin-1_7_3-release:1.2
+	cygwin-1_7_2-release:1.2
+	fifo_doover3:1.2.0.4
+	cygwin-1_7_1-release:1.2
+	prefifo:1.2
+	cv-branch-2:1.2.0.2
+	pre-ripout-set_console_state_for_spawn:1.1;
+locks; strict;
+comment	@// @;
+
+
+1.3
+date	2010.10.02.19.03.44;	author corinna;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2008.11.26.17.21.03;	author cgf;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2008.05.20.15.11.23;	author corinna;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.3
+log
+@	* fhandler_disk_file.cc (fhandler_base::fstat_by_nfs_ea): Simplify.
+	Just call nfs_fetch_fattr3 if called via fstat.
+	* nfs.cc (nfs_fetch_fattr3): New function to fetch NFS fattr3 info from
+	file handle.
+	* nfs.h (nfs_fetch_fattr3): Declare.
+	* path.cc (symlink_info::check): Simplify NFS case.  Just call
+	nfs_fetch_fattr3.
+@
+text
+@/* nfs.cc
+
+   Copyright 2008, 2010 Red Hat, Inc.
+
+This software is a copyrighted work licensed under the terms of the
+Cygwin license.  Please consult the file "CYGWIN_LICENSE" for
+details. */
+
+#include "winsup.h"
+#include "sys/fcntl.h"
+#include "nfs.h"
+#include "ntdll.h"
+
+struct nfs_aol_ffei_t nfs_aol_ffei = { 0, 0, sizeof (NFS_ACT_ON_LINK) - 1, 0,
+				       NFS_ACT_ON_LINK };
+
+uint32_t nfs_type_mapping[] = { 0, S_IFREG, S_IFDIR, S_IFBLK,
+				S_IFCHR, S_IFLNK, S_IFSOCK, S_IFIFO };
+
+NTSTATUS
+nfs_fetch_fattr3 (HANDLE h, fattr3 *fattr_buf)
+{
+  struct {
+    FILE_FULL_EA_INFORMATION ffei;
+    char buf[sizeof (NFS_V3_ATTR) + sizeof (fattr3)];
+  } ffei_buf;
+  struct {
+     FILE_GET_EA_INFORMATION fgei;
+     char buf[sizeof (NFS_V3_ATTR)];
+  } fgei_buf;
+  NTSTATUS status;
+  IO_STATUS_BLOCK io;
+
+  fgei_buf.fgei.NextEntryOffset = 0;
+  fgei_buf.fgei.EaNameLength = sizeof (NFS_V3_ATTR) - 1;
+  stpcpy (fgei_buf.fgei.EaName, NFS_V3_ATTR);
+  status = NtQueryEaFile (h, &io, &ffei_buf.ffei, sizeof ffei_buf, TRUE,
+			  &fgei_buf.fgei, sizeof fgei_buf, NULL, TRUE);
+  if (NT_SUCCESS (status))
+    {
+      fattr3 *nfs_attr = (fattr3 *) (ffei_buf.ffei.EaName
+				     + ffei_buf.ffei.EaNameLength + 1);
+      if (fattr_buf)
+	memcpy (fattr_buf, nfs_attr, sizeof (fattr3));
+    }
+  return status;
+}
+@
+
+
+1.2
+log
+@Remove unneeded whitespace.
+* fhandler_fifo.cc (fhandler_fifo::open): Rework to cause errno to be set to
+ENXIO when opening a fifo write/nonblocking.
+* environ.cc (ucreqenv): Rename to ucenv.  Move code from old ucenv here and
+conditionalize it on create_upcaseenv.
+(ucenv): Delete.
+(environ_init): Fix compiler warning by moving create_upcaseenv test to ucenv.
+Don't bother checking for child_proc_info when calling ucenv since it is
+assumed to be NULL at the point where the function is called.
+* path.cc (symlink_worker): Turn off MS-DOS path warnings when dealing with
+devices since the device handler passes in a translated MS-DOS path.
+* sec_auth.cc (lsaprivkeyauth): Avoid variable initialization which causes a
+compiler error.
+* fhandler_netdrive.cc: Update copyright.
+@
+text
+@d3 1
+a3 1
+   Copyright 2008 Red Hat, Inc.
+d12 1
+d20 28
+@
+
+
+1.1
+log
+@	* Makefile.in (DLL_OFILES): Add nfs.o.
+	* fhandler.cc (fhandler_base::open): Open files on NFS shares with
+	correct access flags and EAs.
+	* fhandler.h (fhandler_base::fstat_by_nfs_ea): Declare.
+	* fhandler_disk_file.cc (fhandler_base::fstat_by_nfs_ea): New method.
+	(fhandler_base::fstat_by_handle): Call fstat_by_nfs_ea for files on
+	NFS shares.
+	(fhandler_disk_file::fchmod): Use NFS specific method to set mode for
+	files on NFS shares.  Don't overrule errno from call to
+	set_file_attribute with errno from NtSetInformationFile call.
+	(fhandler_disk_file::fchown): Add comment.
+	* mount.cc (fillout_mntent): Accommodate change in second parameter
+	to fs_info::update.
+	* nfs.cc: New file.
+	* nfs.h: New file.
+	* path.cc (fs_info::update): Take handle instead of bool as second
+	parameter.  Use that handle if it's not NULL.  Only close handle if
+	it has been opened here.  Use static defined buffers instead of
+	alloca'd buffers.
+	(path_conv::check): Call symlink_info::check with reference to fs.
+	Don't call fs.update here if file exists.
+	(conv_path_list): Prefer tmp_pathbuf buffer over using alloca.
+	(symlink_worker): Use NFS specific method to create symlinks on NFS
+	shares.  Prefer tmp_pathbuf buffer over using alloca.
+	(symlink_info::check_shortcut): Reopen file from incoming handle
+	with necessary FILE_GENERIC_READ flag.  Prefer tmp_pathbuf buffer over
+	using alloca.
+	(symlink_info::check_sysfile): Ditto.
+	(symlink_info::check_reparse_point): Use tmp_pathbuf buffer to
+	allocate REPARSE_DATA_BUFFER.
+	(symlink_info::check_nfs_symlink): New method.
+	(enum symlink_t): Remove.
+	(symlink_info::check): Don't use NtQueryAttributesFile.  Rather, open
+	file with necessary access flags and call NtQueryInformationFile.  Fix
+	error handling in case file can't be opened.  For existing files, call
+	fs_info::update here.  Restructure symlink checking to accommodate the
+	fact that the file is already open.  Add case for NFS symlinks.
+	* path.h (fs_info::update): Take handle instead of bool as second
+	parameter.
+@
+text
+@d17 1
+a17 1
+                                S_IFCHR, S_IFLNK, S_IFSOCK, S_IFIFO };
+@
+
